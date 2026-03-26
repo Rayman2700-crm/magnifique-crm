@@ -2,6 +2,18 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 export async function middleware(req: NextRequest) {
+  const path = req.nextUrl.pathname;
+
+  const isPublicAsset =
+    path.startsWith("/_next") ||
+    path.startsWith("/favicon.ico") ||
+    path.startsWith("/brand/") ||
+    /\.(png|jpg|jpeg|gif|webp|svg|ico)$/i.test(path);
+
+  if (isPublicAsset) {
+    return NextResponse.next();
+  }
+
   const res = NextResponse.next();
 
   const supabase = createServerClient(
@@ -24,16 +36,10 @@ export async function middleware(req: NextRequest) {
   const { data } = await supabase.auth.getUser();
   const user = data.user;
 
-  const path = req.nextUrl.pathname;
-
-  // Öffentlich erlaubte Pfade (ohne Login)
   const isPublic =
     path.startsWith("/login") ||
-    path.startsWith("/auth") ||
-    path.startsWith("/_next") ||
-    path.startsWith("/favicon.ico");
+    path.startsWith("/auth");
 
-  // Wenn nicht eingeloggt und nicht public → Login
   if (!user && !isPublic) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
