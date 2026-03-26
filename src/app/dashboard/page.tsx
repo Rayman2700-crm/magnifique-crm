@@ -265,7 +265,7 @@ function StatCard({
 
   const content = (
     <Card className="h-full min-w-0 border-[var(--border)] bg-[var(--surface)] transition hover:border-white/20 hover:bg-white/[0.03]">
-      <CardContent className="flex h-full min-h-[130px] flex-col justify-center items-center">
+      <CardContent className="flex h-full min-h-[100px] flex-col justify-center items-center">
         <div className="flex min-w-0 flex-col items-center justify-center gap-1 text-center">
           <div className="min-w-0">
             <div className="truncate text-[13px] font-semibold leading-8 text-white py-0">{label}</div>
