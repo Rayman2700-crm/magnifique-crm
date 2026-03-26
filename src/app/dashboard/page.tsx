@@ -805,7 +805,7 @@ export default async function DashboardPage() {
             </div>
 
             <div className="mt-5 overflow-x-auto">
-              <div className="flex min-w-[1040px] gap-3 font-semibold">
+              <div className="flex min-w-[980px] gap-3 font-semibold">
                 <div className="min-w-[100px] flex-1">
                   <StatCard
                     label="Termine heute"
