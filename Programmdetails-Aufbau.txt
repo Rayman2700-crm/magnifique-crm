@@ -1,0 +1,1935 @@
+ich möchte ein programm zum Erfassen von Kundendaten erstellen.  Es soll in einem Beautystudio Magnifique Beauty Institut (anbei die Website: https://www.magnifique-beauty.at/) verwendet werden. Neben der Kundenerfassung sollen die Erst-Kunden auch ein Fragebogen zur Erstkundenbehandlung digital ausfüllen und unterschreiben können. Rechnungen für für diverse Behandllungen/Services sollen aus einer Voreinstellung ausgewählt werden können und digital dem Kunden per E-Mail geschickt werden können, zusätzlich bei Bedarf über einen externen Drucker ausgedruckt werden können. Es soll ein Google Kalender integriert werden können um Behandlungstermine direkt einzutragen. Könnten wir soetwas realisieren?
+
+Ja — das ist absolut realisierbar. Das ist im Kern eine kleine Studio-Software (CRM + Anamnese/Einverständnis + Rechnungen + Kalender + E-Mail/Druck). Entscheidend ist, wie ihr es umsetzen wollt (Web-App vs. Tablet-App) und dass wir DSGVO und Signaturen sauber lösen.
+
+Was das Programm können kann (sauber in Module aufgeteilt)
+1) Kundendatenbank (CRM)
+
+Kundenprofil: Name, Kontakt, Geburtstag, Notizen, Präferenzen, Allergien, Hauttyp, Behandlungs-Historie
+
+Such-/Filterfunktion (Name, letzte Behandlung, Tags)
+
+Dateiablage pro Kunde (Fotos vorher/nachher, Dokumente)
+
+2) Erstkunden-Fragebogen + digitale Unterschrift
+
+Digitaler Fragebogen (Anamnese, Kontraindikationen, Einverständnis, Datenschutz)
+
+Unterschrift direkt am Tablet/Handy (Finger/Stift)
+
+Automatische PDF-Erzeugung + revisionssichere Ablage im Kundenprofil
+
+Optional: E-Mail-Kopie an Kunden
+
+3) Rechnungen / Behandlungen aus Vorlagen
+
+Leistungen/Services als Katalog (mit Preisen, Dauer, MwSt, Textbausteinen)
+
+Rechnung erstellen durch Auswahl + ggf. Rabatte
+
+PDF-Rechnung generieren
+
+Versand per E-Mail direkt aus dem System
+
+Drucken über Standarddruckdialog (oder Netzwerkdrucker)
+
+4) Google Kalender Integration
+
+Termin aus Kundenprofil heraus erstellen (Service → Dauer → Kalender-Slot)
+
+Teilnehmer/Adresse/Notizen automatisch setzen
+
+Optional: automatische Bestätigungs- oder Reminder-Mails/SMS (wenn gewünscht)
+
+Empfohlene Umsetzung (pragmatisch & wartbar)
+Option A: Web-App (meist die beste Wahl)
+
+Läuft im Browser auf PC, iPad, Android-Tablet
+
+Ein Login für Mitarbeiterrollen
+
+Cloud-Datenbank + Backup
+
+Einfach Updates auszurollen
+
+Technik (Beispiel-Stack):
+
+Frontend: React / Next.js
+
+Backend: Node/Next API oder Python (FastAPI)
+
+Datenbank: PostgreSQL
+
+Auth: Benutzer/Rollen, 2FA optional
+
+PDF: serverseitig generiert
+
+E-Mail: SMTP oder Dienst (z.B. SendGrid/Mailgun)
+
+Google Calendar: OAuth + Calendar API
+
+Option B: No-Code/Low-Code (schneller Start, weniger flexibel)
+
+Airtable/Glide/AppSheet + Google Workspace
+
+Fragebogen via Formular + Signatur-Komponente
+
+Rechnungen über Vorlagen/Automationen
+
+Kann funktionieren, aber bei Signatur + Rechnung + DSGVO wird’s oft schnell „geflickt“.
+
+DSGVO / Rechtliches (wichtig, aber machbar)
+
+Ihr verarbeitet Gesundheitsdaten (Anamnese) → das ist besondere Kategorie. Deshalb:
+
+Zugriff nur für berechtigte Mitarbeiter (Rollen)
+
+Verschlüsselung (Transport + idealerweise Datenbank/Backups)
+
+Protokollierung (wer hat was geändert)
+
+Auftragsverarbeitungsverträge (Hosting, E-Mail-Dienst)
+
+Datenexport/Löschung auf Anfrage (Betroffenenrechte)
+
+Saubere Einwilligungs-/Dokumentation
+
+Digitale Unterschrift: In der Praxis reicht oft eine „einfache“ Signatur (Handschrift auf Screen) + PDF-Protokoll. „Qualifizierte elektronische Signatur“ (QES) ist meist Overkill, aber möglich.
+
+Konkreter Projektplan (so würde ich’s angehen)
+Phase 1: MVP (funktioniert im Alltag)
+
+Kunden anlegen + Suche
+
+Erstkundenfragebogen + Unterschrift + PDF im Kundenprofil
+
+Service-Katalog + Rechnung als PDF + E-Mail-Versand
+
+Google Kalender: Termin anlegen
+
+Phase 2: Komfort & Automatisierung
+
+Behandlungshistorie + Vorher/Nachher Fotos
+
+Templates für Nachsorge/Empfehlungen
+
+Erinnerungen (E-Mail/SMS)
+
+Statistiken (Umsatz, Top-Services, Auslastung)
+
+Was ich als Nächstes von dir brauche (damit es wirklich „treffsicher“ wird)
+
+Ohne lange Rückfragen, nur die 4 wichtigsten Entscheidungen, die alles bestimmen:
+
+Geräte: Soll es primär am PC, am iPad/Tablet, oder beides laufen?
+
+Rechnung: Reicht „PDF-Rechnung per E-Mail“ oder braucht ihr fortlaufende Rechnungsnummern, Storno, UID, Kleinunternehmerregelung, etc.?
+
+Fragebogen: Soll der Kunde im Studio ausfüllen (Tablet) oder auch vorab per Link zuhause?
+
+Benutzer: Wieviele Mitarbeiter-Logins braucht ihr?
+
+Wenn du mir diese 4 Punkte kurz beantwortest, kann ich dir direkt ein konkretes Konzept liefern:
+
+Datenfelder (Kundenmaske + Fragebogen)
+
+Bildschirm-/Workflow-Skizze (welche Masken es gibt)
+
+Technologievorschlag (Web-App vs. Low-Code) passend zu Magnifique
+
+Grober Aufwand in Modulen (damit ihr priorisieren könnt)
+
+Option A: Web-App (meist die beste Wahl)
+
+1. Geräte: beides
+2. Rechnung: PDF-Rechnung per E-Mail mit fortlaufende Rechnungsnummern, Storno, UID, Kleinunternehmerregelung, also ohne MwSt.
+3. Fragebogen direkt im Studio über ipad
+4. Benutzer: 5 Benutzer und erweiterbar
+Nachgedacht für 14s
+
+Perfekt – mit deinen Entscheidungen (Web-App, iPad+PC, 5 User, Kleinunternehmer ohne USt, fortlaufende Nummern + Storno, Google Kalender) kann man das sehr sauber bauen.
+
+Zielbild: Was ihr am Ende habt
+
+Eine Web-App, die am PC (Rezeption/Büro) und am iPad (Behandlungsraum) läuft:
+
+Kundenanlage + Historie
+
+Erstkunden-Fragebogen am iPad inkl. Unterschrift → automatisch als PDF im Kundenprofil gespeichert
+
+Rechnungen aus Leistungsvorlagen (ohne USt) mit fortlaufender Rechnungsnummer, Versand per E-Mail, optional Druck
+
+Storno über Storno-/Gutschrift-Dokument, das die Originalrechnung referenziert
+
+Google Kalender: Termine direkt aus dem Kundenprofil/Service heraus anlegen
+
+Rechnungslogik (AT, Kleinunternehmer) – so würde ich’s umsetzen
+Pflichtangaben & Hinweise
+
+Für Österreich orientieren wir uns an den üblichen Rechnungserfordernissen (z.B. WKO-Zusammenfassung).
+Für Kleinunternehmer gilt: keine Umsatzsteuer ausweisen und Hinweis auf die Befreiung (typisch: „Gemäß § 6 Abs. 1 Z 27 UStG wird keine Umsatzsteuer berechnet.“). (Das wird in der Praxis so verwendet; wir setzen es als fixen Textbaustein.)
+
+UID
+
+Laut USP: Kleinunternehmen haben nur unter bestimmten Voraussetzungen Anspruch auf eine UID (z.B. EU-Konstellationen).
+In der App ist das daher ein optionales Feld im Studio-Profil: „UID vorhanden? Ja/Nein“. Wenn vorhanden, drucken wir sie auf jede Rechnung; wenn nicht, nicht.
+
+Fortlaufende Rechnungsnummer
+
+Nummernkreis z.B. 2026-0001, 2026-0002 …
+
+Pro Jahr eigener Nummernkreis (einfach, nachvollziehbar)
+
+Technisch: serverseitig transaktional vergeben (keine Doppelnummern)
+
+Storno / Korrektur
+
+Storno erzeugt eigenes Dokument (z.B. „Storno“ oder „Gutschrift“) mit eigener fortlaufender Nummer
+
+Verknüpft zur Originalrechnung (Nummer + Datum), Betrag negativ/ausgleichend
+
+Original bleibt unverändert, Status = „storniert“
+
+Kleinbetragsrechnung bis 400 €
+
+Ab 1.1.2025 dürfen Kleinunternehmer für Rechnungen bis 400 € die vereinfachte Rechnung (Kleinbetragsrechnung) verwenden.
+Ich würde trotzdem standardmäßig immer die „vollständige“ Rechnung erzeugen (weniger Risiko/Verwechslung). Die App kann optional automatisch auf „Kurzformat“ schalten.
+
+Fragebogen am iPad (im Studio)
+
+Workflow, der wirklich funktioniert:
+
+Kunde wird am PC/iPad angelegt (Name, Telefon, Mail)
+
+iPad: „Erstkundenbogen starten“ → Formular (Pflichtfelder, Ja/Nein-Checks, Freitext)
+
+Unterschriftfeld (Finger/Stift) + Datum/Uhrzeit
+
+„Abschließen“ → App erzeugt PDF, speichert es im Kundenprofil + optional Mail-Kopie
+
+Wichtig: Gesundheitsdaten → wir bauen Rechte/Rollen, Protokollierung (wer hat was geöffnet/geändert) und Backups fix mit ein.
+
+Benutzer & Rechte (5 User, erweiterbar)
+
+Rollen-Vorschlag:
+
+Admin (Einstellungen, Vorlagen, Benutzer)
+
+Rezeption (Kunden, Termine, Rechnungen)
+
+Behandler/in (Kunden ansehen, Fragebogen, Doku; Rechnungen optional nur lesen)
+
+Optional: Nur Lesen (z.B. Praktikant)
+
+Google Kalender Integration
+
+OAuth Login pro Studio oder pro Benutzer (je nachdem wie ihr’s organisiert)
+
+Termin aus „Service“ heraus: Dauer/Buffer automatisch
+
+Termintext: Kunde + Service + interne Notiz
+
+Optional: Kalenderauswahl (z.B. „Team“, „Raum 1“, „Raum 2“)
+
+Konkrete Datenobjekte (damit’s sauber bleibt)
+
+Customer (Stammdaten, Tags, Notizen)
+
+IntakeForm (Version, Antworten, Signaturbild, PDF-Link, Zeitstempel)
+
+ServiceCatalogItem (Name, Preis, Dauer, Textbaustein)
+
+Invoice (Nummer, Status, Positionen, PDF, Mail-Log)
+
+CreditNote/Storno (eigene Nummer, Referenz auf Invoice)
+
+Appointment (Kalender-Event-ID, Kunde, Service, Zeitpunkt)
+
+Nächster Schritt (damit ich’s “build-ready” machen kann)
+
+Ich mache dir als nächstes eine konkrete MVP-Spezifikation (Screens + Felder + Abläufe + Nummernkreisregeln + E-Mail-Vorlagen). Dafür brauche ich nur noch diese Infos (kurz, stichwortartig reicht):
+
+Rechnungsadresse: Haben eure Rechnungen fixe Firmendaten (Name/Adresse/IBAN) – und welches Bundesland/Land (AT nehme ich an)?
+
+Zahlungsarten: Bar / Karte / Überweisung? Soll das auf die Rechnung?
+
+E-Mail Versand: Nutzt ihr eine Studio-E-Mail (z.B. office@…)? (SMTP/Google Workspace)
+
+Leistungskatalog: ca. wie viele Services (10 / 30 / 100+)? Preise fix oder manchmal manuell?
+
+Wenn du mir das gibst, kann ich dir direkt die MVP-Maske-für-Maske Struktur + Rechnungsnummern/Storno-Regeln fertig definieren.
+
+Achtung: 
+a) Vielleicht noch kurz zur Aufklärung: Es gibt derzeit 4 Behandler/Benutzer die jeweils selbstständig sind und eine eigene Firma haben. Also benötigen wir pro Benutzer alles eigen und extra, also z.b. Benutzer 1 = Raluca (medizinische Fußpflege, eigene Firma) loggt sich ein und sieht nur ihre Kunden, Termine, Rechnungen, etc. Benutzer 2 = Radu (Permanent Make-up) loggt sich ein und sieht nur seine Kunden, Termine, Rechnungen, etc. Benutzer 3 = Alexandra (Naildesign) loggt sich ein und sieht nur ihre Kunden, Termine, Rechnungen, etc. Benutzer 4 = Barbara (Kosmetik) loggt sich ein und sieht nur ihre Kunden, Termine, Rechnungen, etc.
+b) es soll auch noch ein Gemeinschaftskaleder geben wo alle Kalender der Benutzer zusammengeführt werden, damit jeder immer Einsicht auf die Termine andererer Kollegen/Behandler/Benutzer hat!
+
+1) Benutzer & Rechte (4 User, erweiterbar): da benötigen wir nur 2 Rollen derzeit: Admin = Radu (Einstellungen, Vorlagen, Benutzer, der einfach alles darf und kann und auch in allen Konten einsteigen darf und alles sehen und Bearbeiten kann); Behandler/in(Benutzer (Kunden ansehen, Fragebogen, Doku für den Kunden mit Fotos erstellen, Rechnungen, Kunden, Termine)
+
+2) Google Kalender Integration
+OAuth Login pro Benutzer/Behandler
+Termin aus „Service“ heraus: Dauer/Buffer automatisch
+Termintext: Kunde + Service + interne Notiz
+
+3) Konkrete Datenobjekte (damit’s sauber bleibt)
+Customer (Stammdaten, Tags, Notizen)
+IntakeForm (Version, Antworten, Signaturbild, PDF-Link, Zeitstempel)
+ServiceCatalogItem (Name, Preis, Dauer, Textbaustein)
+Invoice (Nummer, Status, Positionen, PDF, Mail-Log)
+CreditNote/Storno (eigene Nummer, Referenz auf Invoice)
+Appointment (Kalender-Event-ID, Kunde, Service, Zeitpunkt)
+
+Nächster Schritt (damit ich’s “build-ready” machen kann)
+1. Studioadresse: Magnifique Beauty Institut, Flugfeldgürtel 24/1, 2700 Wiener Neustadt, Österreich
+
+Eigentümer/Inhaber = Benutzer 1:
+Raluca Craus
+
+Flugfeldgürtel 24/1
+2700 Wiener Neustadt
+Tel: +43 676 4106468
+
+
+​Mail: raluca.schwarz@gmail.com
+Rechnungsadresse: Raluca Craus, Flugfeldgürtel 24/1 , 2700 Wiener Neustadt 
+
+Benutzer 2: 
+Radu Craus
+Studio Magnifique Beauty Institut
+Flugfeldgürtel 24/1
+2700 Wiener Neustadt
+Tel: +43 676 6742429
+
+
+​Mail: radu.craus@gmail.com
+Rechnungsadresse: Radu Craus, Flugfeldgürtel 24/1 , 2700 Wiener Neustadt
+
+Benutzer 3:
+Alexandra Sacadat
+Studio Magnifique Beauty Institut
+Flugfeldgürtel 24/1
+2700 Wiener Neustadt
+Tel: +43 664 1433818
+
+
+​Mail: alexandra_soj@hotmail.com
+Rechnungsadresse: Alexandra Sacadat, Bahnstraße 1, 2763 Pernitz 
+
+Benutzer 4:
+Barbara Eder
+Studio Magnifique Beauty Institut
+Flugfeldgürtel 24/1
+2700 Wiener Neustadt
+Tel: +43 699 12638348
+
+
+​Mail: eder.barbara1969@gmail.com
+Rechnungsadresse: Barbara Gabriele Maria Eder, Wiesenbachgasse 3/5-7, 2700 Wiener Neustadt
+
+2. Zahlungsarten: Bar / Karte soll auf der Rechnung stehen
+
+3. E-Mail Versand: soll für den Nutzer jeweils die eigene Mail Adresse benutzt werden
+
+4. Leistungskatalog: Gesamt ca. 100 Services, Preise fix eingestellt, aber auch manuell änderbar bei Bedarf
+
+Alles klar — mit dem Setup (4 selbstständige Firmen unter einem Dach + Admin darf alles + jeder sieht nur seine Daten + Gemeinschaftskalender) ist das klassischer Multi-Mandant (“Mandanten” = Behandler/Firma). Das ist technisch gut machbar, man muss es nur von Anfang an richtig modellieren, sonst wird’s später teuer.
+
+Unten ist eine build-ready Spezifikation auf Architektur-/Datenebene plus die kritischen Entscheidungen (ohne dass ich nochmal nachfrage).
+
+1) Kernprinzip: Mandantenfähigkeit (pro Behandler eigene „Firma“)
+
+Wir führen ein Objekt Tenant / Practice (nenn’s „Behandler-Firma“). Jeder Datensatz gehört zu genau einem Tenant.
+
+Radu (Admin): darf alle Tenants sehen/bearbeiten und kann „als Behandler wechseln“.
+
+Behandler: sieht nur den eigenen Tenant (Kunden, Termine, Rechnungen, Dokumente, Services).
+
+Wichtig: Auch wenn alle im selben Studio arbeiten, dürfen Rechnungsnummern, PDFs, E-Mail-Absender, Firmenkopf etc. nicht vermischt werden → deshalb Tenant-Scope überall.
+
+2) Rollen & Rechte (genau wie du willst)
+
+Nur 2 Rollen:
+
+Admin (Radu)
+
+Zugriff auf alle Tenants
+
+Benutzerverwaltung (einladen, deaktivieren)
+
+System-/Vorlagenverwaltung (global oder pro Tenant)
+
+Einsicht + Bearbeitung aller Kunden, Termine, Rechnungen, Fragebögen, Fotos
+
+„Login als Behandler“ (Impersonation) für Support
+
+Behandler
+
+Vollzugriff nur im eigenen Tenant
+
+Kunden, Fragebogen, Fotos/Doku
+
+Rechnungen erstellen/stornieren
+
+Termine erstellen/ändern
+
+Technisch: Role-Based Access + Tenant-Filter auf DB-Ebene (Row-Level Security oder konsequent in API).
+
+3) Datenmodell (angepasst auf euren Fall)
+
+Deine Liste ist super — ich ergänze nur das Tenant-Feld und ein paar Pflichtfelder für Rechnungsrecht/Revision.
+
+Tenant (Behandler-Firma)
+
+id
+
+display_name (z.B. “Raluca Craus – med. Fußpflege”)
+
+legal_name (Rechnungsname)
+
+address (Rechnungsadresse)
+
+phone, email
+
+Kleinunternehmer-Hinweis Text (Default: „Gemäß § 6 Abs. 1 Z 27 UStG wird keine Umsatzsteuer berechnet.“)
+
+optional: UID (falls vorhanden)
+
+invoice_prefix (z.B. RAL, RAD, ALE, BAR) oder Jahreskreis
+
+invoice_counter_current / per-year counter
+
+logo optional
+
+User
+
+id, name, email(login)
+
+role (ADMIN/BEHANDLER)
+
+tenant_id (bei Behandler fix, bei Admin null oder “all”)
+
+Customer
+
+id
+
+tenant_id
+
+name, phone, email, birthday optional
+
+tags, notes
+
+marketing_consent optional
+
+IntakeForm
+
+id
+
+tenant_id
+
+customer_id
+
+version
+
+answers (JSON)
+
+signature_image (stored)
+
+pdf_file_id
+
+signed_at (timestamp)
+
+created_by_user_id
+
+Media / CustomerFile (Fotos, Dokumente)
+
+id
+
+tenant_id
+
+customer_id
+
+type (photo_before/after/document/other)
+
+file_id
+
+created_at, created_by
+
+ServiceCatalogItem
+
+id
+
+tenant_id
+
+name
+
+default_price
+
+duration_minutes
+
+buffer_minutes (optional)
+
+description / textbaustein
+
+active
+
+Invoice
+
+id
+
+tenant_id
+
+invoice_number (fortlaufend, einzigartig innerhalb tenant+jahr)
+
+issue_date
+
+customer_snapshot (Name/Adresse zum Zeitpunkt der Rechnung)
+
+payment_method (Bar/Karte)
+
+line_items (oder eigene Tabelle InvoiceItem)
+
+total_amount
+
+tax_rate = 0
+
+status: DRAFT / SENT / PAID / STORNO / CANCELLED
+
+pdf_file_id
+
+sent_to_email
+
+sent_at
+
+created_by_user_id
+
+audit fields: created_at, updated_at, locked_at (nach Versand sperren)
+
+CreditNote / Storno
+
+id
+
+tenant_id
+
+credit_number (eigener Nummernkreis)
+
+original_invoice_id
+
+reason
+
+amount (negativ oder ausgleichend)
+
+pdf_file_id
+
+created_at
+
+Appointment (intern)
+
+id
+
+tenant_id
+
+customer_id
+
+service_id
+
+start_at, end_at
+
+notes_internal
+
+google_calendar_event_id
+
+created_by_user_id
+
+4) Rechnungen: Nummern, Storno, Kleinunternehmer, Bar/Karte
+
+Pro Behandler eigener Nummernkreis. Empfehlung: Jahr + laufende Nummer + Prefix.
+
+Beispiele:
+
+RAL-2026-0001
+
+RAD-2026-0001
+
+ALE-2026-0001
+
+Vorteil: nie Kollisionen, klare Zuordnung.
+
+Storno/Gutschrift:
+
+eigenes Dokument mit eigener Nummer, z.B. RAL-G-2026-0001
+
+referenziert Originalrechnung (Nummer + Datum)
+
+Originalrechnung bleibt unverändert, Status = “STORNO”, Storno-PDF wird verknüpft
+
+Kleinunternehmer:
+
+fix Textbaustein pro Tenant (editierbar)
+
+keine MwSt.-Zeile, Steuersatz 0
+
+Zahlungsart (Bar/Karte):
+
+Feld auf Rechnung, auswählbar beim Erstellen
+
+optional “Bezahlt am …” + Status PAID
+
+Sperrlogik:
+
+Sobald Rechnung versendet → “locked”: Positionen/Preis nicht mehr ändern (nur Storno/Korrektur möglich). Das ist wichtig für Nachvollziehbarkeit.
+
+5) E-Mail-Versand „aus der eigenen Mailadresse“ (realistisch gelöst)
+
+Es gibt zwei praktikable Wege:
+
+Variante 1 (empfohlen): Google/Microsoft OAuth pro Behandler
+
+Jeder Behandler verbindet einmal sein Postfach (Gmail/Workspace oder Outlook/365)
+
+Versand passiert über die jeweilige API → Absender ist wirklich die eigene Adresse
+
+Vorteil: bessere Zustellbarkeit, keine SMTP-Passwörter in der App
+
+Variante 2: SMTP pro Behandler
+
+In den Einstellungen hinterlegt jeder Behandler SMTP-Server + App-Passwort
+
+Funktioniert, aber wartungsintensiver (Passwörter, Providerwechsel)
+
+Mail-Log: Jede gesendete Rechnung protokolliert: an wen, wann, Betreff, Erfolg/Fehler.
+
+6) Google Kalender: pro Behandler + Gemeinschaftskalender
+
+Du willst zwei Dinge gleichzeitig:
+
+Behandler arbeitet in seinem Kalender (OAuth pro User)
+
+Alle sehen alle Termine zusammen in einem Gemeinschafts-Blick
+
+Saubere Lösung
+
+Jeder Behandler verbindet seinen Google Kalender.
+
+App speichert pro Termin die event_id im jeweiligen Kalender.
+
+In der App gibt es eine Ansicht „Team-Kalender“, die alle Termine aus allen Tenants zusammenzieht.
+
+Wichtig (Datenschutz intern): Team-Kalender sollte standardmäßig nur anzeigen:
+
+Zeitblock + Behandler + Service-Kürzel (optional)
+
+Kundenname entweder ausblendbar oder nur für Admin sichtbar
+So bleibt es im Studio alltagstauglich, ohne unnötig Kundendaten preiszugeben.
+
+Technische Umsetzung Team-Kalender
+
+Entweder:
+
+App liest via Google Calendar API die Events aller verbundenen Kalender (über die jeweiligen OAuth-Tokens), cached sie und zeigt sie zusammen.
+
+Oder:
+
+Zusätzlich wird ein “Shared Calendar” in Google geführt und die App schreibt parallel Blocks hinein (aber dann musst du Sync/Updates sauber managen).
+Ich würde erste Variante nehmen: weniger Sync-Probleme, eine Quelle pro Behandler.
+
+7) Screens/Workflows (MVP, konkret)
+Login
+
+Benutzer loggt ein → landet automatisch im eigenen Tenant
+
+Admin hat oben einen Tenant-Switch (“Ansicht: Raluca / Radu / Alexandra / Barbara / Alle”)
+
+Kunden
+
+Liste + Suche
+
+Kundenprofil: Stammdaten, Notizen, Tags, Historie, Dateien/Fotos
+
+Erstkundenbogen am iPad
+
+Button „Erstkundenbogen starten“
+
+Formular → Unterschrift → PDF erzeugen → automatisch im Kundenprofil
+
+Optional: “Drucken” oder “Mail an Kunden”
+
+Services
+
+Service-Katalog (ca. 100)
+
+Preis standard, aber im Rechnungsdialog manuell anpassbar
+
+Rechnung
+
+Rechnung erstellen: Kunde wählen → Services wählen → Zahlungsart Bar/Karte → PDF erzeugen
+
+„Senden“ → E-Mail über verbundenes Postfach
+
+„Drucken“ → Browser Druckdialog
+
+„Storno“ → Storno-Dokument erzeugen
+
+Kalender
+
+Eigener Kalender (nur eigener Tenant)
+
+Team-Kalender (alle Tenants zusammen)
+
+Termin anlegen: Kunde + Service → Dauer/Buffer → Google Event
+
+8) Sicherheits-/DSGVO Punkte (die wir fix einbauen)
+
+Mandantentrennung technisch enforced (nicht nur UI)
+
+Zugriffsliste + Audit-Log (wer hat Kunde/Rechnung/Fragebogen geöffnet/erstellt)
+
+Verschlüsselte Speicherung von Dokumenten (PDFs/Fotos)
+
+Backups + Restore-Prozess
+
+Datenexport pro Kunde (PDF + JSON/CSV) und Löschroutine
+
+9) Umsetzungsvorschlag als Tech-Stack (robust, nicht exotisch)
+
+Web-App: Next.js (Frontend + API) oder React + Backend (FastAPI/Node)
+
+DB: PostgreSQL
+
+File Storage: S3-kompatibel (z.B. Cloud Storage) + signed URLs
+
+Auth: E-Mail + Passwort, optional 2FA für Admin
+
+Google: Calendar API + OAuth
+
+E-Mail: Gmail/Outlook OAuth (pro User) bevorzugt
+
+10) Was ich jetzt als nächstes liefern kann (ohne weitere Fragen)
+
+Wenn du willst, erstelle ich dir als nächsten Output direkt:
+
+Datenbank-Schema (Tabellen + Beziehungen)
+
+Rechnungs-PDF Layout (Kleinunternehmer-Text, Bar/Karte, Storno-Layout)
+
+Fragebogen-Template (als editierbare Versionen)
+
+User Stories + Prioritäten für MVP (so dass ein Entwickler sofort starten kann)
+
+Wenn du direkt starten willst, sag mir nur: soll der Team-Kalender Kundennamen zeigen oder standardmäßig nur “Belegt (Behandler)”? (Ich empfehle “Belegt”, Admin kann optional umschalten.)
+
+1) ok
+2) ok
+3) ok
+4) ok
+5) Variante 1
+6) Kunden name soll für alle sichtbar bleiben, da manche Kunden z.b. um 11:00 Uhr zuerst zur Fußpflege gehen, gleich danach um 12:00 Uhr geht der selbe Kunde zur Kosmetik, also es kann sein, dass ein Kunde ein und der selbe für mehrere Benutzer ist. 
+Umsetzung zum Team-Kalender: Ich nehme erste Variante: weniger Sync-Probleme, eine Quelle pro Behandler.
+7) ok
+8) ok
+9) ok
+10) ok
+
+Top — dann sind wir “locked in” und können das jetzt wirklich build-ready machen. Es gibt nur eine wichtige Konsequenz aus deiner Kalender-Anforderung („Kundenname für alle sichtbar“ + derselbe Kunde kann bei mehreren Behandlern sein):
+
+Wichtige Modell-Anpassung: Kunde kann tenant-übergreifend sein
+
+Wenn ein Kunde bei Raluca und Barbara Termine hat, darf er nicht doppelt/isoliert existieren. Lösung:
+
+Person (global) = “der Mensch” (einmalig, studio-weit)
+
+CustomerProfile (pro Tenant) = Notizen/Tags/Behandlungs-Infos nur für diesen Behandler
+
+Termine zeigen den Person-Namen, egal bei welchem Tenant.
+
+Damit bleibt Datenschutz im Haus ok (alle sehen Name + Termin), aber medizinische/Behandlungsdetails bleiben tenant-getrennt.
+
+A) Datenbank-Schema (konkret, als Tabellen/Beziehungen)
+1) tenants
+
+id (uuid)
+
+display_name
+
+legal_name
+
+invoice_address_line1/2, zip, city, country
+
+phone, email
+
+kleinunternehmer_text
+
+uid_optional
+
+invoice_prefix (RAL/RAD/ALE/BAR)
+
+invoice_counter_year (int) + invoice_counter_value (int) (oder separate Tabelle invoice_sequences)
+
+created_at
+
+2) users
+
+id
+
+tenant_id (nullable für Admin)
+
+role (ADMIN | PRACTITIONER)
+
+name
+
+login_email
+
+password_hash / SSO flag
+
+is_active
+
+created_at
+
+3) persons (globaler Kunde)
+
+id
+
+full_name
+
+phone
+
+email
+
+birthday (optional)
+
+created_at
+
+unique soft-match: optional (email) + (phone) Index, um Duplikate zu vermeiden
+
+4) customer_profiles (Kunde pro Tenant)
+
+id
+
+tenant_id
+
+person_id
+
+tags (text[] oder json)
+
+notes (text)
+
+created_at
+
+UNIQUE(tenant_id, person_id)
+
+5) intake_forms
+
+id
+
+tenant_id
+
+person_id
+
+customer_profile_id
+
+version
+
+answers_json
+
+signature_image_file_id
+
+pdf_file_id
+
+signed_at
+
+created_by_user_id
+
+created_at
+
+6) files (Storage-Metadaten)
+
+id
+
+tenant_id (nullable, wenn global; empfehle: tenant_id setzen, je nach Eigentümer)
+
+person_id (optional)
+
+customer_profile_id (optional)
+
+type (photo_before/photo_after/document/intake_pdf/invoice_pdf/etc.)
+
+storage_key
+
+mime_type
+
+created_by_user_id
+
+created_at
+
+7) services
+
+id
+
+tenant_id
+
+name
+
+default_price_cents
+
+duration_minutes
+
+buffer_minutes
+
+description
+
+is_active
+
+8) invoices
+
+id
+
+tenant_id
+
+invoice_number (z.B. RAL-2026-0001)
+
+issue_date
+
+person_id
+
+customer_snapshot_json (Name/Adresse zum Zeitpunkt)
+
+payment_method (CASH | CARD)
+
+total_cents
+
+status (DRAFT | SENT | PAID | STORNO)
+
+pdf_file_id
+
+sent_to_email
+
+sent_at
+
+locked_at
+
+created_by_user_id
+
+created_at
+
+9) invoice_items
+
+id
+
+invoice_id
+
+service_id (nullable, falls freie Position)
+
+title
+
+qty
+
+unit_price_cents
+
+line_total_cents
+
+10) credit_notes (Storno/Gutschrift)
+
+id
+
+tenant_id
+
+credit_number (z.B. RAL-G-2026-0001)
+
+original_invoice_id
+
+issue_date
+
+reason
+
+total_cents (negativ)
+
+pdf_file_id
+
+created_by_user_id
+
+created_at
+
+11) appointments (intern + Google Verknüpfung)
+
+id
+
+tenant_id
+
+person_id
+
+service_id
+
+start_at, end_at
+
+notes_internal
+
+google_calendar_id (welcher Kalender)
+
+google_event_id
+
+created_by_user_id
+
+created_at
+
+12) oauth_accounts (Google/Gmail/Outlook pro User)
+
+id
+
+user_id
+
+provider (google | microsoft)
+
+email
+
+refresh_token_encrypted
+
+access_token_encrypted (optional)
+
+expires_at
+
+scopes
+
+created_at
+
+13) audit_log
+
+id
+
+tenant_id
+
+user_id
+
+action (VIEW/CREATE/UPDATE/DELETE/SEND)
+
+entity_type (PERSON/INVOICE/INTAKE/APPOINTMENT/FILE)
+
+entity_id
+
+metadata_json
+
+created_at
+
+B) Rechnungs-PDF Layout (Inhalt + Logik)
+Kopfbereich (pro Tenant)
+
+Rechnungssteller: legal_name, Adresse, Tel, E-Mail, optional UID
+
+Empfänger: Kundenname + (Adresse optional — wenn ihr Adressen erfassen wollt; sonst nur Name)
+
+Rechnungsdaten:
+
+Rechnungsnummer
+
+Rechnungsdatum
+
+Zahlungsart: Bar / Karte
+
+Status (intern, nicht zwingend auf PDF)
+
+Positionen
+
+Leistung | Menge | Einzelpreis | Summe
+
+Gesamtbetrag
+
+Steuerblock (Kleinunternehmer)
+
+Keine USt-Zeilen
+
+Fixer Hinweistext pro Tenant:
+
+„Gemäß § 6 Abs. 1 Z 27 UStG wird keine Umsatzsteuer berechnet.“
+
+Footer
+
+Dankestext, optional Bankdaten (falls gewünscht)
+
+Optional: Hinweis „Bar/Karte bezahlt am …“ bei Status PAID
+
+Storno/Gutschrift-PDF
+
+Titel: „Storno“ oder „Gutschrift“
+
+Eigene Nummer + Datum
+
+Referenz: „Storniert Rechnung Nr. … vom …“
+
+Betrag negativ oder ausgleichend
+
+Hinweis: „Dieses Dokument hebt die genannte Rechnung auf.“
+
+Sperrregel: Sobald sent_at gesetzt → invoice locked → Änderungen nur via Storno.
+
+C) Erstkunden-Fragebogen Template (Versionierbar)
+
+Ich würde den Fragebogen als Version speichern (z.B. v1.0), damit ihr später Felder ändern könnt, ohne alte PDFs “inkonsistent” zu machen.
+
+Vorschlag Struktur (typisch Studio-tauglich)
+
+Persönliche Daten (Name, Tel, Mail, Geburtsdatum)
+
+Gesundheitsfragen (Ja/Nein + ggf. Details)
+
+Allergien
+
+Medikamente
+
+Schwangerschaft/Stillzeit
+
+Hauterkrankungen / Diabetes (v.a. Fußpflege relevant)
+
+Blutverdünner etc.
+
+Kontraindikationen / Risiken (service-spezifisch optional)
+
+Einverständnis Behandlung
+
+Aufklärung, Risiken verstanden
+
+Einwilligung Fotos (optional Checkbox)
+
+Datenschutz / Einwilligung Kontakt (optional)
+
+Unterschrift
+
+Signaturfeld
+
+Datum/Uhrzeit auto
+
+Name in Druckschrift
+
+Output:
+
+PDF mit Studio/Behandler-Kopf + Antworten + Signaturbild + Zeitstempel + “erstellt von User X”.
+
+D) User Stories & Prioritäten (MVP → Go-live)
+Must-have (MVP)
+
+Login (Admin/Behandler), Tenant-Scope enforced
+
+Personen anlegen + Dubletten-Check (Telefon/Mail)
+
+Kundenprofil pro Tenant (Notizen/Tags)
+
+Erstkundenbogen am iPad inkl. Unterschrift → PDF gespeichert
+
+Servicekatalog (100 Services importierbar)
+
+Rechnung erstellen aus Services, Preis anpassbar
+
+Fortlaufende Nummern pro Tenant + Jahr
+
+Rechnung PDF generieren + E-Mail Versand via OAuth (Variante 1)
+
+Storno/Gutschrift erzeugen + Verknüpfung
+
+Google Kalender OAuth pro Behandler
+
+Termin erstellen (Service → Dauer/Buffer) + in Google schreiben
+
+Team-Kalender Ansicht (alle Termine) inkl. Kundenname sichtbar
+
+Should-have (direkt nach MVP)
+
+“Bezahlt”-Status + Zahlungsdatum
+
+Foto-Doku (vorher/nachher) im Kundenprofil
+
+Audit-Log für sensible Aktionen
+
+Export pro Kunde (PDFs + Basisdaten)
+
+Nice-to-have
+
+Automatische Reminder
+
+Statistiken (Umsatz pro Tenant, Auslastung)
+
+Rechte-Feintuning (z.B. Behandler kann nur eigene Rechnungen, etc.)
+
+E) Konkrete “Setup-Daten” (aus deinen Infos)
+
+Wir hinterlegen 4 Tenants mit jeweiligen Firmen-/Kontakt-/Rechnungsdaten und setzen:
+
+kleinunternehmer_text = Standard
+
+invoice_prefix = RAL / RAD / ALE / BAR
+
+Absender-Mail = über OAuth je User
+
+Studioadresse (für UI/Info) kann als “Location” gespeichert werden:
+
+Magnifique Beauty Institut, Flugfeldgürtel 24/1, 2700 Wiener Neustadt
+
+Nächster sinnvoller Schritt (ohne weitere Fragen)
+
+Ich kann dir jetzt direkt entweder
+
+ein technisches Pflichtenheft (als strukturiertes Dokument) schreiben, das du einem Entwickler geben kannst, oder
+
+ein Datenimport-Template (CSV-Felder) für die ~100 Services definieren (damit ihr nicht alles manuell klickt).
+
+Sag einfach: „1“ oder „2“ (oder beide).
+
+Wichtige Modell-Anpassung: Kunde kann tenant-übergreifend sein: dein Vorschlag ist perfekt, so machen wir es!
+A) ok
+B) Footer mit Dankestext (las dir da was cooles einfallen), Bankdaten des jeweiligen Benutzers und Hinweis „Bar/Karte bezahlt am …“ bei Status PAID
+C) derzeitiger Fragenbogen für Benutzer 1 = Raluca sieht so aus (siehe Foto in Beilage), du kannst dieses ruhig erweitern, dann haben wir mal ein Standart Fragebogen für alle Benutzer. Fragebogen kann und wird wahrscheinlich pro Benutzer unterschiedlich sein, also soll/muss es bearbeitbar sein.
+D) 14. es sollen aber nicht nur zwei Fotos hinzugefügt werden können, sondern quasi unendlich viele (eventuell Bildgröße beim upload automatisch verkleinern, damit nicht zu viel Speichrplatz verwendet wird)
+17. perfekt, nehmen wir dazu
+18. perfekt, nehmen wir dazu
+19. perfekt, nehmen wir dazu, wenn du zusätzliche vernünftige Ideen hast, gerne vorschlagen
+E) ok
+
+Nächster sinnvoller Schritt: ich dachte dass du mir dieses Programm schreiben kannst, ich will dass selbst mit deiner Hilfe machen/entwickeln und keinen Entwickler geben, schaffen wir das?
+
+Ja, das schaffen wir — wenn du bereit bist, es in klare Etappen zu bauen und nicht alles auf einmal. Du brauchst keinen externen Entwickler, aber du brauchst einen soliden Tech-Stack, saubere Datenstruktur (haben wir) und dann Schritt für Schritt.
+
+Unten bekommst du:
+
+Konkrete Tech-Entscheidung, die für Solo-Entwicklung am wenigsten weh tut
+
+Was ich aus eurem Papier-Fragebogen (Foto) als digitales Formular ableite + wie wir es bearbeitbar pro Benutzer machen
+
+Rechnungs-Footer Text + Bankdaten + “Bezahlt am …” Logik
+
+Extra Features (Foto-Upload “unendlich”, Reminder, Statistik, Rollen)
+
+Startplan: Was du diese Woche wirklich bauen kannst (inkl. Reihenfolge)
+
+1) Stack-Empfehlung für “Ich baue das selbst”
+
+Für Solo-Dev ist das am besten:
+
+Next.js (Web-App) + Supabase
+
+Supabase Auth (Login, Rollen)
+
+Supabase Postgres (Datenbank)
+
+Supabase Storage (PDFs/Fotos)
+
+Row Level Security (RLS) für Mandantentrennung (extrem wichtig, und Supabase kann das gut)
+
+Warum das gut ist: Du musst nicht erst Server/Hosting/Users/DB/Storage alles selbst zusammennageln.
+
+Google Kalender + Gmail Versand machen wir per OAuth in Next.js API Routes (oder Supabase Edge Functions). Das ist absolut machbar.
+
+2) Fragebogen (vom Foto) → digitales, editierbares Formular pro Benutzer
+
+Ich lese aus dem Foto (Raluca Fußpflege) diese Felder/Fragen heraus:
+
+A) Stammdaten
+
+Name
+
+Vorname
+
+Straße/Hausnummer
+
+PLZ/Ort
+
+Geburtsdatum
+
+Telefon
+
+E-Mail
+
+Mobil (optional)
+
+Krankenkasse (optional)
+
+Hausarzt (optional)
+
+B) Medizinische Ja/Nein Fragen (mit Checkboxen)
+
+Links:
+
+Erstes Mal bei Fußpflege?
+
+Diabetiker?
+
+Rheumatiker?
+
+Blutverdünnende Mittel?
+
+Durchblutungsstörungen?
+
+Bluthochdruck?
+
+Herzerkrankungen?
+
+Rechts:
+
+Herzschrittmacher?
+
+Infektionskrankheiten (z.B. Hepatitis)?
+
+Fußoperationen?
+
+Krampfadern?
+
+Thrombosegefahr?
+
+Laufen/stehen viel beruflich/privat?
+
+Tetanus geimpft?
+
+C) Allergien Freitext
+
+“Bestehen Allergien? Wenn ja, welche Substanzen?”
+
+D) Aufklärung / Einverständnis + Unterschrift
+
+Text zur Risikoaufklärung
+
+Hinweis zu Fotos (interner Gebrauch)
+
+Bestätigung: “nach bestem Wissen beantwortet…”
+
+Ort/Datum
+
+Unterschrift
+
+E) Terminabsage-Hinweis (Footer im Fragebogen)
+
+“<24h Absage wird verrechnet” (Policy)
+
+So machen wir den Fragebogen bearbeitbar pro Benutzer (Tenant)
+
+Wir bauen einen Form Builder light (nicht übertrieben), mit Versionierung:
+
+Tabelle form_templates:
+
+tenant_id
+
+name (z.B. “Erstbehandlung Standard”)
+
+version
+
+schema_json (Felder + Reihenfolge + Pflichtfelder + Texte)
+
+is_active
+
+Beim Ausfüllen speichern wir:
+
+intake_forms.answers_json (Antworten)
+
+plus erzeugen wir PDF aus Template + Antworten + Signatur
+
+Wichtig: Du willst später pro Behandler eigene Fragebögen → das passt perfekt: jeder Tenant hat seine eigenen Templates.
+
+✅ Erweiterungen, die ich sofort in den Standard-Fragebogen aufnehmen würde:
+
+Checkbox: “Einwilligung zur Kontaktaufnahme (WhatsApp/SMS/E-Mail)” getrennt
+
+Checkbox: “Einwilligung Fotoaufnahmen intern” + optional “für Marketing” (separat!)
+
+Freitext: “Sonstige Erkrankungen / Hinweise”
+
+Freitext: “Medikamente (welche?)” (statt nur Ja/Nein)
+
+Bei “Ja” Fragen: optionales Detailfeld (z.B. Blutverdünner: welches?)
+
+3) Rechnungs-PDF: Footer, Bankdaten, “Bar/Karte bezahlt am …”
+Footer Text (Vorschläge – du kannst pro Tenant auswählen)
+
+Variante 1 (kurz & classy):
+
+Vielen Dank für Ihren Besuch bei Magnifique Beauty Institut. Wir freuen uns, Sie bald wieder verwöhnen zu dürfen.
+
+Variante 2 (freundlich & persönlich):
+
+Danke, dass Sie uns Ihr Vertrauen schenken. Bei Fragen zur Behandlung oder Pflege melden Sie sich jederzeit gerne.
+
+Variante 3 (mit Care-Hinweis):
+
+Vielen Dank! Für ein optimales Ergebnis beachten Sie bitte die Pflegehinweise. Wir sind jederzeit gerne für Sie da.
+
+Bankdaten pro Benutzer
+
+Im tenants Profil speichern:
+
+IBAN
+
+BIC (optional)
+
+Bankname (optional)
+
+Kontoinhaber (oft ident mit legal_name)
+
+Auf PDF drucken nur wenn Zahlungsart ≠ “Bar/Karte bezahlt” oder immer (dein Wunsch). Ich würde: immer, weil es professionell ist.
+
+“Bar/Karte bezahlt am …”
+
+Logik:
+
+Wenn Invoice status = PAID → zeige Zeile:
+
+Bezahlt am: 28.02.2026 — Zahlungsart: Karte
+
+Wenn nicht bezahlt → nicht anzeigen
+
+4) Deine Punkte D) + meine Ergänzungen
+14) “Unendlich viele Fotos” + Auto-Komprimierung
+
+Ja. So:
+
+Upload beliebig viele Bilder pro Kunde/Behandlung
+
+Beim Upload im Browser:
+
+automatisch auf z.B. max 1600px Kante verkleinern
+
+Qualität z.B. 0.75 (JPEG/WebP)
+
+Dann in Storage speichern + im System nur URLs/Metadaten
+
+Das spart massiv Speicher und macht iPad-Uploads schnell.
+
+17) Reminder
+
+E-Mail Reminder (später optional SMS)
+
+Regel: 24h vorher + optional 2h vorher
+
+Opt-in pro Kunde (DSGVO sauber)
+
+18) Statistik
+
+Umsatz pro Tenant/Monat
+
+Top Services
+
+Auslastung (Termindauer vs. freie Slots)
+
+Wiederkehrquote (Kunde hatte >1 Termin)
+
+19) Rechte-Feintuning + zusätzliche sinnvolle Ideen
+
+Sinnvoll:
+
+Kunden-Duplikate vermeiden (globaler Person-Datensatz, Matching über Telefon/E-Mail)
+
+“Kunde ist bei mehreren Behandlern”: Beim Termin anlegen sucht man Person global, dadurch klappt dein 11:00/12:00 Usecase perfekt
+
+Storno-Grund Pflichtfeld (für Ordnung)
+
+Dokumente exportieren pro Kunde (alle PDFs + Fotos als ZIP) – sehr hilfreich bei Auskunftsbegehren
+
+5) Ja: Wir bauen das zusammen — so startest du ohne dich zu verzetteln
+
+Wenn du wirklich selbst entwickeln willst, ist die Reihenfolge entscheidend. So machen wir es:
+
+Etappe 1: Fundament (1–2 Abende)
+
+Next.js Projekt
+
+Supabase Projekt (Auth + DB + Storage)
+
+Rollen: ADMIN / PRACTITIONER
+
+Tenants + Tenant-Switch für Admin
+
+RLS Regeln (wichtig!)
+
+Etappe 2: Kunden (Person + CustomerProfile)
+
+Person global anlegen/suchen
+
+Tenant-Profil für Person anlegen
+
+Kundenliste + Suche
+
+Etappe 3: Fragebogen am iPad
+
+Template speichern (Schema JSON)
+
+Formular rendern
+
+Unterschriftfeld
+
+PDF generieren + speichern
+
+Etappe 4: Services + Rechnung
+
+Services CRUD + Import (CSV)
+
+Rechnung erstellen + Nummernkreis
+
+PDF Rechnung
+
+OAuth Gmail Versand
+
+Etappe 5: Kalender
+
+Google OAuth pro User
+
+Event anlegen + speichern
+
+Team-Kalender Ansicht (aggregiert)
+
+Etappe 6: Fotos, Reminder, Statistik
+
+Multi-Upload + Komprimierung
+
+Reminder Cron
+
+Dashboard
+
+Nächster Schritt (damit wir wirklich anfangen, nicht nur planen)
+
+Sag mir nur eins (kurz): Willst du Next.js + Supabase nehmen?
+Wenn ja, gebe ich dir im nächsten Schritt ganz konkret:
+
+DB Tabellen als SQL (inkl. RLS Policies für Admin/Behandler)
+
+Supabase Auth Setup (Role Claims)
+
+Projektstruktur (Ordner, Pages)
+
+Erste 2 Screens (Login + Kundenliste) als Code-Skelett
+
+Und dann bauen wir iterativ weiter.
+
+1) ok
+2) ok + Erweiterungen die du vorgeschlagen hast einbauen
+3) Variante 1 für Footer Text; Bankdaten pro Benutzer immer und auf jeder Rechnung drucken; Bar/Karte Logik = ok
+4) 14) “Unendlich viele Fotos” + Auto-Komprimierung = ok
+4) 17) Reminder = ok +24h Regel
+4) 18) Statistik = ok
+4) 19) Rechte-Feintuning + zusätzliche sinnvolle Ideen, deine Vorschläge sind perfekt, nehmen wir dazu
+5) genauso machen wir es in Etappen, danke
+
+Nächster Schritt (damit wir wirklich anfangen, nicht nur planen):
+was ist besser bzw. kostenlos? --> Next.js + Supabase
+Nachgedacht für 15s
+
+Ja — Next.js + Supabase ist eine der besten Kombis, wenn du „möglichst viel kostenlos“ + „trotzdem professionell“ willst.
+
+Was ist kostenlos (realistisch) und wo sind die Grenzen?
+Hosting der Web-App (Next.js)
+
+Vercel Hobby ist gratis und der Standard für Next.js Deployments.
+
+Für ein Studio-Tool mit wenigen Nutzern (4–5 Behandler + Admin) reicht das in der Regel locker.
+
+Achtung: Wenn ihr sehr viele Bilder über Vercel ausliefert (oder extrem viel Traffic habt), können Limits/„Fair Use“ irgendwann relevant werden. Die Details hängen stark vom Nutzungsverhalten ab.
+
+Backend (DB, Auth, Storage) – Supabase
+
+Supabase hat einen Free Plan, der für MVP/Start super ist. Die wichtigsten Größen, die du im Blick behalten musst:
+
+DB Größe: 500 MB pro Projekt (Free)
+
+Egress (Traffic raus): 5 GB (Free)
+
+Auth (MAU): bis 50.000 monatlich aktive User (Free)
+
+Für euch: 4–5 interne Nutzer + Kunden füllen Fragebogen im Studio (kein öffentlicher Login) → MAU ist völlig unkritisch. Kritischer wird eher Storage/Egress, wenn ihr sehr viele Fotos/PDFs speichert und oft herunterladet.
+
+Fazit: „Besser vs. kostenlos?“
+
+Besser für Solo-Entwicklung + schnell live: Next.js + Supabase (ja).
+
+Am längsten kostenlos nutzbar: auch diese Kombi, wenn wir Bilder/PDFs effizient behandeln (Komprimierung, Thumbnails, keine unnötigen Downloads).
+
+Wie wir es so bauen, dass es lange im Free-Bereich bleibt
+
+Fotos beim Upload komprimieren (max Kante + WebP/JPEG Quality) → spart Storage & Traffic massiv.
+
+Thumbnails speichern und in Listen nur Thumbnails laden.
+
+PDFs nicht ständig neu generieren, sondern einmal speichern und wiederverwenden.
+
+In Supabase Storage saubere Ordnerstruktur pro Tenant/Person (und Lifecycle/Archiv später möglich).
+
+Nächster echter Schritt (jetzt wird’s konkret)
+
+Wenn du „Next.js + Supabase“ fix nimmst, gebe ich dir als nächstes:
+
+SQL für alle Tabellen (Tenants, Users, Persons, CustomerProfiles, Services, Invoices, Appointments…)
+
+RLS Policies (Admin sieht alles, Behandler nur eigenen Tenant; Person global + CustomerProfile tenant-spezifisch)
+
+Projektstruktur + Start-Code für Login, Tenant-Switch (Admin) und Kundenliste
+
+Sag mir nur: Willst du das Projekt in TypeScript (empfohlen) oder JavaScript starten?
+
+genauso machen wir es wie du mir es empfohlen hast und wir nehmen TypeScript
+
+
+
+
+
+Sehr gut. 👌
+Jetzt ist deine Architektur sauber.
+
+Du bist jetzt:
+
+🔐 ADMIN (siehst alles)
+
+🧑‍⚕️ gleichzeitig eigener Tenant (Permanent Make-up)
+
+👥 Multi-User-fähig
+
+🏢 Mandantenfähig
+
+📅 Google pro Behandler vorbereitet
+
+🧱 RLS stabil (keine Rekursion mehr)
+
+✏️ Kunden editierbar
+
+🔄 Tenant-Switch live
+
+Das ist kein Hobby-Projekt mehr – das ist eine echte SaaS-Struktur.
+
+Nächster Schritt: UI professionell machen
+
+Bevor wir einfach „schöner“ machen, machen wir es praxistauglich.
+
+In einer echten Praxis brauchst du:
+
+Klarere Hierarchie (Header + Navigation)
+
+Weniger „technischen Look“
+
+Schnellere Bedienbarkeit auf iPad
+
+Weniger graue Boxen, mehr visuelle Führung
+
+Buttons konsistent (Primary / Secondary)
+
+Bessere Abstände
+
+Mobile-Optimierung
+
+Schnellzugriffe (z. B. Termin anlegen direkt aus Liste)
+
+Meine Empfehlung – wir machen es systematisch:
+Phase 1 – Layout-Struktur
+
+Top Navigation (Dashboard / Kunden / Kalender / Einstellungen)
+
+Einheitlicher Seiten-Container
+
+Bessere Headline-Struktur
+
+Klarer Button-Stil
+
+Phase 2 – Kundenbereich optimieren
+
+Suchfeld
+
+Schnellfilter
+
+Kundenkarte statt Tabellen-Feeling
+
+Schnell „+ Termin“ direkt aus Liste
+
+Phase 3 – Kundendetail modernisieren
+
+2-Spalten Layout
+
+Termine visuell schöner
+
+Notizen moderner
+
+Fotos mit Lightbox
+
+Ich will dich nicht in Design-Spielereien treiben.
+Wir machen das funktional & professionell.
+
+Bevor ich dir Code gebe:
+
+Willst du eher:
+
+A) Clean / minimal / Apple-Style
+B) Business / modern / SaaS-Style
+C) Praxis / Beauty / etwas eleganter & weicher
+
+Sag mir A, B oder C – dann bauen wir die UI in eine klare Richtung.
+
+
+
+Top – dann machen wir als Nächstes:
+
+Kundenzeile komplett klickbar (ganze Row, alle Spalten)
+
+Suchfeld über der Tabelle (Server-side via ?q=; Filter aktuell “in-memory”, weil Supabase Join-Filter auf person:persons(...) je nach Setup zickig ist)
+
+Hier ist dein Customers Page Code 1:1 zum Ersetzen (src/app/customers/page.tsx):
+
+import Link from "next/link";
+import { supabaseServer } from "@/lib/supabase/server";
+import { setAdminTenant } from "@/app/admin/actions";
+import { getAdminTenantCookie, getEffectiveTenantId } from "@/lib/effectiveTenant";
+import AdminTenantSelect from "./AdminTenantSelect";
+
+export default async function CustomersPage({
+  searchParams,
+}: {
+  searchParams?: { q?: string } | Promise<{ q?: string }>;
+}) {
+  const sp = searchParams ? await searchParams : undefined;
+  const qRaw = (sp?.q ?? "").toString();
+  const q = qRaw.trim().toLowerCase();
+
+  const supabase = await supabaseServer();
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData.user;
+
+  if (!user) {
+    return (
+      <main className="p-6">
+        <Link href="/login" className="underline">
+          Bitte einloggen
+        </Link>
+      </main>
+    );
+  }
+
+  const { data: profile } = await supabase
+    .from("user_profiles")
+    .select("role, tenant_id, full_name")
+    .eq("user_id", user.id)
+    .single();
+
+  const role = (profile?.role ?? "PRACTITIONER") as string;
+
+  // Admin Dropdown-Optionen
+  let tenantOptions: { tenant_id: string; label: string }[] = [];
+  let currentAdminTenant = "all";
+
+  if (role === "ADMIN") {
+    currentAdminTenant = await getAdminTenantCookie();
+
+    const { data: practitioners } = await supabase
+      .from("user_profiles")
+      .select("tenant_id, full_name")
+      .eq("role", "PRACTITIONER");
+
+    const seen = new Set<string>();
+    tenantOptions =
+      (practitioners ?? [])
+        .filter((p: any) => p.tenant_id)
+        .map((p: any) => ({
+          tenant_id: p.tenant_id as string,
+          label: (p.full_name as string) || (p.tenant_id as string),
+        }))
+        .filter((x) => {
+          if (seen.has(x.tenant_id)) return false;
+          seen.add(x.tenant_id);
+          return true;
+        })
+        .sort((a, b) => a.label.localeCompare(b.label));
+  }
+
+  const effectiveTenantId = await getEffectiveTenantId({
+    role: profile?.role ?? "PRACTITIONER",
+    tenant_id: profile?.tenant_id ?? null,
+  });
+
+  // Kunden-Query
+  let queryBuilder = supabase
+    .from("customer_profiles")
+    .select(
+      `
+        id,
+        created_at,
+        tenant_id,
+        person_id,
+        person:persons (
+          id,
+          full_name,
+          phone,
+          email,
+          birthday
+        )
+      `
+    )
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (role === "ADMIN" && effectiveTenantId) {
+    queryBuilder = queryBuilder.eq("tenant_id", effectiveTenantId);
+  }
+
+  const { data: rowsRaw, error } = await queryBuilder;
+
+  const rows = (rowsRaw ?? []).filter((r: any) => {
+    if (!q) return true;
+
+    const name = (r?.person?.full_name ?? "").toString().toLowerCase();
+    const phone = (r?.person?.phone ?? "").toString().toLowerCase();
+    const email = (r?.person?.email ?? "").toString().toLowerCase();
+
+    return name.includes(q) || phone.includes(q) || email.includes(q);
+  });
+
+  const adminMissingOwnTenant =
+    role === "ADMIN" && currentAdminTenant === "all" && !profile?.tenant_id;
+
+  return (
+    <main className="p-6 mx-auto max-w-5xl">
+      <div className="flex items-start justify-between gap-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-white">Kunden</h1>
+          <p className="mt-1 text-sm text-white/60">
+            Eingeloggt als {profile?.full_name ?? user.email} ({profile?.role ?? "—"})
+          </p>
+
+          {role === "ADMIN" ? (
+            <div className="mt-3 space-y-2">
+              <AdminTenantSelect current={currentAdminTenant} options={tenantOptions} action={setAdminTenant} />
+
+              {currentAdminTenant === "all" ? (
+                <div className="text-xs text-white/50">
+                  Hinweis: “Alle” ist die Admin-Ansicht. “Neuer Kunde” wird dann in deinem eigenen Tenant angelegt.
+                </div>
+              ) : null}
+
+              {adminMissingOwnTenant ? (
+                <div className="text-xs text-red-300">
+                  Dein ADMIN-Profil hat aktuell kein tenant_id. Bitte setze tenant_id in user_profiles, sonst kann “Alle → eigener Tenant”
+                  nicht funktionieren.
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
+        <Link
+          className="rounded-xl bg-white text-black px-4 py-2 font-medium hover:bg-white/90"
+          href="/customers/new"
+        >
+          + Neuer Kunde
+        </Link>
+      </div>
+
+      {/* Suche */}
+      <div className="mt-6 flex items-center gap-3">
+        <form className="flex w-full max-w-md items-center gap-2" action="/customers" method="get">
+          <input
+            name="q"
+            defaultValue={qRaw}
+            placeholder="Suchen: Name, Telefon oder E-Mail…"
+            className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/40 outline-none focus:border-white/20"
+          />
+          <button
+            type="submit"
+            className="rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/15"
+          >
+            Suchen
+          </button>
+
+          {qRaw ? (
+            <Link
+              href="/customers"
+              className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white/80 hover:bg-black/30"
+            >
+              Reset
+            </Link>
+          ) : null}
+        </form>
+
+        <div className="ml-auto text-sm text-white/50">
+          {rows.length} Ergebnis(se)
+        </div>
+      </div>
+
+      {error ? (
+        <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+          Fehler: {error.message}
+        </div>
+      ) : null}
+
+      <div className="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-[var(--surface)]">
+        <table className="w-full text-sm">
+          <thead className="bg-white/5">
+            <tr className="text-left text-white/70">
+              <th className="p-3 font-semibold">Name</th>
+              <th className="p-3 font-semibold">Telefon</th>
+              <th className="p-3 font-semibold">E-Mail</th>
+              <th className="p-3 font-semibold">Erstellt</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {rows.map((r: any) => {
+              const href = `/customers/${r.id}`;
+              return (
+                <tr key={r.id} className="border-t border-white/10 hover:bg-white/5">
+                  <td className="p-3 font-medium text-white">
+                    <Link className="block" href={href}>
+                      {r.person?.full_name ?? "-"}
+                    </Link>
+                  </td>
+
+                  <td className="p-3 text-white/80">
+                    <Link className="block" href={href}>
+                      {r.person?.phone ?? "-"}
+                    </Link>
+                  </td>
+
+                  <td className="p-3 text-white/80">
+                    <Link className="block" href={href}>
+                      {r.person?.email ?? "-"}
+                    </Link>
+                  </td>
+
+                  <td className="p-3 text-white/70">
+                    <Link className="block" href={href}>
+                      {r.created_at ? new Date(r.created_at).toLocaleDateString() : "-"}
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
+
+            {(rows?.length ?? 0) === 0 ? (
+              <tr>
+                <td className="p-6 text-white/50" colSpan={4}>
+                  Noch keine Kunden vorhanden.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </main>
+  );
+}
+Was du danach siehst
+
+Suche oben (Name/Telefon/E-Mail), URL wird ?q=...
+
+Komplette Zeile klickbar (jede Spalte ist Link → Kundenprofil)
+
+Wenn das passt, sag kurz „ok“, dann können wir im neuen Chat direkt mit Option A weitermachen.
+
+ok
+
+Super. ✅
+
+Neuer Chat – Option A (Kunden-Flow beim Termin-Klick):
+Mein Vorschlag ist genau wie du dachtest:
+
+Klick auf Termin → Kundenprofil öffnen (schnellster Alltag-Flow)
+
+Im Kundenprofil dann: Terminübersicht, neuen Termin, Rechnung später, etc.
+
+Konkrete nächste Steps (Option A):
+
+Kundenprofil: “Termine”-Sektion (Liste der letzten + kommenden Termine des Kunden)
+
+“Neuer Termin” Button im Kundenprofil (vorausgefüllt mit Kunde)
+
+Kalender: Termin-Klick bleibt wie jetzt (Modal + Buttons), aber zusätzlich:
+
+“Zum Kundenprofil” ist der Primary-CTA (ist ja schon drin)
+
+Optional: Deep-Link vom Kalender direkt ins Profil + auf Termin-Tab (z.B. .../customers/:id?tab=appointments)
+
+Wenn du im neuen Chat startest, schreib einfach:
+“Option A starten: Kundenprofil Termine-Sektion”
+Dann gebe ich dir sofort die 1:1 ersetzbaren Files (Customer-Detail Page + Query + UI).
