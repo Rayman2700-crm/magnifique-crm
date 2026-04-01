@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getEffectiveTenantId } from "@/lib/effectiveTenant";
 
 type UserProfileRow = {
@@ -55,7 +54,6 @@ async function requireUserProfile() {
 
   return {
     supabase,
-    admin: supabaseAdmin(),
     user,
     profile: profile as UserProfileRow,
   };
@@ -73,27 +71,14 @@ async function getSelectedTenantId(profile: UserProfileRow) {
   });
 }
 
-function assertTenantAccess(profile: UserProfileRow, tenantId: string) {
-  const role = normalizedRole(profile);
-  if (role === "ADMIN") return;
-
-  const ownTenantId = profile.tenant_id ?? profile.calendar_tenant_id ?? null;
-  if (!ownTenantId) {
-    redirect(buildServicesUrl("error", "Kein eigener Tenant gefunden."));
-  }
-
-  if (ownTenantId !== tenantId) {
-    redirect(buildServicesUrl("error", "Du darfst nur Dienstleistungen deines eigenen Tenants verwalten."));
-  }
-}
-
 export async function setActiveServiceTenant(formData: FormData) {
-  const { admin, profile } = await requireUserProfile();
+  const { supabase, profile } = await requireUserProfile();
   const nextTenantId = String(formData.get("tenant") ?? "all").trim() || "all";
   const role = normalizedRole(profile);
 
   if (role !== "ADMIN") {
-    const ownTenantId = profile.tenant_id ?? profile.calendar_tenant_id ?? null;
+    const ownTenantId =
+      profile.calendar_tenant_id ?? profile.tenant_id ?? null;
 
     if (!ownTenantId) {
       redirect(buildServicesUrl("error", "Kein eigener Tenant gefunden."));
@@ -107,7 +92,7 @@ export async function setActiveServiceTenant(formData: FormData) {
   }
 
   if (nextTenantId !== "all") {
-    const { data: tenant, error: tenantError } = await admin
+    const { data: tenant, error: tenantError } = await supabase
       .from("tenants")
       .select("id")
       .eq("id", nextTenantId)
@@ -139,14 +124,12 @@ export async function setActiveServiceTenant(formData: FormData) {
 }
 
 export async function createService(formData: FormData) {
-  const { admin, profile } = await requireUserProfile();
+  const { supabase, profile } = await requireUserProfile();
   const selectedTenantId = await getSelectedTenantId(profile);
 
   if (!selectedTenantId) {
     redirect(buildServicesUrl("error", "Bitte zuerst einen Behandler/Tenant auswählen."));
   }
-
-  assertTenantAccess(profile, selectedTenantId);
 
   const name = String(formData.get("name") ?? "").trim();
   const durationMinutes = parseMinutes(formData.get("duration_minutes"), 60);
@@ -163,7 +146,7 @@ export async function createService(formData: FormData) {
     redirect(buildServicesUrl("error", "Die Dauer muss größer als 0 sein."));
   }
 
-  const { error } = await admin.from("services").insert({
+  const { error } = await supabase.from("services").insert({
     tenant_id: selectedTenantId,
     name,
     duration_minutes: durationMinutes,
@@ -184,14 +167,12 @@ export async function createService(formData: FormData) {
 }
 
 export async function updateService(formData: FormData) {
-  const { admin, profile } = await requireUserProfile();
+  const { supabase, profile } = await requireUserProfile();
   const selectedTenantId = await getSelectedTenantId(profile);
 
   if (!selectedTenantId) {
     redirect(buildServicesUrl("error", "Bitte zuerst einen Behandler/Tenant auswählen."));
   }
-
-  assertTenantAccess(profile, selectedTenantId);
 
   const serviceId = String(formData.get("service_id") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
@@ -209,7 +190,7 @@ export async function updateService(formData: FormData) {
     redirect(buildServicesUrl("error", "Bitte einen Namen für die Dienstleistung eingeben."));
   }
 
-  const { data: existing, error: existingError } = await admin
+  const { data: existing, error: existingError } = await supabase
     .from("services")
     .select("id, tenant_id")
     .eq("id", serviceId)
@@ -223,7 +204,7 @@ export async function updateService(formData: FormData) {
     redirect(buildServicesUrl("error", "Diese Dienstleistung gehört nicht zum aktiven Tenant."));
   }
 
-  const { error } = await admin
+  const { error } = await supabase
     .from("services")
     .update({
       name,
@@ -247,14 +228,12 @@ export async function updateService(formData: FormData) {
 }
 
 export async function toggleServiceActive(formData: FormData) {
-  const { admin, profile } = await requireUserProfile();
+  const { supabase, profile } = await requireUserProfile();
   const selectedTenantId = await getSelectedTenantId(profile);
 
   if (!selectedTenantId) {
     redirect(buildServicesUrl("error", "Bitte zuerst einen Behandler/Tenant auswählen."));
   }
-
-  assertTenantAccess(profile, selectedTenantId);
 
   const serviceId = String(formData.get("service_id") ?? "").trim();
   const nextActive = String(formData.get("next_active") ?? "0") === "1";
@@ -263,21 +242,7 @@ export async function toggleServiceActive(formData: FormData) {
     redirect(buildServicesUrl("error", "Dienstleistung konnte nicht zugeordnet werden."));
   }
 
-  const { data: existing, error: existingError } = await admin
-    .from("services")
-    .select("id, tenant_id")
-    .eq("id", serviceId)
-    .single();
-
-  if (existingError || !existing) {
-    redirect(buildServicesUrl("error", "Dienstleistung nicht gefunden."));
-  }
-
-  if (existing.tenant_id !== selectedTenantId) {
-    redirect(buildServicesUrl("error", "Diese Dienstleistung gehört nicht zum aktiven Tenant."));
-  }
-
-  const { error } = await admin
+  const { error } = await supabase
     .from("services")
     .update({ is_active: nextActive })
     .eq("id", serviceId)

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getEffectiveTenantId } from "@/lib/effectiveTenant";
 import { setActiveServiceTenant } from "./actions";
 import ServicesWorkspace from "./ServicesWorkspace";
@@ -44,8 +43,6 @@ export default async function ServicesPage({
   searchParams?: Promise<{ success?: string; error?: string }>;
 }) {
   const supabase = await supabaseServer();
-  const admin = supabaseAdmin();
-
   const { data: authData } = await supabase.auth.getUser();
   const user = authData.user;
   if (!user) redirect("/login");
@@ -76,14 +73,14 @@ export default async function ServicesPage({
   let services: ServiceRow[] = [];
 
   if (isAdmin) {
-    const { data: tenantRows } = await admin
+    const { data: tenantRows } = await supabase
       .from("tenants")
       .select("id, display_name")
       .order("display_name", { ascending: true });
 
     tenantOptions = (tenantRows ?? []) as TenantOption[];
   } else if (selectedTenantId) {
-    const { data: ownTenant } = await admin
+    const { data: ownTenant } = await supabase
       .from("tenants")
       .select("id, display_name")
       .eq("id", selectedTenantId)
@@ -96,8 +93,8 @@ export default async function ServicesPage({
 
   if (selectedTenantId) {
     const [{ data: tenant }, { data: serviceRows }] = await Promise.all([
-      admin.from("tenants").select("display_name").eq("id", selectedTenantId).single(),
-      admin
+      supabase.from("tenants").select("display_name").eq("id", selectedTenantId).single(),
+      supabase
         .from("services")
         .select(
           "id, tenant_id, name, default_price_cents, duration_minutes, buffer_minutes, description, is_active, created_at, updated_at"

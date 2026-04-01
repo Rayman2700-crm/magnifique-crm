@@ -90,17 +90,6 @@ type WaitlistDashboardItem = {
   profileExists: boolean;
 };
 
-
-type CalendarServiceRow = {
-  id: string;
-  tenant_id: string;
-  name: string;
-  duration_minutes: number | null;
-  buffer_minutes: number | null;
-  default_price_cents: number | null;
-  is_active: boolean | null;
-};
-
 type ThemeLike = {
   bg: string;
   text: string;
@@ -572,13 +561,6 @@ export default async function DashboardPage() {
     activeWaitlistQuery = activeWaitlistQuery.eq("tenant_id", effectiveReminderTenantId);
   }
 
-
-  const calendarServicesQuery = admin
-    .from("services")
-    .select("id, tenant_id, name, duration_minutes, buffer_minutes, default_price_cents, is_active")
-    .eq("is_active", true)
-    .order("name", { ascending: true });
-
   const [
     todayCountResult,
     weekCountResult,
@@ -589,7 +571,6 @@ export default async function DashboardPage() {
     recentCustomersResult,
     openSlotsResult,
     activeWaitlistResult,
-    calendarServicesResult,
   ] = await Promise.all([
     todayCountQuery,
     weekCountQuery,
@@ -600,7 +581,6 @@ export default async function DashboardPage() {
     recentCustomersQuery,
     openSlotsQuery,
     activeWaitlistQuery,
-    calendarServicesQuery,
   ]);
 
   const todayAppointments = (todayAppointmentsResult.data ?? []) as TodayAppointmentRow[];
@@ -619,9 +599,6 @@ export default async function DashboardPage() {
     status: string | null;
     created_at: string;
   }[]).filter((row) => String(row.status ?? "active").toLowerCase() === "active");
-
-
-  const calendarServices = (calendarServicesResult.data ?? []) as CalendarServiceRow[];
 
   const waitlistCustomerProfileIds = Array.from(
     new Set(
@@ -901,7 +878,6 @@ export default async function DashboardPage() {
       <DashboardCalendarCardClient
         tenants={tenantRows}
         legendUsers={legendUsers}
-        services={calendarServices}
         creatorTenantId={creatorTenantId}
       />
 
