@@ -47,7 +47,7 @@ async function getProfile(
 ) {
   const { data, error } = await supabase
     .from("user_profiles")
-    .select("tenant_id, full_name, role")
+    .select("tenant_id, full_name")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -56,7 +56,6 @@ async function getProfile(
   return {
     tenantId: data?.tenant_id ?? null,
     fullName: data?.full_name ?? "",
-    role: data?.role ?? "PRACTITIONER",
   };
 }
 
@@ -73,11 +72,18 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data, error } = await admin
+    const { tenantId } = await getProfile(supabase, user.id);
+
+    if (!tenantId) {
+      return NextResponse.json({ error: "No tenant found" }, { status: 400 });
+    }
+
+    const { data, error } = await supabase
       .from("team_messages")
       .select(
-        "id, text, sender_id, sender_name, created_at, edited_at, deleted_at, file_name, file_path, file_type, file_size, tenant_id"
+        "id, text, sender_id, sender_name, created_at, edited_at, deleted_at, file_name, file_path, file_type, file_size"
       )
+      .eq("tenant_id", tenantId)
       .order("created_at", { ascending: false })
       .limit(100);
 
@@ -111,7 +117,6 @@ export async function GET() {
         file_type: row.file_type,
         file_size: row.file_size,
         file_url: fileUrl,
-        tenant_id: row.tenant_id,
       };
     });
 
@@ -218,7 +223,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const { data: inserted, error: insertError } = await admin
+    const { data: inserted, error: insertError } = await supabase
       .from("team_messages")
       .insert({
         tenant_id: tenantId,
@@ -246,9 +251,10 @@ export async function POST(req: Request) {
     let mentionedUserIds = new Set<string>();
 
     if (inserted?.id && mentionNames.length > 0) {
-      const { data: profiles, error: profilesError } = await admin
+      const { data: profiles, error: profilesError } = await supabase
         .from("user_profiles")
-        .select("user_id, full_name");
+        .select("user_id, full_name, tenant_id")
+        .eq("tenant_id", tenantId);
 
       if (profilesError) {
         console.error("[chat/messages POST] mention profile load failed:", profilesError.message);
@@ -284,7 +290,7 @@ export async function POST(req: Request) {
             mentioned_user_id: mentionedUserId,
           }));
 
-          const { error: mentionsInsertError } = await admin
+          const { error: mentionsInsertError } = await supabase
             .from("team_message_mentions")
             .insert(mentionRows);
 
@@ -306,7 +312,8 @@ export async function POST(req: Request) {
 
     const { data: subs } = await admin
       .from("push_subscriptions")
-      .select("id, user_id, endpoint, p256dh, auth")
+      .select("id, tenant_id, user_id, endpoint, p256dh, auth")
+      .eq("tenant_id", tenantId)
       .neq("user_id", user.id);
 
     const baseBody = uploadedFile
@@ -327,7 +334,7 @@ export async function POST(req: Request) {
               : "Neue Team-Nachricht",
           body:
             baseBody.length > 140 ? baseBody.slice(0, 137) + "..." : baseBody,
-          url: "/dashboard?openChat=1",
+          url: "/dashboard/chat",
         });
 
         await webpush.sendNotification(

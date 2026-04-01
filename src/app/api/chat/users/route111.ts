@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export async function GET() {
   try {
     const supabase = await supabaseServer();
-    const admin = supabaseAdmin();
 
     const {
       data: { user },
@@ -16,11 +14,29 @@ export async function GET() {
       return NextResponse.json({ error: "Nicht eingeloggt" }, { status: 401 });
     }
 
-    const { data: users, error: usersError } = await admin
+    const { data: profile, error: profileError } = await supabase
+      .from("user_profiles")
+      .select("tenant_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      return NextResponse.json(
+        { error: profileError.message || "Profil konnte nicht geladen werden" },
+        { status: 500 }
+      );
+    }
+
+    const tenantId = profile?.tenant_id ?? null;
+
+    if (!tenantId) {
+      return NextResponse.json({ users: [] });
+    }
+
+    const { data: users, error: usersError } = await supabase
       .from("user_profiles")
       .select("user_id, full_name")
-      .not("user_id", "is", null)
-      .not("full_name", "is", null)
+      .eq("tenant_id", tenantId)
       .order("full_name", { ascending: true });
 
     if (usersError) {
