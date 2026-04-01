@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
-// ❗ Removed strict emoji whitelist to allow full UTF-8 emoji support
+const ALLOWED_EMOJIS = ["👍", "❤️", "😂", "😮"];
 
 async function getProfile(
   supabase: Awaited<ReturnType<typeof supabaseServer>>,
@@ -33,9 +33,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // ✅ Safe JSON parsing (UTF-8 clean)
     const body = await req.json().catch(() => null);
-
     const messageId = body?.messageId ? String(body.messageId) : "";
     const emoji = body?.emoji ? String(body.emoji) : "";
 
@@ -46,8 +44,12 @@ export async function POST(req: Request) {
       );
     }
 
-    // ❗ IMPORTANT: no emoji filtering → allows all emojis correctly
-    // (Prevents broken encoding or missing emoji issues)
+    if (!ALLOWED_EMOJIS.includes(emoji)) {
+      return NextResponse.json(
+        { error: "Emoji not allowed" },
+        { status: 400 }
+      );
+    }
 
     const { tenantId, fullName } = await getProfile(supabase, user.id);
 
@@ -73,7 +75,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Toggle behavior (add/remove reaction)
     if (existing?.id) {
       const { error: deleteError } = await supabase
         .from("team_message_reactions")
@@ -97,7 +98,7 @@ export async function POST(req: Request) {
         message_id: messageId,
         user_id: user.id,
         user_name: fullName || "Team",
-        emoji, // ✅ stored as UTF-8 (no transformation)
+        emoji,
       });
 
     if (insertError) {
