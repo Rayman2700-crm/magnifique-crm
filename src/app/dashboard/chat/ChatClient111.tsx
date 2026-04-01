@@ -918,9 +918,12 @@ export default function ChatClient({
     try {
       const [messagesRes, reactionsRes] = await Promise.all([
         fetch("/api/chat/messages", { cache: "no-store" }),
-        supabase
-          .from("team_message_reactions")
-          .select("id, message_id, user_id, user_name, emoji, created_at"),
+        tenantId
+          ? supabase
+              .from("team_message_reactions")
+              .select("id, message_id, user_id, user_name, emoji, created_at")
+              .eq("tenant_id", tenantId)
+          : Promise.resolve({ data: [], error: null } as any),
       ]);
 
       if (!messagesRes.ok) return;
@@ -972,28 +975,31 @@ export default function ChatClient({
   }, [mergeMessages, supabase, tenantId]);
 
   const loadMentionUsers = useCallback(async () => {
+    if (!tenantId) return;
+
     try {
-      const [usersRes, messagesRes, reactionsRes] = await Promise.all([
-        fetch("/api/chat/users", { cache: "no-store" }),
+      const [profilesRes, messagesRes, reactionsRes] = await Promise.all([
+        supabase
+          .from("user_profiles")
+          .select("user_id, full_name, tenant_id")
+          .eq("tenant_id", tenantId),
         fetch("/api/chat/messages", { cache: "no-store" }),
         supabase
           .from("team_message_reactions")
-          .select("user_id, user_name"),
+          .select("user_id, user_name")
+          .eq("tenant_id", tenantId),
       ]);
 
       const userMap = new Map<string, MentionUser>();
 
       upsertMentionUser(userMap, currentUserId, currentUserName || "Du");
 
-      if (usersRes.ok) {
-        const json = await usersRes.json();
-        const rows = Array.isArray(json?.users) ? json.users : [];
-
-        for (const row of rows) {
-          upsertMentionUser(userMap, row?.userId, row?.fullName);
+      if (!profilesRes.error) {
+        for (const row of profilesRes.data ?? []) {
+          upsertMentionUser(userMap, row?.user_id, row?.full_name);
         }
       } else {
-        console.error("[chat] load mention users from users api failed", usersRes.status);
+        console.error("[chat] load mention users from profiles failed", profilesRes.error.message);
       }
 
       if (messagesRes.ok) {
@@ -1023,7 +1029,7 @@ export default function ChatClient({
     } catch (e) {
       console.error("[chat] load mention users failed", e);
     }
-  }, [supabase, currentUserId, currentUserName]);
+  }, [supabase, tenantId, currentUserId, currentUserName]);
 
   const sendTypingEvent = useCallback(
     async (isTyping: boolean) => {
@@ -1266,6 +1272,7 @@ export default function ChatClient({
   }, [refetchMessages, loadMentionUsers, autoScroll, markLatestAsRead]);
 
   useEffect(() => {
+    if (!tenantId) return;
 
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") {
@@ -1395,13 +1402,14 @@ export default function ChatClient({
         if (cancelled) return;
 
         messageChannel = supabase
-          .channel(`team-messages:global`)
+          .channel(`team-messages:${tenantId}`)
           .on(
             "postgres_changes",
             {
               event: "*",
               schema: "public",
               table: "team_messages",
+              filter: `tenant_id=eq.${tenantId}`,
             },
             async (payload) => {
               const row = (payload.new || payload.old) as any;
@@ -1461,7 +1469,7 @@ export default function ChatClient({
           });
 
         typingChannel = supabase
-          .channel(`typing:global`, {
+          .channel(`typing:${tenantId}`, {
             config: {
               broadcast: { self: false },
             },
@@ -1492,13 +1500,14 @@ export default function ChatClient({
           });
 
         reactionsChannel = supabase
-          .channel(`team-message-reactions:global`)
+          .channel(`team-message-reactions:${tenantId}`)
           .on(
             "postgres_changes",
             {
               event: "INSERT",
               schema: "public",
               table: "team_message_reactions",
+              filter: `tenant_id=eq.${tenantId}`,
             },
             (payload) => {
               const row = payload.new as any;
@@ -1518,6 +1527,7 @@ export default function ChatClient({
               event: "DELETE",
               schema: "public",
               table: "team_message_reactions",
+              filter: `tenant_id=eq.${tenantId}`,
             },
             (payload) => {
               const row = payload.old as any;

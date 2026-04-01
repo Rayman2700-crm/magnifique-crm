@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 
 const ALLOWED_EMOJIS = ["👍", "❤️", "😂", "😮"];
 
@@ -25,7 +24,6 @@ async function getProfile(
 export async function POST(req: Request) {
   try {
     const supabase = await supabaseServer();
-    const admin = supabaseAdmin();
 
     const {
       data: { user },
@@ -53,45 +51,16 @@ export async function POST(req: Request) {
       );
     }
 
-    const { fullName } = await getProfile(supabase, user.id);
+    const { tenantId, fullName } = await getProfile(supabase, user.id);
 
-    const { data: message, error: messageError } = await admin
-      .from("team_messages")
-      .select("id, tenant_id, deleted_at")
-      .eq("id", messageId)
-      .maybeSingle();
-
-    if (messageError) {
+    if (!tenantId) {
       return NextResponse.json(
-        { error: messageError.message },
-        { status: 500 }
-      );
-    }
-
-    if (!message?.id) {
-      return NextResponse.json(
-        { error: "Message not found" },
-        { status: 404 }
-      );
-    }
-
-    if (message.deleted_at) {
-      return NextResponse.json(
-        { error: "Message already deleted" },
+        { error: "No tenant found" },
         { status: 400 }
       );
     }
 
-    const reactionTenantId = String(message.tenant_id ?? "").trim();
-
-    if (!reactionTenantId) {
-      return NextResponse.json(
-        { error: "Message tenant missing" },
-        { status: 400 }
-      );
-    }
-
-    const { data: existing, error: existingError } = await admin
+    const { data: existing, error: existingError } = await supabase
       .from("team_message_reactions")
       .select("id")
       .eq("message_id", messageId)
@@ -107,7 +76,7 @@ export async function POST(req: Request) {
     }
 
     if (existing?.id) {
-      const { error: deleteError } = await admin
+      const { error: deleteError } = await supabase
         .from("team_message_reactions")
         .delete()
         .eq("id", existing.id);
@@ -122,10 +91,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, action: "removed" });
     }
 
-    const { error: insertError } = await admin
+    const { error: insertError } = await supabase
       .from("team_message_reactions")
       .insert({
-        tenant_id: reactionTenantId,
+        tenant_id: tenantId,
         message_id: messageId,
         user_id: user.id,
         user_name: fullName || "Team",
