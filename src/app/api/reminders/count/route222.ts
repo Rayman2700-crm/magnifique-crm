@@ -68,33 +68,7 @@ export async function GET(request: NextRequest) {
       calendar_tenant_id: profile?.calendar_tenant_id ?? null,
     });
 
-    if (!includeItems) {
-      let countQuery = admin
-        .from("appointments")
-        .select("id, notes_internal")
-        .not("reminder_at", "is", null)
-        .is("reminder_sent_at", null)
-        .lte("reminder_at", new Date().toISOString());
-
-      if (!isAdmin && effectiveTenantId) {
-        countQuery = countQuery.eq("tenant_id", effectiveTenantId);
-      }
-
-      const { data, error } = await countQuery;
-
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      }
-
-      const count = ((data ?? []) as Array<{ id: string; notes_internal: string | null }>).filter((row) => {
-        const status = parseStatus(row.notes_internal);
-        return status !== "cancelled" && status !== "completed" && status !== "no_show";
-      }).length;
-
-      return NextResponse.json({ count });
-    }
-
-    let itemsQuery = admin
+    let query = admin
       .from("appointments")
       .select(
         `
@@ -107,7 +81,7 @@ export async function GET(request: NextRequest) {
         tenant_id,
         person_id,
         tenant:tenants ( display_name ),
-        person:persons ( full_name, phone )
+        person:persons ( full_name, phone, email )
       `
       )
       .not("reminder_at", "is", null)
@@ -116,10 +90,10 @@ export async function GET(request: NextRequest) {
       .order("start_at", { ascending: true });
 
     if (!isAdmin && effectiveTenantId) {
-      itemsQuery = itemsQuery.eq("tenant_id", effectiveTenantId);
+      query = query.eq("tenant_id", effectiveTenantId);
     }
 
-    const { data, error } = await itemsQuery;
+    const { data, error } = await query;
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -129,6 +103,10 @@ export async function GET(request: NextRequest) {
       const status = parseStatus(row.notes_internal);
       return status !== "cancelled" && status !== "completed" && status !== "no_show";
     });
+
+    if (!includeItems) {
+      return NextResponse.json({ count: filtered.length });
+    }
 
     const items = filtered.map((row) => {
       const tenant = Array.isArray(row.tenant) ? row.tenant[0] : row.tenant;
@@ -146,7 +124,7 @@ export async function GET(request: NextRequest) {
         customerProfileId: null,
         customerName: String(person?.full_name ?? "").trim() || "Walk-in",
         customerPhone: person?.phone ? String(person.phone) : null,
-        customerEmail: null,
+        customerEmail: person?.email ? String(person.email) : null,
         reminderSentAt: row.reminder_sent_at ? String(row.reminder_sent_at) : null,
         canOpenCustomerProfile: true,
         canCreateFollowUp: true,
