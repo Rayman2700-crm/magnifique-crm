@@ -1,10 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
-import { getEffectiveTenantId } from "@/lib/effectiveTenant";
 
 type UserProfileRow = {
   role: string | null;
@@ -63,69 +61,76 @@ function normalizedRole(profile: UserProfileRow) {
   return String(profile.role ?? "PRACTITIONER").toUpperCase();
 }
 
-async function getSelectedTenantId(profile: UserProfileRow) {
-  return getEffectiveTenantId({
-    role: profile.role ?? "PRACTITIONER",
-    tenant_id: profile.tenant_id ?? null,
-    calendar_tenant_id: profile.calendar_tenant_id ?? null,
-  });
+function getSelectedTenantId(profile: UserProfileRow) {
+  const role = normalizedRole(profile);
+
+  if (role === "ADMIN") {
+    return profile.calendar_tenant_id ?? null;
+  }
+
+  return profile.calendar_tenant_id ?? profile.tenant_id ?? null;
 }
 
 export async function setActiveServiceTenant(formData: FormData) {
-  const { supabase, profile } = await requireUserProfile();
-  const nextTenantId = String(formData.get("tenant") ?? "all").trim() || "all";
+  const { supabase, user, profile } = await requireUserProfile();
+  const nextTenantId = String(formData.get("tenant_id") ?? "").trim();
   const role = normalizedRole(profile);
 
-  if (role !== "ADMIN") {
-    const ownTenantId =
-      profile.calendar_tenant_id ?? profile.tenant_id ?? null;
+  if (!nextTenantId) {
+    if (role === "ADMIN") {
+      const { error } = await supabase
+        .from("user_profiles")
+        .update({ calendar_tenant_id: null })
+        .eq("user_id", user.id);
 
-    if (!ownTenantId) {
-      redirect(buildServicesUrl("error", "Kein eigener Tenant gefunden."));
+      if (error) {
+        redirect(buildServicesUrl("error", `Behandler konnte nicht geleert werden: ${error.message}`));
+      }
+
+      revalidatePath("/services");
+      revalidatePath("/dashboard");
+      revalidatePath("/calendar");
+      redirect(buildServicesUrl("success", "Aktiver Behandler zurückgesetzt."));
     }
 
-    if (nextTenantId !== "all" && nextTenantId !== ownTenantId) {
+    redirect(buildServicesUrl("error", "Bitte einen gültigen Behandler auswählen."));
+  }
+
+  const { data: tenant, error: tenantError } = await supabase
+    .from("tenants")
+    .select("id")
+    .eq("id", nextTenantId)
+    .single();
+
+  if (tenantError || !tenant) {
+    redirect(buildServicesUrl("error", "Behandler/Tenant nicht gefunden."));
+  }
+
+  if (role === "ADMIN") {
+    const { error } = await supabase
+      .from("user_profiles")
+      .update({ calendar_tenant_id: nextTenantId })
+      .eq("user_id", user.id);
+
+    if (error) {
+      redirect(buildServicesUrl("error", `Behandler konnte nicht gesetzt werden: ${error.message}`));
+    }
+  } else {
+    const ownTenantId = profile.calendar_tenant_id ?? profile.tenant_id ?? null;
+    if (ownTenantId !== nextTenantId) {
       redirect(buildServicesUrl("error", "Du kannst nur deinen eigenen Behandler auswählen."));
     }
-
-    redirect(buildServicesUrl("success", "Eigener Behandler bleibt aktiv."));
   }
-
-  if (nextTenantId !== "all") {
-    const { data: tenant, error: tenantError } = await supabase
-      .from("tenants")
-      .select("id")
-      .eq("id", nextTenantId)
-      .single();
-
-    if (tenantError || !tenant) {
-      redirect(buildServicesUrl("error", "Behandler/Tenant nicht gefunden."));
-    }
-  }
-
-  const cookieStore = await cookies();
-  cookieStore.set("admin_tenant", nextTenantId, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-  });
 
   revalidatePath("/services");
   revalidatePath("/dashboard");
   revalidatePath("/calendar");
-  redirect(
-    buildServicesUrl(
-      "success",
-      nextTenantId === "all"
-        ? "Aktiver Behandler zurückgesetzt."
-        : "Aktiver Behandler übernommen ✅"
-    )
-  );
+  redirect(buildServicesUrl("success", "Aktiver Behandler übernommen ✅"));
 }
 
 export async function createService(formData: FormData) {
   const { supabase, profile } = await requireUserProfile();
-  const selectedTenantId = await getSelectedTenantId(profile);
+  const selectedTenantId = getSelectedTenantId(profile);
 
   if (!selectedTenantId) {
     redirect(buildServicesUrl("error", "Bitte zuerst einen Behandler/Tenant auswählen."));
@@ -168,7 +173,7 @@ export async function createService(formData: FormData) {
 
 export async function updateService(formData: FormData) {
   const { supabase, profile } = await requireUserProfile();
-  const selectedTenantId = await getSelectedTenantId(profile);
+  const selectedTenantId = getSelectedTenantId(profile);
 
   if (!selectedTenantId) {
     redirect(buildServicesUrl("error", "Bitte zuerst einen Behandler/Tenant auswählen."));
@@ -229,7 +234,7 @@ export async function updateService(formData: FormData) {
 
 export async function toggleServiceActive(formData: FormData) {
   const { supabase, profile } = await requireUserProfile();
-  const selectedTenantId = await getSelectedTenantId(profile);
+  const selectedTenantId = getSelectedTenantId(profile);
 
   if (!selectedTenantId) {
     redirect(buildServicesUrl("error", "Bitte zuerst einen Behandler/Tenant auswählen."));

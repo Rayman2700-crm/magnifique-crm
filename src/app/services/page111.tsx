@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
-import { getEffectiveTenantId } from "@/lib/effectiveTenant";
 import { setActiveServiceTenant } from "./actions";
 import ServicesWorkspace from "./ServicesWorkspace";
 
@@ -62,11 +61,9 @@ export default async function ServicesPage({
   const role = String(typedProfile.role ?? "PRACTITIONER").toUpperCase();
   const isAdmin = role === "ADMIN";
 
-  const selectedTenantId = await getEffectiveTenantId({
-    role: typedProfile.role ?? "PRACTITIONER",
-    tenant_id: typedProfile.tenant_id ?? null,
-    calendar_tenant_id: typedProfile.calendar_tenant_id ?? null,
-  });
+  const selectedTenantId = isAdmin
+    ? typedProfile.calendar_tenant_id ?? null
+    : typedProfile.calendar_tenant_id ?? typedProfile.tenant_id ?? null;
 
   let tenantOptions: TenantOption[] = [];
   let tenantName: string | null = null;
@@ -156,11 +153,11 @@ export default async function ServicesPage({
             <div className="w-full md:max-w-md">
               <label className="text-sm font-medium text-white">Behandler / Tenant</label>
               <select
-                name="tenant"
-                defaultValue={selectedTenantId ?? "all"}
+                name="tenant_id"
+                defaultValue={selectedTenantId ?? ""}
                 className={adminSelectClassName()}
               >
-                <option value="all">Bitte auswählen</option>
+                <option value="">Bitte auswählen</option>
                 {tenantOptions.map((tenant) => (
                   <option key={tenant.id} value={tenant.id}>
                     {tenant.display_name ?? tenant.id}
