@@ -12,12 +12,6 @@ type ReminderItem = Item & {
   reminderAt: string | null;
 };
 
-type ReminderApiResponse = {
-  count: number;
-  items?: ReminderItem[];
-  error?: string;
-};
-
 function formatTime(dateString: string) {
   return new Intl.DateTimeFormat("de-AT", {
     hour: "2-digit",
@@ -87,9 +81,6 @@ export default function ReminderSlideover({
   const [shown, setShown] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [fetchError, setFetchError] = useState<string | null>(null);
-  const [liveItems, setLiveItems] = useState<ReminderItem[]>(items ?? []);
-  const [isLoadingItems, setIsLoadingItems] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const isAdmin =
@@ -107,15 +98,9 @@ export default function ReminderSlideover({
     };
   }, [router, pathname, searchParams]);
 
-  const effectiveItems = liveItems;
-
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  useEffect(() => {
-    setLiveItems(items ?? []);
-  }, [items]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -141,48 +126,6 @@ export default function ReminderSlideover({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, close]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    let cancelled = false;
-
-    async function loadReminderItems() {
-      try {
-        setIsLoadingItems(true);
-        setFetchError(null);
-
-        const res = await fetch("/api/reminders/count?includeItems=1", {
-          method: "GET",
-          cache: "no-store",
-        });
-
-        const json = (await res.json().catch(() => null)) as ReminderApiResponse | null;
-
-        if (!res.ok) {
-          throw new Error(json?.error ?? "Reminder konnten nicht geladen werden.");
-        }
-
-        if (!cancelled) {
-          setLiveItems(Array.isArray(json?.items) ? json!.items! : []);
-        }
-      } catch (error: any) {
-        if (!cancelled) {
-          setFetchError(error?.message ?? "Reminder konnten nicht geladen werden.");
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoadingItems(false);
-        }
-      }
-    }
-
-    loadReminderItems();
-
-    return () => {
-      cancelled = true
-    }
-  }, [open]);
 
   function handleSendReminder(item: ReminderItem, force = false) {
     const reminderHref = buildReminderWhatsAppUrl(item);
@@ -211,17 +154,6 @@ export default function ReminderSlideover({
       } else {
         window.location.href = reminderHref;
       }
-
-      setLiveItems((current) =>
-        current.map((entry) =>
-          entry.id === item.id
-            ? {
-                ...entry,
-                reminderSentAt: result.reminderSentAt ?? entry.reminderSentAt ?? null,
-              }
-            : entry
-        )
-      );
 
       setPendingId(null);
       router.refresh();
@@ -268,11 +200,9 @@ export default function ReminderSlideover({
             <div className="text-sm text-white/55">Reminder</div>
             <div className="text-2xl font-extrabold text-white">Fällige Reminder</div>
             <div className="mt-1 text-sm text-white/55">
-              {isLoadingItems
-                ? "Lade Reminder..."
-                : effectiveItems.length === 0
+              {items.length === 0
                 ? "Aktuell ist nichts offen."
-                : `${effectiveItems.length} offene Reminder`}
+                : `${items.length} offene Reminder`}
             </div>
           </div>
 
@@ -292,23 +222,13 @@ export default function ReminderSlideover({
             </div>
           ) : null}
 
-          {fetchError ? (
-            <div className="mb-4 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
-              {fetchError}
-            </div>
-          ) : null}
-
-          {isLoadingItems ? (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-sm text-white/65">
-              Reminder werden geladen...
-            </div>
-          ) : effectiveItems.length === 0 ? (
+          {items.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-sm text-white/65">
               Aktuell sind keine Reminder fällig.
             </div>
           ) : (
             <div className="space-y-3">
-              {effectiveItems.map((item) => {
+              {items.map((item) => {
                 const theme = tenantTheme(item.tenantName ?? "");
                 const buttonStyle = getButtonStyle(theme);
 

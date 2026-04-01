@@ -993,7 +993,7 @@ export async function markReminderSent(input: { appointmentId: string; force?: b
     const appointmentTenantId = String((appointment as any).tenant_id ?? "").trim();
     const reminderSentAt = (appointment as any).reminder_sent_at as string | null;
 
-    if (!isAdmin && effectiveTenantId && appointmentTenantId !== effectiveTenantId) {
+    if (effectiveTenantId && appointmentTenantId !== effectiveTenantId) {
       return { ok: false, error: "Keine Berechtigung für diesen Reminder." };
     }
 
