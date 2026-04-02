@@ -194,40 +194,6 @@ function isAdminTenantName(name: string | null | undefined) {
   return n.includes("radu");
 }
 
-function mapAppointmentRowToItem(
-  row: ApptRow,
-  cpMap: Map<string, string>,
-  isAdmin: boolean,
-  creatorTenantId: string | null
-): Item {
-  const parsed = parseNotes(row.notes_internal);
-  const key = `${row.tenant_id}:${row.person_id}`;
-  const customerProfileId = cpMap.get(key) ?? null;
-  const tenant = firstJoin(row.tenant);
-  const person = firstJoin(row.person);
-
-  const canManageCustomerActions = isAdmin || (!!creatorTenantId && row.tenant_id === creatorTenantId);
-
-  return {
-    id: row.id,
-    start_at: row.start_at,
-    end_at: row.end_at,
-    title: parsed.title ? parsed.title : "Termin",
-    note: parsed.note ?? "",
-    status: parsed.status,
-    tenantId: row.tenant_id,
-    tenantName: tenant?.display_name ?? "Behandler",
-    customerProfileId,
-    customerName: person?.full_name ?? null,
-    customerPhone: person?.phone ?? null,
-    customerEmail: person?.email ?? null,
-    reminderSentAt: row.reminder_sent_at ?? null,
-    canOpenCustomerProfile: canManageCustomerActions,
-    canCreateFollowUp: canManageCustomerActions,
-    canDeleteAppointment: canManageCustomerActions,
-  };
-}
-
 function ViewSwitch({
   value,
   onChange,
@@ -308,7 +274,6 @@ export default function DashboardCalendarCardClient({
   });
 
   const [items, setItems] = useState<Item[]>([]);
-  const [customerProfileMap, setCustomerProfileMap] = useState<Map<string, string>>(new Map());
   const [errorText, setErrorText] = useState<string | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -376,40 +341,6 @@ export default function DashboardCalendarCardClient({
     };
   }, [anchorISO, view]);
 
-  const itemMatchesCurrentFilters = useCallback(
-    (item: Item) => {
-      if (selectedTenantId && item.tenantId !== selectedTenantId) return false;
-
-      const itemStart = new Date(item.start_at).getTime();
-      const rangeStart = new Date(range.startISO).getTime();
-      const rangeEnd = new Date(range.endISO).getTime();
-
-      return itemStart >= rangeStart && itemStart < rangeEnd;
-    },
-    [range.endISO, range.startISO, selectedTenantId]
-  );
-
-  const upsertCalendarItem = useCallback(
-    (nextItem: Item) => {
-      setItems((current) => {
-        const filtered = current.filter((entry) => entry.id !== nextItem.id);
-
-        if (!itemMatchesCurrentFilters(nextItem)) {
-          return filtered;
-        }
-
-        const next = [...filtered, nextItem];
-        next.sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
-        return next;
-      });
-    },
-    [itemMatchesCurrentFilters]
-  );
-
-  const removeCalendarItem = useCallback((appointmentId: string) => {
-    setItems((current) => current.filter((entry) => entry.id !== appointmentId));
-  }, []);
-
   const loadAppointments = useCallback(async () => {
     const seq = ++loadSeq.current;
     const hasExistingItems = items.length > 0;
@@ -475,13 +406,37 @@ export default function DashboardCalendarCardClient({
       }
     }
 
-    const mappedItems: Item[] = appts.map((a) =>
-      mapAppointmentRowToItem(a, cpMap, isAdmin, creatorTenantId)
-    );
+    const mappedItems: Item[] = appts.map((a) => {
+      const parsed = parseNotes(a.notes_internal);
+      const key = `${a.tenant_id}:${a.person_id}`;
+      const customerProfileId = cpMap.get(key) ?? null;
+      const tenant = firstJoin(a.tenant);
+      const person = firstJoin(a.person);
+
+      const canManageCustomerActions = isAdmin || (!!creatorTenantId && a.tenant_id === creatorTenantId);
+
+      return {
+        id: a.id,
+        start_at: a.start_at,
+        end_at: a.end_at,
+        title: parsed.title ? parsed.title : "Termin",
+        note: parsed.note ?? "",
+        status: parsed.status,
+        tenantId: a.tenant_id,
+        tenantName: tenant?.display_name ?? "Behandler",
+        customerProfileId,
+        customerName: person?.full_name ?? null,
+        customerPhone: person?.phone ?? null,
+        customerEmail: person?.email ?? null,
+        reminderSentAt: a.reminder_sent_at ?? null,
+        canOpenCustomerProfile: canManageCustomerActions,
+        canCreateFollowUp: canManageCustomerActions,
+        canDeleteAppointment: canManageCustomerActions,
+      };
+    });
 
     if (seq !== loadSeq.current) return;
 
-    setCustomerProfileMap(new Map(cpMap));
     setItems(mappedItems);
     setIsInitialLoading(false);
     setIsRefreshing(false);
@@ -492,182 +447,19 @@ export default function DashboardCalendarCardClient({
   }, [loadAppointments]);
 
   useEffect(() => {
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") {
-        loadAppointments();
-      }
-    };
-
-    window.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("focus", onVisibility);
-
-    return () => {
-      window.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("focus", onVisibility);
-    };
-  }, [loadAppointments]);
-
-  useEffect(() => {
     const channel = supabase
       .channel(`dashboard-appointments-${selectedTenantId ?? "all"}-${view}-${anchorISO}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "appointments" },
-        async (payload) => {
-          const row = payload.new as Partial<ApptRow> | null;
-          if (!row?.id || !row?.tenant_id || !row?.person_id) return;
-
-          const baseRow: ApptRow = {
-            id: String(row.id),
-            start_at: String(row.start_at ?? ""),
-            end_at: String(row.end_at ?? ""),
-            notes_internal: row.notes_internal ? String(row.notes_internal) : null,
-            reminder_sent_at: row.reminder_sent_at ? String(row.reminder_sent_at) : null,
-            tenant_id: String(row.tenant_id),
-            person_id: String(row.person_id),
-            tenant: null,
-            person: null,
-          };
-
-          const [tenantRes, personRes, customerProfileRes] = await Promise.all([
-            supabase
-              .from("tenants")
-              .select("display_name")
-              .eq("id", baseRow.tenant_id)
-              .maybeSingle(),
-            supabase
-              .from("persons")
-              .select("full_name, phone, email")
-              .eq("id", baseRow.person_id)
-              .maybeSingle(),
-            supabase
-              .from("customer_profiles")
-              .select("id")
-              .eq("tenant_id", baseRow.tenant_id)
-              .eq("person_id", baseRow.person_id)
-              .maybeSingle(),
-          ]);
-
-          const nextProfileMap = new Map(customerProfileMap);
-          if (customerProfileRes.data?.id) {
-            nextProfileMap.set(
-              `${baseRow.tenant_id}:${baseRow.person_id}`,
-              String(customerProfileRes.data.id)
-            );
-            setCustomerProfileMap(nextProfileMap);
-          }
-
-          const hydratedRow: ApptRow = {
-            ...baseRow,
-            tenant: tenantRes.data ? { display_name: tenantRes.data.display_name ?? null } : null,
-            person: personRes.data
-              ? {
-                  full_name: personRes.data.full_name ?? null,
-                  phone: personRes.data.phone ?? null,
-                  email: personRes.data.email ?? null,
-                }
-              : null,
-          };
-
-          upsertCalendarItem(
-            mapAppointmentRowToItem(hydratedRow, nextProfileMap, isAdmin, creatorTenantId)
-          );
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "appointments" },
-        async (payload) => {
-          const row = payload.new as Partial<ApptRow> | null;
-          if (!row?.id || !row?.tenant_id || !row?.person_id) return;
-
-          const baseRow: ApptRow = {
-            id: String(row.id),
-            start_at: String(row.start_at ?? ""),
-            end_at: String(row.end_at ?? ""),
-            notes_internal: row.notes_internal ? String(row.notes_internal) : null,
-            reminder_sent_at: row.reminder_sent_at ? String(row.reminder_sent_at) : null,
-            tenant_id: String(row.tenant_id),
-            person_id: String(row.person_id),
-            tenant: null,
-            person: null,
-          };
-
-          const [tenantRes, personRes, customerProfileRes] = await Promise.all([
-            supabase
-              .from("tenants")
-              .select("display_name")
-              .eq("id", baseRow.tenant_id)
-              .maybeSingle(),
-            supabase
-              .from("persons")
-              .select("full_name, phone, email")
-              .eq("id", baseRow.person_id)
-              .maybeSingle(),
-            supabase
-              .from("customer_profiles")
-              .select("id")
-              .eq("tenant_id", baseRow.tenant_id)
-              .eq("person_id", baseRow.person_id)
-              .maybeSingle(),
-          ]);
-
-          const nextProfileMap = new Map(customerProfileMap);
-          if (customerProfileRes.data?.id) {
-            nextProfileMap.set(
-              `${baseRow.tenant_id}:${baseRow.person_id}`,
-              String(customerProfileRes.data.id)
-            );
-            setCustomerProfileMap(nextProfileMap);
-          }
-
-          const hydratedRow: ApptRow = {
-            ...baseRow,
-            tenant: tenantRes.data ? { display_name: tenantRes.data.display_name ?? null } : null,
-            person: personRes.data
-              ? {
-                  full_name: personRes.data.full_name ?? null,
-                  phone: personRes.data.phone ?? null,
-                  email: personRes.data.email ?? null,
-                }
-              : null,
-          };
-
-          upsertCalendarItem(
-            mapAppointmentRowToItem(hydratedRow, nextProfileMap, isAdmin, creatorTenantId)
-          );
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "appointments" },
-        (payload) => {
-          const row = payload.old as { id?: string } | null;
-          if (!row?.id) return;
-          removeCalendarItem(String(row.id));
-        }
-      )
-      .subscribe((status) => {
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+      .on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, () => {
+        if (document.visibilityState === "visible") {
           loadAppointments();
         }
-      });
+      })
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [
-    anchorISO,
-    creatorTenantId,
-    customerProfileMap,
-    isAdmin,
-    loadAppointments,
-    removeCalendarItem,
-    selectedTenantId,
-    supabase,
-    upsertCalendarItem,
-    view,
-  ]);
+  }, [anchorISO, loadAppointments, selectedTenantId, supabase, view]);
 
   const handleToday = useCallback(() => {
     setCalendarState((prev) => ({
