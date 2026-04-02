@@ -81,13 +81,6 @@ type RealtimeStatus = "connecting" | "connected" | "reconnecting" | "offline";
 
 const ALLOWED_EMOJIS = ["👍", "❤️", "😂", "😮"];
 
-function getRealtimeStatusLabel(status: RealtimeStatus) {
-  if (status === "connected") return "Live verbunden";
-  if (status === "reconnecting") return "Synchronisiere...";
-  if (status === "connecting") return "Verbinde...";
-  return "Offline";
-}
-
 function formatTime(iso: string) {
   const d = new Date(iso);
   return new Intl.DateTimeFormat("de-AT", {
@@ -1876,7 +1869,7 @@ export default function ChatClient({
       >
         <div className="flex items-center justify-between border-b border-white/10 px-3 py-2 text-[11px]">
           <span className="font-semibold uppercase tracking-wide text-white/40">
-            Realtime Status
+            Team Chat Live
           </span>
           <span
             className={
@@ -1889,9 +1882,14 @@ export default function ChatClient({
                     ? "border-white/15 bg-white/5 text-white/70"
                     : "border-red-500/30 bg-red-500/10 text-red-300")
             }
-            title="Zeigt nur den Live-Verbindungsstatus des Chats an"
           >
-            {getRealtimeStatusLabel(realtimeStatus)}
+            {realtimeStatus === "connected"
+              ? "Live verbunden"
+              : realtimeStatus === "reconnecting"
+                ? "Fallback aktiv"
+                : realtimeStatus === "connecting"
+                  ? "Verbinde..."
+                  : "Offline"}
           </span>
         </div>
 
@@ -2063,10 +2061,6 @@ export default function ChatClient({
                   </div>
                 </div>
               ) : null}
-
-              <div className="mb-2 text-[11px] text-white/35">
-                Live-Updates laufen direkt über Realtime, nicht über Push-Benachrichtigungen.
-              </div>
 
               <div className="flex items-end gap-2">
                 <input
