@@ -889,18 +889,6 @@ export default function ChatClient({
     });
   }, []);
 
-  const collectMessageIds = useCallback(
-    (incomingMessages?: ChatMessageDTO[]) => {
-      const source = incomingMessages ?? messages;
-      const ids = source
-        .map((message) => String(message.id ?? "").trim())
-        .filter(Boolean);
-
-      return Array.from(new Set(ids));
-    },
-    [messages]
-  );
-
   const setReactionRow = useCallback((row: ReactionRow) => {
     setReactionsByMessage((prev) => {
       const current = prev[row.message_id] ?? [];
@@ -928,7 +916,15 @@ export default function ChatClient({
 
   const refetchMessages = useCallback(async () => {
     try {
-      const messagesRes = await fetch("/api/chat/messages", { cache: "no-store" });
+      const [messagesRes, reactionsRes] = await Promise.all([
+        fetch("/api/chat/messages", { cache: "no-store" }),
+        tenantId
+          ? supabase
+              .from("team_message_reactions")
+              .select("id, message_id, user_id, user_name, emoji, created_at")
+              .eq("tenant_id", tenantId)
+          : Promise.resolve({ data: [], error: null } as any),
+      ]);
 
       if (!messagesRes.ok) return;
 
@@ -957,22 +953,9 @@ export default function ChatClient({
 
       mergeMessages(normalized);
 
-      const messageIds = collectMessageIds(normalized);
-
-      if (messageIds.length === 0) {
-        setReactionsByMessage({});
-        return;
-      }
-
-      const { data: reactionsData, error: reactionsError } = await supabase
-        .from("team_message_reactions")
-        .select("id, message_id, user_id, user_name, emoji, created_at")
-        .in("message_id", messageIds)
-        .order("created_at", { ascending: true });
-
-      if (!reactionsError) {
+      if (!reactionsRes.error) {
         const grouped: Record<string, ReactionRow[]> = {};
-        for (const row of reactionsData ?? []) {
+        for (const row of reactionsRes.data ?? []) {
           const messageId = String(row.message_id);
           if (!grouped[messageId]) grouped[messageId] = [];
           grouped[messageId].push({
@@ -985,13 +968,11 @@ export default function ChatClient({
           });
         }
         setReactionsByMessage(grouped);
-      } else {
-        console.error("[chat] load reactions failed", reactionsError.message);
       }
     } catch (e) {
       console.error("[chat] refetch failed", e);
     }
-  }, [collectMessageIds, mergeMessages, supabase]);
+  }, [mergeMessages, supabase, tenantId]);
 
   const loadMentionUsers = useCallback(async () => {
     if (!tenantId) return;
@@ -1005,7 +986,8 @@ export default function ChatClient({
         fetch("/api/chat/messages", { cache: "no-store" }),
         supabase
           .from("team_message_reactions")
-          .select("user_id, user_name"),
+          .select("user_id, user_name")
+          .eq("tenant_id", tenantId),
       ]);
 
       const userMap = new Map<string, MentionUser>();
@@ -1525,19 +1507,13 @@ export default function ChatClient({
               event: "INSERT",
               schema: "public",
               table: "team_message_reactions",
+              filter: `tenant_id=eq.${tenantId}`,
             },
             (payload) => {
               const row = payload.new as any;
-              const messageId = String(row.message_id ?? "");
-
-              if (!messageId) return;
-              if (!messageRefs.current[messageId] && !messages.some((m) => m.id === messageId)) {
-                return;
-              }
-
               setReactionRow({
                 id: String(row.id),
-                message_id: messageId,
+                message_id: String(row.message_id),
                 user_id: String(row.user_id),
                 user_name: String(row.user_name ?? ""),
                 emoji: String(row.emoji),
@@ -1551,6 +1527,7 @@ export default function ChatClient({
               event: "DELETE",
               schema: "public",
               table: "team_message_reactions",
+              filter: `tenant_id=eq.${tenantId}`,
             },
             (payload) => {
               const row = payload.old as any;
@@ -1592,7 +1569,6 @@ export default function ChatClient({
     removeReactionRow,
     refetchMessages,
     loadMentionUsers,
-    messages,
   ]);
 
   async function send() {

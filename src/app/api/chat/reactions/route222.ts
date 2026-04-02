@@ -21,21 +21,6 @@ async function getProfile(
   };
 }
 
-async function getMessageTenantId(
-  supabase: Awaited<ReturnType<typeof supabaseServer>>,
-  messageId: string
-) {
-  const { data, error } = await supabase
-    .from("team_messages")
-    .select("id, tenant_id")
-    .eq("id", messageId)
-    .maybeSingle();
-
-  if (error) throw new Error(error.message);
-
-  return data?.tenant_id ? String(data.tenant_id) : null;
-}
-
 export async function POST(req: Request) {
   try {
     const supabase = await supabaseServer();
@@ -64,13 +49,11 @@ export async function POST(req: Request) {
     // ❗ IMPORTANT: no emoji filtering → allows all emojis correctly
     // (Prevents broken encoding or missing emoji issues)
 
-    const { tenantId: profileTenantId, fullName } = await getProfile(supabase, user.id);
-    const messageTenantId = await getMessageTenantId(supabase, messageId);
-    const effectiveTenantId = messageTenantId || profileTenantId;
+    const { tenantId, fullName } = await getProfile(supabase, user.id);
 
-    if (!effectiveTenantId) {
+    if (!tenantId) {
       return NextResponse.json(
-        { error: "No tenant found for message" },
+        { error: "No tenant found" },
         { status: 400 }
       );
     }
@@ -110,7 +93,7 @@ export async function POST(req: Request) {
     const { error: insertError } = await supabase
       .from("team_message_reactions")
       .insert({
-        tenant_id: effectiveTenantId,
+        tenant_id: tenantId,
         message_id: messageId,
         user_id: user.id,
         user_name: fullName || "Team",
