@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import ChatClient, { type ChatMessageDTO } from "@/app/dashboard/chat/ChatClient";
+import PushSetupClient from "@/components/push/PushSetupClient";
 import ChatTeamAvatars from "@/components/chat/ChatTeamAvatars";
 
 export default function ChatSlideover({
@@ -203,11 +204,12 @@ export default function ChatSlideover({
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 8,
+              gap: 10,
               justifySelf: "end",
               flexShrink: 0,
             }}
           >
+            <PushSetupClient compact />
             <Button variant="secondary" onClick={close}>
               Schließen
             </Button>
