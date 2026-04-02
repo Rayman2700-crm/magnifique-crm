@@ -77,8 +77,6 @@ type MentionState = {
   endIndex: number;
 };
 
-type RealtimeStatus = "connecting" | "connected" | "reconnecting" | "offline";
-
 const ALLOWED_EMOJIS = ["👍", "❤️", "😂", "😮"];
 
 function formatTime(iso: string) {
@@ -826,7 +824,6 @@ export default function ChatClient({
     endIndex: -1,
   });
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
-  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("connecting");
 
   const endRef = useRef<HTMLDivElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -842,8 +839,6 @@ export default function ChatClient({
     null
   );
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasFetchedRealtimeFallbackRef = useRef(false);
 
   const storageKey = useMemo(() => {
     if (!tenantId || !currentUserId) return null;
@@ -929,13 +924,6 @@ export default function ChatClient({
 
       return next;
     });
-  }, []);
-
-  const clearReconnectTimeout = useCallback(() => {
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
   }, []);
 
   const refetchMessages = useCallback(async () => {
@@ -1302,6 +1290,18 @@ export default function ChatClient({
   }, [refetchMessages, loadMentionUsers, autoScroll, markLatestAsRead]);
 
   useEffect(() => {
+    if (!tenantId) return;
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        refetchMessages();
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [tenantId, refetchMessages]);
+
+  useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
       setTypingUsers((prev) => prev.filter((u) => u.expiresAt > now));
@@ -1375,12 +1375,6 @@ export default function ChatClient({
 
   useEffect(() => {
     return () => {
-      clearReconnectTimeout();
-    };
-  }, [clearReconnectTimeout]);
-
-  useEffect(() => {
-    return () => {
       if (highlightTimeoutRef.current) {
         clearTimeout(highlightTimeoutRef.current);
       }
@@ -1414,23 +1408,6 @@ export default function ChatClient({
     let typingChannel: ReturnType<typeof supabase.channel> | null = null;
     let reactionsChannel: ReturnType<typeof supabase.channel> | null = null;
     let cancelled = false;
-
-    hasFetchedRealtimeFallbackRef.current = false;
-    clearReconnectTimeout();
-    setRealtimeStatus("connecting");
-
-    const scheduleReconnectFallback = () => {
-      clearReconnectTimeout();
-
-      reconnectTimeoutRef.current = setTimeout(() => {
-        if (cancelled) return;
-
-        hasFetchedRealtimeFallbackRef.current = true;
-        setRealtimeStatus("reconnecting");
-        refetchMessages();
-        loadMentionUsers();
-      }, 1500);
-    };
 
     (async () => {
       try {
@@ -1507,23 +1484,6 @@ export default function ChatClient({
           )
           .subscribe((status) => {
             console.log("[realtime] messages status:", status);
-
-            if (status === "SUBSCRIBED") {
-              clearReconnectTimeout();
-              setRealtimeStatus("connected");
-
-              if (hasFetchedRealtimeFallbackRef.current) {
-                refetchMessages();
-                loadMentionUsers();
-              }
-            } else if (
-              status === "CHANNEL_ERROR" ||
-              status === "TIMED_OUT" ||
-              status === "CLOSED"
-            ) {
-              setRealtimeStatus("offline");
-              scheduleReconnectFallback();
-            }
           });
 
         typingChannel = supabase
@@ -1604,14 +1564,11 @@ export default function ChatClient({
         typingChannelRef.current = typingChannel;
       } catch (e) {
         console.error("[realtime] setup error", e);
-        setRealtimeStatus("offline");
-        scheduleReconnectFallback();
       }
     })();
 
     return () => {
       cancelled = true;
-      clearReconnectTimeout();
 
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
@@ -1636,7 +1593,6 @@ export default function ChatClient({
     refetchMessages,
     loadMentionUsers,
     messages,
-    clearReconnectTimeout,
   ]);
 
   async function send() {
@@ -1867,32 +1823,6 @@ export default function ChatClient({
           (embedded ? "h-full" : "h-[calc(100dvh-220px)]")
         }
       >
-        <div className="flex items-center justify-between border-b border-white/10 px-3 py-2 text-[11px]">
-          <span className="font-semibold uppercase tracking-wide text-white/40">
-            Team Chat Live
-          </span>
-          <span
-            className={
-              "rounded-full border px-2.5 py-1 font-medium " +
-              (realtimeStatus === "connected"
-                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                : realtimeStatus === "reconnecting"
-                  ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
-                  : realtimeStatus === "connecting"
-                    ? "border-white/15 bg-white/5 text-white/70"
-                    : "border-red-500/30 bg-red-500/10 text-red-300")
-            }
-          >
-            {realtimeStatus === "connected"
-              ? "Live verbunden"
-              : realtimeStatus === "reconnecting"
-                ? "Fallback aktiv"
-                : realtimeStatus === "connecting"
-                  ? "Verbinde..."
-                  : "Offline"}
-          </span>
-        </div>
-
         <div
           ref={listRef}
           className="flex-1 overflow-y-auto overscroll-contain px-2 py-3 sm:px-4 sm:py-4"
