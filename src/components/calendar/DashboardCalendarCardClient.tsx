@@ -189,6 +189,10 @@ function fmtHeader(view: ViewMode, anchorISO: string, weekStartISO: string) {
   };
 }
 
+function isAdminTenantName(name: string | null | undefined) {
+  const n = String(name ?? "").toLowerCase();
+  return n.includes("radu");
+}
 
 function ViewSwitch({
   value,
@@ -243,13 +247,11 @@ export default function DashboardCalendarCardClient({
   legendUsers,
   services = [],
   creatorTenantId,
-  isAdmin,
 }: {
   tenants: TenantRow[];
   legendUsers: LegendUser[];
   services?: ServiceOptionInput[];
   creatorTenantId: string | null;
-  isAdmin: boolean;
 }) {
   const supabase = useMemo(() => supabaseBrowser(), []);
   const normalizedServices = useMemo<ServiceOption[]>(
@@ -293,12 +295,22 @@ export default function DashboardCalendarCardClient({
     );
   }, [creatorTenantId, legendUsers]);
 
+  const currentTenantDisplayName =
+    currentLegendUser?.tenantDisplayName ??
+    tenants.find((t) => t.id === creatorTenantId)?.display_name ??
+    null;
+
+  const isAdmin = useMemo(() => {
+    if (legendUsers.length > 1) return true;
+    return isAdminTenantName(currentTenantDisplayName);
+  }, [currentTenantDisplayName, legendUsers.length]);
+
   useEffect(() => {
     if (!creatorTenantId) return;
 
     setSelectedTenantId((current) => {
       if (isAdmin) return current;
-      return creatorTenantId;
+      return current || creatorTenantId;
     });
   }, [creatorTenantId, isAdmin]);
 
@@ -392,18 +404,11 @@ export default function DashboardCalendarCardClient({
       const tenantIds = Array.from(new Set(Array.from(uniquePairs.values()).map((p) => p.tenant_id)));
       const personIds = Array.from(new Set(Array.from(uniquePairs.values()).map((p) => p.person_id)));
 
-      let customerProfilesQuery = supabase
+      const { data: cps } = await supabase
         .from("customer_profiles")
         .select("id,tenant_id,person_id")
+        .in("tenant_id", tenantIds)
         .in("person_id", personIds);
-
-      if (tenantIds.length === 1) {
-        customerProfilesQuery = customerProfilesQuery.eq("tenant_id", tenantIds[0]);
-      } else {
-        customerProfilesQuery = customerProfilesQuery.in("tenant_id", tenantIds);
-      }
-
-      const { data: cps } = await customerProfilesQuery;
 
       if (seq !== loadSeq.current) return;
 
@@ -474,23 +479,9 @@ export default function DashboardCalendarCardClient({
   }, []);
 
   useEffect(() => {
-    const changeConfig =
-      selectedTenantId
-        ? {
-            event: "*" as const,
-            schema: "public",
-            table: "appointments",
-            filter: `tenant_id=eq.${selectedTenantId}`,
-          }
-        : {
-            event: "*" as const,
-            schema: "public",
-            table: "appointments",
-          };
-
     const channel = supabase
       .channel(`dashboard-appointments-${selectedTenantId ?? "all"}-${view}-${anchorISO}`)
-      .on("postgres_changes", changeConfig, () => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, () => {
         scheduleRefresh();
       })
       .subscribe((status) => {

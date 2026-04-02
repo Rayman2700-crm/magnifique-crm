@@ -371,7 +371,6 @@ export default async function DashboardPage() {
   let effectiveCustomerTenantId: string | null = null;
   let role: string = "PRACTITIONER";
   let effectiveReminderTenantId: string | null = null;
-  let isAdmin = false;
 
   if (user) {
     const { data: profile } = await supabase
@@ -382,7 +381,6 @@ export default async function DashboardPage() {
 
     fullName = profile?.full_name ?? null;
     role = profile?.role ?? "PRACTITIONER";
-    isAdmin = role === "ADMIN";
 
     effectiveCustomerTenantId = await getEffectiveTenantId({
       role: profile?.role ?? "PRACTITIONER",
@@ -410,25 +408,10 @@ export default async function DashboardPage() {
     }
   }
 
-  const tenantsQuery = isAdmin
-    ? admin.from("tenants").select("id, display_name").order("display_name", { ascending: true })
-    : creatorTenantId
-    ? admin.from("tenants").select("id, display_name").eq("id", creatorTenantId).order("display_name", { ascending: true })
-    : admin.from("tenants").select("id, display_name").limit(0);
-
-  const legendUsersQuery = isAdmin
-    ? admin.from("user_profiles").select("user_id, tenant_id, calendar_tenant_id, full_name, role")
-    : user?.id
-    ? admin
-        .from("user_profiles")
-        .select("user_id, tenant_id, calendar_tenant_id, full_name, role")
-        .eq("user_id", user.id)
-    : admin.from("user_profiles").select("user_id, tenant_id, calendar_tenant_id, full_name, role").limit(0);
-
-  const [{ data: tenantsRaw }, { data: userProfilesRaw }] = await Promise.all([
-    tenantsQuery,
-    legendUsersQuery,
-  ]);
+  const { data: tenantsRaw } = await admin
+    .from("tenants")
+    .select("id, display_name")
+    .order("display_name", { ascending: true });
 
   const tenantRows = (tenantsRaw ?? []) as TenantRow[];
 
@@ -436,6 +419,10 @@ export default async function DashboardPage() {
   for (const t of tenantRows) {
     tenantNameById.set(t.id, t.display_name ?? "Behandler");
   }
+
+  const { data: userProfilesRaw } = await admin
+    .from("user_profiles")
+    .select("user_id, tenant_id, calendar_tenant_id, full_name, role");
 
   const legendUsers: LegendUser[] = (userProfilesRaw ?? [])
     .filter((p) => !!p.user_id && !!p.calendar_tenant_id)
@@ -463,28 +450,20 @@ export default async function DashboardPage() {
   const endOfWeek = new Date(startOfWeek);
   endOfWeek.setDate(endOfWeek.getDate() + 7);
 
-  let todayCountQuery = supabase
+  const todayCountQuery = supabase
     .from("appointments")
     .select("id", { count: "exact", head: true })
     .gte("start_at", startOfToday.toISOString())
     .lt("start_at", endOfToday.toISOString());
 
-  if (!isAdmin && effectiveReminderTenantId) {
-    todayCountQuery = todayCountQuery.eq("tenant_id", effectiveReminderTenantId);
-  }
-
-  let weekCountQuery = supabase
+  const weekCountQuery = supabase
     .from("appointments")
     .select("id", { count: "exact", head: true })
     .gte("start_at", startOfWeek.toISOString())
     .lt("start_at", endOfWeek.toISOString());
 
-  if (!isAdmin && effectiveReminderTenantId) {
-    weekCountQuery = weekCountQuery.eq("tenant_id", effectiveReminderTenantId);
-  }
-
   const customersCountQuery =
-    isAdmin || !effectiveCustomerTenantId
+    role === "ADMIN" || !effectiveCustomerTenantId
       ? admin.from("customer_profiles").select("id", { count: "exact", head: true })
       : admin
           .from("customer_profiles")
@@ -501,7 +480,7 @@ export default async function DashboardPage() {
         "Behandler";
 
   const activeServicesCountQuery =
-    isAdmin
+    role === "ADMIN"
       ? admin.from("services").select("id", { count: "exact", head: true }).eq("is_active", true)
       : admin
           .from("services")
@@ -509,7 +488,7 @@ export default async function DashboardPage() {
           .eq("tenant_id", servicesCardTenantId ?? effectiveCustomerTenantId ?? "")
           .eq("is_active", true);
 
-  let todayAppointmentsQuery = supabase
+  const todayAppointmentsQuery = supabase
     .from("appointments")
     .select(`
       id,
@@ -520,13 +499,7 @@ export default async function DashboardPage() {
       person:persons ( full_name, phone )
     `)
     .gte("start_at", startOfToday.toISOString())
-    .lt("start_at", endOfToday.toISOString());
-
-  if (!isAdmin && effectiveReminderTenantId) {
-    todayAppointmentsQuery = todayAppointmentsQuery.eq("tenant_id", effectiveReminderTenantId);
-  }
-
-  todayAppointmentsQuery = todayAppointmentsQuery
+    .lt("start_at", endOfToday.toISOString())
     .order("start_at", { ascending: true })
     .limit(6);
 
@@ -560,7 +533,7 @@ export default async function DashboardPage() {
     .limit(5);
 
   const recentCustomersQuery =
-    isAdmin || !effectiveCustomerTenantId
+    role === "ADMIN" || !effectiveCustomerTenantId
       ? recentCustomersBaseQuery
       : recentCustomersBaseQuery.eq("tenant_id", effectiveCustomerTenantId);
 
@@ -600,16 +573,11 @@ export default async function DashboardPage() {
   }
 
 
-  let calendarServicesQuery = admin
+  const calendarServicesQuery = admin
     .from("services")
     .select("id, tenant_id, name, duration_minutes, buffer_minutes, default_price_cents, is_active")
-    .eq("is_active", true);
-
-  if (!isAdmin && creatorTenantId) {
-    calendarServicesQuery = calendarServicesQuery.eq("tenant_id", creatorTenantId);
-  }
-
-  calendarServicesQuery = calendarServicesQuery.order("name", { ascending: true });
+    .eq("is_active", true)
+    .order("name", { ascending: true });
 
   const [
     todayCountResult,
@@ -887,7 +855,7 @@ export default async function DashboardPage() {
                     activeCount={activeServicesCountResult?.count ?? 0}
                     tenantId={servicesCardTenantId}
                     tenantName={servicesCardTenantName}
-                    isAdmin={isAdmin}
+                    isAdmin={role === "ADMIN"}
                     tenantOptions={tenantRows.map((tenant) => ({
                       id: tenant.id,
                       displayName: tenant.display_name ?? "Behandler",
@@ -935,7 +903,6 @@ export default async function DashboardPage() {
         legendUsers={legendUsers}
         services={calendarServices}
         creatorTenantId={creatorTenantId}
-        isAdmin={isAdmin}
       />
 
       <section className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
