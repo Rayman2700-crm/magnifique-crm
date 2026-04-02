@@ -88,10 +88,6 @@ function getRealtimeStatusLabel(status: RealtimeStatus) {
   return "Offline";
 }
 
-function createOptimisticReactionId(messageId: string, userId: string, emoji: string) {
-  return `optimistic:${messageId}:${userId}:${emoji}`;
-}
-
 function formatTime(iso: string) {
   const d = new Date(iso);
   return new Intl.DateTimeFormat("de-AT", {
@@ -942,25 +938,6 @@ export default function ChatClient({
     });
   }, []);
 
-  const replaceOptimisticReactionRow = useCallback((row: ReactionRow) => {
-    setReactionsByMessage((prev) => {
-      const optimisticId = createOptimisticReactionId(
-        row.message_id,
-        row.user_id,
-        row.emoji
-      );
-
-      const current = prev[row.message_id] ?? [];
-      const withoutOptimistic = current.filter((r) => r.id !== optimisticId);
-      const alreadyExists = withoutOptimistic.some((r) => r.id === row.id);
-
-      return {
-        ...prev,
-        [row.message_id]: alreadyExists ? withoutOptimistic : [...withoutOptimistic, row],
-      };
-    });
-  }, []);
-
   const clearReconnectTimeout = useCallback(() => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
@@ -1605,7 +1582,7 @@ export default function ChatClient({
                 return;
               }
 
-              replaceOptimisticReactionRow({
+              setReactionRow({
                 id: String(row.id),
                 message_id: messageId,
                 user_id: String(row.user_id),
@@ -1661,7 +1638,7 @@ export default function ChatClient({
     currentUserName,
     mergeMessages,
     sendTypingEvent,
-    replaceOptimisticReactionRow,
+    setReactionRow,
     removeReactionRow,
     refetchMessages,
     loadMentionUsers,
@@ -1732,25 +1709,6 @@ export default function ChatClient({
   }
 
   async function toggleReaction(messageId: string, emoji: string) {
-    const optimisticId = createOptimisticReactionId(messageId, currentUserId, emoji);
-    const existingRows = reactionsByMessage[messageId] ?? [];
-    const existingOwnReaction = existingRows.find(
-      (row) => row.user_id === currentUserId && row.emoji === emoji
-    );
-
-    if (existingOwnReaction) {
-      removeReactionRow(existingOwnReaction.id);
-    } else {
-      setReactionRow({
-        id: optimisticId,
-        message_id: messageId,
-        user_id: currentUserId,
-        user_name: currentUserName || "Du",
-        emoji,
-        created_at: new Date().toISOString(),
-      });
-    }
-
     try {
       const res = await fetch("/api/chat/reactions", {
         method: "POST",
@@ -1762,20 +1720,7 @@ export default function ChatClient({
         const t = await res.text();
         throw new Error(t || "Reaktion fehlgeschlagen");
       }
-
-      const json = await res.json().catch(() => null);
-      const action = String(json?.action ?? "");
-
-      if (action === "removed") {
-        removeReactionRow(optimisticId);
-      }
     } catch (e) {
-      if (existingOwnReaction) {
-        setReactionRow(existingOwnReaction);
-      } else {
-        removeReactionRow(optimisticId);
-      }
-
       console.error(e);
       alert("Reaktion konnte nicht gespeichert werden.");
     }
