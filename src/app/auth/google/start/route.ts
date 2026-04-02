@@ -20,7 +20,7 @@ export async function GET() {
   (await cookies()).set("gcal_oauth_state", state, {
     httpOnly: true,
     sameSite: "lax",
-    secure: false, // lokal
+    secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: 60 * 10,
   });
