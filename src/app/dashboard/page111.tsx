@@ -503,7 +503,21 @@ export default async function DashboardPage() {
     .order("start_at", { ascending: true })
     .limit(6);
 
-  const reminderCountQuery = Promise.resolve({ data: [] as ReminderCountRow[] });
+  let reminderCountQuery = admin
+    .from("appointments")
+    .select(`
+      id,
+      reminder_at,
+      reminder_sent_at,
+      notes_internal
+    `)
+    .not("reminder_at", "is", null)
+    .is("reminder_sent_at", null)
+    .lte("reminder_at", now.toISOString());
+
+  if (effectiveReminderTenantId) {
+    reminderCountQuery = reminderCountQuery.eq("tenant_id", effectiveReminderTenantId);
+  }
 
   const recentCustomersBaseQuery = admin
     .from("customer_profiles")
@@ -526,20 +540,37 @@ export default async function DashboardPage() {
   const slotsWindowEnd = new Date(startOfToday);
   slotsWindowEnd.setDate(slotsWindowEnd.getDate() + 90);
 
-  const openSlotsQuery = Promise.resolve({ data: [] as OpenSlotRow[] });
-  const activeWaitlistQuery = Promise.resolve({ data: [] as {
-    id: string;
-    tenant_id: string;
-    customer_profile_id: string | null;
-    person_id: string | null;
-    service_title: string | null;
-    priority: string | null;
-    short_notice_ok: boolean | null;
-    reachable_today: boolean | null;
-    requested_recently_at: string | null;
-    status: string | null;
-    created_at: string;
-  }[] });
+  let openSlotsQuery = admin
+    .from("appointment_open_slots")
+    .select("id, appointment_id, tenant_id, start_at, end_at, status, created_at")
+    .eq("status", "open")
+    .gte("start_at", startOfToday.toISOString())
+    .lt("start_at", slotsWindowEnd.toISOString())
+    .order("start_at", { ascending: true });
+
+  if (effectiveReminderTenantId) {
+    openSlotsQuery = openSlotsQuery.eq("tenant_id", effectiveReminderTenantId);
+  }
+
+  let activeWaitlistQuery = admin
+    .from("appointment_waitlist")
+    .select(`
+      id,
+      tenant_id,
+      customer_profile_id,
+      person_id,
+      service_title,
+      priority,
+      short_notice_ok,
+      reachable_today,
+      requested_recently_at,
+      status,
+      created_at
+    `);
+
+  if (effectiveReminderTenantId) {
+    activeWaitlistQuery = activeWaitlistQuery.eq("tenant_id", effectiveReminderTenantId);
+  }
 
 
   const calendarServicesQuery = admin

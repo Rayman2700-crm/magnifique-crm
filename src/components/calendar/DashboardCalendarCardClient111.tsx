@@ -454,8 +454,9 @@ export default function DashboardCalendarCardClient({
     setIsRefreshing(false);
   }, [creatorTenantId, isAdmin, range.endISO, range.startISO, selectedTenantId, supabase]);
 
-  
   const scheduleRefresh = useCallback(() => {
+    if (document.visibilityState !== "visible") return;
+
     if (refreshTimeoutRef.current) {
       clearTimeout(refreshTimeoutRef.current);
     }
@@ -470,21 +471,29 @@ export default function DashboardCalendarCardClient({
   }, [loadAppointments]);
 
   useEffect(() => {
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") {
-        scheduleRefresh();
-      }
-    };
-
-    document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      document.removeEventListener("visibilitychange", onVisibility);
       if (refreshTimeoutRef.current) {
         clearTimeout(refreshTimeoutRef.current);
       }
     };
-  }, [scheduleRefresh]);
+  }, []);
 
+  useEffect(() => {
+    const channel = supabase
+      .channel(`dashboard-appointments-${selectedTenantId ?? "all"}-${view}-${anchorISO}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, () => {
+        scheduleRefresh();
+      })
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          scheduleRefresh();
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [anchorISO, scheduleRefresh, selectedTenantId, supabase, view]);
 
   const handleToday = useCallback(() => {
     setCalendarState((prev) => ({
