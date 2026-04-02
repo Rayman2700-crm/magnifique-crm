@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
+import webpush from "web-push";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 const CHAT_STORAGE_BUCKET = "team-chat";
 const MAX_TEXT_LENGTH = 2000;
 const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15 MB
+
+function requireEnv(name: string) {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing env: ${name}`);
+  return value;
+}
 
 function sanitizeFileName(fileName: string) {
   return fileName
@@ -287,6 +294,57 @@ export async function POST(req: Request) {
               mentionsInsertError.message
             );
           }
+        }
+      }
+    }
+
+    const vapidPublicKey = requireEnv("NEXT_PUBLIC_VAPID_PUBLIC_KEY");
+    const vapidPrivateKey = requireEnv("VAPID_PRIVATE_KEY");
+    const vapidSubject = process.env.VAPID_SUBJECT || "mailto:admin@example.com";
+
+    webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+
+    const { data: subs } = await admin
+      .from("push_subscriptions")
+      .select("id, user_id, endpoint, p256dh, auth")
+      .neq("user_id", user.id);
+
+    const baseBody = uploadedFile
+      ? text
+        ? `📎 ${text}`
+        : `📎 Datei: ${fileName}`
+      : text;
+
+    for (const sub of subs ?? []) {
+      try {
+        const isMentioned = mentionedUserIds.has(String(sub.user_id));
+
+        const payload = JSON.stringify({
+          title: isMentioned
+            ? `${fullName || "Team"} hat dich erwähnt`
+            : fullName
+              ? `Team: ${fullName}`
+              : "Neue Team-Nachricht",
+          body:
+            baseBody.length > 140 ? baseBody.slice(0, 137) + "..." : baseBody,
+          url: "/dashboard?openChat=1",
+        });
+
+        await webpush.sendNotification(
+          {
+            endpoint: sub.endpoint,
+            keys: {
+              p256dh: sub.p256dh,
+              auth: sub.auth,
+            },
+          },
+          payload
+        );
+      } catch (error: any) {
+        const statusCode = error?.statusCode ?? "unknown";
+
+        if (statusCode === 404 || statusCode === 410) {
+          await admin.from("push_subscriptions").delete().eq("id", sub.id);
         }
       }
     }
