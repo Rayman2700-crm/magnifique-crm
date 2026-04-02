@@ -279,6 +279,8 @@ export default function DashboardCalendarCardClient({
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const loadSeq = useRef(0);
+  const hasLoadedOnceRef = useRef(false);
+  const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const view = calendarState.view;
   const anchorISO = calendarState.anchorISO;
@@ -302,6 +304,15 @@ export default function DashboardCalendarCardClient({
     if (legendUsers.length > 1) return true;
     return isAdminTenantName(currentTenantDisplayName);
   }, [currentTenantDisplayName, legendUsers.length]);
+
+  useEffect(() => {
+    if (!creatorTenantId) return;
+
+    setSelectedTenantId((current) => {
+      if (isAdmin) return current;
+      return current || creatorTenantId;
+    });
+  }, [creatorTenantId, isAdmin]);
 
   const weekStartISO = useMemo(() => {
     return toLocalISODate(startOfWeekMondayLocal(new Date(`${anchorISO}T12:00:00`)));
@@ -343,7 +354,7 @@ export default function DashboardCalendarCardClient({
 
   const loadAppointments = useCallback(async () => {
     const seq = ++loadSeq.current;
-    const hasExistingItems = items.length > 0;
+    const hasExistingItems = hasLoadedOnceRef.current;
 
     if (hasExistingItems) setIsRefreshing(true);
     else setIsInitialLoading(true);
@@ -438,28 +449,51 @@ export default function DashboardCalendarCardClient({
     if (seq !== loadSeq.current) return;
 
     setItems(mappedItems);
+    hasLoadedOnceRef.current = true;
     setIsInitialLoading(false);
     setIsRefreshing(false);
-  }, [creatorTenantId, isAdmin, items.length, range.endISO, range.startISO, selectedTenantId, supabase]);
+  }, [creatorTenantId, isAdmin, range.endISO, range.startISO, selectedTenantId, supabase]);
+
+  const scheduleRefresh = useCallback(() => {
+    if (document.visibilityState !== "visible") return;
+
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+    }
+
+    refreshTimeoutRef.current = setTimeout(() => {
+      loadAppointments();
+    }, 250);
+  }, [loadAppointments]);
 
   useEffect(() => {
     loadAppointments();
   }, [loadAppointments]);
 
   useEffect(() => {
+    return () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     const channel = supabase
       .channel(`dashboard-appointments-${selectedTenantId ?? "all"}-${view}-${anchorISO}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, () => {
-        if (document.visibilityState === "visible") {
-          loadAppointments();
-        }
+        scheduleRefresh();
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          scheduleRefresh();
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [anchorISO, loadAppointments, selectedTenantId, supabase, view]);
+  }, [anchorISO, scheduleRefresh, selectedTenantId, supabase, view]);
 
   const handleToday = useCallback(() => {
     setCalendarState((prev) => ({
