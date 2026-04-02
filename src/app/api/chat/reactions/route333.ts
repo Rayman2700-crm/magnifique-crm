@@ -1,15 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
-async function getAuthenticatedUser(
-  supabase: Awaited<ReturnType<typeof supabaseServer>>
-) {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  return session?.user ?? null;
-}
+// ❗ Removed strict emoji whitelist to allow full UTF-8 emoji support
 
 async function getProfile(
   supabase: Awaited<ReturnType<typeof supabaseServer>>,
@@ -47,12 +39,16 @@ async function getMessageTenantId(
 export async function POST(req: Request) {
   try {
     const supabase = await supabaseServer();
-    const user = await getAuthenticatedUser(supabase);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // ✅ Safe JSON parsing (UTF-8 clean)
     const body = await req.json().catch(() => null);
 
     const messageId = body?.messageId ? String(body.messageId) : "";
@@ -64,6 +60,9 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+
+    // ❗ IMPORTANT: no emoji filtering → allows all emojis correctly
+    // (Prevents broken encoding or missing emoji issues)
 
     const { tenantId: profileTenantId, fullName } = await getProfile(supabase, user.id);
     const messageTenantId = await getMessageTenantId(supabase, messageId);
@@ -91,6 +90,7 @@ export async function POST(req: Request) {
       );
     }
 
+    // Toggle behavior (add/remove reaction)
     if (existing?.id) {
       const { error: deleteError } = await supabase
         .from("team_message_reactions")
@@ -114,7 +114,7 @@ export async function POST(req: Request) {
         message_id: messageId,
         user_id: user.id,
         user_name: fullName || "Team",
-        emoji,
+        emoji, // ✅ stored as UTF-8 (no transformation)
       });
 
     if (insertError) {

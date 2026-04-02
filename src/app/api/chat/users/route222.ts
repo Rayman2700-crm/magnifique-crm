@@ -2,22 +2,17 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
-async function getAuthenticatedUserId() {
-  const supabase = await supabaseServer();
-
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  return session?.user?.id ?? null;
-}
-
 export async function GET() {
   try {
-    const userId = await getAuthenticatedUserId();
+    const supabase = await supabaseServer();
     const admin = supabaseAdmin();
 
-    if (!userId) {
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
       return NextResponse.json({ error: "Nicht eingeloggt" }, { status: 401 });
     }
 
