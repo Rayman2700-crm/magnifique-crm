@@ -126,18 +126,19 @@ export default async function AppShell({
   const supabase = await supabaseServer();
   const admin = supabaseAdmin();
 
-  const userId = currentUserId;
+  const { data } = await supabase.auth.getUser();
+  const user = data.user;
 
   let googleSetupAlertCount = 0;
   let googleLoadError: string | null = null;
   let googleCalendars: CalendarListItem[] = [];
   let googleSavedDefault: string | null = null;
 
-  if (userId) {
+  if (user) {
     const { data: googleTokenRow } = await supabase
       .from("google_oauth_tokens")
       .select("refresh_token, default_calendar_id")
-      .eq("user_id", userId)
+      .eq("user_id", user.id)
       .maybeSingle();
 
     const hasRefreshToken = Boolean(googleTokenRow?.refresh_token);
@@ -177,11 +178,11 @@ export default async function AppShell({
   let effectiveReminderTenantId: string | null = null;
   let userRole: string = "PRACTITIONER";
 
-  if (userId) {
+  if (user) {
     const { data: profile } = await supabase
       .from("user_profiles")
       .select("role, tenant_id, calendar_tenant_id")
-      .eq("user_id", userId)
+      .eq("user_id", user.id)
       .maybeSingle();
 
     userRole = profile?.role ?? "PRACTITIONER";
@@ -403,7 +404,7 @@ export default async function AppShell({
     <div className="min-h-dvh bg-gradient-to-b from-black to-[#050505]">
       <TopNav
         userLabel={userLabel}
-        userEmail={null}
+        userEmail={user?.email ?? null}
         rightSlot={rightSlot}
         tenantId={tenantId}
         currentUserId={currentUserId}
@@ -422,7 +423,7 @@ export default async function AppShell({
         currentUserName={userLabel ?? ""}
       />
 
-      <ReminderSlideover items={reminderItems} currentUserEmail={null} />
+      <ReminderSlideover items={reminderItems} currentUserEmail={user?.email ?? null} />
       <WaitlistSlideover items={waitlistItems} />
       <GoogleCalendarSetupSlideover
         calendars={googleCalendars}
