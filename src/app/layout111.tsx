@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import AppShell from "@/components/app/AppShell";
-import { getCurrentUserContext } from "@/lib/auth/get-current-user-context";
+import { supabaseServer } from "@/lib/supabase/server";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,28 +30,32 @@ export const metadata: Metadata = {
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  let currentUserId: string | null = null;
+  const supabase = await supabaseServer();
+  const { data } = await supabase.auth.getUser();
+  const user = data.user;
+
   let userLabel: string | undefined;
   let tenantId: string | null = null;
 
-  try {
-    const context = await getCurrentUserContext();
+  if (user) {
+    const { data: profile } = await supabase
+      .from("user_profiles")
+      .select("full_name, role, tenant_id")
+      .eq("user_id", user.id)
+      .single();
 
-    currentUserId = context.authUser.id;
-    userLabel = context.profile.full_name ?? context.authUser.email ?? undefined;
-    tenantId = context.profile.tenant_id ?? null;
-  } catch {
-    // Not logged in or no valid user context → render public layout without AppShell
+    userLabel = profile?.full_name ?? user.email ?? undefined;
+    tenantId = profile?.tenant_id ?? null;
   }
 
   return (
     <html lang="de">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        {currentUserId ? (
+        {user ? (
           <AppShell
             userLabel={userLabel}
             tenantId={tenantId}
-            currentUserId={currentUserId}
+            currentUserId={user.id}
           >
             {children}
           </AppShell>

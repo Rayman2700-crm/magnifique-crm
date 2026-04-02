@@ -1,9 +1,8 @@
-import { cache } from "react";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import type { CurrentUserContext } from "@/types/auth";
 
-const loadCurrentUserContext = cache(async (): Promise<CurrentUserContext> => {
+export async function getCurrentUserContext(): Promise<CurrentUserContext> {
   const supabase = await supabaseServer();
 
   const {
@@ -53,8 +52,4 @@ const loadCurrentUserContext = cache(async (): Promise<CurrentUserContext> => {
     profile,
     tenant,
   };
-});
-
-export async function getCurrentUserContext(): Promise<CurrentUserContext> {
-  return loadCurrentUserContext();
 }
