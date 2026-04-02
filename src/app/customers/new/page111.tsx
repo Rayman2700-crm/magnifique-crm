@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createCustomer } from "./actions";
 
@@ -14,7 +14,7 @@ function fieldClassName(disabled: boolean) {
   ].join(" ");
 }
 
-function NewCustomerPageContent() {
+export default function NewCustomerPage() {
   const searchParams = useSearchParams();
 
   const preName = searchParams.get("name") ?? "";
@@ -260,21 +260,5 @@ function NewCustomerPageContent() {
         Hinweis: Person ist tenant-übergreifend, aber das Kundenprofil wird pro Behandler erstellt.
       </p>
     </main>
-  );
-}
-
-export default function NewCustomerPage() {
-  return (
-    <Suspense
-      fallback={
-        <main className="mx-auto max-w-3xl p-6">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/60">
-            Seite wird geladen...
-          </div>
-        </main>
-      }
-    >
-      <NewCustomerPageContent />
-    </Suspense>
   );
 }
