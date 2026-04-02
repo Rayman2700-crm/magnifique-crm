@@ -279,9 +279,6 @@ export default function DashboardCalendarCardClient({
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const loadSeq = useRef(0);
-  const hasLoadedOnceRef = useRef(false);
-  const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const refreshInFlightRef = useRef(false);
 
   const view = calendarState.view;
   const anchorISO = calendarState.anchorISO;
@@ -346,7 +343,7 @@ export default function DashboardCalendarCardClient({
 
   const loadAppointments = useCallback(async () => {
     const seq = ++loadSeq.current;
-    const hasExistingItems = hasLoadedOnceRef.current;
+    const hasExistingItems = items.length > 0;
 
     if (hasExistingItems) setIsRefreshing(true);
     else setIsInitialLoading(true);
@@ -377,7 +374,6 @@ export default function DashboardCalendarCardClient({
       setErrorText(apptError.message);
       setIsInitialLoading(false);
       setIsRefreshing(false);
-      refreshInFlightRef.current = false;
       return;
     }
 
@@ -442,58 +438,28 @@ export default function DashboardCalendarCardClient({
     if (seq !== loadSeq.current) return;
 
     setItems(mappedItems);
-    hasLoadedOnceRef.current = true;
     setIsInitialLoading(false);
     setIsRefreshing(false);
-    refreshInFlightRef.current = false;
-  }, [creatorTenantId, isAdmin, range.endISO, range.startISO, selectedTenantId, supabase]);
-
-  const scheduleRefresh = useCallback(() => {
-    if (document.visibilityState !== "visible") return;
-    if (refreshInFlightRef.current) return;
-
-    if (refreshTimeoutRef.current) {
-      clearTimeout(refreshTimeoutRef.current);
-    }
-
-    refreshTimeoutRef.current = setTimeout(() => {
-      refreshInFlightRef.current = true;
-      loadAppointments();
-    }, 250);
-  }, [loadAppointments]);
+  }, [creatorTenantId, isAdmin, items.length, range.endISO, range.startISO, selectedTenantId, supabase]);
 
   useEffect(() => {
     loadAppointments();
   }, [loadAppointments]);
 
   useEffect(() => {
-    return () => {
-      if (refreshTimeoutRef.current) {
-        clearTimeout(refreshTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
     const channel = supabase
       .channel(`dashboard-appointments-${selectedTenantId ?? "all"}-${view}-${anchorISO}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "appointments" },
-        () => {
-          scheduleRefresh();
+      .on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, () => {
+        if (document.visibilityState === "visible") {
+          loadAppointments();
         }
-      )
-      .subscribe((status) => {
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          scheduleRefresh();
-        }
-      });
+      })
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [anchorISO, scheduleRefresh, selectedTenantId, supabase, view]);
+  }, [anchorISO, loadAppointments, selectedTenantId, supabase, view]);
 
   const handleToday = useCallback(() => {
     setCalendarState((prev) => ({

@@ -68,6 +68,7 @@ export default function DashboardWeekGridClient({
   const [selected, setSelected] = useState<Item | null>(null);
   const [mounted, setMounted] = useState(false);
 
+  const optimisticItemsRef = useRef<Item[] | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const didAutoScrollRef = useRef(false);
   const rafRef = useRef<number | null>(null);
@@ -79,9 +80,16 @@ export default function DashboardWeekGridClient({
   const todayISO = useMemo(() => toLocalISODate(new Date()), []);
   const focusISO: string | null = null;
 
+  const [localItems, setLocalItems] = useState<Item[]>(items);
+
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    setLocalItems(items);
+    optimisticItemsRef.current = null;
+  }, [localItems]);
 
   useEffect(() => {
     return () => {
@@ -131,9 +139,9 @@ export default function DashboardWeekGridClient({
 
   const itemsById = useMemo(() => {
     const map = new Map<string, Item>();
-    for (const it of items) map.set(it.id, it);
+    for (const it of localItems) map.set(it.id, it);
     return map;
-  }, [items]);
+  }, [localItems]);
 
   const navigateLocal = useCallback(
     (next: Partial<{ view: ViewMode; date: string; week: string; focus: string | null }>) => {
@@ -151,6 +159,23 @@ export default function DashboardWeekGridClient({
   );
 
   const moveAppointment = useCallback(async (appointmentId: string, startAt: string, endAt: string) => {
+    const previousItems = localItems;
+    optimisticItemsRef.current = previousItems;
+
+    setLocalItems((current) =>
+      current
+        .map((entry) =>
+          entry.id === appointmentId
+            ? {
+                ...entry,
+                start_at: startAt,
+                end_at: endAt,
+              }
+            : entry
+        )
+        .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())
+    );
+
     try {
       setMoveSavingId(appointmentId);
 
@@ -163,19 +188,26 @@ export default function DashboardWeekGridClient({
       const json = await res.json().catch(() => null);
 
       if (!res.ok) {
+        setLocalItems(previousItems);
+        optimisticItemsRef.current = null;
         alert(json?.error ?? "Termin konnte nicht verschoben werden.");
+        return;
       }
+
+      optimisticItemsRef.current = null;
     } catch (e: any) {
+      setLocalItems(previousItems);
+      optimisticItemsRef.current = null;
       alert(e?.message ?? "Termin konnte nicht verschoben werden.");
     } finally {
       setMoveSavingId(null);
     }
-  }, []);
+  }, [localItems]);
 
   const dayMeta = useMemo(() => {
     const map = new Map<string, DayMeta>();
 
-    for (const it of items) {
+    for (const it of localItems) {
       const day = it.start_at.slice(0, 10);
       const prev = map.get(day);
 
@@ -194,12 +226,12 @@ export default function DashboardWeekGridClient({
     }
 
     return map;
-  }, [items]);
+  }, [localItems]);
 
   const eventsByDayLimited = useMemo(() => {
     const map = new Map<string, Item[]>();
 
-    for (const it of items) {
+    for (const it of localItems) {
       const day = it.start_at.slice(0, 10);
       const arr = map.get(day);
       if (!arr) map.set(day, [it]);
@@ -236,16 +268,16 @@ export default function DashboardWeekGridClient({
     const map = new Map<string, Positioned[]>();
 
     for (const d of weekDays) {
-      const placed = layoutDay(items, d.iso, startHour, pxPerMin);
+      const placed = layoutDay(localItems, d.iso, startHour, pxPerMin);
       map.set(d.iso, placed);
     }
 
     return map;
-  }, [weekDays, items, startHour, pxPerMin]);
+  }, [weekDays, localItems, startHour, pxPerMin]);
 
   const positionedDay = useMemo(() => {
-    return layoutDay(items, anchorISO, startHour, pxPerMin);
-  }, [items, anchorISO, startHour, pxPerMin]);
+    return layoutDay(localItems, anchorISO, startHour, pxPerMin);
+  }, [localItems, anchorISO, startHour, pxPerMin]);
 
   const nowInfo = useMemo(() => {
     const now = new Date();
