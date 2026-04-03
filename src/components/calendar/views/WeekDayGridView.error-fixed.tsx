@@ -1379,17 +1379,17 @@ export default function WeekDayGridView(props: {
                                 </div>
                               ) : (
                                 <>
-                                  <div style={{ paddingRight: isCompact ? 34 : 22 }}>
+                                  <div style={{ paddingRight: isCompact ? 42 : 22 }}>
                                     {isCompact ? (
                                       <div
                                         style={{
                                           display: "grid",
-                                          gridTemplateColumns: "minmax(0,1fr) auto",
+                                          gridTemplateColumns: "minmax(0, 1fr) 18px",
                                           alignItems: "center",
                                           columnGap: 6,
                                           minWidth: 0,
                                           width: "100%",
-                                          paddingRight: 28,
+                                          paddingRight: 24,
                                         }}
                                       >
                                         <div
@@ -1398,7 +1398,7 @@ export default function WeekDayGridView(props: {
                                             alignItems: "center",
                                             justifySelf: "start",
                                             maxWidth: "100%",
-                                            minWidth: eventWidthPx < 112 ? 34 : eventWidthPx < 128 ? 48 : 62,
+                                            minWidth: 0,
                                             borderRadius: 999,
                                             padding: "2px 6px",
                                             background: theme.labelBg,
@@ -1412,7 +1412,6 @@ export default function WeekDayGridView(props: {
                                             textOverflow: "ellipsis",
                                             letterSpacing: "0.02em",
                                             boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-                                            minWidth: 0,
                                           }}
                                         >
                                           {timeText}
@@ -1421,7 +1420,6 @@ export default function WeekDayGridView(props: {
                                         <div
                                           style={{
                                             position: "relative",
-                                            minWidth: 18,
                                             width: 18,
                                             height: 18,
                                             borderRadius: 999,
