@@ -7,22 +7,31 @@ type Variant = "primary" | "secondary" | "ghost" | "danger";
 type Size = "sm" | "md" | "lg";
 
 const base =
-  "inline-flex items-center justify-center rounded-lg font-medium transition " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 " +
-  "disabled:opacity-50 disabled:pointer-events-none";
+  "inline-flex items-center justify-center font-medium transition-all duration-150 " +
+  "focus-visible:outline-none disabled:opacity-50 disabled:pointer-events-none";
 
 const variants: Record<Variant, string> = {
-  primary: "bg-white text-black hover:bg-white/90 active:bg-white/85 shadow-sm",
+  primary:
+    "bg-[var(--primary)] text-[var(--primary-foreground)] " +
+    "hover:opacity-90 active:scale-[0.98] " +
+    "shadow-[0_4px_20px_rgba(214,195,163,0.25)]",
+
   secondary:
-    "bg-[var(--surface-2)] text-[var(--foreground)] border border-[var(--border)] hover:bg-white/10 active:bg-white/15",
-  ghost: "bg-transparent text-[var(--foreground)] hover:bg-white/10 active:bg-white/15",
-  danger: "bg-red-600 text-white hover:bg-red-600/90 active:bg-red-600/85 shadow-sm",
+    "bg-[var(--surface-2)] text-[var(--text)] border border-[var(--border)] " +
+    "hover:bg-white/10 active:bg-white/15",
+
+  ghost:
+    "bg-transparent text-[var(--text)] " +
+    "hover:bg-white/10 active:bg-white/15",
+
+  danger:
+    "bg-red-600 text-white hover:bg-red-600/90 active:bg-red-600/80",
 };
 
 const sizes: Record<Size, string> = {
-  sm: "h-9 px-3 text-sm",
-  md: "h-10 px-4 text-sm",
-  lg: "h-11 px-5 text-base",
+  sm: "h-9 px-3 text-sm rounded-[14px]",
+  md: "h-10 px-4 text-sm rounded-[16px]",
+  lg: "h-11 px-5 text-base rounded-[18px]",
 };
 
 export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
