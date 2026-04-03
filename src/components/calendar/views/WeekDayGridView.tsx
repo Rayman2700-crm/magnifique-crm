@@ -1411,7 +1411,6 @@ export default function WeekDayGridView(props: {
                                             boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
                                             flexShrink: 1,
                                             minWidth: 0,
-                                            maxWidth: eventWidthPx < 108 ? "52px" : eventWidthPx < 128 ? "72px" : "92px",
                                           }}
                                         >
                                           {timeText}
