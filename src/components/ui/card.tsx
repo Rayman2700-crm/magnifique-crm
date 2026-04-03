@@ -7,8 +7,9 @@ export function Card({
   return (
     <div
       className={cn(
-        "rounded-2xl border shadow-sm",
+        "rounded-[24px] border",
         "bg-[var(--surface)] border-[var(--border)]",
+        "shadow-[0_10px_30px_rgba(0,0,0,0.25)]",
         className
       )}
       {...props}
@@ -20,12 +21,28 @@ export function CardHeader({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("p-2 pb-0", className)} {...props} />;
+  return (
+    <div
+      className={cn(
+        "px-5 pt-5 pb-2 text-sm text-[var(--text-muted)]",
+        className
+      )}
+      {...props}
+    />
+  );
 }
 
 export function CardContent({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("p-2", className)} {...props} />;
+  return (
+    <div
+      className={cn(
+        "px-5 pb-5",
+        className
+      )}
+      {...props}
+    />
+  );
 }
