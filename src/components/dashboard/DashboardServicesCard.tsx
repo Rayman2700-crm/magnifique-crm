@@ -20,6 +20,27 @@ function fieldClassName() {
   ].join(" ");
 }
 
+function ServicesActionPill({
+  label,
+  accentColor = "#60a5fa",
+}: {
+  label: string;
+  accentColor?: string;
+}) {
+  return (
+    <span
+      className="inline-flex h-10 items-center justify-center rounded-[16px] border px-4 text-[11px] font-semibold uppercase tracking-[0.12em]"
+      style={{
+        color: accentColor,
+        backgroundColor: `${accentColor}14`,
+        borderColor: `${accentColor}30`,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
 function ServiceQuickCreateSlideover({
   open,
   shown,
@@ -63,7 +84,11 @@ function ServiceQuickCreateSlideover({
   }, [open, onClose]);
 
   const selectedTenantName = useMemo(() => {
-    return tenantOptions.find((entry) => entry.id === selectedTenantId)?.displayName ?? tenantName ?? "Behandler";
+    return (
+      tenantOptions.find((entry) => entry.id === selectedTenantId)?.displayName ??
+      tenantName ??
+      "Behandler"
+    );
   }, [tenantOptions, selectedTenantId, tenantName]);
 
   if (!mounted || !open || typeof document === "undefined") return null;
@@ -115,7 +140,14 @@ function ServiceQuickCreateSlideover({
         >
           <div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>Dienstleistungen</div>
-            <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: "rgba(255,255,255,0.95)" }}>
+            <div
+              style={{
+                marginTop: 6,
+                fontSize: 18,
+                fontWeight: 800,
+                color: "rgba(255,255,255,0.95)",
+              }}
+            >
               Neue Dienstleistung
             </div>
             <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,0.50)" }}>
@@ -155,9 +187,7 @@ function ServiceQuickCreateSlideover({
             ) : (
               <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4">
                 <div className="text-sm text-white/55">Behandler</div>
-                <div className="mt-2 text-base font-medium text-white">
-                  {selectedTenantName}
-                </div>
+                <div className="mt-2 text-base font-medium text-white">{selectedTenantName}</div>
               </div>
             )}
 
@@ -263,13 +293,17 @@ export default function DashboardServicesCard({
   return (
     <>
       <Card className="h-full min-w-0 border-[var(--border)] bg-[var(--surface)] transition hover:border-white/20 hover:bg-white/[0.03]">
-        <CardContent className="flex h-full min-h-[130px] flex-col justify-center items-center p-3">
+        <CardContent className="flex h-full min-h-[132px] flex-col justify-between p-5">
           <div className="min-w-0 text-center">
-            <div className="truncate text-[13px] font-semibold leading-4 text-white">Dienstleistungen</div>
-            <div className="mt-0.5 text-[10px] leading-4 text-white/60">{tenantName ?? "Behandler"}</div>
+            <div className="truncate text-[13px] font-semibold leading-4 text-white">
+              Dienstleistungen
+            </div>
+            <div className="mt-1 text-[10px] leading-4 text-white/60">
+              {tenantName ?? "Behandler"}
+            </div>
           </div>
 
-          <div className="mt-3 flex items-center justify-center">
+          <div className="mt-1 flex items-center justify-center">
             <div
               className="text-[22px] font-bold leading-none tracking-tight"
               style={{ color: "#ffffff" }}
@@ -279,30 +313,12 @@ export default function DashboardServicesCard({
           </div>
 
           <div className="mt-3 flex items-center justify-center gap-2">
-            <button
-              type="button"
-              onClick={() => setOpen(true)}
-              className="inline-flex h-8 items-center justify-center whitespace-nowrap rounded-md border px-2.5 text-[11px] font-semibold uppercase tracking-wide transition"
-              style={{
-                backgroundColor: "rgba(96,165,250,0.08)",
-                borderColor: "rgba(96,165,250,0.22)",
-                color: "#60a5fa",
-              }}
-            >
-              + Neu
+            <button type="button" onClick={() => setOpen(true)}>
+              <ServicesActionPill label="+ Neu" />
             </button>
 
             <Link href="/services">
-              <span
-                className="inline-flex h-8 items-center justify-center whitespace-nowrap rounded-md px-2.5 text-[11px] font-semibold uppercase tracking-wide transition"
-                style={{
-                  backgroundColor: "rgba(96,165,250,0.08)",
-                  border: "1px solid rgba(96,165,250,0.22)",
-                  color: "#60a5fa",
-                }}
-              >
-                Öffnen
-              </span>
+              <ServicesActionPill label="Öffnen" />
             </Link>
           </div>
         </CardContent>
