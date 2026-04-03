@@ -1186,10 +1186,10 @@ export default function WeekDayGridView(props: {
                                 }}
                                 style={{
                                   position: "absolute",
-                                  top: isTiny ? 6 : isCompact ? 7 : 8,
-                                  right: isTiny ? 6 : isCompact ? 6 : 8,
-                                  width: isTiny ? 18 : isCompact ? 20 : 24,
-                                  height: isTiny ? 18 : isCompact ? 20 : 24,
+                                  top: isTiny ? 6 : 8,
+                                  right: isTiny ? 6 : 8,
+                                  width: isTiny ? 18 : 24,
+                                  height: isTiny ? 18 : 24,
                                   borderRadius: 999,
                                   display: "inline-flex",
                                   alignItems: "center",
@@ -1199,7 +1199,7 @@ export default function WeekDayGridView(props: {
                                   color: "rgba(255,255,255,0.78)",
                                   cursor: isSaving ? "progress" : "grab",
                                   zIndex: 3,
-                                  fontSize: isTiny ? 9 : isCompact ? 10 : 11,
+                                  fontSize: isTiny ? 9 : 11,
                                   lineHeight: 1,
                                   userSelect: "none",
                                   WebkitUserSelect: "none",
@@ -1326,9 +1326,7 @@ export default function WeekDayGridView(props: {
                                   </span>
                                   <div
                                     style={{
-                                      position: "relative",
                                       minWidth: 18,
-                                      width: 18,
                                       height: 18,
                                       borderRadius: 999,
                                       display: "inline-flex",
@@ -1345,33 +1343,40 @@ export default function WeekDayGridView(props: {
                                     }}
                                   >
                                     {titleText}
-                                    <span
-                                      style={{
-                                        position: "absolute",
-                                        top: -1,
-                                        right: -1,
-                                        width: 6,
-                                        height: 6,
-                                        borderRadius: 999,
-                                        background: badge.sent ? "#16a34a" : "#d89a17",
-                                        boxShadow: `0 0 0 1px rgba(10,11,14,0.92), 0 0 8px ${badge.sent ? "rgba(22,163,74,0.35)" : "rgba(216,154,23,0.35)"}`,
-                                      }}
-                                    />
                                   </div>
+                                  <span
+                                    style={{
+                                      minWidth: 15,
+                                      height: 15,
+                                      borderRadius: 999,
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      background: badge.bg,
+                                      color: badge.text,
+                                      border: `1px solid ${badge.border}`,
+                                      fontSize: 8,
+                                      fontWeight: 900,
+                                      lineHeight: 1,
+                                      flexShrink: 0,
+                                    }}
+                                  >
+                                    {badge.tinyLabel}
+                                  </span>
                                 </div>
                               ) : (
                                 <>
-                                  <div style={{ paddingRight: isCompact ? 20 : 22 }}>
+                                  <div style={{ paddingRight: 22 }}>
                                     <div
                                       style={{
                                         display: "inline-flex",
                                         alignItems: "center",
-                                        maxWidth: isCompact ? "calc(100% - 6px)" : "100%",
+                                        maxWidth: "100%",
                                         borderRadius: 999,
-                                        padding: isCompact ? "2px 7px" : "4px 9px",
+                                        padding: isCompact ? "3px 8px" : "4px 9px",
                                         background: theme.labelBg,
                                         border: `1px solid ${theme.labelBorder}`,
-                                        fontSize: isCompact ? 9 : 11,
+                                        fontSize: isCompact ? 10 : 11,
                                         fontWeight: 800,
                                         color: theme.cardSubtle,
                                         lineHeight: 1.05,
