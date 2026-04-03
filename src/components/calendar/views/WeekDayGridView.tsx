@@ -1,3 +1,4 @@
+console.log("ICH BIN DIE NEUE DATEI");
 "use client";
 
 import type React from "react";
