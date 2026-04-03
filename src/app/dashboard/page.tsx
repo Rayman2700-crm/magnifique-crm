@@ -213,7 +213,7 @@ function tenantTheme(tenantName: string): ThemeLike {
       bg: "rgba(59,130,246,0.16)",
       text: "#F7F7F5",
       subText: "rgba(247,247,245,0.72)",
-      border: "rgba(59,130,246,0.38)",
+      border: "rgba(59,130,246,0.45)",
     };
   }
 
@@ -222,7 +222,7 @@ function tenantTheme(tenantName: string): ThemeLike {
       bg: "rgba(168,85,247,0.16)",
       text: "#F7F7F5",
       subText: "rgba(247,247,245,0.72)",
-      border: "rgba(168,85,247,0.38)",
+      border: "rgba(168,85,247,0.45)",
     };
   }
 
@@ -231,7 +231,7 @@ function tenantTheme(tenantName: string): ThemeLike {
       bg: "rgba(34,197,94,0.16)",
       text: "#F7F7F5",
       subText: "rgba(247,247,245,0.72)",
-      border: "rgba(34,197,94,0.38)",
+      border: "rgba(34,197,94,0.45)",
     };
   }
 
@@ -240,7 +240,7 @@ function tenantTheme(tenantName: string): ThemeLike {
       bg: "rgba(249,115,22,0.16)",
       text: "#F7F7F5",
       subText: "rgba(247,247,245,0.72)",
-      border: "rgba(249,115,22,0.38)",
+      border: "rgba(249,115,22,0.45)",
     };
   }
 
@@ -248,8 +248,29 @@ function tenantTheme(tenantName: string): ThemeLike {
     bg: "rgba(255,255,255,0.04)",
     text: "#F7F7F5",
     subText: "rgba(247,247,245,0.72)",
-    border: "rgba(255,255,255,0.12)",
+    border: "rgba(255,255,255,0.16)",
   };
+}
+
+function DashboardActionPill({
+  label,
+  accentColor,
+}: {
+  label: string;
+  accentColor?: string;
+}) {
+  return (
+    <span
+      className="inline-flex h-10 items-center justify-center rounded-[16px] border px-4 text-[11px] font-semibold uppercase tracking-[0.12em]"
+      style={{
+        color: accentColor ?? "var(--primary)",
+        backgroundColor: accentColor ? `${accentColor}14` : "var(--accent-soft)",
+        borderColor: accentColor ? `${accentColor}30` : "rgba(214,195,163,0.24)",
+      }}
+    >
+      {label}
+    </span>
+  );
 }
 
 function DashboardStatCard({
@@ -281,18 +302,7 @@ function DashboardStatCard({
             {value}
           </div>
 
-          {href ? (
-            <span
-              className="inline-flex h-8 items-center justify-center rounded-full px-3 text-[11px] font-semibold uppercase tracking-[0.12em]"
-              style={{
-                color: accentColor ?? "var(--primary)",
-                backgroundColor: accentColor ? `${accentColor}14` : "var(--accent-soft)",
-                border: `1px solid ${accentColor ? `${accentColor}30` : "rgba(214,195,163,0.24)"}`,
-              }}
-            >
-              öffnen
-            </span>
-          ) : null}
+          {href ? <DashboardActionPill label="öffnen" accentColor={accentColor} /> : null}
         </div>
       </CardContent>
     </Card>
@@ -311,17 +321,7 @@ function InvoiceCreateCard() {
         </div>
 
         <div>
-          <button
-            type="button"
-            className="inline-flex h-10 items-center justify-center rounded-[16px] border px-4 text-sm font-medium transition hover:bg-white/10"
-            style={{
-              borderColor: "rgba(214,195,163,0.28)",
-              backgroundColor: "rgba(214,195,163,0.12)",
-              color: "var(--primary)",
-            }}
-          >
-            + Rechnung erstellen
-          </button>
+          <DashboardActionPill label="+ Rechnung erstellen" />
         </div>
       </CardContent>
     </Card>
@@ -673,7 +673,10 @@ export default async function DashboardPage() {
     id: string;
     person_id: string | null;
     tenant_id: string | null;
-    person?: { full_name: string | null; phone: string | null } | { full_name: string | null; phone: string | null }[] | null;
+    person?:
+      | { full_name: string | null; phone: string | null }
+      | { full_name: string | null; phone: string | null }[]
+      | null;
   }[]) {
     const person = firstJoin(raw.person);
     const personId = String(raw.person_id ?? "").trim() || null;
@@ -787,7 +790,7 @@ export default async function DashboardPage() {
               <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-4">
                   <div
-                    className="flex h-[88px] w-[88px] items-center justify-center overflow-hidden rounded-[24px] border"
+                    className="flex h-[88px] w-[88px] items-center justify-center overflow-hidden rounded-[24px] border-[4px] shadow-[0_0_0_2px_rgba(11,11,12,0.9)]"
                     style={{ borderColor: profileTheme.border, background: profileTheme.bg }}
                   >
                     <img
@@ -906,7 +909,10 @@ export default async function DashboardPage() {
                     >
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div className="flex min-w-0 items-start gap-4">
-                          <div className="rounded-[18px] border px-4 py-3 text-center" style={{ borderColor: theme.border, backgroundColor: "rgba(255,255,255,0.06)" }}>
+                          <div
+                            className="rounded-[18px] border px-4 py-3 text-center"
+                            style={{ borderColor: theme.border, backgroundColor: "rgba(255,255,255,0.06)" }}
+                          >
                             <div className="text-[20px] font-bold leading-none" style={{ color: theme.text }}>
                               {formatTime(appointment.start_at)}
                             </div>
