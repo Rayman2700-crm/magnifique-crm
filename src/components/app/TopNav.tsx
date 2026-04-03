@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { Logo } from "@/components/brand/Logo";
-import { tenantTheme } from "@/lib/tenantTheme";
+import { tenantTheme } from "@/lib/theme/tenantTheme";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard" },
