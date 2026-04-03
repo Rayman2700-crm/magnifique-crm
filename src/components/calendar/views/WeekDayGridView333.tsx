@@ -1088,7 +1088,6 @@ export default function WeekDayGridView(props: {
                           const eventWidthPx = Math.max(16, dayColumnWidthPx / ev._cols - 6);
                           const eventHeightPx = Math.max(28, ev._height);
                           const isTiny = eventWidthPx < 80 || eventHeightPx < 38;
-                          const isTallTiny = isTiny && eventHeightPx >= 54;
                           const isCompact = !isTiny && (eventWidthPx < 138 || eventHeightPx < 68);
                           const isMedium = !isTiny && !isCompact && (eventWidthPx < 190 || eventHeightPx < 104);
                           const tooltipOpen = hoveredTinyId === ev.id && isTiny && !dragging;
@@ -1309,149 +1308,76 @@ export default function WeekDayGridView(props: {
                               ) : null}
 
                               {isTiny ? (
-                                isTallTiny ? (
-                                  <div
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 5,
+                                    width: "100%",
+                                    minWidth: 0,
+                                    paddingLeft: 2,
+                                    paddingRight: 24,
+                                  }}
+                                >
+                                  <span
                                     style={{
-                                      display: "flex",
-                                      flexDirection: "column",
-                                      alignItems: "flex-start",
-                                      justifyContent: "flex-start",
-                                      gap: 6,
-                                      width: "100%",
-                                      minWidth: 0,
-                                      paddingLeft: 2,
-                                      paddingRight: 24,
-                                      paddingTop: 1,
-                                    }}
-                                  >
-                                    <span
-                                      style={{
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        borderRadius: 999,
-                                        padding: "2px 6px",
-                                        background: theme.labelBg,
-                                        border: `1px solid ${theme.labelBorder}`,
-                                        color: theme.cardSubtle,
-                                        fontSize: 9,
-                                        fontWeight: 700,
-                                        lineHeight: 1,
-                                        whiteSpace: "nowrap",
-                                        minWidth: 0,
-                                        maxWidth: "calc(100% - 2px)",
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
-                                      }}
-                                    >
-                                      {getStartTimeOnly(ev._timeLine)}
-                                    </span>
-                                    <div
-                                      style={{
-                                        position: "relative",
-                                        minWidth: 18,
-                                        width: 18,
-                                        height: 18,
-                                        borderRadius: 999,
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                        background: "rgba(255,255,255,0.05)",
-                                        color: theme.cardText,
-                                        border: `1px solid ${theme.accentMid}`,
-                                        fontSize: 10,
-                                        fontWeight: 900,
-                                        lineHeight: 1,
-                                        boxShadow: `0 0 12px ${theme.accentSoft}`,
-                                        flexShrink: 0,
-                                      }}
-                                    >
-                                      {titleText}
-                                      <span
-                                        style={{
-                                          position: "absolute",
-                                          top: -1,
-                                          right: -1,
-                                          width: 6,
-                                          height: 6,
-                                          borderRadius: 999,
-                                          background: badge.sent ? "#16a34a" : "#d89a17",
-                                          boxShadow: `0 0 0 1px rgba(10,11,14,0.92), 0 0 8px ${badge.sent ? "rgba(22,163,74,0.35)" : "rgba(216,154,23,0.35)"}`,
-                                        }}
-                                      />
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div
-                                    style={{
-                                      display: "flex",
+                                      display: "inline-flex",
                                       alignItems: "center",
-                                      gap: 5,
-                                      width: "100%",
+                                      borderRadius: 999,
+                                      padding: "2px 6px",
+                                      background: theme.labelBg,
+                                      border: `1px solid ${theme.labelBorder}`,
+                                      color: theme.cardSubtle,
+                                      fontSize: 9,
+                                      fontWeight: 700,
+                                      lineHeight: 1,
+                                      whiteSpace: "nowrap",
+                                      flexShrink: 1,
                                       minWidth: 0,
-                                      paddingLeft: 2,
-                                      paddingRight: 24,
+                                      maxWidth: "calc(100% - 25px)",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
                                     }}
                                   >
+                                    {fmtShortTime(ev._timeLine)}
+                                  </span>
+                                  <div
+                                    style={{
+                                      position: "relative",
+                                      minWidth: 18,
+                                      width: 18,
+                                      height: 18,
+                                      borderRadius: 999,
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      background: "rgba(255,255,255,0.05)",
+                                      color: theme.cardText,
+                                      border: `1px solid ${theme.accentMid}`,
+                                      fontSize: 10,
+                                      fontWeight: 900,
+                                      lineHeight: 1,
+                                      boxShadow: `0 0 12px ${theme.accentSoft}`,
+                                      flexShrink: 0,
+                                      marginLeft: "auto",
+                                      marginRight: 2,
+                                    }}
+                                  >
+                                    {titleText}
                                     <span
                                       style={{
-                                        display: "inline-flex",
-                                        alignItems: "center",
+                                        position: "absolute",
+                                        top: -1,
+                                        right: -1,
+                                        width: 6,
+                                        height: 6,
                                         borderRadius: 999,
-                                        padding: "2px 6px",
-                                        background: theme.labelBg,
-                                        border: `1px solid ${theme.labelBorder}`,
-                                        color: theme.cardSubtle,
-                                        fontSize: 9,
-                                        fontWeight: 700,
-                                        lineHeight: 1,
-                                        whiteSpace: "nowrap",
-                                        flexShrink: 1,
-                                        minWidth: 0,
-                                        maxWidth: "calc(100% - 25px)",
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
+                                        background: badge.sent ? "#16a34a" : "#d89a17",
+                                        boxShadow: `0 0 0 1px rgba(10,11,14,0.92), 0 0 8px ${badge.sent ? "rgba(22,163,74,0.35)" : "rgba(216,154,23,0.35)"}`,
                                       }}
-                                    >
-                                      {fmtShortTime(ev._timeLine)}
-                                    </span>
-                                    <div
-                                      style={{
-                                        position: "relative",
-                                        minWidth: 18,
-                                        width: 18,
-                                        height: 18,
-                                        borderRadius: 999,
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                        background: "rgba(255,255,255,0.05)",
-                                        color: theme.cardText,
-                                        border: `1px solid ${theme.accentMid}`,
-                                        fontSize: 10,
-                                        fontWeight: 900,
-                                        lineHeight: 1,
-                                        boxShadow: `0 0 12px ${theme.accentSoft}`,
-                                        flexShrink: 0,
-                                        marginLeft: "auto",
-                                        marginRight: 2,
-                                      }}
-                                    >
-                                      {titleText}
-                                      <span
-                                        style={{
-                                          position: "absolute",
-                                          top: -1,
-                                          right: -1,
-                                          width: 6,
-                                          height: 6,
-                                          borderRadius: 999,
-                                          background: badge.sent ? "#16a34a" : "#d89a17",
-                                          boxShadow: `0 0 0 1px rgba(10,11,14,0.92), 0 0 8px ${badge.sent ? "rgba(22,163,74,0.35)" : "rgba(216,154,23,0.35)"}`,
-                                        }}
-                                      />
-                                    </div>
+                                    />
                                   </div>
-                                )
+                                </div>
                               ) : (
                                 <>
                                   <div style={{ paddingRight: isCompact ? 42 : 22 }}>
@@ -2007,4 +1933,3 @@ export default function WeekDayGridView(props: {
     </>
   );
 }
-//dsdASDADSA
