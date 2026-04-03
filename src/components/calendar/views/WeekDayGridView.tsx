@@ -1395,7 +1395,7 @@ export default function WeekDayGridView(props: {
                                           style={{
                                             display: "inline-flex",
                                             alignItems: "center",
-                                            maxWidth: "100%",
+                                            maxWidth: eventWidthPx < 108 ? "52px" : eventWidthPx < 128 ? "72px" : "92px",
                                             borderRadius: 999,
                                             padding: "2px 6px",
                                             background: theme.labelBg,
