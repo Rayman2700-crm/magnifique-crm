@@ -6,6 +6,7 @@ import DashboardCalendarCardClient from "@/components/calendar/DashboardCalendar
 import OpenSlotsSlideover from "@/components/dashboard/OpenSlotsSlideover";
 import WaitlistSlideover from "@/components/dashboard/WaitlistSlideover";
 import DashboardServicesCard from "@/components/dashboard/DashboardServicesCard";
+import Link from "next/link";
 
 type TenantRow = {
   id: string;
