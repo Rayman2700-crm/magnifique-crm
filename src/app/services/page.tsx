@@ -31,6 +31,14 @@ type ServiceRow = {
   is_active: boolean | null;
   created_at: string | null;
   updated_at: string | null;
+  tenant?:
+    | {
+        display_name: string | null;
+      }
+    | {
+        display_name: string | null;
+      }[]
+    | null;
 };
 
 type TenantAvatarOption = TenantOption & {
@@ -161,7 +169,7 @@ export default async function ServicesPage({
     const { data: serviceRows } = await admin
       .from("services")
       .select(
-        "id, tenant_id, name, default_price_cents, duration_minutes, buffer_minutes, description, is_active, created_at, updated_at"
+        "id, tenant_id, name, default_price_cents, duration_minutes, buffer_minutes, description, is_active, created_at, updated_at, tenant:tenants(display_name)"
       )
       .order("is_active", { ascending: false })
       .order("name", { ascending: true });
@@ -174,7 +182,7 @@ export default async function ServicesPage({
       admin
         .from("services")
         .select(
-          "id, tenant_id, name, default_price_cents, duration_minutes, buffer_minutes, description, is_active, created_at, updated_at"
+          "id, tenant_id, name, default_price_cents, duration_minutes, buffer_minutes, description, is_active, created_at, updated_at, tenant:tenants(display_name)"
         )
         .eq("tenant_id", selectedTenantId)
         .order("is_active", { ascending: false })
@@ -209,6 +217,11 @@ export default async function ServicesPage({
       ((service.default_price_cents ?? 0) / 100).toFixed(2).replace(".", ","),
       String(service.duration_minutes ?? ""),
       String(service.tenant_id ?? ""),
+      String(
+        Array.isArray(service.tenant)
+          ? (service.tenant[0]?.display_name ?? "")
+          : (service.tenant?.display_name ?? "")
+      ),
     ]
       .join(" ")
       .toLowerCase();

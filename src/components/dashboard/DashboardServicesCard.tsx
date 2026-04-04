@@ -20,23 +20,43 @@ function fieldClassName() {
   ].join(" ");
 }
 
+function OpenIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-[14px] w-[14px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9 5H6.5A1.5 1.5 0 0 0 5 6.5v11A1.5 1.5 0 0 0 6.5 19h11a1.5 1.5 0 0 0 1.5-1.5V15" />
+      <path d="M10 14 19 5" />
+      <path d="M13 5h6v6" />
+    </svg>
+  );
+}
+
+function PlusCircleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-[16px] w-[16px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 8.5v7" />
+      <path d="M8.5 12h7" />
+    </svg>
+  );
+}
+
 function ServicesActionPill({
-  label,
   accentColor = "#60a5fa",
+  icon,
 }: {
-  label: string;
   accentColor?: string;
+  icon: React.ReactNode;
 }) {
   return (
     <span
-      className="inline-flex h-10 items-center justify-center rounded-[16px] border px-4 text-[11px] font-semibold uppercase tracking-[0.12em]"
+      className="inline-flex h-10 w-10 items-center justify-center rounded-[16px] border"
       style={{
         color: accentColor,
         backgroundColor: `${accentColor}14`,
         borderColor: `${accentColor}30`,
       }}
     >
-      {label}
+      {icon}
     </span>
   );
 }
@@ -293,33 +313,48 @@ export default function DashboardServicesCard({
   return (
     <>
       <Card className="h-full min-w-0 border-[var(--border)] bg-[var(--surface)] transition hover:border-white/20 hover:bg-white/[0.03]">
-        <CardContent className="flex h-full min-h-[132px] flex-col justify-between gap-4 p-5 sm:min-h-[144px] sm:p-6">
-          <div className="min-w-0 text-center">
-            <div className="truncate text-[13px] font-semibold leading-4 text-white">
-              Dienstleistungen
+        <CardContent className="flex min-h-[0px] flex-col p-4 sm:min-h-[120px] sm:p-5">
+          <div className="hidden items-start justify-between gap-3 md:flex">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[13px] font-semibold leading-4 text-white/45">
+                Services
+              </div>
+              <div className="mt-1 text-[10px] leading-4 text-white/60">
+                {tenantName ?? "Behandler"}
+              </div>
             </div>
-            <div className="mt-1 text-[10px] leading-4 text-white/60">
-              {tenantName ?? "Behandler"}
+
+            <div className="flex items-start gap-2">
+              <div className="pt-0.5 text-[22px] font-bold leading-none tracking-tight text-white sm:text-[36px]">
+                {activeCount}
+              </div>
+
+              <button type="button" onClick={() => setOpen(true)} className="shrink-0">
+                <ServicesActionPill icon={<PlusCircleIcon />} />
+              </button>
+
+              <Link href="/services" className="shrink-0">
+                <ServicesActionPill icon={<OpenIcon />} />
+              </Link>
             </div>
           </div>
 
-          <div className="mt-1 flex items-center justify-center">
-            <div
-              className="text-[22px] font-bold leading-none tracking-tight"
-              style={{ color: "#ffffff" }}
-            >
-              {activeCount}
+          <div className="flex h-full flex-col justify-between gap-4 md:hidden">
+            <div className="text-sm font-medium leading-5 text-white/45">Services</div>
+
+            <div className="flex items-center gap-2">
+              <div className="text-[22px] font-bold leading-none tracking-tight text-white">
+                {activeCount}
+              </div>
+
+              <button type="button" onClick={() => setOpen(true)} className="shrink-0">
+                <ServicesActionPill icon={<PlusCircleIcon />} />
+              </button>
+
+              <Link href="/services" className="shrink-0">
+                <ServicesActionPill icon={<OpenIcon />} />
+              </Link>
             </div>
-          </div>
-
-          <div className="mt-2 flex flex-col items-stretch justify-center gap-2 sm:mt-3 sm:flex-row sm:items-center">
-            <button type="button" onClick={() => setOpen(true)} className="w-full sm:w-auto">
-              <ServicesActionPill label="+ Neu" />
-            </button>
-
-            <Link href="/services" className="w-full sm:w-auto">
-              <ServicesActionPill label="Öffnen" />
-            </Link>
           </div>
         </CardContent>
       </Card>

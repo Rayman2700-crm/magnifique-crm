@@ -252,23 +252,50 @@ function tenantTheme(tenantName: string): ThemeLike {
   };
 }
 
+function OpenIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-[14px] w-[14px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9 5H6.5A1.5 1.5 0 0 0 5 6.5v11A1.5 1.5 0 0 0 6.5 19h11a1.5 1.5 0 0 0 1.5-1.5V15" />
+      <path d="M10 14 19 5" />
+      <path d="M13 5h6v6" />
+    </svg>
+  );
+}
+
+function InvoiceIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-[16px] w-[16px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 3H7.5A1.5 1.5 0 0 0 6 4.5v15A1.5 1.5 0 0 0 7.5 21h9a1.5 1.5 0 0 0 1.5-1.5V8Z" />
+      <path d="M14 3v5h5" />
+      <path d="M12 11v6" />
+      <path d="M9 14h6" />
+    </svg>
+  );
+}
+
 function DashboardActionPill({
   label,
   accentColor,
+  icon,
+  compact = false,
 }: {
-  label: string;
+  label?: string;
   accentColor?: string;
+  icon?: React.ReactNode;
+  compact?: boolean;
 }) {
   return (
     <span
-      className="inline-flex h-10 items-center justify-center rounded-[16px] border px-4 text-[11px] font-semibold uppercase tracking-[0.12em]"
+      className={`inline-flex items-center justify-center rounded-[16px] border ${
+        compact ? "h-10 w-10 px-0" : "h-9 px-3 text-[10px] sm:h-10 sm:px-4 sm:text-[11px]"
+      } font-semibold uppercase tracking-[0.12em]`}
       style={{
         color: accentColor ?? "var(--primary)",
         backgroundColor: accentColor ? `${accentColor}14` : "var(--accent-soft)",
         borderColor: accentColor ? `${accentColor}30` : "rgba(214,195,163,0.24)",
       }}
     >
-      {label}
+      {icon ?? label}
     </span>
   );
 }
@@ -288,21 +315,38 @@ function DashboardStatCard({
 }) {
   const content = (
     <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-      <CardContent className="flex min-h-[144px] flex-col justify-between gap-5 p-6">
-        <div>
-          <div className="text-sm font-medium text-[var(--text-muted)]">{label}</div>
-          {subtext ? <div className="mt-1 text-xs text-white/45">{subtext}</div> : null}
-        </div>
-
-        <div className="flex items-end justify-between gap-3">
-          <div
-            className="text-[30px] font-semibold leading-none tracking-tight"
-            style={{ color: accentColor ?? "var(--text)" }}
-          >
-            {value}
+      <CardContent className="flex min-h-[108px] flex-col p-4 sm:min-h-[120px] sm:p-5">
+        <div className="hidden items-start justify-between gap-3 md:flex">
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-medium text-[var(--text-muted)] sm:text-sm">{label}</div>
+            {subtext ? <div className="mt-1 text-[11px] text-white/45 sm:text-xs">{subtext}</div> : null}
           </div>
 
-          {href ? <DashboardActionPill label="öffnen" accentColor={accentColor} /> : null}
+          <div className="flex items-start gap-2">
+            <div
+              className="pt-0.5 text-[22px] font-semibold leading-none tracking-tight sm:text-[36px]"
+              style={{ color: accentColor ?? "var(--text)" }}
+            >
+              {value}
+            </div>
+
+            {href ? <DashboardActionPill icon={<OpenIcon />} compact accentColor={accentColor} /> : null}
+          </div>
+        </div>
+
+        <div className="flex h-full flex-col justify-between gap-4 md:hidden">
+          <div className="text-sm font-medium leading-5 text-[var(--text-muted)]">{label}</div>
+
+          <div className="flex items-center gap-2">
+            <div
+              className="text-[22px] font-semibold leading-none tracking-tight"
+              style={{ color: accentColor ?? "var(--text)" }}
+            >
+              {value}
+            </div>
+
+            {href ? <DashboardActionPill icon={<OpenIcon />} compact accentColor={accentColor} /> : null}
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -314,14 +358,24 @@ function DashboardStatCard({
 function InvoiceCreateCard() {
   return (
     <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-      <CardContent className="flex min-h-[144px] flex-col justify-between gap-5 p-6">
-        <div>
-          <div className="text-sm font-medium text-[var(--text-muted)]">Rechnungen</div>
-          <div className="mt-1 text-xs text-white/45">Neue Rechnung direkt starten</div>
+      <CardContent className="flex min-h-[108px] flex-col p-4 sm:min-h-[120px] sm:p-5">
+        <div className="hidden items-start justify-between gap-3 md:flex">
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-medium text-[var(--text-muted)] sm:text-sm">Rechnungen</div>
+            <div className="mt-1 text-[11px] text-white/45 sm:text-xs">Rechnung erstellen</div>
+          </div>
+
+          <div className="shrink-0">
+            <DashboardActionPill icon={<InvoiceIcon />} compact />
+          </div>
         </div>
 
-        <div>
-          <DashboardActionPill label="+ Rechnung erstellen" />
+        <div className="flex h-full flex-col justify-between gap-4 md:hidden">
+          <div className="text-sm font-medium leading-5 text-[var(--text-muted)]">Rechnungen</div>
+
+          <div className="flex items-center gap-2">
+            <DashboardActionPill icon={<InvoiceIcon />} compact />
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -786,8 +840,8 @@ export default async function DashboardPage() {
       <section>
         <Card className="overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
           <CardContent className="p-6 md:p-8">
-            <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-6 md:p-7">
-              <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+            <div className="hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 md:block md:p-7">
+              <div className="hidden flex-col gap-6 md:flex md:flex-row md:items-center md:justify-between">
                 <div className="flex items-center gap-5">
                   <div
                     className="flex h-[88px] w-[88px] items-center justify-center overflow-hidden rounded-[24px] border-[4px] shadow-[0_0_0_2px_rgba(11,11,12,0.9)]"
@@ -821,7 +875,7 @@ export default async function DashboardPage() {
               </div>
             </div>
 
-            <div className="mt-7 grid gap-5 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
+            <div className="mt-4 grid grid-cols-2 gap-4 min-[480px]:grid-cols-3 sm:gap-5 md:mt-7 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
               <DashboardStatCard label="Termine heute" value={String(todayCount)} subtext="Heute im Plan" />
               <DashboardStatCard label="Termine Woche" value={String(weekCount)} subtext="Diese Woche" />
               <DashboardStatCard label="Kunden gesamt" value={String(customersCount)} subtext="Gespeicherte Profile" />
@@ -872,7 +926,6 @@ export default async function DashboardPage() {
         creatorTenantId={creatorTenantId}
         isAdmin={isAdmin}
       />
-
 
       <OpenSlotsSlideover items={openSlotItems} />
       <WaitlistSlideover items={waitlistItems} />

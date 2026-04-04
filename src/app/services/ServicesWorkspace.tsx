@@ -20,6 +20,14 @@ type ServiceRow = {
   is_active: boolean | null;
   created_at: string | null;
   updated_at: string | null;
+  tenant?:
+    | {
+        display_name: string | null;
+      }
+    | {
+        display_name: string | null;
+      }[]
+    | null;
 };
 
 type Props = {
@@ -67,15 +75,44 @@ function badgeClassName(active: boolean) {
   ].join(" ");
 }
 
-function tenantAccentColor(tenantId: string | null | undefined) {
-  const id = String(tenantId ?? "").toLowerCase();
+function firstJoin<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
 
-  if (id.includes("radu")) return "#3b82f6";
-  if (id.includes("raluca")) return "#a855f7";
-  if (id.includes("alexandra")) return "#22c55e";
-  if (id.includes("barbara")) return "#f97316";
+function tenantAccentColor(label: string | null | undefined) {
+  const value = String(label ?? "").toLowerCase();
 
-  return "rgba(255,255,255,0.38)";
+  if (value.includes("radu")) return "#3b82f6";
+  if (value.includes("raluca")) return "#a855f7";
+  if (value.includes("alexandra")) return "#22c55e";
+  if (value.includes("barbara")) return "#f97316";
+
+  return "rgba(255,255,255,0.42)";
+}
+
+function withAlpha(hexOrRgba: string, alpha: number) {
+  if (hexOrRgba.startsWith("#")) {
+    const hex = hexOrRgba.slice(1);
+    const normalized = hex.length === 3
+      ? hex.split("").map((char) => char + char).join("")
+      : hex;
+
+    const r = Number.parseInt(normalized.slice(0, 2), 16);
+    const g = Number.parseInt(normalized.slice(2, 4), 16);
+    const b = Number.parseInt(normalized.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
+  if (hexOrRgba.startsWith("rgba(")) {
+    return hexOrRgba.replace(/rgba\(([^)]+),\s*[^,]+\)$/, `rgba($1, ${alpha})`);
+  }
+
+  if (hexOrRgba.startsWith("rgb(")) {
+    return hexOrRgba.replace("rgb(", "rgba(").replace(")", `, ${alpha})`);
+  }
+
+  return hexOrRgba;
 }
 
 function ServiceSheet({
@@ -250,20 +287,32 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
           <div className="space-y-3">
             {services.map((service) => {
               const active = Boolean(service.is_active);
-              const accent = tenantAccentColor(service.tenant_id);
+              const tenant = firstJoin(service.tenant);
+              const accent = tenantAccentColor(tenant?.display_name ?? service.tenant_id);
+              const borderColor = withAlpha(accent, 0.7);
+              const softGlow = withAlpha(accent, 0.18);
+              const fillGlow = withAlpha(accent, 0.08);
 
               return (
                 <article
                   key={service.id}
-                  className="relative overflow-hidden rounded-[24px] border border-white/10 bg-black/20 p-4 transition hover:border-white/20 hover:bg-black/25 md:p-5"
+                  className="relative overflow-hidden rounded-[24px] border bg-black/20 px-4 py-4 transition hover:bg-black/25 md:px-5 md:py-5"
+                  style={{
+                    borderColor,
+                    boxShadow: `0 0 0 1px ${withAlpha(accent, 0.14)} inset, 0 0 0 1px ${softGlow}, 0 12px 34px rgba(0,0,0,0.22)`,
+                    backgroundImage: `linear-gradient(90deg, ${fillGlow} 0%, rgba(255,255,255,0) 22%)`,
+                  }}
                 >
                   <div
-                    className="absolute bottom-4 left-0 top-4 w-[4px] rounded-r-full"
-                    style={{ backgroundColor: accent, boxShadow: `0 0 12px ${accent}` }}
+                    className="pointer-events-none absolute inset-y-0 left-0 w-[6px]"
+                    style={{
+                      background: `linear-gradient(180deg, ${withAlpha(accent, 0.95)} 0%, ${withAlpha(accent, 0.45)} 100%)`,
+                      boxShadow: `0 0 22px ${withAlpha(accent, 0.65)}`,
+                    }}
                   />
 
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="min-w-0 pl-3">
+                    <div className="min-w-0 pl-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="truncate text-lg font-semibold text-white">
                           {service.name ?? "Unbenannte Dienstleistung"}

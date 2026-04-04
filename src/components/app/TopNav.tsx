@@ -497,7 +497,13 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
       </aside>
 
       <div className="clientique-topbar fixed left-[84px] right-0 top-0 z-40 border-b border-white/10">
-        <div className="flex h-[74px] items-center justify-between px-3 sm:px-5 lg:px-8">
+        <div className="relative flex h-[74px] items-center justify-between px-3 sm:px-5 lg:px-8">
+          <div className="pointer-events-none absolute left-1/2 top-1/2 block -translate-x-1/2 -translate-y-1/2 md:hidden">
+            <div className="text-center text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">
+              Clientique Dashboard
+            </div>
+          </div>
+
           <nav className="hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto md:flex">
             {nav.slice(0, 4).map((item) => {
               const isChat = item.href === "/dashboard/chat";
