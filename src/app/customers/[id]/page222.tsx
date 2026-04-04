@@ -70,6 +70,13 @@ type IntakeRow = {
   status: string | null;
 };
 
+type ServiceRow = {
+  id: string;
+  name: string;
+  tenant_id: string | null;
+  is_active: boolean | null;
+};
+
 type CustomerStatus = "Neu" | "Aktiv" | "Inaktiv" | "Ohne Folgetermin";
 type AppointmentStatus = "scheduled" | "completed" | "cancelled" | "no_show";
 
@@ -357,6 +364,15 @@ function fmtTimeRange(timeFrom?: string | null, timeTo?: string | null) {
   if (timeFrom) return `ab ${timeFrom}`;
   if (timeTo) return `bis ${timeTo}`;
   return "Ganztägig";
+}
+
+function buildWaitlistTimeOptions() {
+  const options: string[] = [];
+  for (let hour = 8; hour <= 20; hour += 1) {
+    options.push(`${String(hour).padStart(2, "0")}:00`);
+    options.push(`${String(hour).padStart(2, "0")}:30`);
+  }
+  return options;
 }
 
 function waitlistPriorityLabel(priority?: string | null) {
@@ -701,6 +717,18 @@ export default async function CustomerDetailPage({
     .order("created_at", { ascending: false })
     .limit(200);
 
+  const { data: servicesRaw } = tenantId
+    ? await supabase
+        .from("services")
+        .select("id, name, tenant_id, is_active")
+        .eq("tenant_id", tenantId)
+        .eq("is_active", true)
+        .order("name", { ascending: true })
+    : { data: [] };
+
+  const services = ((servicesRaw ?? []) as ServiceRow[]).filter((service) => !!service.name);
+  const waitlistTimeOptions = buildWaitlistTimeOptions();
+
   return (
     <main className="mx-auto max-w-7xl p-4 md:p-6 xl:p-8">
       <ScrollToTab />
@@ -715,16 +743,42 @@ export default async function CustomerDetailPage({
                 borderColor: "rgba(255,255,255,0.08)",
               }}
             >
-              <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                <div className="min-w-0 flex-1">
-                  <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">
-                    Clientique Kundenprofil
+              <div className="flex flex-col gap-5">
+                <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">
+                      Clientique Kundenprofil
+                    </div>
+                    <h1 className="mt-2 truncate text-3xl font-semibold tracking-tight text-[var(--text)]">
+                      {person?.full_name || "Unbekannter Kunde"}
+                    </h1>
                   </div>
-                  <h1 className="mt-2 truncate text-3xl font-semibold tracking-tight text-[var(--text)]">
-                    {person?.full_name || "Unbekannter Kunde"}
-                  </h1>
 
-                  <div className="mt-5 flex items-center justify-between gap-3">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:w-[360px]">
+                    <div className="rounded-[22px] border border-white/10 bg-black/20 px-4 py-3">
+                      <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Letzter Besuch</div>
+                      <div className="mt-2 text-base font-medium text-[var(--text)]">
+                        {fmtDateOrDash(lastVisitAt)}
+                      </div>
+                      <div className="mt-1 text-sm text-white/50">
+                        {daysSinceLastVisit !== null ? `${daysSinceLastVisit} Tage her` : "Noch kein Besuch"}
+                      </div>
+                    </div>
+
+                    <div className="rounded-[22px] border border-white/10 bg-black/20 px-4 py-3">
+                      <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Nächster Termin</div>
+                      <div className="mt-2 text-base font-medium text-[var(--text)]">
+                        {fmtDateOrDash(nextAppointmentAt)}
+                      </div>
+                      <div className="mt-1 text-sm text-white/50">
+                        {nextAppointmentAt ? "Folgetermin vorhanden" : "Kein Termin geplant"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-white/8 pt-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <Link href={`/customers/${customerProfileId}/edit`}>
                       <Button variant="secondary" size="sm">Bearbeiten</Button>
                     </Link>
@@ -732,28 +786,6 @@ export default async function CustomerDetailPage({
                     <Link href={`/customers/${customerProfileId}/appointments/new`}>
                       <Button size="sm">Neuer Termin</Button>
                     </Link>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2 xl:w-[360px]">
-                  <div className="rounded-[22px] border border-white/10 bg-black/20 px-4 py-3">
-                    <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Letzter Besuch</div>
-                    <div className="mt-2 text-base font-medium text-[var(--text)]">
-                      {fmtDateOrDash(lastVisitAt)}
-                    </div>
-                    <div className="mt-1 text-sm text-white/50">
-                      {daysSinceLastVisit !== null ? `${daysSinceLastVisit} Tage her` : "Noch kein Besuch"}
-                    </div>
-                  </div>
-
-                  <div className="rounded-[22px] border border-white/10 bg-black/20 px-4 py-3">
-                    <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Nächster Termin</div>
-                    <div className="mt-2 text-base font-medium text-[var(--text)]">
-                      {fmtDateOrDash(nextAppointmentAt)}
-                    </div>
-                    <div className="mt-1 text-sm text-white/50">
-                      {nextAppointmentAt ? "Folgetermin vorhanden" : "Kein Termin geplant"}
-                    </div>
                   </div>
                 </div>
               </div>
@@ -885,86 +917,65 @@ export default async function CustomerDetailPage({
               action={addCustomerToWaitlist.bind(null, customerProfileId)}
               className="grid gap-3 rounded-[24px] border border-white/10 bg-black/20 p-4 md:grid-cols-2"
             >
-              <div>
+              <input type="hidden" name="preferred_staff_name" value={tenantLabel || ""} />
+              <input type="hidden" name="preferred_days" value="" />
+              <input type="hidden" name="priority" value="normal" />
+              <input type="hidden" name="requested_recently_preset" value="" />
+
+              <div className="md:col-span-2">
                 <label className="text-xs text-white/80">Behandlung</label>
-                <input
-                  name="service_name"
-                  className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
-                  placeholder="z. B. Hydrafacial"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-white/80">Gewünschter Behandler</label>
-                <input
-                  name="preferred_staff_name"
-                  defaultValue={tenantLabel || ""}
-                  className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
-                  placeholder="optional"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-white/80">Bevorzugte Tage</label>
-                <input
-                  name="preferred_days"
-                  className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
-                  placeholder="z. B. Mo, Di, Fr"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-white/80">Priorität</label>
                 <select
-                  name="priority"
-                  defaultValue="normal"
+                  name="service_name"
+                  defaultValue=""
                   className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
+                  required
                 >
-                  <option value="high">Dringend</option>
-                  <option value="normal">Normal</option>
-                  <option value="low">Flexibel</option>
+                  <option value="" disabled>
+                    Dienstleistung auswählen
+                  </option>
+                  {services.map((service) => (
+                    <option key={service.id} value={service.name}>
+                      {service.name}
+                    </option>
+                  ))}
                 </select>
+                {services.length === 0 ? (
+                  <div className="mt-2 text-xs text-amber-200">
+                    Keine aktiven Dienstleistungen für diesen Behandler gefunden.
+                  </div>
+                ) : null}
               </div>
 
               <div>
                 <label className="text-xs text-white/80">Zeit von</label>
-                <input
-                  type="time"
+                <select
                   name="time_from"
+                  defaultValue=""
                   className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
-                />
+                >
+                  <option value="">Beliebig</option>
+                  {waitlistTimeOptions.map((time) => (
+                    <option key={`from-${time}`} value={time}>
+                      {time}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
                 <label className="text-xs text-white/80">Zeit bis</label>
-                <input
-                  type="time"
-                  name="time_to"
-                  className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-white/80">Kurzfristig angefragt</label>
                 <select
-                  name="requested_recently_preset"
+                  name="time_to"
                   defaultValue=""
                   className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
                 >
-                  <option value="">Kein Akutfall</option>
-                  <option value="today">Heute angefragt</option>
-                  <option value="yesterday">Gestern angefragt</option>
+                  <option value="">Beliebig</option>
+                  {waitlistTimeOptions.map((time) => (
+                    <option key={`to-${time}`} value={time}>
+                      {time}
+                    </option>
+                  ))}
                 </select>
-              </div>
-
-              <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-3">
-                <input id="short_notice_ok" type="checkbox" name="short_notice_ok" className="h-4 w-4 rounded border-white/20 bg-black/30" />
-                <label htmlFor="short_notice_ok" className="text-sm text-white/85">Kann kurzfristig kommen</label>
-              </div>
-
-              <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-3">
-                <input id="reachable_today" type="checkbox" name="reachable_today" className="h-4 w-4 rounded border-white/20 bg-black/30" />
-                <label htmlFor="reachable_today" className="text-sm text-white/85">Heute gut erreichbar</label>
               </div>
 
               <div className="md:col-span-2">
@@ -973,7 +984,7 @@ export default async function CustomerDetailPage({
                   name="notes"
                   rows={3}
                   className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
-                  placeholder="z. B. kurzfristig, morgens besser erreichbar"
+                  placeholder="z. B. nur vormittags oder flexibel"
                 />
               </div>
 

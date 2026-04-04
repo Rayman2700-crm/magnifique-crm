@@ -701,14 +701,6 @@ export default async function CustomerDetailPage({
     .order("created_at", { ascending: false })
     .limit(200);
 
-  const avatarText =
-    (person?.full_name ?? "K")
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase() ?? "")
-      .join("") || "K";
-
   return (
     <main className="mx-auto max-w-7xl p-4 md:p-6 xl:p-8">
       <ScrollToTab />
@@ -723,83 +715,49 @@ export default async function CustomerDetailPage({
                 borderColor: "rgba(255,255,255,0.08)",
               }}
             >
-              <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                <div className="flex items-start gap-4">
-                  <div
-                    className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border text-lg font-semibold md:h-20 md:w-20 md:text-xl"
-                    style={{
-                      backgroundColor: theme.pillBg,
-                      borderColor: theme.border,
-                      color: theme.text,
-                    }}
-                  >
-                    {avatarText}
-                  </div>
-
-                  <div className="min-w-0">
+              <div className="flex flex-col gap-5">
+                <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="min-w-0 flex-1">
                     <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">
                       Clientique Kundenprofil
                     </div>
                     <h1 className="mt-2 truncate text-3xl font-semibold tracking-tight text-[var(--text)]">
                       {person?.full_name || "Unbekannter Kunde"}
                     </h1>
+                  </div>
 
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <span
-                        className="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold"
-                        style={{
-                          backgroundColor: theme.bg,
-                          color: theme.text,
-                          borderColor: theme.border,
-                        }}
-                      >
-                        {tenantLabel || "Behandler"}
-                      </span>
-
-                      <span
-                        className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusBadgeClasses(
-                          customerStatus
-                        )}`}
-                      >
-                        {customerStatus}
-                      </span>
-
-                      
+                  <div className="grid gap-3 sm:grid-cols-2 xl:w-[360px]">
+                    <div className="rounded-[22px] border border-white/10 bg-black/20 px-4 py-3">
+                      <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Letzter Besuch</div>
+                      <div className="mt-2 text-base font-medium text-[var(--text)]">
+                        {fmtDateOrDash(lastVisitAt)}
+                      </div>
+                      <div className="mt-1 text-sm text-white/50">
+                        {daysSinceLastVisit !== null ? `${daysSinceLastVisit} Tage her` : "Noch kein Besuch"}
+                      </div>
                     </div>
 
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <Link href="/customers">
-                        <Button variant="secondary" size="sm">Zurück</Button>
-                      </Link>
-                      <Link href={`/customers/${customerProfileId}/edit`}>
-                        <Button variant="secondary" size="sm">Bearbeiten</Button>
-                      </Link>
-                      <Link href={`/customers/${customerProfileId}/appointments/new`}>
-                        <Button size="sm">Neuer Termin</Button>
-                      </Link>
+                    <div className="rounded-[22px] border border-white/10 bg-black/20 px-4 py-3">
+                      <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Nächster Termin</div>
+                      <div className="mt-2 text-base font-medium text-[var(--text)]">
+                        {fmtDateOrDash(nextAppointmentAt)}
+                      </div>
+                      <div className="mt-1 text-sm text-white/50">
+                        {nextAppointmentAt ? "Folgetermin vorhanden" : "Kein Termin geplant"}
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2 xl:w-[360px]">
-                  <div className="rounded-[22px] border border-white/10 bg-black/20 px-4 py-3">
-                    <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Letzter Besuch</div>
-                    <div className="mt-2 text-base font-medium text-[var(--text)]">
-                      {fmtDateOrDash(lastVisitAt)}
-                    </div>
-                    <div className="mt-1 text-sm text-white/50">
-                      {daysSinceLastVisit !== null ? `${daysSinceLastVisit} Tage her` : "Noch kein Besuch"}
-                    </div>
-                  </div>
+                <div className="border-t border-white/8 pt-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <Link href={`/customers/${customerProfileId}/edit`}>
+                      <Button variant="secondary" size="sm">Bearbeiten</Button>
+                    </Link>
 
-                  <div className="rounded-[22px] border border-white/10 bg-black/20 px-4 py-3">
-                    <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Nächster Termin</div>
-                    <div className="mt-2 text-base font-medium text-[var(--text)]">
-                      {fmtDateOrDash(nextAppointmentAt)}
-                    </div>
-                    <div className="mt-1 text-sm text-white/50">
-                      {nextAppointmentAt ? "Folgetermin vorhanden" : "Kein Termin geplant"}
-                    </div>
+                    <Link href={`/customers/${customerProfileId}/appointments/new`}>
+                      <Button size="sm">Neuer Termin</Button>
+                    </Link>
                   </div>
                 </div>
               </div>
