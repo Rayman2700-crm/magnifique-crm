@@ -80,6 +80,12 @@ function buildServicesHref(q: string, status: StatusFilter, createOpen = false) 
   return query ? `/services?${query}` : "/services";
 }
 
+function isTenantOption(
+  entry: { id: string; display_name: string | null; user_id: string | null } | null
+): entry is TenantOption {
+  return entry !== null;
+}
+
 export default async function ServicesPage({
   searchParams,
 }: {
@@ -139,7 +145,7 @@ export default async function ServicesPage({
           user_id: entry.user_id ?? null,
         };
       })
-      .filter((entry): entry is TenantOption => entry !== null)
+      .filter(isTenantOption)
       .filter((entry) => {
         if (seen.has(entry.id)) return false;
         seen.add(entry.id);
@@ -219,8 +225,8 @@ export default async function ServicesPage({
       String(service.tenant_id ?? ""),
       String(
         Array.isArray(service.tenant)
-          ? (service.tenant[0]?.display_name ?? "")
-          : (service.tenant?.display_name ?? "")
+          ? service.tenant[0]?.display_name ?? ""
+          : service.tenant?.display_name ?? ""
       ),
     ]
       .join(" ")
@@ -241,99 +247,76 @@ export default async function ServicesPage({
               borderColor: "rgba(255,255,255,0.08)",
             }}
           >
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-              <div className="min-w-0 flex-1">
-                <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">
-                  Clientique Service Center
-                </div>
-                <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">
-                  Dienstleistungen
-                </h1>
+            <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">
+                    Clientique Service Center
+                  </div>
+                  <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">
+                    Dienstleistungen
+                  </h1>
 
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Link
-                    href={buildServicesHref(qRaw, "active")}
-                    className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
-                      statusFilter === "active"
-                        ? "border-white bg-white text-black"
-                        : "border-white/15 bg-transparent text-white hover:bg-white/5"
-                    }`}
-                  >
-                    Aktiv ({counts.active})
-                  </Link>
-                  <Link
-                    href={buildServicesHref(qRaw, "inactive")}
-                    className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
-                      statusFilter === "inactive"
-                        ? "border-white bg-white text-black"
-                        : "border-white/15 bg-transparent text-white hover:bg-white/5"
-                    }`}
-                  >
-                    Inaktiv ({counts.inactive})
-                  </Link>
-                  <Link
-                    href={buildServicesHref(qRaw, "all")}
-                    className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
-                      statusFilter === "all"
-                        ? "border-white bg-white text-black"
-                        : "border-white/15 bg-transparent text-white hover:bg-white/5"
-                    }`}
-                  >
-                    Alle ({counts.all})
-                  </Link>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 xl:justify-end">
-                {!shouldShowAllServices ? (
-                  <Link href={buildServicesHref(qRaw, statusFilter, true)}>
-                    <button
-                      type="button"
-                      className="inline-flex h-10 items-center justify-center rounded-[16px] bg-white px-4 text-sm font-semibold text-black transition hover:opacity-90"
+                  <div className="mt-4 flex items-center gap-2">
+                    <Link
+                      href={buildServicesHref(qRaw, "active")}
+                      className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
+                        statusFilter === "active"
+                          ? "border-white bg-white text-black"
+                          : "border-white/15 bg-transparent text-white hover:bg-white/5"
+                      }`}
                     >
-                      + Neue Dienstleistung
-                    </button>
-                  </Link>
-                ) : null}
-                <Link href="/dashboard">
-                  <button
-                    type="button"
-                    className="inline-flex h-10 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition hover:bg-white/10"
-                  >
-                    Zum Dashboard
-                  </button>
-                </Link>
-                <Link href="/calendar">
-                  <button
-                    type="button"
-                    className="inline-flex h-10 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition hover:bg-white/10"
-                  >
-                    Zum Kalender
-                  </button>
-                </Link>
-              </div>
-            </div>
-
-            <div className="mt-5 rounded-[24px] border border-white/10 bg-black/20 px-4 py-4">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                Behandler auswählen
-              </div>
-
-              <div className="mt-4 flex flex-col gap-4 2xl:flex-row 2xl:items-center 2xl:justify-between">
-                <div className="min-w-0 flex-1 overflow-x-auto">
-                  <div className="min-w-max pr-2">
-                    <ServiceTenantSelect
-                      tenantOptions={tenantAvatarOptions}
-                      selectedTenantId={selectedTenantId}
-                      isAdmin={isAdmin}
-                      fallbackLabel={tenantName ?? "nicht gewählt"}
-                    />
+                      Aktiv ({counts.active})
+                    </Link>
+                    <Link
+                      href={buildServicesHref(qRaw, "inactive")}
+                      className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
+                        statusFilter === "inactive"
+                          ? "border-white bg-white text-black"
+                          : "border-white/15 bg-transparent text-white hover:bg-white/5"
+                      }`}
+                    >
+                      Inaktiv ({counts.inactive})
+                    </Link>
+                    <Link
+                      href={buildServicesHref(qRaw, "all")}
+                      className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
+                        statusFilter === "all"
+                          ? "border-white bg-white text-black"
+                          : "border-white/15 bg-transparent text-white hover:bg-white/5"
+                      }`}
+                    >
+                      Alle ({counts.all})
+                    </Link>
                   </div>
                 </div>
 
-                <form action="/services" method="get" className="w-full 2xl:max-w-[320px] shrink-0">
+                <div className="w-full xl:w-auto xl:max-w-[620px] xl:min-w-[420px] xl:shrink-0">
+                  <div className="flex justify-start xl:justify-end">
+                    <div className="max-w-full overflow-x-auto">
+                      <div className="min-w-max">
+                        <ServiceTenantSelect
+                          tenantOptions={tenantAvatarOptions}
+                          selectedTenantId={selectedTenantId}
+                          isAdmin={isAdmin}
+                          fallbackLabel={tenantName ?? "nicht gewählt"}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-start xl:justify-end">
+                <form action="/services" method="get" className="w-full xl:max-w-[620px]">
                   <input type="hidden" name="status" value={statusFilter} />
                   <div className="flex h-11 items-center rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
+                    <span className="mr-3 inline-flex h-4 w-4 shrink-0 items-center justify-center text-white/35">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="m20 20-3.5-3.5" />
+                      </svg>
+                    </span>
                     <input
                       type="text"
                       name="q"

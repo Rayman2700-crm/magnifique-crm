@@ -102,6 +102,66 @@ function statusCountClass(isActive: boolean) {
   ].join(" ");
 }
 
+function MobileStatusMenu({
+  qRaw,
+  statusFilter,
+  counts,
+}: {
+  qRaw: string;
+  statusFilter: StatusFilter;
+  counts: { active: number; inactive: number; all: number };
+}) {
+  const items: Array<{ key: StatusFilter; label: string; count: number }> = [
+    { key: "active", label: "Aktiv", count: counts.active },
+    { key: "inactive", label: "Inaktiv", count: counts.inactive },
+    { key: "all", label: "Alle", count: counts.all },
+  ];
+
+  return (
+    <details className="relative md:hidden">
+      <summary
+        className="flex h-12 w-12 cursor-pointer list-none items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/85 shadow-[0_0_0_2px_rgba(11,11,12,0.95),0_10px_28px_rgba(0,0,0,0.30)] [&::-webkit-details-marker]:hidden"
+        aria-label="Statusfilter öffnen"
+      >
+        <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <path d="M4 7h16" />
+          <path d="M4 12h16" />
+          <path d="M4 17h16" />
+        </svg>
+      </summary>
+
+      <div className="absolute left-0 top-[calc(100%+12px)] z-30 w-[220px] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl">
+        <div className="px-1 pb-2">
+          <div className="text-sm font-semibold text-white">Status wählen</div>
+          <div className="mt-0.5 text-xs text-white/45">Dienstleistungen filtern</div>
+        </div>
+
+        <div className="grid gap-2">
+          {items.map((item) => {
+            const selected = statusFilter === item.key;
+            return (
+              <Link
+                key={item.key}
+                href={buildServicesHref(qRaw, item.key)}
+                className="flex items-center justify-between rounded-2xl border px-3 py-3 text-left"
+                style={{
+                  borderColor: selected ? "rgba(214,195,163,0.28)" : "rgba(255,255,255,0.10)",
+                  backgroundColor: selected ? "rgba(214,195,163,0.14)" : "rgba(255,255,255,0.04)",
+                }}
+              >
+                <span className="text-sm font-semibold text-white">{item.label}</span>
+                <span className="inline-flex min-w-[28px] items-center justify-center rounded-full bg-white/10 px-2 py-0.5 text-xs font-bold text-white/90">
+                  {item.count}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    </details>
+  );
+}
+
 export default async function ServicesPage({
   searchParams,
 }: {
@@ -273,7 +333,7 @@ export default async function ServicesPage({
                     Dienstleistungen
                   </h1>
 
-                  <div className="mt-4 flex items-center gap-2">
+                  <div className="mt-4 hidden items-center gap-2 md:flex">
                     <Link
                       href={buildServicesHref(qRaw, "active")}
                       className={statusLinkClass(statusFilter === "active")}
@@ -299,15 +359,19 @@ export default async function ServicesPage({
                 </div>
 
                 <div className="w-full xl:w-auto xl:max-w-[620px] xl:min-w-[420px] xl:shrink-0">
-                  <div className="flex justify-start xl:justify-end">
-                    <div className="max-w-full overflow-x-auto">
-                      <div className="min-w-max">
-                        <ServiceTenantSelect
-                          tenantOptions={tenantAvatarOptions}
-                          selectedTenantId={selectedTenantId}
-                          isAdmin={isAdmin}
-                          fallbackLabel={tenantName ?? "nicht gewählt"}
-                        />
+                  <div className="flex items-start justify-between gap-3 xl:block">
+                    <MobileStatusMenu qRaw={qRaw} statusFilter={statusFilter} counts={counts} />
+
+                    <div className="min-w-0 flex-1 xl:flex xl:justify-end">
+                      <div className="max-w-full overflow-x-auto xl:max-w-none">
+                        <div className="min-w-max xl:flex xl:justify-end">
+                          <ServiceTenantSelect
+                            tenantOptions={tenantAvatarOptions}
+                            selectedTenantId={selectedTenantId}
+                            isAdmin={isAdmin}
+                            fallbackLabel={tenantName ?? "nicht gewählt"}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
