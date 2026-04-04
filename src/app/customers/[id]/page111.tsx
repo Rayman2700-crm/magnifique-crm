@@ -5,9 +5,8 @@ import PhotoUpload from "./PhotoUpload";
 import ScrollToTab from "./ScrollToTab";
 import CustomerMediaGalleryClient from "./CustomerMediaGalleryClient";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-
-
-
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 
 type Person = {
   id: string;
@@ -46,8 +45,6 @@ type AppointmentRow = {
   created_at: string;
   tenant?: { display_name: string | null } | { display_name: string | null }[] | null;
 };
-
-
 
 type WaitlistRow = {
   id: string;
@@ -168,30 +165,35 @@ function tenantThemeByName(name: string) {
   let text = "rgba(255,255,255,0.95)";
   let subText = "rgba(255,255,255,0.75)";
   let border = "rgba(255,255,255,0.14)";
+  let pillBg = "rgba(255,255,255,0.08)";
 
   if (n.includes("radu")) {
-    bg = "#3F51B5";
+    bg = "rgba(59,130,246,0.14)";
     text = "#ffffff";
     subText = "rgba(255,255,255,0.82)";
-    border = "rgba(0,0,0,0.20)";
+    border = "rgba(59,130,246,0.28)";
+    pillBg = "rgba(59,130,246,0.18)";
   } else if (n.includes("raluca")) {
-    bg = "#6F2DA8";
+    bg = "rgba(168,85,247,0.14)";
     text = "#ffffff";
     subText = "rgba(255,255,255,0.82)";
-    border = "rgba(0,0,0,0.20)";
+    border = "rgba(168,85,247,0.28)";
+    pillBg = "rgba(168,85,247,0.18)";
   } else if (n.includes("alexandra")) {
-    bg = "#008000";
+    bg = "rgba(34,197,94,0.14)";
     text = "#ffffff";
     subText = "rgba(255,255,255,0.82)";
-    border = "rgba(0,0,0,0.20)";
+    border = "rgba(34,197,94,0.28)";
+    pillBg = "rgba(34,197,94,0.18)";
   } else if (n.includes("barbara")) {
-    bg = "#F37A48";
-    text = "#0b0b0c";
-    subText = "rgba(11,11,12,0.72)";
-    border = "rgba(0,0,0,0.10)";
+    bg = "rgba(249,115,22,0.14)";
+    text = "#ffffff";
+    subText = "rgba(255,255,255,0.82)";
+    border = "rgba(249,115,22,0.28)";
+    pillBg = "rgba(249,115,22,0.18)";
   }
 
-  return { bg, text, subText, border };
+  return { bg, text, subText, border, pillBg };
 }
 
 function fmtDateTimeOrDash(iso?: string | null) {
@@ -325,8 +327,6 @@ function StatusIcon({ ok }: { ok: boolean }) {
     </span>
   );
 }
-
-
 
 const WAITLIST_STAFF_PREFIX = "Behandlerwunsch:";
 
@@ -464,11 +464,46 @@ function MetricCard({
   subtext: string;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-      <div className="text-xs uppercase tracking-wide text-white/45">{label}</div>
-      <div className="mt-2 text-2xl font-bold text-white">{value}</div>
-      <div className="mt-1 text-sm text-white/60">{subtext}</div>
-    </div>
+    <Card className="border-[var(--border)] bg-[var(--surface)]">
+      <CardContent className="min-h-[126px] p-5">
+        <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">{label}</div>
+        <div className="mt-4 text-[30px] font-semibold leading-none tracking-tight text-[var(--text)]">
+          {value}
+        </div>
+        <div className="mt-3 text-sm text-white/50">{subtext}</div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SectionCard({
+  title,
+  description,
+  action,
+  children,
+  id,
+}: {
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  id?: string;
+}) {
+  return (
+    <Card className="border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+      <CardContent className="p-5 md:p-6">
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 id={id} className="text-xl font-semibold text-[var(--text)]">
+              {title}
+            </h2>
+            {description ? <div className="mt-1 text-sm text-[var(--text-muted)]">{description}</div> : null}
+          </div>
+          {action ? <div className="shrink-0">{action}</div> : null}
+        </div>
+        {children}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -498,8 +533,8 @@ export default async function CustomerDetailPage({
       <main className="mx-auto max-w-3xl p-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Kunde nicht gefunden</h1>
-          <Link className="rounded-xl border px-3 py-2" href="/customers">
-            Zurück
+          <Link href="/customers">
+            <Button variant="secondary">Zurück</Button>
           </Link>
         </div>
 
@@ -626,8 +661,6 @@ export default async function CustomerDetailPage({
     .order("created_at", { ascending: false })
     .limit(100);
 
-
-
   const { data: waitlistEntriesRaw, error: waitlistError } = await supabase
     .from("appointment_waitlist")
     .select(`
@@ -661,7 +694,6 @@ export default async function CustomerDetailPage({
     (entry) => String(entry.status ?? "active").toLowerCase() === "active"
   );
 
-
   const { data: photos } = await supabase
     .from("customer_media")
     .select("id, storage_path, original_name, mime_type, size_bytes, created_at")
@@ -669,106 +701,160 @@ export default async function CustomerDetailPage({
     .order("created_at", { ascending: false })
     .limit(200);
 
+  const avatarText =
+    (person?.full_name ?? "K")
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join("") || "K";
+
   return (
-    <main className="mx-auto max-w-7xl p-6">
+    <main className="mx-auto max-w-7xl p-4 md:p-6 xl:p-8">
       <ScrollToTab />
 
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <div
-            className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold"
-            style={{
-              background: theme.bg,
-              color: theme.text,
-              borderColor: theme.border,
-            }}
-          >
-            <span>{tenantLabel || "Behandler"}</span>
-          </div>
-
-          <h1 className="mt-4 text-3xl font-semibold text-white">
-            {person?.full_name || "Unbekannter Kunde"}
-          </h1>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span
-              className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusBadgeClasses(
-                customerStatus
-              )}`}
+      <section>
+        <Card className="overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+          <CardContent className="p-5 md:p-7">
+            <div
+              className="rounded-[28px] border p-5 md:p-6"
+              style={{
+                background: "linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015))",
+                borderColor: "rgba(255,255,255,0.08)",
+              }}
             >
-              {customerStatus}
-            </span>
+              <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                <div className="flex items-start gap-4">
+                  <div
+                    className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border text-lg font-semibold md:h-20 md:w-20 md:text-xl"
+                    style={{
+                      backgroundColor: theme.pillBg,
+                      borderColor: theme.border,
+                      color: theme.text,
+                    }}
+                  >
+                    {avatarText}
+                  </div>
 
-            <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
-              Fragebogen
-              <StatusIcon ok={intakeIsDone} />
-            </span>
-          </div>
-        </div>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">
+                      Clientique Kundenprofil
+                    </div>
+                    <h1 className="mt-2 truncate text-3xl font-semibold tracking-tight text-[var(--text)]">
+                      {person?.full_name || "Unbekannter Kunde"}
+                    </h1>
 
-        <div className="flex gap-2">
-          <Link href="/customers" className="rounded-xl border border-white/15 px-4 py-2 text-white/90">
-            Zurück
-          </Link>
-          <Link
-            href={`/customers/${customerProfileId}/edit`}
-            className="rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-white"
-          >
-            Bearbeiten
-          </Link>
-        </div>
-      </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span
+                        className="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold"
+                        style={{
+                          backgroundColor: theme.bg,
+                          color: theme.text,
+                          borderColor: theme.border,
+                        }}
+                      >
+                        {tenantLabel || "Behandler"}
+                      </span>
 
-      {sp?.success ? (
-        <div className="mb-4 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">
-          {sp.success}
-        </div>
-      ) : null}
+                      <span
+                        className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusBadgeClasses(
+                          customerStatus
+                        )}`}
+                      >
+                        {customerStatus}
+                      </span>
 
-      {sp?.error ? (
-        <div className="mb-4 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
-          {sp.error}
-        </div>
-      ) : null}
+                      
+                    </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.3fr_0.7fr]">
-        <section className="space-y-6">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <MetricCard
-              label="Besuche"
-              value={String(visitCount)}
-              subtext={lastVisitAt ? `Letzter Besuch: ${fmtDateOrDash(lastVisitAt)}` : "Noch kein Besuch"}
-            />
-            <MetricCard
-              label="No-Shows"
-              value={String(noShowCount)}
-              subtext={noShowCount > 0 ? "Bitte beobachten" : "Bisher zuverlässig"}
-            />
-            <MetricCard
-              label="Abgesagt"
-              value={String(cancelledCount)}
-              subtext={cancelledCount > 0 ? "Terminabsagen vorhanden" : "Keine Absagen"}
-            />
-            <MetricCard
-              label="Letzter Besuch"
-              value={daysSinceLastVisit !== null ? `${daysSinceLastVisit} Tage` : "—"}
-              subtext={nextAppointmentAt ? `Nächster Termin: ${fmtDateOrDash(nextAppointmentAt)}` : "Kein Folgetermin"}
-            />
-          </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Link href="/customers">
+                        <Button variant="secondary" size="sm">Zurück</Button>
+                      </Link>
+                      <Link href={`/customers/${customerProfileId}/edit`}>
+                        <Button variant="secondary" size="sm">Bearbeiten</Button>
+                      </Link>
+                      <Link href={`/customers/${customerProfileId}/appointments/new`}>
+                        <Button size="sm">Neuer Termin</Button>
+                      </Link>
+                    </div>
+                  </div>
+                </div>
 
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 id="appointments" className="text-xl font-semibold text-white">
-                Termine
-              </h2>
-              <Link
-                href={`/customers/${customerProfileId}/appointments/new`}
-                className="rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white"
-              >
-                Neuer Termin
-              </Link>
+                <div className="grid gap-3 sm:grid-cols-2 xl:w-[360px]">
+                  <div className="rounded-[22px] border border-white/10 bg-black/20 px-4 py-3">
+                    <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Letzter Besuch</div>
+                    <div className="mt-2 text-base font-medium text-[var(--text)]">
+                      {fmtDateOrDash(lastVisitAt)}
+                    </div>
+                    <div className="mt-1 text-sm text-white/50">
+                      {daysSinceLastVisit !== null ? `${daysSinceLastVisit} Tage her` : "Noch kein Besuch"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[22px] border border-white/10 bg-black/20 px-4 py-3">
+                    <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Nächster Termin</div>
+                    <div className="mt-2 text-base font-medium text-[var(--text)]">
+                      {fmtDateOrDash(nextAppointmentAt)}
+                    </div>
+                    <div className="mt-1 text-sm text-white/50">
+                      {nextAppointmentAt ? "Folgetermin vorhanden" : "Kein Termin geplant"}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
+            {sp?.success ? (
+              <div className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">
+                {sp.success}
+              </div>
+            ) : null}
+
+            {sp?.error ? (
+              <div className="mt-5 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
+                {sp.error}
+              </div>
+            ) : null}
+
+            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <MetricCard
+                label="Besuche"
+                value={String(visitCount)}
+                subtext={lastVisitAt ? `Letzter Besuch: ${fmtDateOrDash(lastVisitAt)}` : "Noch kein Besuch"}
+              />
+              <MetricCard
+                label="No-Shows"
+                value={String(noShowCount)}
+                subtext={noShowCount > 0 ? "Bitte beobachten" : "Bisher zuverlässig"}
+              />
+              <MetricCard
+                label="Abgesagt"
+                value={String(cancelledCount)}
+                subtext={cancelledCount > 0 ? "Terminabsagen vorhanden" : "Keine Absagen"}
+              />
+              <MetricCard
+                label="Letzter Besuch"
+                value={daysSinceLastVisit !== null ? `${daysSinceLastVisit} Tage` : "—"}
+                subtext={nextAppointmentAt ? `Nächster Termin: ${fmtDateOrDash(nextAppointmentAt)}` : "Kein Folgetermin"}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[1.35fr_0.65fr]">
+        <section className="space-y-6">
+          <SectionCard
+            id="appointments"
+            title="Termine"
+            description="Kommende und vergangene Termine dieses Kunden."
+            action={
+              <Link href={`/customers/${customerProfileId}/appointments/new`}>
+                <Button size="sm">Neuer Termin</Button>
+              </Link>
+            }
+          >
             {appointments.length === 0 ? (
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-white/60">
                 Keine Termine vorhanden.
@@ -786,12 +872,12 @@ export default async function CustomerDetailPage({
                   return (
                     <div
                       key={appointment.id}
-                      className="rounded-2xl border border-white/10 bg-black/20 p-4"
+                      className="rounded-[24px] border border-white/10 bg-black/20 p-4 md:p-5"
                     >
-                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                        <div>
-                          <div className="text-sm text-white/50">{tenantDisplayName}</div>
-                          <div className="mt-1 text-lg font-semibold text-white">{title}</div>
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0">
+                          <div className="text-sm text-white/45">{tenantDisplayName}</div>
+                          <div className="mt-1 truncate text-lg font-semibold text-white">{title}</div>
                           <div className="mt-2 text-sm text-white/70">
                             {startText} – {endText}
                           </div>
@@ -809,18 +895,15 @@ export default async function CustomerDetailPage({
                           </div>
                         </div>
 
-                        <div className="flex flex-wrap gap-2">
-                          <Link
-                            href={`/customers/${customerProfileId}/appointments/${appointment.id}/edit`}
-                            className="rounded-xl border border-white/15 px-3 py-2 text-sm text-white/90"
-                          >
-                            Bearbeiten
+                        <div className="flex flex-wrap gap-2 lg:justify-end">
+                          <Link href={`/customers/${customerProfileId}/appointments/${appointment.id}/edit`}>
+                            <Button variant="secondary" size="sm">Bearbeiten</Button>
                           </Link>
 
                           <form action={deleteAppointment.bind(null, customerProfileId, appointment.id)}>
                             <button
                               type="submit"
-                              className="rounded-xl border border-red-400/25 bg-red-400/10 px-3 py-2 text-sm text-red-200"
+                              className="inline-flex h-9 items-center justify-center rounded-[14px] border border-red-400/25 bg-red-400/10 px-3 text-sm text-red-200"
                             >
                               Löschen
                             </button>
@@ -832,26 +915,22 @@ export default async function CustomerDetailPage({
                 })}
               </div>
             )}
-          </div>
+          </SectionCard>
 
-
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div>
-                <h2 id="waitlist" className="text-xl font-semibold text-white">
-                  Warteliste
-                </h2>
-                <div className="mt-1 text-sm text-white/55">
-                  Freigewordene Termine schneller an diesen Kunden vergeben.
-                </div>
-              </div>
-
+          <SectionCard
+            id="waitlist"
+            title="Warteliste"
+            description="Freigewordene Termine schneller an diesen Kunden vergeben."
+            action={
               <span className="inline-flex rounded-full border border-fuchsia-400/20 bg-fuchsia-400/10 px-3 py-1 text-xs font-semibold text-fuchsia-200">
                 Aktiv: {activeWaitlistEntries.length}
               </span>
-            </div>
-
-            <form action={addCustomerToWaitlist.bind(null, customerProfileId)} className="grid gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 md:grid-cols-2">
+            }
+          >
+            <form
+              action={addCustomerToWaitlist.bind(null, customerProfileId)}
+              className="grid gap-3 rounded-[24px] border border-white/10 bg-black/20 p-4 md:grid-cols-2"
+            >
               <div>
                 <label className="text-xs text-white/80">Behandlung</label>
                 <input
@@ -961,9 +1040,9 @@ export default async function CustomerDetailPage({
                 </div>
               ) : (
                 waitlistEntries.map((entry) => (
-                  <div key={entry.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div key={entry.id} className="rounded-[24px] border border-white/10 bg-black/20 p-4">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                      <div>
+                      <div className="min-w-0">
                         <div className="flex flex-wrap gap-2">
                           <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${waitlistStatusClasses(entry.status)}`}>
                             {waitlistStatusLabel(entry.status)}
@@ -1007,11 +1086,10 @@ export default async function CustomerDetailPage({
 
                         <div className="mt-3 text-xs text-white/40">
                           Erstellt: {fmtDateTimeOrDash(entry.created_at)}
-                          {""}
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-2 lg:justify-end">
                         {String(entry.status ?? "active").toLowerCase() === "active" ? (
                           <>
                             <form action={updateCustomerWaitlistStatus.bind(null, customerProfileId, entry.id, "contacted")}>
@@ -1066,16 +1144,13 @@ export default async function CustomerDetailPage({
                 ))
               )}
             </div>
-          </div>
+          </SectionCard>
 
-
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 id="notes" className="text-xl font-semibold text-white">
-                Notizen
-              </h2>
-            </div>
-
+          <SectionCard
+            id="notes"
+            title="Notizen"
+            description="Interne Hinweise und Verlauf zum Kunden."
+          >
             <form action={addCustomerNote.bind(null, customerProfileId)} className="mb-4 space-y-3">
               <textarea
                 name="note"
@@ -1095,7 +1170,7 @@ export default async function CustomerDetailPage({
             {(notes as NoteRow[] | null)?.length ? (
               <div className="space-y-3">
                 {(notes as NoteRow[]).map((note) => (
-                  <div key={note.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                  <div key={note.id} className="rounded-[24px] border border-white/10 bg-black/20 p-4">
                     <div className="whitespace-pre-wrap text-sm text-white/85">{note.note}</div>
                     <div className="mt-3 text-xs text-white/40">
                       Erstellt: {fmtDateTimeOrDash(note.created_at)}
@@ -1109,14 +1184,15 @@ export default async function CustomerDetailPage({
                 Noch keine Notizen vorhanden.
               </div>
             )}
-          </div>
+          </SectionCard>
         </section>
 
         <aside className="space-y-6">
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-            <h2 className="text-xl font-semibold text-white">Kundendaten</h2>
-
-            <div className="mt-4 space-y-4 text-sm">
+          <SectionCard
+            title="Kundendaten"
+            description="Stammdaten, Kontakt und aktueller Fragebogen-Status."
+          >
+            <div className="space-y-4 text-sm">
               <div>
                 <div className="text-white/45">Name</div>
                 <div className="mt-1 text-white">{person?.full_name || "—"}</div>
@@ -1176,13 +1252,12 @@ export default async function CustomerDetailPage({
                 <div className="mt-1 text-white">{fmtDateTimeOrDash(intakeCreatedAt)}</div>
               </div>
             </div>
-          </div>
+          </SectionCard>
 
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-white">Dateien</h2>
-            </div>
-
+          <SectionCard
+            title="Dateien"
+            description="Fotos und Dokumente dieses Kunden."
+          >
             <PhotoUpload customerProfileId={customerProfileId} />
 
             <div className="mt-5">
@@ -1198,7 +1273,7 @@ export default async function CustomerDetailPage({
                 }))}
               />
             </div>
-          </div>
+          </SectionCard>
         </aside>
       </div>
     </main>

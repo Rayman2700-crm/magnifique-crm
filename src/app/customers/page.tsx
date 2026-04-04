@@ -139,8 +139,6 @@ function getUserShortCode(tenantLabel: string) {
   return "—";
 }
 
-
-
 function normalizeTenantPersonKey(value: string) {
   const label = (value || "").toLowerCase();
 
@@ -211,103 +209,105 @@ function AdminTenantAvatarPicker({
   const orderedOptions = buildOrderedTenantOptions(options);
 
   return (
-    <div className="flex flex-wrap items-start gap-5">
-      <form action={action}>
-        <input type="hidden" name="tenantId" value="all" />
-        <button
-          type="submit"
-          className="flex flex-col items-center gap-2 transition-opacity opacity-100 hover:opacity-100"
-          title="Alle Kunden anzeigen"
-        >
-          <div
-            className="relative overflow-hidden rounded-full flex items-center justify-center text-sm font-extrabold"
-            style={{
-              width: 56,
-              height: 56,
-              border: "4px solid rgba(255,255,255,0.55)",
-              boxShadow: "0 12px 26px rgba(0,0,0,0.32)",
-              background: "rgba(255,255,255,0.96)",
-              color: "#000",
-            }}
+    <div className="pb-1">
+      <div className="flex items-start gap-4 flex-nowrap">
+        <form action={action} className="shrink-0">
+          <input type="hidden" name="tenant" value="all" />
+          <button
+            type="submit"
+            className="flex flex-col items-center gap-2 transition-opacity opacity-100 hover:opacity-100"
+            title="Alle Kunden anzeigen"
           >
-            Alle
-          </div>
-
-          <div
-            className={`px-3 py-1.5 rounded-full text-sm font-semibold ${
-              current === "all"
-                ? "border border-white bg-white text-black"
-                : "border border-white/10 bg-black/25 text-white/90"
-            }`}
-            style={{ backdropFilter: "blur(8px)", lineHeight: 1 }}
-          >
-            Alle
-          </div>
-        </button>
-      </form>
-
-      {orderedOptions.map((entry) => {
-        const active = current === entry.tenant_id;
-
-        return (
-          <form key={entry.tenant_id} action={action}>
-            <input type="hidden" name="tenantId" value={entry.tenant_id} />
-            <button
-              type="submit"
-              className="flex flex-col items-center gap-2 transition-opacity opacity-100 hover:opacity-100"
-              title={`${entry.displayLabel} anzeigen`}
+            <div
+              className="relative overflow-hidden rounded-full flex items-center justify-center text-sm font-extrabold"
+              style={{
+                width: 56,
+                height: 56,
+                border: "4px solid rgba(255,255,255,0.55)",
+                boxShadow: "0 12px 26px rgba(0,0,0,0.32)",
+                background: "rgba(255,255,255,0.96)",
+                color: "#000",
+              }}
             >
-              <div
-                className="relative overflow-hidden rounded-full"
-                style={{
-                  width: 56,
-                  height: 56,
-                  border: `4px solid ${entry.ringColor}`,
-                  boxShadow: "0 12px 26px rgba(0,0,0,0.32)",
-                  background: "rgba(255,255,255,0.04)",
-                }}
+              Alle
+            </div>
+
+            <div
+              className={`px-3 py-1.5 rounded-full text-sm font-semibold ${
+                current === "all"
+                  ? "border border-white bg-white text-black"
+                  : "border border-white/10 bg-black/25 text-white/90"
+              }`}
+              style={{ backdropFilter: "blur(8px)", lineHeight: 1 }}
+            >
+              Alle
+            </div>
+          </button>
+        </form>
+
+        {orderedOptions.map((entry) => {
+          const active = current === entry.tenant_id;
+
+          return (
+            <form key={entry.tenant_id} action={action} className="shrink-0">
+              <input type="hidden" name="tenant" value={entry.tenant_id} />
+              <button
+                type="submit"
+                className="flex flex-col items-center gap-2 transition-opacity opacity-100 hover:opacity-100"
+                title={`${entry.displayLabel} anzeigen`}
               >
-                {entry.user_id ? (
-                  <img
-                    src={`/users/${entry.user_id}.png`}
-                    alt={entry.displayLabel}
-                    className="h-full w-full object-cover"
+                <div
+                  className="relative overflow-hidden rounded-full"
+                  style={{
+                    width: 56,
+                    height: 56,
+                    border: `4px solid ${entry.ringColor}`,
+                    boxShadow: "0 12px 26px rgba(0,0,0,0.32)",
+                    background: "rgba(255,255,255,0.04)",
+                  }}
+                >
+                  {entry.user_id ? (
+                    <img
+                      src={`/users/${entry.user_id}.png`}
+                      alt={entry.displayLabel}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center text-[13px] font-extrabold text-white/90">
+                      {entry.shortCode}
+                    </div>
+                  )}
+
+                  <div
+                    style={{
+                      position: "absolute",
+                      right: 3,
+                      bottom: 3,
+                      width: 10,
+                      height: 10,
+                      borderRadius: 999,
+                      backgroundColor: entry.ringColor,
+                      boxShadow: "0 0 0 2px rgba(0,0,0,0.65)",
+                    }}
                   />
-                ) : (
-                  <div className="h-full w-full flex items-center justify-center text-[13px] font-extrabold text-white/90">
-                    {entry.shortCode}
-                  </div>
-                )}
+                </div>
 
                 <div
-                  style={{
-                    position: "absolute",
-                    right: 3,
-                    bottom: 3,
-                    width: 10,
-                    height: 10,
-                    borderRadius: 999,
-                    backgroundColor: entry.ringColor,
-                    boxShadow: "0 0 0 2px rgba(0,0,0,0.65)",
-                  }}
-                />
-              </div>
-
-              <div
-                className={`px-3 py-1.5 rounded-full text-sm font-semibold ${
-                  active
-                    ? "border border-white bg-white text-black"
-                    : "border border-white/10 bg-black/25 text-white/90"
-                }`}
-                style={{ backdropFilter: "blur(8px)", lineHeight: 1 }}
-                title={entry.label}
-              >
-                {entry.displayLabel}
-              </div>
-            </button>
-          </form>
-        );
-      })}
+                  className={`px-3 py-1.5 rounded-full text-sm font-semibold ${
+                    active
+                      ? "border border-white bg-white text-black"
+                      : "border border-white/10 bg-black/25 text-white/90"
+                  }`}
+                  style={{ backdropFilter: "blur(8px)", lineHeight: 1 }}
+                  title={entry.label}
+                >
+                  {entry.displayLabel}
+                </div>
+              </button>
+            </form>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -397,16 +397,16 @@ export default async function CustomersPage({
   if (role === "ADMIN") {
     currentAdminTenant = await getAdminTenantCookie();
 
-    const { data: practitioners } = await admin
+    const { data: tenantProfiles } = await admin
       .from("user_profiles")
-      .select("user_id, tenant_id, calendar_tenant_id, full_name")
-      .eq("role", "PRACTITIONER");
+      .select("user_id, role, tenant_id, calendar_tenant_id, full_name")
+      .in("role", ["PRACTITIONER", "ADMIN"]);
 
     const seen = new Set<string>();
 
-    tenantOptions = (practitioners ?? [])
+    tenantOptions = (tenantProfiles ?? [])
       .map((p: any) => {
-        const tenantId = (p?.calendar_tenant_id ?? p?.tenant_id ?? null) as string | null;
+        const tenantId = (p?.tenant_id ?? p?.calendar_tenant_id ?? null) as string | null;
         if (!tenantId) return null;
 
         return {
@@ -420,14 +420,13 @@ export default async function CustomersPage({
         if (seen.has(x.tenant_id)) return false;
         seen.add(x.tenant_id);
         return true;
-      })
-      .sort((a, b) => a.label.localeCompare(b.label));
+      });
   }
 
   const effectiveTenantId = await getEffectiveTenantId({
     role: profile?.role ?? "PRACTITIONER",
     tenant_id: profile?.tenant_id ?? null,
-    calendar_tenant_id: profile?.calendar_tenant_id ?? null,
+    calendar_tenant_id: null,
   });
 
   let customerQuery = admin
@@ -484,12 +483,7 @@ export default async function CustomersPage({
     const email = (person?.email ?? "").toLowerCase();
     const tenantLabel = (tenant?.display_name ?? "").toLowerCase();
 
-    return (
-      name.includes(q) ||
-      phone.includes(q) ||
-      email.includes(q) ||
-      tenantLabel.includes(q)
-    );
+    return name.includes(q) || phone.includes(q) || email.includes(q) || tenantLabel.includes(q);
   });
 
   const now = new Date();
@@ -618,13 +612,6 @@ export default async function CustomersPage({
                       options={tenantOptions}
                       action={setAdminTenant}
                     />
-
-                    {currentAdminTenant === "all" && (
-                      <div className="text-xs text-white/50">
-                        Hinweis: „Alle“ ist die Admin-Ansicht. „Neuer Kunde“ wird dann in deinem
-                        eigenen Tenant angelegt.
-                      </div>
-                    )}
 
                     {adminMissingOwnTenant && (
                       <div className="text-xs text-red-300">
