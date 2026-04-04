@@ -915,6 +915,7 @@ export default async function CustomerDetailPage({
 
       <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[1.35fr_0.65fr]">
         <section className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <SectionCard
             id="appointments"
             title="Termine"
@@ -1194,7 +1195,9 @@ export default async function CustomerDetailPage({
               )}
             </div>
           </SectionCard>
+          </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <SectionCard
             id="notes"
             title="Notizen"
@@ -1234,78 +1237,8 @@ export default async function CustomerDetailPage({
               </div>
             )}
           </SectionCard>
-        </section>
 
-        <aside className="space-y-6">
-          <SectionCard
-            title="Kundendaten"
-            description="Stammdaten, Kontakt und aktueller Fragebogen-Status."
-          >
-            <div className="space-y-4 text-sm">
-              <div>
-                <div className="text-white/45">Name</div>
-                <div className="mt-1 text-white">{person?.full_name || "—"}</div>
-              </div>
-
-              <div>
-                <div className="text-white/45">Telefon</div>
-                <div className="mt-1">
-                  {person?.phone ? (
-                    <div className="flex flex-wrap gap-2">
-                      <ContactButton label={person.phone} href={`tel:${normalizePhoneForTel(person.phone)}`} />
-                      <ContactButton
-                        label="WhatsApp"
-                        href={`https://wa.me/${normalizePhoneForWhatsApp(person.phone)}?text=${encodeURIComponent(
-                          buildWhatsAppText(person.full_name)
-                        )}`}
-                        variant="whatsapp"
-                      />
-                    </div>
-                  ) : (
-                    <span className="text-white">—</span>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-white/45">E-Mail</div>
-                <div className="mt-1">
-                  {person?.email ? (
-                    <ContactButton label={person.email} href={`mailto:${person.email}`} />
-                  ) : (
-                    <span className="text-white">—</span>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-white/45">Geburtstag</div>
-                <div className="mt-1 text-white">{fmtDateOrDash(person?.birthday)}</div>
-              </div>
-
-              <div>
-                <div className="text-white/45">Behandler</div>
-                <div className="mt-1 text-white">{tenantLabel || "—"}</div>
-              </div>
-
-              <div>
-                <div className="text-white/45">Fragebogen</div>
-                <div className="mt-1 flex items-center gap-2 text-white">
-                  <StatusIcon ok={intakeIsDone} />
-                  <span>{intakeIsDone ? "Ausgefüllt" : intakeIsDraft ? "In Bearbeitung" : "Nicht ausgefüllt"}</span>
-                </div>
-              </div>
-
-              <div>
-                <div className="text-white/45">Fragebogen Datum</div>
-                <div className="mt-1 text-white">{fmtDateTimeOrDash(intakeCreatedAt)}</div>
-              </div>
-
-
-            </div>
-          </SectionCard>
-
-          <SectionCard
+<SectionCard
             title="Dateien"
             description="Fotos und Dokumente dieses Kunden."
           >
@@ -1325,6 +1258,12 @@ export default async function CustomerDetailPage({
               />
             </div>
           </SectionCard>
+
+          </div>
+        </section>
+
+        <aside className="space-y-6">
+          
         </aside>
       </div>
     </main>
