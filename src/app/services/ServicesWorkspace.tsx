@@ -26,9 +26,8 @@ type Props = {
   selectedTenantId: string;
   tenantName: string | null;
   services: ServiceRow[];
+  initialCreateOpen?: boolean;
 };
-
-type StatusFilter = "active" | "inactive" | "all";
 
 function euroFromCents(value: number | null | undefined) {
   const cents = Number(value ?? 0);
@@ -66,10 +65,6 @@ function badgeClassName(active: boolean) {
       ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
       : "border-white/10 bg-white/5 text-white/70",
   ].join(" ");
-}
-
-function statCardClassName() {
-  return "rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.18)]";
 }
 
 function ServiceSheet({
@@ -173,11 +168,9 @@ function ServiceSheet({
   return createPortal(content, document.body);
 }
 
-export default function ServicesWorkspace({ selectedTenantId, tenantName, services }: Props) {
+export default function ServicesWorkspace({ selectedTenantId, tenantName, services, initialCreateOpen = false }: Props) {
   const [mounted, setMounted] = useState(false);
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState<StatusFilter>("active");
-  const [createOpen, setCreateOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(initialCreateOpen);
   const [createShown, setCreateShown] = useState(false);
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
   const [editShown, setEditShown] = useState(false);
@@ -185,6 +178,10 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    setCreateOpen(initialCreateOpen);
+  }, [initialCreateOpen]);
 
   useEffect(() => {
     if (!createOpen) {
@@ -207,6 +204,11 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
   const closeCreate = () => {
     setCreateShown(false);
     window.setTimeout(() => setCreateOpen(false), 180);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("create");
+      window.history.replaceState({}, "", url.pathname + (url.search ? `?${url.searchParams.toString()}` : ""));
+    }
   };
 
   const closeEdit = () => {
@@ -214,132 +216,28 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
     window.setTimeout(() => setEditingServiceId(null), 180);
   };
 
-  const filteredServices = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-
-    return services.filter((service) => {
-      const isActive = Boolean(service.is_active);
-      const matchesStatus =
-        status === "all" ? true : status === "active" ? isActive : !isActive;
-
-      const haystack = [
-        service.name ?? "",
-        service.description ?? "",
-        euroFromCents(service.default_price_cents),
-        String(service.duration_minutes ?? ""),
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      const matchesQuery = normalizedQuery.length === 0 || haystack.includes(normalizedQuery);
-      return matchesStatus && matchesQuery;
-    });
-  }, [query, services, status]);
-
   const editingService = useMemo(
     () => services.find((service) => service.id === editingServiceId) ?? null,
     [editingServiceId, services]
   );
 
-  const counts = useMemo(() => {
-    const active = services.filter((service) => service.is_active).length;
-    const inactive = services.length - active;
-    return { all: services.length, active, inactive };
-  }, [services]);
-
   return (
     <>
-      <section className="mt-6 rounded-[28px] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-[var(--text)]">Service-Center</h2>
-            <p className="mt-1 text-sm text-[var(--text-muted)]">
-              Kompakte Übersicht für <span className="text-[var(--text)]">{tenantName ?? "aktuellen Behandler"}</span>.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-end">
-            <div className="w-full xl:w-80">
-              <label className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--text-muted)]">Suche</label>
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                className={fieldClassName()}
-                placeholder="Name, Beschreibung, Preis, Dauer ..."
-              />
-            </div>
-
-            <div>
-              <div className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--text-muted)]">Status</div>
-              <div className="mt-1 flex flex-wrap gap-2">
-                {[
-                  { key: "active", label: `Aktiv (${counts.active})` },
-                  { key: "inactive", label: `Inaktiv (${counts.inactive})` },
-                  { key: "all", label: `Alle (${counts.all})` },
-                ].map((item) => {
-                  const active = status === item.key;
-                  return (
-                    <button
-                      key={item.key}
-                      type="button"
-                      onClick={() => setStatus(item.key as StatusFilter)}
-                      className={[
-                        "rounded-full border px-3 py-2 text-sm font-medium transition",
-                        active
-                          ? "border-white/30 bg-white text-black"
-                          : "border-white/15 bg-transparent text-white hover:bg-white/5",
-                      ].join(" ")}
-                    >
-                      {item.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setCreateOpen(true)}
-              className="inline-flex h-12 items-center justify-center rounded-[18px] bg-white px-5 text-sm font-semibold text-black transition hover:opacity-90"
-            >
-              + Neue Dienstleistung
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section className="mt-6 grid gap-4 md:grid-cols-3">
-        <div className={statCardClassName()}>
-          <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Aktive Dienstleistungen</div>
-          <div className="mt-4 text-[30px] font-semibold leading-none tracking-tight text-[var(--text)]">{counts.active}</div>
-        </div>
-        <div className={statCardClassName()}>
-          <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Inaktive Dienstleistungen</div>
-          <div className="mt-4 text-[30px] font-semibold leading-none tracking-tight text-[var(--text)]">{counts.inactive}</div>
-        </div>
-        <div className={statCardClassName()}>
-          <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Treffer in Liste</div>
-          <div className="mt-4 text-[30px] font-semibold leading-none tracking-tight text-[var(--text)]">{filteredServices.length}</div>
-        </div>
-      </section>
-
       <section className="mt-6 rounded-[28px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] md:p-5">
-        <div className="mb-4 flex items-center justify-between gap-3 px-1">
-          <div>
-            <h2 className="text-xl font-semibold text-[var(--text)]">Dienstleistungen</h2>
-            <p className="mt-1 text-sm text-[var(--text-muted)]">
-              Kompakte Liste mit schnellen Aktionen statt großer Bearbeitungsblöcke.
-            </p>
-          </div>
+        <div className="mb-4 px-1">
+          <h2 className="text-xl font-semibold text-[var(--text)]">Dienstleistungen</h2>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Kompakte Liste mit schnellen Aktionen für <span className="text-[var(--text)]">{tenantName ?? "aktuellen Behandler"}</span>.
+          </p>
         </div>
 
-        {filteredServices.length === 0 ? (
+        {services.length === 0 ? (
           <div className="rounded-[24px] border border-dashed border-white/10 bg-black/20 p-8 text-center text-sm text-white/65">
             Keine Dienstleistungen gefunden. Passe Suche oder Statusfilter an.
           </div>
         ) : (
           <div className="space-y-3">
-            {filteredServices.map((service) => {
+            {services.map((service) => {
               const active = Boolean(service.is_active);
               return (
                 <article

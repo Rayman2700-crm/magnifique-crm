@@ -155,20 +155,7 @@ export default async function ServicesPage({
     }
   }
 
-  const shouldShowAllServices = isAdmin && !selectedTenantId;
-
-  if (shouldShowAllServices) {
-    const { data: serviceRows } = await admin
-      .from("services")
-      .select(
-        "id, tenant_id, name, default_price_cents, duration_minutes, buffer_minutes, description, is_active, created_at, updated_at"
-      )
-      .order("is_active", { ascending: false })
-      .order("name", { ascending: true });
-
-    tenantName = "Alle Behandler";
-    services = (serviceRows ?? []) as ServiceRow[];
-  } else if (selectedTenantId) {
+  if (selectedTenantId) {
     const [{ data: tenant }, { data: serviceRows }] = await Promise.all([
       admin.from("tenants").select("display_name").eq("id", selectedTenantId).single(),
       admin
@@ -208,7 +195,6 @@ export default async function ServicesPage({
       service.description ?? "",
       ((service.default_price_cents ?? 0) / 100).toFixed(2).replace(".", ","),
       String(service.duration_minutes ?? ""),
-      String(service.tenant_id ?? ""),
     ]
       .join(" ")
       .toLowerCase();
@@ -237,51 +223,51 @@ export default async function ServicesPage({
                   Dienstleistungen
                 </h1>
 
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Link
-                    href={buildServicesHref(qRaw, "active")}
-                    className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
-                      statusFilter === "active"
-                        ? "border-white bg-white text-black"
-                        : "border-white/15 bg-transparent text-white hover:bg-white/5"
-                    }`}
-                  >
-                    Aktiv ({counts.active})
-                  </Link>
-                  <Link
-                    href={buildServicesHref(qRaw, "inactive")}
-                    className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
-                      statusFilter === "inactive"
-                        ? "border-white bg-white text-black"
-                        : "border-white/15 bg-transparent text-white hover:bg-white/5"
-                    }`}
-                  >
-                    Inaktiv ({counts.inactive})
-                  </Link>
-                  <Link
-                    href={buildServicesHref(qRaw, "all")}
-                    className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
-                      statusFilter === "all"
-                        ? "border-white bg-white text-black"
-                        : "border-white/15 bg-transparent text-white hover:bg-white/5"
-                    }`}
-                  >
-                    Alle ({counts.all})
-                  </Link>
-                </div>
+                {selectedTenantId ? (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Link
+                      href={buildServicesHref(qRaw, "active")}
+                      className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
+                        statusFilter === "active"
+                          ? "border-white bg-white text-black"
+                          : "border-white/15 bg-transparent text-white hover:bg-white/5"
+                      }`}
+                    >
+                      Aktiv ({counts.active})
+                    </Link>
+                    <Link
+                      href={buildServicesHref(qRaw, "inactive")}
+                      className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
+                        statusFilter === "inactive"
+                          ? "border-white bg-white text-black"
+                          : "border-white/15 bg-transparent text-white hover:bg-white/5"
+                      }`}
+                    >
+                      Inaktiv ({counts.inactive})
+                    </Link>
+                    <Link
+                      href={buildServicesHref(qRaw, "all")}
+                      className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
+                        statusFilter === "all"
+                          ? "border-white bg-white text-black"
+                          : "border-white/15 bg-transparent text-white hover:bg-white/5"
+                      }`}
+                    >
+                      Alle ({counts.all})
+                    </Link>
+                  </div>
+                ) : null}
               </div>
 
               <div className="flex flex-wrap items-center gap-3 xl:justify-end">
-                {!shouldShowAllServices ? (
-                  <Link href={buildServicesHref(qRaw, statusFilter, true)}>
-                    <button
-                      type="button"
-                      className="inline-flex h-10 items-center justify-center rounded-[16px] bg-white px-4 text-sm font-semibold text-black transition hover:opacity-90"
-                    >
-                      + Neue Dienstleistung
-                    </button>
-                  </Link>
-                ) : null}
+                <Link href={buildServicesHref(qRaw, statusFilter, true)}>
+                  <button
+                    type="button"
+                    className="inline-flex h-10 items-center justify-center rounded-[16px] bg-white px-4 text-sm font-semibold text-black transition hover:opacity-90"
+                  >
+                    + Neue Dienstleistung
+                  </button>
+                </Link>
                 <Link href="/dashboard">
                   <button
                     type="button"
@@ -325,7 +311,7 @@ export default async function ServicesPage({
                       type="text"
                       name="q"
                       defaultValue={qRaw}
-                      placeholder={shouldShowAllServices ? "Name, Beschreibung, Preis, Dauer, Tenant" : "Name, Beschreibung, Preis, Dauer"}
+                      placeholder="Name, Beschreibung, Preis, Dauer"
                       className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/35"
                     />
                   </div>
@@ -334,21 +320,19 @@ export default async function ServicesPage({
             </div>
           </div>
 
-          {services.length === 0 ? (
+          {!selectedTenantId ? (
             <section className="mt-6 rounded-[28px] border border-amber-400/20 bg-amber-400/10 p-5 text-amber-100 shadow-[0_18px_50px_rgba(0,0,0,0.18)]">
-              <div className="text-xl font-semibold">Keine Dienstleistungen gefunden</div>
+              <div className="text-xl font-semibold">Kein aktiver Behandler ausgewählt</div>
               <p className="mt-2 text-sm text-amber-50/90">
-                {shouldShowAllServices
-                  ? "Es sind aktuell keine Dienstleistungen vorhanden."
-                  : "Wähle oben zuerst einen Behandler aus. Danach kannst du direkt Dienstleistungen anlegen und bearbeiten."}
+                Wähle oben zuerst einen Behandler aus. Danach kannst du direkt Dienstleistungen anlegen und bearbeiten.
               </p>
             </section>
           ) : (
             <ServicesWorkspace
-              selectedTenantId={selectedTenantId ?? "all"}
+              selectedTenantId={selectedTenantId}
               tenantName={tenantName}
               services={filteredServices}
-              initialCreateOpen={!shouldShowAllServices && createOpen}
+              initialCreateOpen={createOpen}
             />
           )}
         </div>

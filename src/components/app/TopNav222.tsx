@@ -453,20 +453,15 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
     <>
       <aside
         className={cn(
-          "clientique-sidebar-rail fixed inset-y-0 left-0 z-50 border-r border-white/8 bg-[rgba(10,10,11,0.86)] backdrop-blur-xl transition-[width] duration-200",
+          "fixed inset-y-0 left-0 z-40 hidden border-r border-white/8 bg-[rgba(10,10,11,0.86)] backdrop-blur-xl md:flex md:flex-col",
           expanded ? "w-[248px]" : "w-[84px]"
         )}
         onMouseEnter={() => setExpanded(true)}
         onMouseLeave={() => setExpanded(false)}
       >
         <div className="flex h-full flex-col px-3 py-4">
-          <div className="pb-4">
-            <button
-              type="button"
-              onClick={() => setExpanded((value) => !value)}
-              className="flex w-full items-center rounded-2xl px-2 py-2 text-left"
-              aria-label="Sidebar ein- oder ausklappen"
-            >
+          <div className="flex items-center justify-center pb-4">
+            <Link href="/dashboard" className="flex w-full items-center rounded-2xl px-2 py-2">
               <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#111216] shadow-[0_0_0_2px_rgba(11,11,12,0.95),0_0_0_4px_#D6C3A3]">
                 <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[#0d0d10] [&_img]:h-full [&_img]:w-full [&_img]:object-cover">
                   <Logo showText={false} />
@@ -476,7 +471,7 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
                 <span className="block text-sm font-semibold text-white">Magnifique CRM</span>
                 <span className="block text-xs text-white/45">Navigation</span>
               </span>
-            </button>
+            </Link>
           </div>
 
           <div className="clientique-scrollbar flex-1 overflow-y-auto pr-1">
@@ -496,69 +491,30 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
         </div>
       </aside>
 
-      <div className="clientique-topbar fixed left-[84px] right-0 top-0 z-40 border-b border-white/10">
-        <div className="flex h-[74px] items-center justify-between px-3 sm:px-5 lg:px-8">
-          <nav className="hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto md:flex">
-            {nav.slice(0, 4).map((item) => {
-              const isChat = item.href === "/dashboard/chat";
-              const active = isChat
-                ? pathname?.startsWith("/dashboard/chat") || searchParams?.get("openChat") === "1"
-                : item.href === "/dashboard"
-                  ? pathname === "/dashboard"
-                  : pathname?.startsWith(item.href);
-
-              const commonClass = cn(
-                "clientique-nav-pill shrink-0 inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[var(--text-muted)] hover:border-[rgba(255,255,255,0.08)] hover:bg-white/[0.04] hover:text-[var(--text)]",
-                active && "clientique-nav-pill-active"
-              );
-
-              const content = (
-                <span className="inline-flex items-center gap-2.5">
-                  {item.label}
-                  {isChat && unreadCount > 0 ? <BrandBadge count={unreadCount} pulse={chatPulse} /> : null}
-                </span>
-              );
-
-              if (isChat) {
-                return (
-                  <button key={item.href} type="button" onClick={openChat} className={commonClass}>
-                    {content}
-                  </button>
-                );
-              }
-
-              return (
-                <Link key={item.href} href={item.href} className={commonClass}>
-                  {content}
-                </Link>
-              );
-            })}
-
-            <button type="button" onClick={openReminders} className={cn("clientique-nav-pill shrink-0 inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[var(--text-muted)] hover:border-[rgba(255,255,255,0.08)] hover:bg-white/[0.04] hover:text-[var(--text)]", searchParams?.get("openReminders") === "1" && "clientique-nav-pill-active")}>
-              <span className="inline-flex items-center gap-2.5">
-                Reminder
-                {liveReminderCount > 0 ? <BrandBadge count={liveReminderCount} pulse={reminderPulse} /> : null}
-              </span>
-            </button>
-
-            <button type="button" onClick={openWaitlist} className={cn("clientique-nav-pill shrink-0 inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[var(--text-muted)] hover:border-[rgba(255,255,255,0.08)] hover:bg-white/[0.04] hover:text-[var(--text)]", searchParams?.get("openWaitlist") === "1" && "clientique-nav-pill-active")}>
-              <span className="inline-flex items-center gap-2.5">
-                Warteliste
-                {liveWaitlistCount > 0 ? <BrandBadge count={liveWaitlistCount} pulse={waitlistPulse} /> : null}
-              </span>
-            </button>
-          </nav>
-
-          <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-2.5">
-            <div className="hidden md:block">{rightSlot}</div>
-            <button type="button" onClick={toggleSettingsMenu} className={cn("relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-[rgba(10,10,11,0.86)] text-[var(--text-muted)] backdrop-blur-xl hover:bg-white/[0.06] hover:text-[var(--text)]", (settingsMenuOpen || googleSetupActive) && "bg-[var(--primary-soft)] text-[var(--text)]")} aria-label="Einstellungen" title="Einstellungen"><SettingsIcon />{showGoogleSetupAlert ? <span style={{ position: "absolute", top: "-7px", right: "-7px" }}><BrandBadge count={googleSetupAlertCount} /></span> : null}</button>
-            <button type="button" onClick={() => { closeSettingsMenu(); closeMobileMenu(); setUserMenuOpen(true); }} className="relative inline-flex h-12 w-12 items-center justify-center rounded-full" style={{ boxShadow: `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px ${avatarTheme.color}` }} aria-label="Benutzermenü öffnen">
-              <span className="block h-full w-full overflow-hidden rounded-full border-2 border-[#111216]"><img src={`/users/${currentUserId}.png`} alt="Benutzerfoto" className="block h-full w-full object-cover" /></span>
-            </button>
-          </div>
+      <div className="fixed left-0 right-0 top-0 z-40 flex items-center justify-between px-4 py-4 md:hidden">
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard" className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border-2 border-[#111216] shadow-[0_0_0_2px_rgba(11,11,12,0.95),0_0_0_4px_#D6C3A3]">
+            <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[#0d0d10] [&_img]:h-full [&_img]:w-full [&_img]:object-cover"><Logo showText={false} /></span>
+          </Link>
+          <button type="button" onClick={() => { closeSettingsMenu(); closeUserMenu(); setMobileMenuOpen(true); }} className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-[rgba(10,10,11,0.86)] text-white/80 backdrop-blur-xl" aria-label="Menü öffnen"><MenuIcon /></button>
+        </div>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={toggleSettingsMenu} className={cn("relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-[rgba(10,10,11,0.86)] text-white/80 backdrop-blur-xl", (settingsMenuOpen || googleSetupActive) && "bg-[var(--primary-soft)] text-[var(--text)]")} aria-label="Einstellungen"><SettingsIcon />{showGoogleSetupAlert ? <span style={{ position: "absolute", top: "-7px", right: "-7px" }}><BrandBadge count={googleSetupAlertCount} /></span> : null}</button>
+          <button type="button" onClick={() => { closeSettingsMenu(); closeMobileMenu(); setUserMenuOpen(true); }} className="relative inline-flex h-12 w-12 items-center justify-center rounded-full" style={{ boxShadow: `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px ${avatarTheme.color}` }} aria-label="Benutzermenü öffnen">
+            <span className="block h-full w-full overflow-hidden rounded-full border-2 border-[#111216]"><img src={`/users/${currentUserId}.png`} alt="Benutzerfoto" className="block h-full w-full object-cover" /></span>
+          </button>
         </div>
       </div>
 
+      <div className="fixed right-4 top-4 z-40 hidden items-center gap-2 md:flex">
+        {rightSlot ? <div>{rightSlot}</div> : null}
+        <button type="button" onClick={toggleSettingsMenu} className={cn("relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-[rgba(10,10,11,0.86)] text-[var(--text-muted)] backdrop-blur-xl hover:bg-white/[0.06] hover:text-[var(--text)]", (settingsMenuOpen || googleSetupActive) && "bg-[var(--primary-soft)] text-[var(--text)]")} aria-label="Einstellungen"><SettingsIcon />{showGoogleSetupAlert ? <span style={{ position: "absolute", top: "-7px", right: "-7px" }}><BrandBadge count={googleSetupAlertCount} /></span> : null}</button>
+        <button type="button" onClick={() => { closeSettingsMenu(); closeMobileMenu(); setUserMenuOpen(true); }} className="relative inline-flex h-12 w-12 items-center justify-center rounded-full" style={{ boxShadow: `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px ${avatarTheme.color}` }} aria-label="Benutzermenü öffnen">
+          <span className="block h-full w-full overflow-hidden rounded-full border-2 border-[#111216]"><img src={`/users/${currentUserId}.png`} alt="Benutzerfoto" className="block h-full w-full object-cover" /></span>
+        </button>
+      </div>
+
+      <MobileNavDrawer open={mobileMenuOpen} shown={mobileMenuShown} onClose={closeMobileMenu} pathname={pathname} openChat={openChat} openReminders={openReminders} openWaitlist={openWaitlist} unreadCount={unreadCount} liveReminderCount={liveReminderCount} liveWaitlistCount={liveWaitlistCount} chatPulse={chatPulse} reminderPulse={reminderPulse} waitlistPulse={waitlistPulse} />
       <SettingsMenuPopover open={settingsMenuOpen} shown={settingsMenuShown} onClose={closeSettingsMenu} onOpenGoogleSetup={openGoogleSetup} googleSetupAlertCount={googleSetupAlertCount} />
       <UserMenuPopover open={userMenuOpen} shown={userMenuShown} onClose={closeUserMenu} userLabel={userLabel} userEmail={userEmail} currentUserId={currentUserId} />
     </>

@@ -13,8 +13,6 @@ const nav = [
   { href: "/customers", label: "Kunden", key: "customers" },
   { href: "/services", label: "Dienstleistungen", key: "services" },
   { href: "/dashboard/chat", label: "Team Chat", key: "chat" },
-  { href: "#reminders", label: "Reminder", key: "reminders" },
-  { href: "#waitlist", label: "Warteliste", key: "waitlist" },
 ] as const;
 
 type ChatMessageRow = {
@@ -45,63 +43,6 @@ function getAvatarTheme(userLabel?: string) {
   });
 
   return includesKey ? tenantTheme[includesKey as keyof typeof tenantTheme] : tenantTheme.Radu;
-}
-
-function HomeIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 10.5 12 3l9 7.5" />
-      <path d="M5 9.5V20h14V9.5" />
-    </svg>
-  );
-}
-
-function UsersIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
-      <circle cx="9.5" cy="7" r="3" />
-      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 4.13a3 3 0 0 1 0 5.74" />
-    </svg>
-  );
-}
-
-function ServicesIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="18" height="6" rx="1.5" />
-      <rect x="3" y="14" width="18" height="6" rx="1.5" />
-      <path d="M7 10v4" />
-      <path d="M17 10v4" />
-    </svg>
-  );
-}
-
-function ChatIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </svg>
-  );
-}
-
-function BellIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
-      <path d="M10 21a2 2 0 0 0 4 0" />
-    </svg>
-  );
-}
-
-function ClockIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3 3" />
-    </svg>
-  );
 }
 
 function SettingsIcon() {
@@ -182,7 +123,7 @@ function UserMenuPopover({ open, shown, onClose, userLabel, userEmail, currentUs
   return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 1200, isolation: "isolate" }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "transparent" }} />
-      <div style={{ position: "absolute", top: 18, right: 20, width: 300, maxWidth: "calc(100vw - 24px)", borderRadius: 22, border: "1px solid rgba(255,255,255,0.10)", background: "linear-gradient(180deg, rgba(28,28,31,0.98) 0%, rgba(18,19,22,0.98) 100%)", boxShadow: "0 24px 70px rgba(0,0,0,0.44)", overflow: "hidden", transform: shown ? "translateY(0) scale(1)" : "translateY(-6px) scale(0.98)", opacity: shown ? 1 : 0, transformOrigin: "top right", transition: "transform 180ms ease, opacity 180ms ease", backdropFilter: "blur(18px)" }}>
+      <div style={{ position: "absolute", top: 72, right: 20, width: 300, maxWidth: "calc(100vw - 24px)", borderRadius: 22, border: "1px solid rgba(255,255,255,0.10)", background: "linear-gradient(180deg, rgba(28,28,31,0.98) 0%, rgba(18,19,22,0.98) 100%)", boxShadow: "0 24px 70px rgba(0,0,0,0.44)", overflow: "hidden", transform: shown ? "translateY(0) scale(1)" : "translateY(-6px) scale(0.98)", opacity: shown ? 1 : 0, transformOrigin: "top right", transition: "transform 180ms ease, opacity 180ms ease", backdropFilter: "blur(18px)" }}>
         <div style={{ padding: 16, display: "flex", gap: 12, alignItems: "center", background: "rgba(255,255,255,0.04)", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
           <img src={`/users/${currentUserId}.png`} alt="Benutzerfoto" className="shrink-0 rounded-2xl border border-white/10 object-cover" style={{ width: 48, height: 48 }} />
           <div style={{ minWidth: 0 }}>
@@ -222,7 +163,7 @@ function SettingsMenuPopover({ open, shown, onClose, onOpenGoogleSetup, googleSe
   return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 1190, isolation: "isolate" }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "transparent" }} />
-      <div style={{ position: "absolute", top: 18, right: 78, width: 270, maxWidth: "calc(100vw - 24px)", borderRadius: 22, border: "1px solid rgba(255,255,255,0.10)", background: "linear-gradient(180deg, rgba(28,28,31,0.98) 0%, rgba(18,19,22,0.98) 100%)", boxShadow: "0 24px 70px rgba(0,0,0,0.44)", overflow: "hidden", transform: shown ? "translateY(0) scale(1)" : "translateY(-6px) scale(0.98)", opacity: shown ? 1 : 0, transformOrigin: "top right", transition: "transform 180ms ease, opacity 180ms ease", backdropFilter: "blur(18px)" }}>
+      <div style={{ position: "absolute", top: 72, right: 78, width: 270, maxWidth: "calc(100vw - 24px)", borderRadius: 22, border: "1px solid rgba(255,255,255,0.10)", background: "linear-gradient(180deg, rgba(28,28,31,0.98) 0%, rgba(18,19,22,0.98) 100%)", boxShadow: "0 24px 70px rgba(0,0,0,0.44)", overflow: "hidden", transform: shown ? "translateY(0) scale(1)" : "translateY(-6px) scale(0.98)", opacity: shown ? 1 : 0, transformOrigin: "top right", transition: "transform 180ms ease, opacity 180ms ease", backdropFilter: "blur(18px)" }}>
         <div style={{ padding: 10 }}>
           <button type="button" onClick={onOpenGoogleSetup} className="block w-full rounded-2xl border border-white/10 bg-white/[0.04] text-left transition hover:bg-white/[0.07]">
             <div style={{ display: "flex", alignItems: "center", gap: 12, padding: 12 }}>
@@ -278,7 +219,7 @@ function MobileNavDrawer({ open, shown, onClose, pathname, openChat, openReminde
           {nav.slice(0, 3).map((item) => (
             <Link key={item.key} href={item.href} onClick={onClose} className={cn(itemClass, isActive(item.href) && "border-white/20 bg-white/[0.08]")}>{item.label}</Link>
           ))}
-          <button type="button" onClick={() => { onClose(); openChat(); }} className={cn(itemClass, pathname?.startsWith("/dashboard/chat") && "border-white/20 bg-white/[0.08]")}>
+          <button type="button" onClick={() => { onClose(); openChat(); }} className={cn(itemClass, pathname?.startsWith("/dashboard/chat") && "border-white/20 bg-white/[0.08]")}> 
             <span>Team Chat</span>{unreadCount > 0 ? <BrandBadge count={unreadCount} pulse={chatPulse} /> : null}
           </button>
           <button type="button" onClick={() => { onClose(); openReminders(); }} className={itemClass}><span>Reminder</span>{liveReminderCount > 0 ? <BrandBadge count={liveReminderCount} pulse={reminderPulse} /> : null}</button>
@@ -288,26 +229,6 @@ function MobileNavDrawer({ open, shown, onClose, pathname, openChat, openReminde
     </div>,
     document.body
   );
-}
-
-function SidebarItem({ icon, label, active = false, badgeCount = 0, pulse = false, expanded, href, onClick, divider = false }: { icon: React.ReactNode; label: string; active?: boolean; badgeCount?: number; pulse?: boolean; expanded: boolean; href?: string; onClick?: () => void; divider?: boolean; }) {
-  const content = (
-    <>
-      <span className={cn("relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border", active ? "border-[rgba(214,195,163,0.24)] bg-[var(--primary-soft)] text-[var(--text)]" : "border-white/10 bg-white/[0.03] text-white/72 group-hover:bg-white/[0.06] group-hover:text-white")}>{icon}
-        {badgeCount > 0 && !expanded ? (
-          <span className="absolute -right-1 -top-1"><BrandBadge count={badgeCount} pulse={pulse} /></span>
-        ) : null}
-      </span>
-      <span className={cn("flex min-w-0 items-center justify-between overflow-hidden transition-all duration-200", expanded ? "ml-3 w-[132px] opacity-100" : "ml-0 w-0 opacity-0") }>
-        <span className="truncate text-sm font-medium">{label}</span>
-        {badgeCount > 0 ? <BrandBadge count={badgeCount} pulse={pulse} /> : null}
-      </span>
-    </>
-  );
-
-  const className = cn("group flex h-11 items-center rounded-2xl px-2 text-left", divider && "mt-3 pt-3 border-t border-white/8");
-  if (href) return <Link href={href} className={className}>{content}</Link>;
-  return <button type="button" onClick={onClick} className={cn(className, "w-full")}>{content}</button>;
 }
 
 export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserId, reminderCount = 0, waitlistCount = 0, googleSetupAlertCount = 0 }: { userLabel?: string; userEmail?: string | null; rightSlot?: React.ReactNode; tenantId: string | null; currentUserId: string; reminderCount?: number; waitlistCount?: number; googleSetupAlertCount?: number; }) {
@@ -327,12 +248,15 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
   const [settingsMenuShown, setSettingsMenuShown] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileMenuShown, setMobileMenuShown] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [avatarHovered, setAvatarHovered] = useState(false);
+  const [logoHovered, setLogoHovered] = useState(false);
 
   const previousChatCount = useRef(0);
   const previousReminderCount = useRef(reminderCount);
   const previousWaitlistCount = useRef(waitlistCount);
   const avatarTheme = getAvatarTheme(userLabel);
+  const logoRingColor = "#D6C3A3";
+
   const storageKey = useMemo(() => {
     if (!tenantId || !currentUserId) return null;
     return `team-chat:last-read:${tenantId}:${currentUserId}`;
@@ -343,6 +267,7 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
   useEffect(() => { if (!userMenuOpen) return; const t = window.setTimeout(() => setUserMenuShown(true), 10); return () => window.clearTimeout(t); }, [userMenuOpen]);
   useEffect(() => { if (!settingsMenuOpen) return; const t = window.setTimeout(() => setSettingsMenuShown(true), 10); return () => window.clearTimeout(t); }, [settingsMenuOpen]);
   useEffect(() => { if (!mobileMenuOpen) return; const t = window.setTimeout(() => setMobileMenuShown(true), 10); return () => window.clearTimeout(t); }, [mobileMenuOpen]);
+
   useEffect(() => {
     const styleId = "topnav-badge-pulse-style";
     if (document.getElementById(styleId)) return;
@@ -356,10 +281,7 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
   useEffect(() => {
     let cancelled = false;
     async function loadUnreadCount() {
-      if (!storageKey || !currentUserId) {
-        if (!cancelled) setUnreadCount(0);
-        return;
-      }
+      if (!storageKey || !currentUserId) { if (!cancelled) setUnreadCount(0); return; }
       try {
         const lastReadMessageId = typeof window !== "undefined" ? localStorage.getItem(storageKey) : null;
         const res = await fetch("/api/chat/messages", { cache: "no-store" });
@@ -445,120 +367,106 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
   function toggleSettingsMenu() { if (settingsMenuOpen) { closeSettingsMenu(); return; } closeMobileMenu(); setUserMenuShown(false); setUserMenuOpen(false); setSettingsMenuOpen(true); }
   function openGoogleSetup() { const params = new URLSearchParams(searchParams?.toString() ?? ""); params.set("openGoogleSetup", "1"); params.delete("success"); params.delete("error"); params.delete("link"); const qs = params.toString(); closeSettingsMenu(); router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }); }
 
+  const reminderOpen = searchParams?.get("openReminders") === "1";
+  const waitlistOpen = searchParams?.get("openWaitlist") === "1";
   const googleSetupActive = pathname?.startsWith("/calendar/google") || searchParams?.get("openGoogleSetup") === "1";
   const showGoogleSetupAlert = googleSetupAlertCount > 0;
-  const isActive = (href: string) => href === "/dashboard" ? pathname === "/dashboard" : pathname?.startsWith(href);
+  const pillClass = "clientique-nav-pill shrink-0 inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[var(--text-muted)] hover:border-[rgba(255,255,255,0.08)] hover:bg-white/[0.04] hover:text-[var(--text)]";
 
   return (
     <>
-      <aside
-        className={cn(
-          "clientique-sidebar-rail fixed inset-y-0 left-0 z-50 border-r border-white/8 bg-[rgba(10,10,11,0.86)] backdrop-blur-xl transition-[width] duration-200",
-          expanded ? "w-[248px]" : "w-[84px]"
-        )}
-        onMouseEnter={() => setExpanded(true)}
-        onMouseLeave={() => setExpanded(false)}
-      >
-        <div className="flex h-full flex-col px-3 py-4">
-          <div className="pb-4">
+      <div className="clientique-topbar sticky top-0 z-40">
+        <div className="mx-auto flex h-[74px] max-w-[1400px] items-center justify-between px-3 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3 lg:gap-6">
+            <Link
+              href="/dashboard"
+              className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full sm:h-12 sm:w-12"
+              aria-label="Dashboard"
+              onMouseEnter={() => setLogoHovered(true)}
+              onMouseLeave={() => setLogoHovered(false)}
+              onFocus={() => setLogoHovered(true)}
+              onBlur={() => setLogoHovered(false)}
+              style={{
+                transition: "transform 180ms ease, box-shadow 180ms ease",
+                transform: logoHovered ? "scale(1.05)" : "scale(1)",
+                boxShadow: logoHovered
+                  ? `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px ${logoRingColor}, 0 0 24px rgba(214,195,163,0.28)`
+                  : `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px ${logoRingColor}`,
+              }}
+            >
+              <span className="block h-full w-full overflow-hidden rounded-full border-2 border-[#111216]" style={{ transform: logoHovered ? "scale(1.05)" : "scale(1)", transition: "transform 180ms ease" }}>
+                <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[#0d0d10] [&_img]:h-full [&_img]:w-full [&_img]:object-cover"><Logo showText={false} /></span>
+              </span>
+            </Link>
+
+            <button type="button" onClick={() => { closeSettingsMenu(); closeUserMenu(); setMobileMenuOpen(true); }} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-[var(--text-muted)] hover:bg-white/[0.06] hover:text-[var(--text)] sm:hidden" aria-label="Menü öffnen" title="Menü"><MenuIcon /></button>
+
+            <nav className="clientique-scrollbar hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto sm:flex">
+              {nav.map((item) => {
+                const isChat = item.href === "/dashboard/chat";
+                const active = isChat
+                  ? pathname?.startsWith("/dashboard/chat") || searchParams?.get("openChat") === "1"
+                  : item.href === "/dashboard"
+                    ? pathname === "/dashboard"
+                    : pathname?.startsWith(item.href);
+
+                const commonClass = cn(pillClass, active && "clientique-nav-pill-active");
+                const content = (
+                  <span className="inline-flex items-center gap-2.5">
+                    {item.label}
+                    {isChat && unreadCount > 0 ? <BrandBadge count={unreadCount} pulse={chatPulse} /> : null}
+                  </span>
+                );
+
+                if (isChat) {
+                  return <button key={item.key} type="button" onClick={openChat} className={commonClass}>{content}</button>;
+                }
+
+                return <Link key={item.key} href={item.href} className={commonClass}>{content}</Link>;
+              })}
+
+              <button type="button" onClick={openReminders} className={cn(pillClass, reminderOpen && "clientique-nav-pill-active")}>
+                <span className="inline-flex items-center gap-2.5">Reminder{liveReminderCount > 0 ? <BrandBadge count={liveReminderCount} pulse={reminderPulse} /> : null}</span>
+              </button>
+
+              <button type="button" onClick={openWaitlist} className={cn(pillClass, waitlistOpen && "clientique-nav-pill-active")}>
+                <span className="inline-flex items-center gap-2.5">Warteliste{liveWaitlistCount > 0 ? <BrandBadge count={liveWaitlistCount} pulse={waitlistPulse} /> : null}</span>
+              </button>
+            </nav>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
+            <div className="hidden sm:block">{rightSlot}</div>
+            <button type="button" onClick={toggleSettingsMenu} className={cn("relative inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-[var(--text-muted)] hover:bg-white/[0.06] hover:text-[var(--text)] sm:h-11 sm:w-11", (settingsMenuOpen || googleSetupActive) && "bg-[var(--primary-soft)] text-[var(--text)]")} aria-label="Einstellungen" title="Einstellungen"> 
+              <SettingsIcon />
+              {showGoogleSetupAlert ? <span style={{ position: "absolute", top: "-7px", right: "-7px" }}><BrandBadge count={googleSetupAlertCount} /></span> : null}
+            </button>
             <button
               type="button"
-              onClick={() => setExpanded((value) => !value)}
-              className="flex w-full items-center rounded-2xl px-2 py-2 text-left"
-              aria-label="Sidebar ein- oder ausklappen"
+              onClick={() => { closeSettingsMenu(); closeMobileMenu(); setUserMenuOpen(true); }}
+              onMouseEnter={() => setAvatarHovered(true)}
+              onMouseLeave={() => setAvatarHovered(false)}
+              onFocus={() => setAvatarHovered(true)}
+              onBlur={() => setAvatarHovered(false)}
+              className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full sm:h-12 sm:w-12"
+              style={{
+                transition: "transform 180ms ease, box-shadow 180ms ease",
+                transform: avatarHovered ? "scale(1.04)" : "scale(1)",
+                boxShadow: avatarHovered
+                  ? `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px ${avatarTheme.color}, 0 0 16px ${avatarTheme.border}`
+                  : `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px ${avatarTheme.color}`,
+              }}
+              aria-label="Benutzermenü öffnen"
             >
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#111216] shadow-[0_0_0_2px_rgba(11,11,12,0.95),0_0_0_4px_#D6C3A3]">
-                <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[#0d0d10] [&_img]:h-full [&_img]:w-full [&_img]:object-cover">
-                  <Logo showText={false} />
-                </span>
+              <span className="block h-full w-full overflow-hidden rounded-full border-2 border-[#111216]" style={{ transform: avatarHovered ? "scale(1.05)" : "scale(1)", transition: "transform 180ms ease" }}>
+                <img src={`/users/${currentUserId}.png`} alt="Benutzerfoto" className="block h-full w-full object-cover" />
               </span>
-              <span className={cn("overflow-hidden transition-all duration-200", expanded ? "ml-3 w-[132px] opacity-100" : "ml-0 w-0 opacity-0")}>
-                <span className="block text-sm font-semibold text-white">Magnifique CRM</span>
-                <span className="block text-xs text-white/45">Navigation</span>
-              </span>
-            </button>
-          </div>
-
-          <div className="clientique-scrollbar flex-1 overflow-y-auto pr-1">
-            <div className="space-y-1.5">
-              <SidebarItem icon={<HomeIcon />} label="Dashboard" href="/dashboard" active={isActive("/dashboard")} expanded={expanded} />
-              <SidebarItem icon={<UsersIcon />} label="Kunden" href="/customers" active={isActive("/customers")} expanded={expanded} />
-              <SidebarItem icon={<ServicesIcon />} label="Dienstleistungen" href="/services" active={isActive("/services")} expanded={expanded} />
-              <SidebarItem icon={<ChatIcon />} label="Team Chat" onClick={openChat} active={pathname?.startsWith("/dashboard/chat") || searchParams?.get("openChat") === "1"} badgeCount={unreadCount} pulse={chatPulse} expanded={expanded} divider />
-              <SidebarItem icon={<BellIcon />} label="Reminder" onClick={openReminders} active={searchParams?.get("openReminders") === "1"} badgeCount={liveReminderCount} pulse={reminderPulse} expanded={expanded} />
-              <SidebarItem icon={<ClockIcon />} label="Warteliste" onClick={openWaitlist} active={searchParams?.get("openWaitlist") === "1"} badgeCount={liveWaitlistCount} pulse={waitlistPulse} expanded={expanded} />
-            </div>
-          </div>
-
-          <div className="border-t border-white/8 pt-3">
-            <SidebarItem icon={<SettingsIcon />} label="Einstellungen" onClick={toggleSettingsMenu} active={settingsMenuOpen || googleSetupActive} badgeCount={showGoogleSetupAlert ? googleSetupAlertCount : 0} expanded={expanded} />
-          </div>
-        </div>
-      </aside>
-
-      <div className="clientique-topbar fixed left-[84px] right-0 top-0 z-40 border-b border-white/10">
-        <div className="flex h-[74px] items-center justify-between px-3 sm:px-5 lg:px-8">
-          <nav className="hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto md:flex">
-            {nav.slice(0, 4).map((item) => {
-              const isChat = item.href === "/dashboard/chat";
-              const active = isChat
-                ? pathname?.startsWith("/dashboard/chat") || searchParams?.get("openChat") === "1"
-                : item.href === "/dashboard"
-                  ? pathname === "/dashboard"
-                  : pathname?.startsWith(item.href);
-
-              const commonClass = cn(
-                "clientique-nav-pill shrink-0 inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[var(--text-muted)] hover:border-[rgba(255,255,255,0.08)] hover:bg-white/[0.04] hover:text-[var(--text)]",
-                active && "clientique-nav-pill-active"
-              );
-
-              const content = (
-                <span className="inline-flex items-center gap-2.5">
-                  {item.label}
-                  {isChat && unreadCount > 0 ? <BrandBadge count={unreadCount} pulse={chatPulse} /> : null}
-                </span>
-              );
-
-              if (isChat) {
-                return (
-                  <button key={item.href} type="button" onClick={openChat} className={commonClass}>
-                    {content}
-                  </button>
-                );
-              }
-
-              return (
-                <Link key={item.href} href={item.href} className={commonClass}>
-                  {content}
-                </Link>
-              );
-            })}
-
-            <button type="button" onClick={openReminders} className={cn("clientique-nav-pill shrink-0 inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[var(--text-muted)] hover:border-[rgba(255,255,255,0.08)] hover:bg-white/[0.04] hover:text-[var(--text)]", searchParams?.get("openReminders") === "1" && "clientique-nav-pill-active")}>
-              <span className="inline-flex items-center gap-2.5">
-                Reminder
-                {liveReminderCount > 0 ? <BrandBadge count={liveReminderCount} pulse={reminderPulse} /> : null}
-              </span>
-            </button>
-
-            <button type="button" onClick={openWaitlist} className={cn("clientique-nav-pill shrink-0 inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[var(--text-muted)] hover:border-[rgba(255,255,255,0.08)] hover:bg-white/[0.04] hover:text-[var(--text)]", searchParams?.get("openWaitlist") === "1" && "clientique-nav-pill-active")}>
-              <span className="inline-flex items-center gap-2.5">
-                Warteliste
-                {liveWaitlistCount > 0 ? <BrandBadge count={liveWaitlistCount} pulse={waitlistPulse} /> : null}
-              </span>
-            </button>
-          </nav>
-
-          <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-2.5">
-            <div className="hidden md:block">{rightSlot}</div>
-            <button type="button" onClick={toggleSettingsMenu} className={cn("relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-[rgba(10,10,11,0.86)] text-[var(--text-muted)] backdrop-blur-xl hover:bg-white/[0.06] hover:text-[var(--text)]", (settingsMenuOpen || googleSetupActive) && "bg-[var(--primary-soft)] text-[var(--text)]")} aria-label="Einstellungen" title="Einstellungen"><SettingsIcon />{showGoogleSetupAlert ? <span style={{ position: "absolute", top: "-7px", right: "-7px" }}><BrandBadge count={googleSetupAlertCount} /></span> : null}</button>
-            <button type="button" onClick={() => { closeSettingsMenu(); closeMobileMenu(); setUserMenuOpen(true); }} className="relative inline-flex h-12 w-12 items-center justify-center rounded-full" style={{ boxShadow: `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px ${avatarTheme.color}` }} aria-label="Benutzermenü öffnen">
-              <span className="block h-full w-full overflow-hidden rounded-full border-2 border-[#111216]"><img src={`/users/${currentUserId}.png`} alt="Benutzerfoto" className="block h-full w-full object-cover" /></span>
             </button>
           </div>
         </div>
       </div>
 
+      <MobileNavDrawer open={mobileMenuOpen} shown={mobileMenuShown} onClose={closeMobileMenu} pathname={pathname} openChat={openChat} openReminders={openReminders} openWaitlist={openWaitlist} unreadCount={unreadCount} liveReminderCount={liveReminderCount} liveWaitlistCount={liveWaitlistCount} chatPulse={chatPulse} reminderPulse={reminderPulse} waitlistPulse={waitlistPulse} />
       <SettingsMenuPopover open={settingsMenuOpen} shown={settingsMenuShown} onClose={closeSettingsMenu} onOpenGoogleSetup={openGoogleSetup} googleSetupAlertCount={googleSetupAlertCount} />
       <UserMenuPopover open={userMenuOpen} shown={userMenuShown} onClose={closeUserMenu} userLabel={userLabel} userEmail={userEmail} currentUserId={currentUserId} />
     </>

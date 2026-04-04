@@ -412,8 +412,8 @@ export default async function AppShell({
         googleSetupAlertCount={googleSetupAlertCount}
       />
 
-      <main className="min-h-screen pl-[96px] pt-24 lg:pt-[98px]">
-        <Container className="max-w-[1400px]">{children}</Container>
+      <main className="py-6 md:py-7">
+        <Container>{children}</Container>
       </main>
 
       <ChatSlideover

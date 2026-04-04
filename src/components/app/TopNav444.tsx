@@ -498,7 +498,7 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
 
       <div className="clientique-topbar fixed left-[84px] right-0 top-0 z-40 border-b border-white/10">
         <div className="flex h-[74px] items-center justify-between px-3 sm:px-5 lg:px-8">
-          <nav className="hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto md:flex">
+          <nav className="hidden min-w-0 items-center gap-1 overflow-x-auto lg:flex">
             {nav.slice(0, 4).map((item) => {
               const isChat = item.href === "/dashboard/chat";
               const active = isChat
@@ -550,7 +550,7 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
           </nav>
 
           <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-2.5">
-            <div className="hidden md:block">{rightSlot}</div>
+            <div className="hidden lg:block">{rightSlot}</div>
             <button type="button" onClick={toggleSettingsMenu} className={cn("relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-[rgba(10,10,11,0.86)] text-[var(--text-muted)] backdrop-blur-xl hover:bg-white/[0.06] hover:text-[var(--text)]", (settingsMenuOpen || googleSetupActive) && "bg-[var(--primary-soft)] text-[var(--text)]")} aria-label="Einstellungen" title="Einstellungen"><SettingsIcon />{showGoogleSetupAlert ? <span style={{ position: "absolute", top: "-7px", right: "-7px" }}><BrandBadge count={googleSetupAlertCount} /></span> : null}</button>
             <button type="button" onClick={() => { closeSettingsMenu(); closeMobileMenu(); setUserMenuOpen(true); }} className="relative inline-flex h-12 w-12 items-center justify-center rounded-full" style={{ boxShadow: `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px ${avatarTheme.color}` }} aria-label="Benutzermenü öffnen">
               <span className="block h-full w-full overflow-hidden rounded-full border-2 border-[#111216]"><img src={`/users/${currentUserId}.png`} alt="Benutzerfoto" className="block h-full w-full object-cover" /></span>
