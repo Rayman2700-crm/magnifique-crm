@@ -7,7 +7,7 @@ import CustomerMediaGalleryClient from "./CustomerMediaGalleryClient";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import CustomerAppointmentLauncher from "./CustomerAppointmentLauncher";
+import CustomerAppointmentLauncher from "@/app/customers/[id]/CustomerAppointmentLauncher";
 
 type Person = {
   id: string;
