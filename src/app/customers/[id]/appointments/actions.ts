@@ -50,19 +50,12 @@ export async function createAppointment(
   const durationMin = Number(formData.get("duration") ?? 0);
   const bufferMin = Number(formData.get("buffer") ?? 0);
   const status = normalizeStatus(String(formData.get("status") ?? "scheduled"));
-  const returnToCustomer = String(formData.get("return_to_customer") ?? "") === "1";
-  const serviceId = String(formData.get("service_id") ?? "").trim() || null;
-  const serviceNameSnapshot = String(formData.get("service_name_snapshot") ?? "").trim() || null;
-  const serviceDurationSnapshot = Number(formData.get("service_duration_minutes_snapshot") ?? 0) || null;
-  const serviceBufferSnapshot = Number(formData.get("service_buffer_minutes_snapshot") ?? 0) || 0;
-  const servicePriceSnapshot = Number(formData.get("service_price_cents_snapshot") ?? 0) || 0;
-  const effectiveTitle = title || serviceNameSnapshot || "";
 
-  if (!effectiveTitle || !startLocal || !durationMin) {
+  if (!title || !startLocal || !durationMin) {
     redirect(
-      returnToCustomer
-        ? `/customers/${customerProfileId}?appointment=create&error=${encodeURIComponent("Bitte Service, Start und Dauer ausfüllen.")}`
-        : `/customers/${customerProfileId}/appointments/new?error=${encodeURIComponent("Bitte Titel, Start und Dauer ausfüllen.")}`
+      `/customers/${customerProfileId}/appointments/new?error=${encodeURIComponent(
+        "Bitte Titel, Start und Dauer ausfüllen."
+      )}`
     );
   }
 
@@ -74,17 +67,17 @@ export async function createAppointment(
 
   if (cpErr || !cp?.tenant_id) {
     redirect(
-      returnToCustomer
-        ? `/customers/${customerProfileId}?appointment=create&error=${encodeURIComponent("customer_profile tenant_id nicht gefunden.")}`
-        : `/customers/${customerProfileId}/appointments/new?error=${encodeURIComponent("customer_profile tenant_id nicht gefunden.")}`
+      `/customers/${customerProfileId}/appointments/new?error=${encodeURIComponent(
+        "customer_profile tenant_id nicht gefunden."
+      )}`
     );
   }
 
   if (!cp?.person_id) {
     redirect(
-      returnToCustomer
-        ? `/customers/${customerProfileId}?appointment=create&error=${encodeURIComponent("customer_profile person_id nicht gefunden.")}`
-        : `/customers/${customerProfileId}/appointments/new?error=${encodeURIComponent("customer_profile person_id nicht gefunden.")}`
+      `/customers/${customerProfileId}/appointments/new?error=${encodeURIComponent(
+        "customer_profile person_id nicht gefunden."
+      )}`
     );
   }
 
@@ -117,9 +110,9 @@ export async function createAppointment(
   const start = new Date(startLocal);
   if (Number.isNaN(start.getTime())) {
     redirect(
-      returnToCustomer
-        ? `/customers/${customerProfileId}?appointment=create&error=${encodeURIComponent("Ungültiges Start-Datum.")}`
-        : `/customers/${customerProfileId}/appointments/new?error=${encodeURIComponent("Ungültiges Start-Datum.")}`
+      `/customers/${customerProfileId}/appointments/new?error=${encodeURIComponent(
+        "Ungültiges Start-Datum."
+      )}`
     );
   }
 
@@ -139,7 +132,7 @@ export async function createAppointment(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        summary: effectiveTitle,
+        summary: title,
         description: notes || undefined,
         start: { dateTime: effectiveStart.toISOString() },
         end: { dateTime: end.toISOString() },
@@ -153,9 +146,9 @@ export async function createAppointment(
     const msg =
       eventJson?.error?.message ?? "Google Event konnte nicht erstellt werden";
     redirect(
-      returnToCustomer
-        ? `/customers/${customerProfileId}?appointment=create&error=${encodeURIComponent(msg)}`
-        : `/customers/${customerProfileId}/appointments/new?error=${encodeURIComponent(msg)}`
+      `/customers/${customerProfileId}/appointments/new?error=${encodeURIComponent(
+        msg
+      )}`
     );
   }
 
@@ -164,17 +157,13 @@ export async function createAppointment(
   const { error: insErr } = await supabase.from("appointments").insert({
     tenant_id: tenantId,
     person_id: personId,
-    service_id: serviceId,
-    service_name_snapshot: serviceNameSnapshot,
-    service_price_cents_snapshot: servicePriceSnapshot,
-    service_duration_minutes_snapshot: serviceDurationSnapshot,
-    service_buffer_minutes_snapshot: serviceBufferSnapshot,
+    service_id: null,
     start_at: start.toISOString(),
     end_at: end.toISOString(),
     reminder_at: buildReminderAt(start).toISOString(),
     reminder_sent_at: null,
     notes_internal: buildNotesInternal({
-      title: effectiveTitle,
+      title,
       notes,
       bufferMin,
       status,
@@ -186,15 +175,208 @@ export async function createAppointment(
 
   if (insErr) {
     redirect(
-      returnToCustomer
-        ? `/customers/${customerProfileId}?appointment=create&error=${encodeURIComponent("DB Insert failed: " + insErr.message)}`
-        : `/customers/${customerProfileId}?error=${encodeURIComponent("DB Insert failed: " + insErr.message)}`
+      `/customers/${customerProfileId}?error=${encodeURIComponent(
+        "DB Insert failed: " + insErr.message
+      )}`
     );
   }
 
   redirect(
     `/customers/${customerProfileId}?success=${encodeURIComponent(
       "Termin erstellt ✅"
+    )}`
+  );
+}
+
+export async function updateAppointment(
+  customerProfileId: string,
+  appointmentId: string,
+  formData: FormData
+) {
+  const supabase = await supabaseServer();
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData.user;
+  if (!user) redirect("/login");
+
+  const title = String(formData.get("title") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim();
+  const startLocal = String(formData.get("start") ?? "").trim();
+  const durationMin = Number(formData.get("duration") ?? 0);
+  const bufferMin = Number(formData.get("buffer") ?? 0);
+  const status = normalizeStatus(String(formData.get("status") ?? "scheduled"));
+
+  if (!title || !startLocal || !durationMin) {
+    redirect(
+      `/customers/${customerProfileId}/appointments/${appointmentId}/edit?error=${encodeURIComponent(
+        "Bitte Titel, Start und Dauer ausfüllen."
+      )}`
+    );
+  }
+
+  const { data: appointment, error: appointmentError } = await supabase
+    .from("appointments")
+    .select("id, google_calendar_id, google_event_id")
+    .eq("id", appointmentId)
+    .single();
+
+  if (appointmentError || !appointment) {
+    redirect(
+      `/customers/${customerProfileId}?error=${encodeURIComponent(
+        "Termin konnte nicht geladen werden."
+      )}`
+    );
+  }
+
+  const start = new Date(startLocal);
+  if (Number.isNaN(start.getTime())) {
+    redirect(
+      `/customers/${customerProfileId}/appointments/${appointmentId}/edit?error=${encodeURIComponent(
+        "Ungültiges Start-Datum."
+      )}`
+    );
+  }
+
+  const end = new Date(start.getTime() + durationMin * 60 * 1000);
+
+  const googleCalendarId = (appointment as any)?.google_calendar_id as string | null;
+  const googleEventId = (appointment as any)?.google_event_id as string | null;
+
+  if (googleCalendarId && googleEventId) {
+    try {
+      const token = await getValidGoogleAccessToken();
+      const updateRes = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+          googleCalendarId
+        )}/events/${encodeURIComponent(googleEventId)}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            summary: title,
+            description: notes || undefined,
+            start: { dateTime: start.toISOString() },
+            end: { dateTime: end.toISOString() },
+          }),
+          cache: "no-store",
+        }
+      );
+
+      if (!updateRes.ok) {
+        const eventJson: any = await updateRes.json().catch(() => null);
+        const msg =
+          eventJson?.error?.message ?? "Google Event konnte nicht aktualisiert werden";
+        redirect(
+          `/customers/${customerProfileId}/appointments/${appointmentId}/edit?error=${encodeURIComponent(
+            msg
+          )}`
+        );
+      }
+    } catch (error: any) {
+      redirect(
+        `/customers/${customerProfileId}/appointments/${appointmentId}/edit?error=${encodeURIComponent(
+          error?.message ?? "Google Event konnte nicht aktualisiert werden"
+        )}`
+      );
+    }
+  }
+
+  const { error: updateError } = await supabase
+    .from("appointments")
+    .update({
+      start_at: start.toISOString(),
+      end_at: end.toISOString(),
+      reminder_at: buildReminderAt(start).toISOString(),
+      notes_internal: buildNotesInternal({
+        title,
+        notes,
+        bufferMin,
+        status,
+      }),
+      created_by: user.id,
+    })
+    .eq("id", appointmentId);
+
+  if (updateError) {
+    redirect(
+      `/customers/${customerProfileId}/appointments/${appointmentId}/edit?error=${encodeURIComponent(
+        "Termin konnte nicht gespeichert werden: " + updateError.message
+      )}`
+    );
+  }
+
+  redirect(
+    `/customers/${customerProfileId}?success=${encodeURIComponent(
+      "Termin gespeichert ✅"
+    )}`
+  );
+}
+
+
+export async function deleteAppointment(
+  customerProfileId: string,
+  appointmentId: string
+) {
+  const supabase = await supabaseServer();
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData.user;
+  if (!user) redirect("/login");
+
+  const { data: appointment, error: appointmentError } = await supabase
+    .from("appointments")
+    .select("id, google_calendar_id, google_event_id")
+    .eq("id", appointmentId)
+    .single();
+
+  if (appointmentError || !appointment) {
+    redirect(
+      `/customers/${customerProfileId}?error=${encodeURIComponent(
+        "Termin konnte nicht geladen werden."
+      )}`
+    );
+  }
+
+  const googleCalendarId = (appointment as any)?.google_calendar_id as string | null;
+  const googleEventId = (appointment as any)?.google_event_id as string | null;
+
+  if (googleCalendarId && googleEventId) {
+    try {
+      const token = await getValidGoogleAccessToken();
+      await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+          googleCalendarId
+        )}/events/${encodeURIComponent(googleEventId)}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: "no-store",
+        }
+      );
+    } catch {
+      // Google-Fehler ignorieren, DB-Eintrag trotzdem löschen
+    }
+  }
+
+  const { error: deleteError } = await supabase
+    .from("appointments")
+    .delete()
+    .eq("id", appointmentId);
+
+  if (deleteError) {
+    redirect(
+      `/customers/${customerProfileId}?error=${encodeURIComponent(
+        "Termin konnte nicht gelöscht werden: " + deleteError.message
+      )}`
+    );
+  }
+
+  redirect(
+    `/customers/${customerProfileId}?success=${encodeURIComponent(
+      "Termin gelöscht ✅"
     )}`
   );
 }

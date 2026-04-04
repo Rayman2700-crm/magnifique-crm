@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { addCustomerNote, addCustomerToWaitlist, updateCustomerWaitlistStatus } from "./actions";
-import { deleteAppointment } from "./appointments/actions";
+import { deleteAppointment } from "@/app/customers/[id]/appointments/actions";
 import PhotoUpload from "./PhotoUpload";
 import ScrollToTab from "./ScrollToTab";
 import CustomerMediaGalleryClient from "./CustomerMediaGalleryClient";
@@ -730,7 +730,9 @@ export default async function CustomerDetailPage({
       .createSignedUrls(photoPaths, 60 * 60);
 
     for (const entry of signedUrls ?? []) {
-      signedUrlMap.set(entry.path, entry.signedUrl ?? null);
+      if (entry.path) {
+        signedUrlMap.set(entry.path, entry.signedUrl ?? null);
+      }
     }
   }
 
@@ -889,7 +891,7 @@ export default async function CustomerDetailPage({
               </div>
             ) : null}
 
-            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-5 items-stretch">
+            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5 items-stretch">
               <MetricCard
                 label="Besuche"
                 value={String(visitCount)}
