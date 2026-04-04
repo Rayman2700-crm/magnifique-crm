@@ -310,11 +310,20 @@ export default function DashboardCalendarCardClient({
 
   useEffect(() => {
     if (isAdmin) return;
-
-    // Team-Kalender für normale Benutzer:
-    // alle Termine sehen, aber fremde Termine nicht verwalten.
     setSelectedTenantId(null);
   }, [isAdmin]);
+
+  useEffect(() => {
+    const mobile = typeof window !== "undefined" && window.innerWidth < 640;
+    const tablet = typeof window !== "undefined" && window.innerWidth >= 640 && window.innerWidth < 1024;
+
+    setCalendarState((prev) => {
+      if (!mobile && !tablet) return prev;
+      if (mobile && prev.view === "week") return { ...prev, view: "day" };
+      if (tablet && prev.view === "year") return { ...prev, view: "month" };
+      return prev;
+    });
+  }, []);
 
   const weekStartISO = useMemo(() => {
     return toLocalISODate(startOfWeekMondayLocal(new Date(`${anchorISO}T12:00:00`)));
@@ -365,96 +374,96 @@ export default function DashboardCalendarCardClient({
 
     try {
       let apptQuery = supabase
-      .from("appointments")
-      .select(
-        `
+        .from("appointments")
+        .select(
+          `
         id,start_at,end_at,notes_internal,reminder_sent_at,tenant_id,person_id,
         tenant:tenants ( display_name ),
         person:persons ( full_name, phone, email )
       `
-      )
-      .gte("start_at", range.startISO)
-      .lt("start_at", range.endISO);
+        )
+        .gte("start_at", range.startISO)
+        .lt("start_at", range.endISO);
 
-    if (selectedTenantId) {
-      apptQuery = apptQuery.eq("tenant_id", selectedTenantId);
-    }
+      if (selectedTenantId) {
+        apptQuery = apptQuery.eq("tenant_id", selectedTenantId);
+      }
 
-    const { data: apptData, error: apptError } = await apptQuery.order("start_at", { ascending: true });
-
-    if (seq !== loadSeq.current) return;
-
-    if (apptError) {
-      setErrorText(apptError.message);
-      setIsInitialLoading(false);
-      setIsRefreshing(false);
-      return;
-    }
-
-    const appts = (apptData ?? []) as ApptRow[];
-
-    const uniquePairs = new Map<string, { tenant_id: string; person_id: string }>();
-    for (const a of appts) {
-      uniquePairs.set(`${a.tenant_id}:${a.person_id}`, {
-        tenant_id: a.tenant_id,
-        person_id: a.person_id,
-      });
-    }
-
-    const cpMap = new Map<string, string>();
-
-    if (uniquePairs.size > 0) {
-      const tenantIds = Array.from(new Set(Array.from(uniquePairs.values()).map((p) => p.tenant_id)));
-      const personIds = Array.from(new Set(Array.from(uniquePairs.values()).map((p) => p.person_id)));
-
-      const { data: cps } = await supabase
-        .from("customer_profiles")
-        .select("id,tenant_id,person_id")
-        .in("tenant_id", tenantIds)
-        .in("person_id", personIds);
+      const { data: apptData, error: apptError } = await apptQuery.order("start_at", { ascending: true });
 
       if (seq !== loadSeq.current) return;
 
-      for (const cp of (cps ?? []) as CustomerProfileRow[]) {
-        cpMap.set(`${cp.tenant_id}:${cp.person_id}`, cp.id);
+      if (apptError) {
+        setErrorText(apptError.message);
+        setIsInitialLoading(false);
+        setIsRefreshing(false);
+        return;
       }
-    }
 
-    const mappedItems: Item[] = appts.map((a) => {
-      const parsed = parseNotes(a.notes_internal);
-      const key = `${a.tenant_id}:${a.person_id}`;
-      const customerProfileId = cpMap.get(key) ?? null;
-      const tenant = firstJoin(a.tenant);
-      const person = firstJoin(a.person);
+      const appts = (apptData ?? []) as ApptRow[];
 
-      const canManageCustomerActions = isAdmin || (!!creatorTenantId && a.tenant_id === creatorTenantId);
+      const uniquePairs = new Map<string, { tenant_id: string; person_id: string }>();
+      for (const a of appts) {
+        uniquePairs.set(`${a.tenant_id}:${a.person_id}`, {
+          tenant_id: a.tenant_id,
+          person_id: a.person_id,
+        });
+      }
 
-      return {
-        id: a.id,
-        start_at: a.start_at,
-        end_at: a.end_at,
-        title: parsed.title ? parsed.title : "Termin",
-        note: parsed.note ?? "",
-        status: parsed.status,
-        tenantId: a.tenant_id,
-        tenantName: tenant?.display_name ?? "Behandler",
-        customerProfileId,
-        customerName: person?.full_name ?? null,
-        customerPhone: person?.phone ?? null,
-        customerEmail: person?.email ?? null,
-        reminderSentAt: a.reminder_sent_at ?? null,
-        canOpenCustomerProfile: canManageCustomerActions,
-        canCreateFollowUp: canManageCustomerActions,
-        canDeleteAppointment: canManageCustomerActions,
-      };
-    });
+      const cpMap = new Map<string, string>();
 
-    if (seq !== loadSeq.current) return;
+      if (uniquePairs.size > 0) {
+        const tenantIds = Array.from(new Set(Array.from(uniquePairs.values()).map((p) => p.tenant_id)));
+        const personIds = Array.from(new Set(Array.from(uniquePairs.values()).map((p) => p.person_id)));
 
-    setItems(mappedItems);
-    hasLoadedOnceRef.current = true;
-    setIsInitialLoading(false);
-    setIsRefreshing(false);
+        const { data: cps } = await supabase
+          .from("customer_profiles")
+          .select("id,tenant_id,person_id")
+          .in("tenant_id", tenantIds)
+          .in("person_id", personIds);
+
+        if (seq !== loadSeq.current) return;
+
+        for (const cp of (cps ?? []) as CustomerProfileRow[]) {
+          cpMap.set(`${cp.tenant_id}:${cp.person_id}`, cp.id);
+        }
+      }
+
+      const mappedItems: Item[] = appts.map((a) => {
+        const parsed = parseNotes(a.notes_internal);
+        const key = `${a.tenant_id}:${a.person_id}`;
+        const customerProfileId = cpMap.get(key) ?? null;
+        const tenant = firstJoin(a.tenant);
+        const person = firstJoin(a.person);
+
+        const canManageCustomerActions = isAdmin || (!!creatorTenantId && a.tenant_id === creatorTenantId);
+
+        return {
+          id: a.id,
+          start_at: a.start_at,
+          end_at: a.end_at,
+          title: parsed.title ? parsed.title : "Termin",
+          note: parsed.note ?? "",
+          status: parsed.status,
+          tenantId: a.tenant_id,
+          tenantName: tenant?.display_name ?? "Behandler",
+          customerProfileId,
+          customerName: person?.full_name ?? null,
+          customerPhone: person?.phone ?? null,
+          customerEmail: person?.email ?? null,
+          reminderSentAt: a.reminder_sent_at ?? null,
+          canOpenCustomerProfile: canManageCustomerActions,
+          canCreateFollowUp: canManageCustomerActions,
+          canDeleteAppointment: canManageCustomerActions,
+        };
+      });
+
+      if (seq !== loadSeq.current) return;
+
+      setItems(mappedItems);
+      hasLoadedOnceRef.current = true;
+      setIsInitialLoading(false);
+      setIsRefreshing(false);
     } catch (error: any) {
       if (seq !== loadSeq.current) return;
       setErrorText(error?.message ?? "Kalender konnte nicht geladen werden.");
@@ -547,26 +556,26 @@ export default function DashboardCalendarCardClient({
     <Card className="border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
       <CardContent className="p-6 md:p-8">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-6">
-    <div>
-      <div className="text-lg font-semibold text-white">Kalender</div>
-      <div className="text-sm text-white/60">Team-Übersicht</div>
-    </div>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-6">
+            <div>
+              <div className="text-lg font-semibold text-white">Kalender</div>
+              <div className="text-sm text-white/60">Team-Übersicht</div>
+            </div>
 
-    {isAdmin ? (
-      <TenantLegendClient
-        users={legendUsers}
-        activeTenantId={selectedTenantId}
-        onSelect={setSelectedTenantId}
-      />
-    ) : currentLegendUser ? (
-      <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/80">
-        {currentLegendUser.fullName ?? currentLegendUser.tenantDisplayName}
-      </div>
-    ) : null}
-  </div>
+            {isAdmin ? (
+              <TenantLegendClient
+                users={legendUsers}
+                activeTenantId={selectedTenantId}
+                onSelect={setSelectedTenantId}
+              />
+            ) : currentLegendUser ? (
+              <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/80">
+                {currentLegendUser.fullName ?? currentLegendUser.tenantDisplayName}
+              </div>
+            ) : null}
+          </div>
 
-  <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3">
             <Button
               type="button"
               className="whitespace-nowrap"
@@ -671,7 +680,6 @@ export default function DashboardCalendarCardClient({
                     }}
                   >
                     →
-
                   </Button>
 
                   <div className="ml-2 text-xl font-bold text-white">

@@ -459,7 +459,7 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
         onMouseEnter={() => setExpanded(true)}
         onMouseLeave={() => setExpanded(false)}
       >
-        <div className="flex h-full flex-col px-3 py-4">
+        <div className="flex h-full flex-col px-3 pt-[6px] pb-4">
           <div className="pb-4">
             <button
               type="button"

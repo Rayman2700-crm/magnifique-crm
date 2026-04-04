@@ -67,6 +67,7 @@ export default function DashboardWeekGridClient({
   const [moveSavingId, setMoveSavingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Item | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState<number>(1280);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const didAutoScrollRef = useRef(false);
@@ -81,6 +82,15 @@ export default function DashboardWeekGridClient({
 
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const updateViewportWidth = () => setViewportWidth(window.innerWidth);
+    updateViewportWidth();
+    window.addEventListener("resize", updateViewportWidth);
+    return () => window.removeEventListener("resize", updateViewportWidth);
   }, []);
 
   useEffect(() => {
@@ -313,40 +323,133 @@ export default function DashboardWeekGridClient({
     [services]
   );
 
+  const isMobileCalendar = viewportWidth < 768;
+  const mobileAgendaDays = useMemo(() => {
+    if (!isMobileCalendar) return [] as { iso: string; date: Date; events: Item[] }[];
+
+    if (view === "week") {
+      return weekDays.map((day) => ({
+        iso: day.iso,
+        date: day.date,
+        events: [...(positionedWeekByDay.get(day.iso) ?? [])]
+          .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime()),
+      }));
+    }
+
+    const date = new Date(`${anchorISO}T12:00:00`);
+    return [{
+      iso: anchorISO,
+      date,
+      events: [...items]
+        .filter((item) => item.start_at.slice(0, 10) === anchorISO)
+        .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime()),
+    }];
+  }, [anchorISO, isMobileCalendar, items, positionedWeekByDay, view, weekDays]);
+
+  const mobileEmptyLabel = view === "week"
+    ? "Keine Termine in dieser Woche"
+    : "Keine Termine an diesem Tag";
 
   return (
     <>
-      <WeekDayGridView
-        view={view}
-        weekDays={weekDays}
-        anchorISO={anchorISO}
-        todayISO={todayISO}
-        scrollRef={scrollRef}
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          if (rafRef.current) cancelAnimationFrame(rafRef.current);
-          rafRef.current = requestAnimationFrame(() => {
-            setScrollTop(el.scrollTop);
-            setViewportH(el.clientHeight);
-          });
-        }}
-        startHour={startHour}
-        endHour={endHour}
-        pxPerHour={pxPerHour}
-        nowInfo={nowInfo}
-        positionedWeekByDay={positionedWeekByDay as any}
-        positionedDay={positionedDay as any}
-        scrollTop={scrollTop}
-        viewportH={viewportH}
-        overscanPx={OVERSCAN_PX}
-        setSelected={setSelected}
-        pad2={pad2}
-        fmtDayHeader={fmtDayHeader}
-        tenantTheme={tenantTheme}
-        itemsById={itemsById}
-        onMoveAppointment={moveAppointment}
-        moveSavingId={moveSavingId}
-      />
+      {isMobileCalendar && (view === "week" || view === "day") ? (
+        <div className="mt-4 space-y-4">
+          {mobileAgendaDays.every((day) => day.events.length === 0) ? (
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-5 text-sm text-white/65">
+              {mobileEmptyLabel}
+            </div>
+          ) : (
+            mobileAgendaDays.map((day) => (
+              <section key={day.iso} className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
+                  <div>
+                    <div className="text-sm font-semibold text-white">
+                      {new Intl.DateTimeFormat("de-AT", { weekday: "long", day: "2-digit", month: "2-digit" }).format(day.date)}
+                    </div>
+                    <div className="text-xs text-white/45">
+                      {day.events.length} {day.events.length === 1 ? "Termin" : "Termine"}
+                    </div>
+                  </div>
+                  {day.iso === todayISO ? (
+                    <span className="rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/70">Heute</span>
+                  ) : null}
+                </div>
+
+                <div className="p-3 space-y-3">
+                  {day.events.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-white/10 bg-black/10 px-3 py-4 text-sm text-white/45">
+                      Frei
+                    </div>
+                  ) : (
+                    day.events.map((it) => {
+                      const theme = tenantTheme(it.tenantName);
+                      return (
+                        <button
+                          key={it.id}
+                          type="button"
+                          onClick={() => setSelected(it)}
+                          className="w-full rounded-2xl border border-white/10 bg-[rgba(255,255,255,0.03)] px-3 py-3 text-left"
+                          style={{ boxShadow: `inset 3px 0 0 ${theme.bg}` }}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="min-w-[62px] rounded-xl border border-white/10 bg-black/20 px-2.5 py-2 text-center">
+                              <div className="text-[13px] font-bold leading-none text-white">{fmtTime(new Date(it.start_at))}</div>
+                              <div className="mt-1 text-[11px] leading-none text-white/45">bis {fmtTime(new Date(it.end_at))}</div>
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-sm font-semibold text-white">{it.customerName ?? "Kunde"}</div>
+                              <div className="mt-1 truncate text-xs text-white/55">{it.title || "Termin"}</div>
+                              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                                <span className="rounded-full border px-2 py-1" style={{ borderColor: theme.bg, color: theme.text, backgroundColor: theme.bg }}>
+                                  {it.tenantName}
+                                </span>
+                                {it.customerPhone ? <span className="text-white/45">{it.customerPhone}</span> : null}
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </section>
+            ))
+          )}
+        </div>
+      ) : (
+        <WeekDayGridView
+          view={view}
+          weekDays={weekDays}
+          anchorISO={anchorISO}
+          todayISO={todayISO}
+          scrollRef={scrollRef}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            if (rafRef.current) cancelAnimationFrame(rafRef.current);
+            rafRef.current = requestAnimationFrame(() => {
+              setScrollTop(el.scrollTop);
+              setViewportH(el.clientHeight);
+            });
+          }}
+          startHour={startHour}
+          endHour={endHour}
+          pxPerHour={pxPerHour}
+          nowInfo={nowInfo}
+          positionedWeekByDay={positionedWeekByDay as any}
+          positionedDay={positionedDay as any}
+          scrollTop={scrollTop}
+          viewportH={viewportH}
+          overscanPx={OVERSCAN_PX}
+          setSelected={setSelected}
+          pad2={pad2}
+          fmtDayHeader={fmtDayHeader}
+          tenantTheme={tenantTheme}
+          itemsById={itemsById}
+          onMoveAppointment={moveAppointment}
+          moveSavingId={moveSavingId}
+        />
+      )}
 
       <MonthView
         view={view}

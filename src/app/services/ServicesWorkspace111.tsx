@@ -67,17 +67,6 @@ function badgeClassName(active: boolean) {
   ].join(" ");
 }
 
-function tenantAccentColor(tenantId: string | null | undefined) {
-  const id = String(tenantId ?? "").toLowerCase();
-
-  if (id.includes("radu")) return "#3b82f6";
-  if (id.includes("raluca")) return "#a855f7";
-  if (id.includes("alexandra")) return "#22c55e";
-  if (id.includes("barbara")) return "#f97316";
-
-  return "rgba(255,255,255,0.38)";
-}
-
 function ServiceSheet({
   mounted,
   open,
@@ -250,20 +239,13 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
           <div className="space-y-3">
             {services.map((service) => {
               const active = Boolean(service.is_active);
-              const accent = tenantAccentColor(service.tenant_id);
-
               return (
                 <article
                   key={service.id}
-                  className="relative overflow-hidden rounded-[24px] border border-white/10 bg-black/20 p-4 transition hover:border-white/20 hover:bg-black/25 md:p-5"
+                  className="rounded-[24px] border border-white/10 bg-black/20 p-4 transition hover:border-white/20 hover:bg-black/25 md:p-5"
                 >
-                  <div
-                    className="absolute bottom-4 left-0 top-4 w-[4px] rounded-r-full"
-                    style={{ backgroundColor: accent, boxShadow: `0 0 12px ${accent}` }}
-                  />
-
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="min-w-0 pl-3">
+                    <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="truncate text-lg font-semibold text-white">
                           {service.name ?? "Unbenannte Dienstleistung"}
