@@ -780,9 +780,42 @@ export default async function CustomerDetailPage({
 
                 <div className="border-t border-white/8 pt-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <Link href={`/customers/${customerProfileId}/edit`}>
-                      <Button variant="secondary" size="sm">Bearbeiten</Button>
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Link href={`/customers/${customerProfileId}/edit`}>
+                        <Button variant="secondary" size="sm">Bearbeiten</Button>
+                      </Link>
+
+                      <Link href={`/customers/${customerProfileId}/intake`} className="inline-flex">
+                        <button
+                          type="button"
+                          className="inline-flex h-9 items-center justify-center rounded-[14px] border px-3 text-sm font-semibold"
+                          style={
+                            intakeIsDone
+                              ? {
+                                  backgroundColor: "#10b981",
+                                  borderColor: "rgba(52, 211, 153, 0.75)",
+                                  color: "#ffffff",
+                                  boxShadow: "0 10px 24px rgba(16,185,129,0.28)",
+                                }
+                              : intakeIsDraft
+                                ? {
+                                    backgroundColor: "#f59e0b",
+                                    borderColor: "rgba(251, 191, 36, 0.75)",
+                                    color: "#111827",
+                                    boxShadow: "0 10px 24px rgba(245,158,11,0.28)",
+                                  }
+                                : {
+                                    backgroundColor: "#ef4444",
+                                    borderColor: "rgba(248, 113, 113, 0.75)",
+                                    color: "#ffffff",
+                                    boxShadow: "0 10px 24px rgba(239,68,68,0.28)",
+                                  }
+                          }
+                        >
+                          {intakeIsDone ? "Fragebogen ausgefüllt" : intakeIsDraft ? "Fragebogen fortsetzen" : "Fragebogen ausfüllen"}
+                        </button>
+                      </Link>
+                    </div>
 
                     <Link href={`/customers/${customerProfileId}/appointments/new`}>
                       <Button size="sm">Neuer Termin</Button>
@@ -1218,13 +1251,7 @@ export default async function CustomerDetailPage({
                 <div className="mt-1 text-white">{fmtDateTimeOrDash(intakeCreatedAt)}</div>
               </div>
 
-              <div className="pt-2">
-                <Link href={`/customers/${customerProfileId}/intake`} className="inline-flex">
-                  <Button size="sm" variant={intakeIsDone ? "secondary" : "default"}>
-                    {intakeIsDone ? "Fragebogen öffnen" : intakeIsDraft ? "Fragebogen fortsetzen" : "Fragebogen starten"}
-                  </Button>
-                </Link>
-              </div>
+
             </div>
           </SectionCard>
 

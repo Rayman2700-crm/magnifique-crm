@@ -566,6 +566,7 @@ export async function saveCustomerIntake(
   const postalCity = textField("postal_city");
   const birthDate = textField("birth_date");
   const phone = textField("phone");
+  const mobile = textField("mobile");
   const email = textField("email");
   const healthInsurance = textField("health_insurance");
   const familyDoctor = textField("family_doctor");
@@ -583,6 +584,7 @@ export async function saveCustomerIntake(
   }
 
   const payload = {
+    version: "v2",
     answers_json: {
       last_name: lastName,
       first_name: firstName,
@@ -590,6 +592,7 @@ export async function saveCustomerIntake(
       postal_city: postalCity,
       birth_date: birthDate,
       phone,
+      mobile,
       email,
       health_insurance: healthInsurance,
       family_doctor: familyDoctor,
@@ -617,7 +620,7 @@ export async function saveCustomerIntake(
     },
     status: "SIGNED",
     signed_at: new Date().toISOString(),
-    created_by: user.id,
+    created_by_user_id: user.id,
     tenant_id: context.tenantId,
     person_id: context.personId,
     customer_profile_id: customerProfileId,

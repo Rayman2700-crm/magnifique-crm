@@ -554,27 +554,11 @@ export async function saveCustomerIntake(
     redirect(`/customers/${customerProfileId}?error=${encodeURIComponent(error?.message ?? "Fragebogen konnte nicht vorbereitet werden")}`);
   }
 
-  const textField = (key: string) => String(formData.get(key) ?? "").trim();
-  const yesNoField = (key: string) => {
-    const value = String(formData.get(key) ?? "").trim().toLowerCase();
-    return value === "yes" || value === "no" ? value : "";
-  };
-
-  const lastName = textField("last_name");
-  const firstName = textField("first_name");
-  const street = textField("street");
-  const postalCity = textField("postal_city");
-  const birthDate = textField("birth_date");
-  const phone = textField("phone");
-  const email = textField("email");
-  const healthInsurance = textField("health_insurance");
-  const familyDoctor = textField("family_doctor");
-  const allergies = textField("allergies");
-  const medications = textField("medications");
-  const notes = textField("notes");
-  const placeDate = textField("place_date");
-  const signatureName = textField("signature_name");
-
+  const allergies = String(formData.get("allergies") ?? "").trim();
+  const medications = String(formData.get("medications") ?? "").trim();
+  const conditions = String(formData.get("conditions") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim();
+  const signatureName = String(formData.get("signature_name") ?? "").trim();
   const consentTreatment = String(formData.get("consent_treatment") ?? "") === "on";
   const consentPrivacy = String(formData.get("consent_privacy") ?? "") === "on";
 
@@ -583,41 +567,19 @@ export async function saveCustomerIntake(
   }
 
   const payload = {
+    version: "v1",
     answers_json: {
-      last_name: lastName,
-      first_name: firstName,
-      street,
-      postal_city: postalCity,
-      birth_date: birthDate,
-      phone,
-      email,
-      health_insurance: healthInsurance,
-      family_doctor: familyDoctor,
-      first_foot_care: yesNoField("first_foot_care"),
-      diabetic: yesNoField("diabetic"),
-      rheumatic: yesNoField("rheumatic"),
-      blood_thinners: yesNoField("blood_thinners"),
-      circulation_disorders: yesNoField("circulation_disorders"),
-      high_blood_pressure: yesNoField("high_blood_pressure"),
-      heart_disease: yesNoField("heart_disease"),
-      pacemaker: yesNoField("pacemaker"),
-      infectious_disease: yesNoField("infectious_disease"),
-      foot_operations: yesNoField("foot_operations"),
-      varicose_veins: yesNoField("varicose_veins"),
-      thrombosis_risk: yesNoField("thrombosis_risk"),
-      stand_walk_a_lot: yesNoField("stand_walk_a_lot"),
-      tetanus_vaccinated: yesNoField("tetanus_vaccinated"),
       allergies,
       medications,
+      conditions,
       notes,
-      place_date: placeDate,
       signature_name: signatureName,
       consent_treatment: consentTreatment,
       consent_privacy: consentPrivacy,
     },
     status: "SIGNED",
     signed_at: new Date().toISOString(),
-    created_by: user.id,
+    created_by_user_id: user.id,
     tenant_id: context.tenantId,
     person_id: context.personId,
     customer_profile_id: customerProfileId,

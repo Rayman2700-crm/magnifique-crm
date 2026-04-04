@@ -788,12 +788,12 @@ export default async function CustomerDetailPage({
                       <Link href={`/customers/${customerProfileId}/intake`} className="inline-flex">
                         <button
                           type="button"
-                          className={`inline-flex h-9 items-center justify-center rounded-[14px] border px-3 text-sm font-semibold transition ${
+                          className={`inline-flex h-9 items-center justify-center rounded-[14px] border px-3 text-sm font-semibold transition-colors ${
                             intakeIsDone
-                              ? "border-emerald-400/40 bg-emerald-500/90 text-white shadow-[0_10px_24px_rgba(34,197,94,0.28)] hover:bg-emerald-500"
+                              ? "border-emerald-400/40 bg-emerald-500/90 text-white shadow-[0_10px_24px_rgba(34,197,94,0.28)] hover:border-emerald-300/60 hover:bg-emerald-400"
                               : intakeIsDraft
-                                ? "border-amber-400/40 bg-amber-500/90 text-black shadow-[0_10px_24px_rgba(245,158,11,0.28)] hover:bg-amber-500"
-                                : "border-red-400/40 bg-red-500/90 text-white shadow-[0_10px_24px_rgba(239,68,68,0.28)] hover:bg-red-500"
+                                ? "border-amber-400/40 bg-amber-500/90 text-black shadow-[0_10px_24px_rgba(245,158,11,0.28)] hover:border-amber-300/60 hover:bg-amber-400"
+                                : "border-red-400/40 bg-red-500/90 text-white shadow-[0_10px_24px_rgba(239,68,68,0.28)] hover:border-red-300/60 hover:bg-red-400"
                           }`}
                         >
                           {intakeIsDone ? "Fragebogen ausgefüllt" : intakeIsDraft ? "Fragebogen fortsetzen" : "Fragebogen ausfüllen"}

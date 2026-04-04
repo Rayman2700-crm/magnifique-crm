@@ -259,6 +259,16 @@ export default async function CustomerIntakePage({
               </div>
 
               <div>
+                <label className="text-xs text-white/80">Mobil</label>
+                <input
+                  name="mobile"
+                  defaultValue={readAnswer(intakeLatest ?? null, "mobile")}
+                  className="mt-1 w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+                  placeholder="Mobilnummer"
+                />
+              </div>
+
+              <div>
                 <label className="text-xs text-white/80">E-Mail</label>
                 <input
                   name="email"
