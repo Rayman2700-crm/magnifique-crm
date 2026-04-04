@@ -74,7 +74,10 @@ type IntakeRow = {
 type ServiceRow = {
   id: string;
   name: string;
-  tenant_id: string | null;
+  tenant_id: string;
+  duration_minutes: number | null;
+  buffer_minutes: number | null;
+  default_price_cents: number | null;
   is_active: boolean | null;
 };
 
@@ -166,44 +169,6 @@ function appointmentStatusClasses(status: AppointmentStatus | null, startAt: str
   return "border-sky-400/20 bg-sky-400/10 text-sky-200";
 }
 
-function tenantThemeByName(name: string) {
-  const n = (name || "").toLowerCase();
-
-  let bg = "rgba(255,255,255,0.04)";
-  let text = "rgba(255,255,255,0.95)";
-  let subText = "rgba(255,255,255,0.75)";
-  let border = "rgba(255,255,255,0.14)";
-  let pillBg = "rgba(255,255,255,0.08)";
-
-  if (n.includes("radu")) {
-    bg = "rgba(59,130,246,0.14)";
-    text = "#ffffff";
-    subText = "rgba(255,255,255,0.82)";
-    border = "rgba(59,130,246,0.28)";
-    pillBg = "rgba(59,130,246,0.18)";
-  } else if (n.includes("raluca")) {
-    bg = "rgba(168,85,247,0.14)";
-    text = "#ffffff";
-    subText = "rgba(255,255,255,0.82)";
-    border = "rgba(168,85,247,0.28)";
-    pillBg = "rgba(168,85,247,0.18)";
-  } else if (n.includes("alexandra")) {
-    bg = "rgba(34,197,94,0.14)";
-    text = "#ffffff";
-    subText = "rgba(255,255,255,0.82)";
-    border = "rgba(34,197,94,0.28)";
-    pillBg = "rgba(34,197,94,0.18)";
-  } else if (n.includes("barbara")) {
-    bg = "rgba(249,115,22,0.14)";
-    text = "#ffffff";
-    subText = "rgba(255,255,255,0.82)";
-    border = "rgba(249,115,22,0.28)";
-    pillBg = "rgba(249,115,22,0.18)";
-  }
-
-  return { bg, text, subText, border, pillBg };
-}
-
 function fmtDateTimeOrDash(iso?: string | null) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -264,76 +229,6 @@ function getCustomerStatus(
   if (!nextAppointmentAt && lastVisitDate < sixtyDaysAgo) return "Inaktiv";
   if (!nextAppointmentAt) return "Ohne Folgetermin";
   return "Aktiv";
-}
-
-function statusBadgeClasses(status: CustomerStatus) {
-  switch (status) {
-    case "Aktiv":
-      return "border-emerald-400/20 bg-emerald-400/10 text-emerald-200";
-    case "Inaktiv":
-      return "border-amber-400/20 bg-amber-400/10 text-amber-200";
-    case "Ohne Folgetermin":
-      return "border-white/10 bg-white/5 text-white/80";
-    default:
-      return "border-sky-400/20 bg-sky-400/10 text-sky-200";
-  }
-}
-
-function StatusIcon({ ok }: { ok: boolean }) {
-  if (ok) {
-    return (
-      <span
-        aria-label="ausgefüllt"
-        title="Fragebogen ausgefüllt"
-        style={{
-          display: "inline-flex",
-          width: 22,
-          height: 22,
-          borderRadius: 999,
-          background: "rgba(34,197,94,0.18)",
-          border: "1px solid rgba(34,197,94,0.35)",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-          <path
-            d="M20 6L9 17l-5-5"
-            stroke="#22c55e"
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </span>
-    );
-  }
-
-  return (
-    <span
-      aria-label="nicht ausgefüllt"
-      title="Fragebogen nicht ausgefüllt"
-      style={{
-        display: "inline-flex",
-        width: 22,
-        height: 22,
-        borderRadius: 999,
-        background: "rgba(239,68,68,0.18)",
-        border: "1px solid rgba(239,68,68,0.35)",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-        <path
-          d="M18 6L6 18M6 6l12 12"
-          stroke="#ef4444"
-          strokeWidth="3"
-          strokeLinecap="round"
-        />
-      </svg>
-    </span>
-  );
 }
 
 const WAITLIST_STAFF_PREFIX = "Behandlerwunsch:";
@@ -589,7 +484,6 @@ export default async function CustomerDetailPage({
   ]);
 
   const tenantLabel = tenant?.display_name || tenantId || "";
-  const theme = tenantThemeByName(tenantLabel);
 
   const { data: intakeLatest } = await supabase
     .from("intake_forms")
@@ -669,7 +563,6 @@ export default async function CustomerDetailPage({
     }
   }
 
-  const customerStatus = getCustomerStatus(lastVisitAt, nextAppointmentAt, visitCount);
   const daysSinceLastVisit = countDaysSince(lastVisitAt);
 
   const { data: notes } = await supabase
@@ -740,7 +633,7 @@ export default async function CustomerDetailPage({
   const { data: servicesRaw } = tenantId
     ? await supabase
         .from("services")
-        .select("id, name, tenant_id, is_active")
+        .select("id, name, tenant_id, duration_minutes, buffer_minutes, default_price_cents, is_active")
         .eq("tenant_id", tenantId)
         .eq("is_active", true)
         .order("name", { ascending: true })
@@ -780,6 +673,7 @@ export default async function CustomerDetailPage({
                     </Link>
 
                     <CustomerAppointmentLauncher
+                      customerProfileId={customerProfileId}
                       customerName={person?.full_name || ""}
                       customerPhone={person?.phone || ""}
                       customerTenantId={tenantId}
@@ -879,8 +773,6 @@ export default async function CustomerDetailPage({
                     </div>
                   </div>
                 </div>
-
-
               </div>
             </div>
 
@@ -896,7 +788,7 @@ export default async function CustomerDetailPage({
               </div>
             ) : null}
 
-            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5 items-stretch">
+            <div className="mt-6 grid grid-cols-1 gap-4 items-stretch sm:grid-cols-2 lg:grid-cols-5">
               <MetricCard
                 label="Besuche"
                 value={String(visitCount)}
@@ -929,354 +821,354 @@ export default async function CustomerDetailPage({
 
       <div className="mt-6 space-y-6">
         <section className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <SectionCard
-            id="appointments"
-            title="Termine"
-            description="Kommende und vergangene Termine dieses Kunden."
-            action={
-              <CustomerAppointmentLauncher
-                customerName={person?.full_name || ""}
-                customerPhone={person?.phone || ""}
-                customerTenantId={tenantId}
-                customerTenantLabel={tenantLabel || null}
-                services={services}
-              />
-            }
-          >
-            {appointments.length === 0 ? (
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-white/60">
-                Keine Termine vorhanden.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {appointments.map((appointment) => {
-                  const startText = fmtDateTimeOrDash(appointment.start_at);
-                  const endText = fmtDateTimeOrDash(appointment.end_at);
-                  const tenantDisplayName = firstJoin(appointment.tenant)?.display_name || "Behandler";
-                  const title = getAppointmentTitle(appointment.notes_internal);
-                  const note = getAppointmentNote(appointment.notes_internal);
-                  const status = getAppointmentStatus(appointment.notes_internal);
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <SectionCard
+              id="appointments"
+              title="Termine"
+              description="Kommende und vergangene Termine dieses Kunden."
+              action={
+                <CustomerAppointmentLauncher
+                  customerProfileId={customerProfileId}
+                  customerName={person?.full_name || ""}
+                  customerPhone={person?.phone || ""}
+                  customerTenantId={tenantId}
+                  customerTenantLabel={tenantLabel || null}
+                  services={services}
+                />
+              }
+            >
+              {appointments.length === 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-white/60">
+                  Keine Termine vorhanden.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {appointments.map((appointment) => {
+                    const startText = fmtDateTimeOrDash(appointment.start_at);
+                    const endText = fmtDateTimeOrDash(appointment.end_at);
+                    const tenantDisplayName = firstJoin(appointment.tenant)?.display_name || "Behandler";
+                    const title = getAppointmentTitle(appointment.notes_internal);
+                    const note = getAppointmentNote(appointment.notes_internal);
+                    const status = getAppointmentStatus(appointment.notes_internal);
 
-                  return (
-                    <div
-                      key={appointment.id}
-                      className="rounded-[24px] border border-white/10 bg-black/20 p-4 md:p-5"
-                    >
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                        <div className="min-w-0">
-                          <div className="text-sm text-white/45">{tenantDisplayName}</div>
-                          <div className="mt-1 truncate text-lg font-semibold text-white">{title}</div>
-                          <div className="mt-2 text-sm text-white/70">
-                            {startText} – {endText}
+                    return (
+                      <div
+                        key={appointment.id}
+                        className="rounded-[24px] border border-white/10 bg-black/20 p-4 md:p-5"
+                      >
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="min-w-0">
+                            <div className="text-sm text-white/45">{tenantDisplayName}</div>
+                            <div className="mt-1 truncate text-lg font-semibold text-white">{title}</div>
+                            <div className="mt-2 text-sm text-white/70">
+                              {startText} – {endText}
+                            </div>
+                            {note ? <div className="mt-2 text-sm text-white/60">{note}</div> : null}
+
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <span
+                                className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${appointmentStatusClasses(
+                                  status,
+                                  appointment.start_at
+                                )}`}
+                              >
+                                {appointmentStatusLabel(status, appointment.start_at)}
+                              </span>
+                            </div>
                           </div>
-                          {note ? <div className="mt-2 text-sm text-white/60">{note}</div> : null}
+
+                          <div className="flex flex-wrap gap-2 lg:justify-end">
+                            <Link href={`/customers/${customerProfileId}/appointments/${appointment.id}/edit`}>
+                              <Button variant="secondary" size="sm">Bearbeiten</Button>
+                            </Link>
+
+                            <form action={deleteAppointment.bind(null, customerProfileId, appointment.id)}>
+                              <button
+                                type="submit"
+                                className="inline-flex h-9 items-center justify-center rounded-[14px] border border-red-400/25 bg-red-400/10 px-3 text-sm text-red-200"
+                              >
+                                Löschen
+                              </button>
+                            </form>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </SectionCard>
+
+            <SectionCard
+              id="waitlist"
+              title="Warteliste"
+              description="Freigewordene Termine schneller an diesen Kunden vergeben."
+              action={
+                <span className="inline-flex rounded-full border border-fuchsia-400/20 bg-fuchsia-400/10 px-3 py-1 text-xs font-semibold text-fuchsia-200">
+                  Aktiv: {activeWaitlistEntries.length}
+                </span>
+              }
+            >
+              <form
+                action={addCustomerToWaitlist.bind(null, customerProfileId)}
+                className="grid gap-3 rounded-[24px] border border-white/10 bg-black/20 p-4 md:grid-cols-2"
+              >
+                <input type="hidden" name="preferred_staff_name" value={tenantLabel || ""} />
+                <input type="hidden" name="preferred_days" value="" />
+                <input type="hidden" name="priority" value="normal" />
+                <input type="hidden" name="requested_recently_preset" value="" />
+
+                <div className="md:col-span-2">
+                  <label className="text-xs text-white/80">Behandlung</label>
+                  <select
+                    name="service_name"
+                    defaultValue=""
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
+                    required
+                  >
+                    <option value="" disabled>
+                      Dienstleistung auswählen
+                    </option>
+                    {services.map((service) => (
+                      <option key={service.id} value={service.name}>
+                        {service.name}
+                      </option>
+                    ))}
+                  </select>
+                  {services.length === 0 ? (
+                    <div className="mt-2 text-xs text-amber-200">
+                      Keine aktiven Dienstleistungen für diesen Behandler gefunden.
+                    </div>
+                  ) : null}
+                </div>
+
+                <div>
+                  <label className="text-xs text-white/80">Zeit von</label>
+                  <select
+                    name="time_from"
+                    defaultValue=""
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
+                  >
+                    <option value="">Beliebig</option>
+                    {waitlistTimeOptions.map((time) => (
+                      <option key={`from-${time}`} value={time}>
+                        {time}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs text-white/80">Zeit bis</label>
+                  <select
+                    name="time_to"
+                    defaultValue=""
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
+                  >
+                    <option value="">Beliebig</option>
+                    {waitlistTimeOptions.map((time) => (
+                      <option key={`to-${time}`} value={time}>
+                        {time}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="text-xs text-white/80">Notiz</label>
+                  <textarea
+                    name="notes"
+                    rows={3}
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
+                    placeholder="z. B. nur vormittags oder flexibel"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <button
+                    type="submit"
+                    className="rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white"
+                  >
+                    Zur Warteliste hinzufügen
+                  </button>
+                </div>
+              </form>
+
+              <div className="mt-4 space-y-3">
+                {waitlistEntries.length === 0 ? (
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-white/60">
+                    Noch kein Wartelisten-Eintrag vorhanden.
+                  </div>
+                ) : (
+                  waitlistEntries.map((entry) => (
+                    <div key={entry.id} className="rounded-[24px] border border-white/10 bg-black/20 p-4">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap gap-2">
+                            <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${waitlistStatusClasses(entry.status)}`}>
+                              {waitlistStatusLabel(entry.status)}
+                            </span>
+                            <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${waitlistPriorityClasses(entry.priority)}`}>
+                              {waitlistPriorityLabel(entry.priority)}
+                            </span>
+                          </div>
+
+                          <div className="mt-3 text-lg font-semibold text-white">
+                            {entry.service_title || "Ohne konkrete Behandlung"}
+                          </div>
+
+                          <div className="mt-2 flex flex-wrap gap-4 text-sm text-white/65">
+                            <span>Behandler: {readWaitlistPreferredStaff(entry.notes) || "egal"}</span>
+                            <span>Tageszeit: {fmtTimeRange(entry.time_from, entry.time_to)}</span>
+                            <span>
+                              Tage: {entry.preferred_days && entry.preferred_days.length > 0 ? entry.preferred_days.join(", ") : "flexibel"}
+                            </span>
+                          </div>
 
                           <div className="mt-3 flex flex-wrap gap-2">
-                            <span
-                              className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${appointmentStatusClasses(
-                                status,
-                                appointment.start_at
-                              )}`}
-                            >
-                              {appointmentStatusLabel(status, appointment.start_at)}
-                            </span>
+                            {entry.short_notice_ok ? (
+                              <span className="inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-200">
+                                Kurzfristig möglich
+                              </span>
+                            ) : null}
+                            {entry.reachable_today ? (
+                              <span className="inline-flex rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1 text-xs font-semibold text-sky-200">
+                                Heute erreichbar
+                              </span>
+                            ) : null}
+                            {waitlistRecentRequestLabel(entry.requested_recently_at) ? (
+                              <span className="inline-flex rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-200">
+                                {waitlistRecentRequestLabel(entry.requested_recently_at)}
+                              </span>
+                            ) : null}
+                          </div>
+
+                          {readWaitlistVisibleNotes(entry.notes) ? <div className="mt-2 whitespace-pre-wrap text-sm text-white/75">{readWaitlistVisibleNotes(entry.notes)}</div> : null}
+
+                          <div className="mt-3 text-xs text-white/40">
+                            Erstellt: {fmtDateTimeOrDash(entry.created_at)}
                           </div>
                         </div>
 
                         <div className="flex flex-wrap gap-2 lg:justify-end">
-                          <Link href={`/customers/${customerProfileId}/appointments/${appointment.id}/edit`}>
-                            <Button variant="secondary" size="sm">Bearbeiten</Button>
-                          </Link>
-
-                          <form action={deleteAppointment.bind(null, customerProfileId, appointment.id)}>
-                            <button
-                              type="submit"
-                              className="inline-flex h-9 items-center justify-center rounded-[14px] border border-red-400/25 bg-red-400/10 px-3 text-sm text-red-200"
-                            >
-                              Löschen
-                            </button>
-                          </form>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </SectionCard>
-
-          <SectionCard
-            id="waitlist"
-            title="Warteliste"
-            description="Freigewordene Termine schneller an diesen Kunden vergeben."
-            action={
-              <span className="inline-flex rounded-full border border-fuchsia-400/20 bg-fuchsia-400/10 px-3 py-1 text-xs font-semibold text-fuchsia-200">
-                Aktiv: {activeWaitlistEntries.length}
-              </span>
-            }
-          >
-            <form
-              action={addCustomerToWaitlist.bind(null, customerProfileId)}
-              className="grid gap-3 rounded-[24px] border border-white/10 bg-black/20 p-4 md:grid-cols-2"
-            >
-              <input type="hidden" name="preferred_staff_name" value={tenantLabel || ""} />
-              <input type="hidden" name="preferred_days" value="" />
-              <input type="hidden" name="priority" value="normal" />
-              <input type="hidden" name="requested_recently_preset" value="" />
-
-              <div className="md:col-span-2">
-                <label className="text-xs text-white/80">Behandlung</label>
-                <select
-                  name="service_name"
-                  defaultValue=""
-                  className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
-                  required
-                >
-                  <option value="" disabled>
-                    Dienstleistung auswählen
-                  </option>
-                  {services.map((service) => (
-                    <option key={service.id} value={service.name}>
-                      {service.name}
-                    </option>
-                  ))}
-                </select>
-                {services.length === 0 ? (
-                  <div className="mt-2 text-xs text-amber-200">
-                    Keine aktiven Dienstleistungen für diesen Behandler gefunden.
-                  </div>
-                ) : null}
-              </div>
-
-              <div>
-                <label className="text-xs text-white/80">Zeit von</label>
-                <select
-                  name="time_from"
-                  defaultValue=""
-                  className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
-                >
-                  <option value="">Beliebig</option>
-                  {waitlistTimeOptions.map((time) => (
-                    <option key={`from-${time}`} value={time}>
-                      {time}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs text-white/80">Zeit bis</label>
-                <select
-                  name="time_to"
-                  defaultValue=""
-                  className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
-                >
-                  <option value="">Beliebig</option>
-                  {waitlistTimeOptions.map((time) => (
-                    <option key={`to-${time}`} value={time}>
-                      {time}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="text-xs text-white/80">Notiz</label>
-                <textarea
-                  name="notes"
-                  rows={3}
-                  className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
-                  placeholder="z. B. nur vormittags oder flexibel"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <button
-                  type="submit"
-                  className="rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white"
-                >
-                  Zur Warteliste hinzufügen
-                </button>
-              </div>
-            </form>
-
-            <div className="mt-4 space-y-3">
-              {waitlistEntries.length === 0 ? (
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-white/60">
-                  Noch kein Wartelisten-Eintrag vorhanden.
-                </div>
-              ) : (
-                waitlistEntries.map((entry) => (
-                  <div key={entry.id} className="rounded-[24px] border border-white/10 bg-black/20 p-4">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap gap-2">
-                          <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${waitlistStatusClasses(entry.status)}`}>
-                            {waitlistStatusLabel(entry.status)}
-                          </span>
-                          <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${waitlistPriorityClasses(entry.priority)}`}>
-                            {waitlistPriorityLabel(entry.priority)}
-                          </span>
-                        </div>
-
-                        <div className="mt-3 text-lg font-semibold text-white">
-                          {entry.service_title || "Ohne konkrete Behandlung"}
-                        </div>
-
-                        <div className="mt-2 flex flex-wrap gap-4 text-sm text-white/65">
-                          <span>Behandler: {readWaitlistPreferredStaff(entry.notes) || "egal"}</span>
-                          <span>Tageszeit: {fmtTimeRange(entry.time_from, entry.time_to)}</span>
-                          <span>
-                            Tage: {entry.preferred_days && entry.preferred_days.length > 0 ? entry.preferred_days.join(", ") : "flexibel"}
-                          </span>
-                        </div>
-
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {entry.short_notice_ok ? (
-                            <span className="inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-200">
-                              Kurzfristig möglich
-                            </span>
-                          ) : null}
-                          {entry.reachable_today ? (
-                            <span className="inline-flex rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1 text-xs font-semibold text-sky-200">
-                              Heute erreichbar
-                            </span>
-                          ) : null}
-                          {waitlistRecentRequestLabel(entry.requested_recently_at) ? (
-                            <span className="inline-flex rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-200">
-                              {waitlistRecentRequestLabel(entry.requested_recently_at)}
-                            </span>
-                          ) : null}
-                        </div>
-
-                        {readWaitlistVisibleNotes(entry.notes) ? <div className="mt-2 whitespace-pre-wrap text-sm text-white/75">{readWaitlistVisibleNotes(entry.notes)}</div> : null}
-
-                        <div className="mt-3 text-xs text-white/40">
-                          Erstellt: {fmtDateTimeOrDash(entry.created_at)}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2 lg:justify-end">
-                        {String(entry.status ?? "active").toLowerCase() === "active" ? (
-                          <>
-                            <form action={updateCustomerWaitlistStatus.bind(null, customerProfileId, entry.id, "contacted")}>
-                              <button
-                                type="submit"
-                                className="rounded-xl border border-sky-400/20 bg-sky-400/10 px-3 py-2 text-sm text-sky-200"
-                              >
-                                Kontaktiert
-                              </button>
-                            </form>
-                            <form action={updateCustomerWaitlistStatus.bind(null, customerProfileId, entry.id, "removed")}>
-                              <button
-                                type="submit"
-                                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80"
-                              >
-                                Entfernen
-                              </button>
-                            </form>
-                          </>
-                        ) : String(entry.status ?? "").toLowerCase() === "contacted" ? (
-                          <>
-                            <form action={updateCustomerWaitlistStatus.bind(null, customerProfileId, entry.id, "booked")}>
-                              <button
-                                type="submit"
-                                className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-200"
-                              >
-                                Als gebucht markieren
-                              </button>
-                            </form>
+                          {String(entry.status ?? "active").toLowerCase() === "active" ? (
+                            <>
+                              <form action={updateCustomerWaitlistStatus.bind(null, customerProfileId, entry.id, "contacted")}>
+                                <button
+                                  type="submit"
+                                  className="rounded-xl border border-sky-400/20 bg-sky-400/10 px-3 py-2 text-sm text-sky-200"
+                                >
+                                  Kontaktiert
+                                </button>
+                              </form>
+                              <form action={updateCustomerWaitlistStatus.bind(null, customerProfileId, entry.id, "removed")}>
+                                <button
+                                  type="submit"
+                                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80"
+                                >
+                                  Entfernen
+                                </button>
+                              </form>
+                            </>
+                          ) : String(entry.status ?? "").toLowerCase() === "contacted" ? (
+                            <>
+                              <form action={updateCustomerWaitlistStatus.bind(null, customerProfileId, entry.id, "booked")}>
+                                <button
+                                  type="submit"
+                                  className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-200"
+                                >
+                                  Als gebucht markieren
+                                </button>
+                              </form>
+                              <form action={updateCustomerWaitlistStatus.bind(null, customerProfileId, entry.id, "active")}>
+                                <button
+                                  type="submit"
+                                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80"
+                                >
+                                  Wieder aktiv
+                                </button>
+                              </form>
+                            </>
+                          ) : (
                             <form action={updateCustomerWaitlistStatus.bind(null, customerProfileId, entry.id, "active")}>
                               <button
                                 type="submit"
                                 className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80"
                               >
-                                Wieder aktiv
+                                Reaktivieren
                               </button>
                             </form>
-                          </>
-                        ) : (
-                          <form action={updateCustomerWaitlistStatus.bind(null, customerProfileId, entry.id, "active")}>
-                            <button
-                              type="submit"
-                              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80"
-                            >
-                              Reaktivieren
-                            </button>
-                          </form>
-                        )}
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </SectionCard>
+                  ))
+                )}
+              </div>
+            </SectionCard>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <SectionCard
-            id="notes"
-            title="Notizen"
-            description="Interne Hinweise und Verlauf zum Kunden."
-          >
-            <form action={addCustomerNote.bind(null, customerProfileId)} className="mb-4 space-y-3">
-              <textarea
-                name="note"
-                rows={4}
-                className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
-                placeholder="Neue Notiz hinzufügen..."
-                required
-              />
-              <button
-                type="submit"
-                className="rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white"
-              >
-                Notiz speichern
-              </button>
-            </form>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <SectionCard
+              id="notes"
+              title="Notizen"
+              description="Interne Hinweise und Verlauf zum Kunden."
+            >
+              <form action={addCustomerNote.bind(null, customerProfileId)} className="mb-4 space-y-3">
+                <textarea
+                  name="note"
+                  rows={4}
+                  className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none"
+                  placeholder="Neue Notiz hinzufügen..."
+                  required
+                />
+                <button
+                  type="submit"
+                  className="rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white"
+                >
+                  Notiz speichern
+                </button>
+              </form>
 
-            {(notes as NoteRow[] | null)?.length ? (
-              <div className="space-y-3">
-                {(notes as NoteRow[]).map((note) => (
-                  <div key={note.id} className="rounded-[24px] border border-white/10 bg-black/20 p-4">
-                    <div className="whitespace-pre-wrap text-sm text-white/85">{note.note}</div>
-                    <div className="mt-3 text-xs text-white/40">
-                      Erstellt: {fmtDateTimeOrDash(note.created_at)}
-                      {note.updated_at !== note.created_at ? ` • Aktualisiert: ${fmtDateTimeOrDash(note.updated_at)}` : ""}
+              {(notes as NoteRow[] | null)?.length ? (
+                <div className="space-y-3">
+                  {(notes as NoteRow[]).map((note) => (
+                    <div key={note.id} className="rounded-[24px] border border-white/10 bg-black/20 p-4">
+                      <div className="whitespace-pre-wrap text-sm text-white/85">{note.note}</div>
+                      <div className="mt-3 text-xs text-white/40">
+                        Erstellt: {fmtDateTimeOrDash(note.created_at)}
+                        {note.updated_at !== note.created_at ? ` • Aktualisiert: ${fmtDateTimeOrDash(note.updated_at)}` : ""}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-white/60">
+                  Noch keine Notizen vorhanden.
+                </div>
+              )}
+            </SectionCard>
+
+            <SectionCard
+              title="Dateien"
+              description="Fotos und Dokumente dieses Kunden."
+            >
+              <PhotoUpload customerProfileId={customerProfileId} />
+
+              <div className="mt-5">
+                <CustomerMediaGalleryClient
+                  customerProfileId={customerProfileId}
+                  items={photoRows.map((photo) => ({
+                    id: photo.id,
+                    url: signedUrlMap.get(photo.storage_path) ?? null,
+                    originalName: photo.original_name ?? null,
+                    mimeType: photo.mime_type ?? null,
+                    sizeBytes: photo.size_bytes ?? null,
+                    createdAt: photo.created_at,
+                  }))}
+                />
               </div>
-            ) : (
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-white/60">
-                Noch keine Notizen vorhanden.
-              </div>
-            )}
-          </SectionCard>
-
-<SectionCard
-            title="Dateien"
-            description="Fotos und Dokumente dieses Kunden."
-          >
-            <PhotoUpload customerProfileId={customerProfileId} />
-
-            <div className="mt-5">
-              <CustomerMediaGalleryClient
-                customerProfileId={customerProfileId}
-                items={photoRows.map((photo) => ({
-                  id: photo.id,
-                  url: signedUrlMap.get(photo.storage_path) ?? null,
-                  originalName: photo.original_name ?? null,
-                  mimeType: photo.mime_type ?? null,
-                  sizeBytes: photo.size_bytes ?? null,
-                  createdAt: photo.created_at,
-                }))}
-              />
-            </div>
-          </SectionCard>
-
+            </SectionCard>
           </div>
         </section>
       </div>

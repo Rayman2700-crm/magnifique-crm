@@ -53,7 +53,6 @@ export default function CreateAppointmentSlideover({
   services,
   creatorTenantId,
   defaultWeekISO,
-  customerProfileId,
   initialWalkInName,
   initialWalkInPhone,
   forceTenantId,
@@ -68,7 +67,6 @@ export default function CreateAppointmentSlideover({
   services: ServiceOption[];
   creatorTenantId: string | null;
   defaultWeekISO?: string;
-  customerProfileId?: string | null;
   initialWalkInName?: string;
   initialWalkInPhone?: string;
   forceTenantId?: string | null;
@@ -81,7 +79,9 @@ export default function CreateAppointmentSlideover({
     return copy;
   }, [tenants]);
 
-  const [selectedTenantId, setSelectedTenantId] = useState<string>(forceTenantId ?? creatorTenantId ?? "");
+  const effectiveInitialTenantId = forceTenantId ?? creatorTenantId ?? sortedTenants[0]?.id ?? "";
+
+  const [selectedTenantId, setSelectedTenantId] = useState<string>(effectiveInitialTenantId);
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
   const [startValue, setStartValue] = useState<string>("");
   const [walkInName, setWalkInName] = useState(initialWalkInName ?? "");
@@ -90,11 +90,13 @@ export default function CreateAppointmentSlideover({
   const [status, setStatus] = useState("scheduled");
   const [returnTo, setReturnTo] = useState<string>("");
 
+  const activeTenantId = forceTenantId ?? selectedTenantId;
+
   const tenantServices = useMemo(() => {
     return (services ?? [])
-      .filter((service) => service.tenant_id === selectedTenantId && service.is_active !== false)
+      .filter((service) => service.tenant_id === activeTenantId && service.is_active !== false)
       .sort((a, b) => a.name.localeCompare(b.name, "de"));
-  }, [services, selectedTenantId]);
+  }, [services, activeTenantId]);
 
   const selectedService = useMemo(
     () => tenantServices.find((service) => service.id === selectedServiceId) ?? null,
@@ -110,21 +112,37 @@ export default function CreateAppointmentSlideover({
     setWalkInPhone(initialWalkInPhone ?? "");
     setNotes("");
     setStatus("scheduled");
-    setSelectedTenantId(forceTenantId ?? creatorTenantId ?? "");
     setSelectedServiceId("");
+    setSelectedTenantId(forceTenantId ?? creatorTenantId ?? sortedTenants[0]?.id ?? "");
 
     if (typeof window !== "undefined") {
       setReturnTo(window.location.pathname + window.location.search);
     }
-  }, [createVisible, creatorTenantId, forceTenantId, initialWalkInName, initialWalkInPhone]);
+  }, [createVisible, creatorTenantId, forceTenantId, initialWalkInName, initialWalkInPhone, sortedTenants]);
 
   useEffect(() => {
-    if (!forceTenantId && !creatorTenantId) return;
-    setSelectedTenantId(forceTenantId ?? creatorTenantId ?? "");
+    if (forceTenantId) {
+      setSelectedTenantId(forceTenantId);
+      return;
+    }
+
+    if (!creatorTenantId) return;
+    setSelectedTenantId((prev) => prev || creatorTenantId);
   }, [creatorTenantId, forceTenantId]);
 
   useEffect(() => {
-    if (!selectedTenantId) {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    if (createVisible) {
+      window.addEventListener("keydown", onKeyDown);
+      return () => window.removeEventListener("keydown", onKeyDown);
+    }
+  }, [createVisible, onClose]);
+
+  useEffect(() => {
+    if (!activeTenantId) {
       setSelectedServiceId("");
       return;
     }
@@ -133,18 +151,7 @@ export default function CreateAppointmentSlideover({
       if (current && tenantServices.some((service) => service.id === current)) return current;
       return tenantServices[0]?.id ?? "";
     });
-  }, [selectedTenantId, tenantServices]);
-
-  useEffect(() => {
-    if (!createVisible) return;
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [createVisible, onClose]);
+  }, [activeTenantId, tenantServices]);
 
   if (!mounted || !createVisible || typeof document === "undefined") return null;
 
@@ -152,8 +159,8 @@ export default function CreateAppointmentSlideover({
   const durationValue = selectedService?.duration_minutes ?? 60;
   const bufferValue = selectedService?.buffer_minutes ?? 0;
   const priceLabel = formatPrice(selectedService?.default_price_cents ?? null);
-  const effectiveTenantLabel =
-    tenantLabel || sortedTenants.find((tenant) => tenant.id === selectedTenantId)?.display_name || "Behandler";
+  const selectedTenantLabel =
+    tenantLabel ?? sortedTenants.find((t) => t.id === activeTenantId)?.display_name ?? "Behandler";
 
   const content = (
     <div style={{ position: "fixed", inset: 0, zIndex: 1200, isolation: "isolate" }}>
@@ -206,7 +213,9 @@ export default function CreateAppointmentSlideover({
               Neuer Termin
             </div>
             <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,0.50)" }}>
-              {hideTenantSelect ? `${effectiveTenantLabel} · Dienstleistung wählen · Kunde verknüpft` : "Behandler wählen · Dienstleistung wählen · Kunde optional (Walk-in)"}
+              {hideTenantSelect
+                ? "Termin direkt für diesen Kunden anlegen"
+                : "Behandler wählen · Dienstleistung wählen · Kunde optional (Walk-in)"}
             </div>
           </div>
 
@@ -217,15 +226,12 @@ export default function CreateAppointmentSlideover({
 
         <div style={{ padding: 16, overflow: "auto" }}>
           <form action={createAppointmentQuick} className="space-y-4">
-            <input type="hidden" name="customerProfileId" value={customerProfileId ?? ""} />
-
             {hideTenantSelect ? (
               <div>
                 <label className="text-white text-sm">Behandler</label>
-                <div className="mt-1 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white/90">
-                  {effectiveTenantLabel}
+                <div className="mt-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-sm text-white/85">
+                  {selectedTenantLabel}
                 </div>
-                <input type="hidden" name="tenantId" value={selectedTenantId} />
               </div>
             ) : (
               <div>
@@ -245,11 +251,10 @@ export default function CreateAppointmentSlideover({
                     </option>
                   ))}
                 </select>
-
-                <input type="hidden" name="tenantId" value={selectedTenantId} />
               </div>
             )}
 
+            <input type="hidden" name="tenantId" value={activeTenantId} />
             <input type="hidden" name="creatorTenantId" value={creatorTenantId ?? ""} />
             <input type="hidden" name="week" value={defaultWeekISO ?? ""} />
             <input type="hidden" name="tenant" value="" />
@@ -264,7 +269,7 @@ export default function CreateAppointmentSlideover({
                 style={{ colorScheme: "dark", backgroundColor: "rgba(0,0,0,0.30)" }}
               >
                 <option value="" disabled className="bg-[#0b0b0c] text-white">
-                  {selectedTenantId ? "Dienstleistung wählen…" : "Bitte zuerst Behandler wählen…"}
+                  {activeTenantId ? "Dienstleistung wählen…" : "Bitte zuerst Behandler wählen…"}
                 </option>
                 {tenantServices.map((service) => (
                   <option key={service.id} value={service.id} className="bg-[#0b0b0c] text-white">
@@ -296,9 +301,9 @@ export default function CreateAppointmentSlideover({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-white text-sm">Kunde (Name)</label>
+                <label className="text-white text-sm">Kunde (Name) – optional</label>
                 <input
-                  name="walkInName"
+                  name="walkinName"
                   value={walkInName}
                   onChange={(e) => setWalkInName(e.target.value)}
                   className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white placeholder:text-white/30 outline-none focus:ring-2 focus:ring-white/15"
@@ -306,9 +311,9 @@ export default function CreateAppointmentSlideover({
                 />
               </div>
               <div>
-                <label className="text-white text-sm">Telefon</label>
+                <label className="text-white text-sm">Telefon – optional</label>
                 <input
-                  name="walkInPhone"
+                  name="walkinPhone"
                   value={walkInPhone}
                   onChange={(e) => setWalkInPhone(e.target.value)}
                   className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white placeholder:text-white/30 outline-none focus:ring-2 focus:ring-white/15"
@@ -384,7 +389,7 @@ export default function CreateAppointmentSlideover({
               </div>
             </div>
 
-            <Button type="submit" className="w-full" disabled={!selectedTenantId || !selectedServiceId}>
+            <Button type="submit" className="w-full" disabled={!activeTenantId || !selectedServiceId}>
               Termin erstellen
             </Button>
 

@@ -16,21 +16,23 @@ type ServiceOption = {
 };
 
 export default function CustomerAppointmentLauncher({
+  customerProfileId,
   customerName,
   customerPhone,
   customerTenantId,
   customerTenantLabel,
   services,
   buttonLabel = "Neuer Termin",
-  buttonVariant = "default",
+  buttonVariant = "primary",
 }: {
+  customerProfileId: string;
   customerName: string;
   customerPhone: string;
   customerTenantId: string | null;
   customerTenantLabel?: string | null;
   services: ServiceOption[];
   buttonLabel?: string;
-  buttonVariant?: "default" | "secondary";
+  buttonVariant?: "primary" | "secondary";
 }) {
   const [mounted, setMounted] = useState(false);
   const [createVisible, setCreateVisible] = useState(false);
@@ -64,12 +66,7 @@ export default function CustomerAppointmentLauncher({
 
   return (
     <>
-      <Button
-        type="button"
-        variant={buttonVariant}
-        size="sm"
-        onClick={() => setCreateVisible(true)}
-      >
+      <Button type="button" variant={buttonVariant} size="sm" onClick={() => setCreateVisible(true)}>
         {buttonLabel}
       </Button>
 
@@ -81,6 +78,7 @@ export default function CustomerAppointmentLauncher({
         tenants={tenantOptions}
         services={services}
         creatorTenantId={customerTenantId}
+        customerProfileId={customerProfileId}
         initialWalkInName={customerName}
         initialWalkInPhone={customerPhone}
         forceTenantId={customerTenantId}
