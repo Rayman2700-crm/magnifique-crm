@@ -53,7 +53,7 @@ function formatDate(value: string | null | undefined) {
 
 function fieldClassName() {
   return [
-    "mt-1 w-full rounded-xl border px-3 py-2.5",
+    "mt-1 w-full rounded-[16px] border px-4 py-3",
     "bg-black/30 text-white placeholder:text-white/35 border-white/10",
     "focus:outline-none focus:ring-2 focus:ring-white/15",
   ].join(" ");
@@ -61,11 +61,15 @@ function fieldClassName() {
 
 function badgeClassName(active: boolean) {
   return [
-    "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium",
+    "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold",
     active
-      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-      : "border-white/15 bg-white/5 text-white/70",
+      ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
+      : "border-white/10 bg-white/5 text-white/70",
   ].join(" ");
+}
+
+function statCardClassName() {
+  return "rounded-[24px] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.18)]";
 }
 
 function ServiceSheet({
@@ -245,18 +249,18 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
 
   return (
     <>
-      <section className="mt-6 rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+      <section className="mt-6 rounded-[28px] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-white">Service-Center</h2>
-            <p className="mt-1 text-sm text-white/60">
-              Kompakte Übersicht für <span className="text-white">{tenantName ?? "aktuellen Behandler"}</span>.
+            <h2 className="text-xl font-semibold text-[var(--text)]">Service-Center</h2>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
+              Kompakte Übersicht für <span className="text-[var(--text)]">{tenantName ?? "aktuellen Behandler"}</span>.
             </p>
           </div>
 
           <div className="flex flex-col gap-3 xl:flex-row xl:items-end">
             <div className="w-full xl:w-80">
-              <label className="text-xs font-medium uppercase tracking-[0.18em] text-white/45">Suche</label>
+              <label className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--text-muted)]">Suche</label>
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -266,7 +270,7 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
             </div>
 
             <div>
-              <div className="text-xs font-medium uppercase tracking-[0.18em] text-white/45">Status</div>
+              <div className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--text-muted)]">Status</div>
               <div className="mt-1 flex flex-wrap gap-2">
                 {[
                   { key: "active", label: `Aktiv (${counts.active})` },
@@ -280,7 +284,7 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
                       type="button"
                       onClick={() => setStatus(item.key as StatusFilter)}
                       className={[
-                        "rounded-full border px-3 py-2 text-sm transition",
+                        "rounded-full border px-3 py-2 text-sm font-medium transition",
                         active
                           ? "border-white/30 bg-white text-black"
                           : "border-white/15 bg-transparent text-white hover:bg-white/5",
@@ -296,7 +300,7 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
             <button
               type="button"
               onClick={() => setCreateOpen(true)}
-              className="rounded-2xl bg-white px-4 py-2.5 font-medium text-black transition hover:opacity-90"
+              className="inline-flex h-12 items-center justify-center rounded-[18px] bg-white px-5 text-sm font-semibold text-black transition hover:opacity-90"
             >
               + Neue Dienstleistung
             </button>
@@ -305,32 +309,32 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
       </section>
 
       <section className="mt-6 grid gap-4 md:grid-cols-3">
-        <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
-          <div className="text-sm text-white/60">Aktive Dienstleistungen</div>
-          <div className="mt-2 text-3xl font-semibold text-white">{counts.active}</div>
+        <div className={statCardClassName()}>
+          <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Aktive Dienstleistungen</div>
+          <div className="mt-4 text-[30px] font-semibold leading-none tracking-tight text-[var(--text)]">{counts.active}</div>
         </div>
-        <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
-          <div className="text-sm text-white/60">Inaktive Dienstleistungen</div>
-          <div className="mt-2 text-3xl font-semibold text-white">{counts.inactive}</div>
+        <div className={statCardClassName()}>
+          <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Inaktive Dienstleistungen</div>
+          <div className="mt-4 text-[30px] font-semibold leading-none tracking-tight text-[var(--text)]">{counts.inactive}</div>
         </div>
-        <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
-          <div className="text-sm text-white/60">Treffer in Liste</div>
-          <div className="mt-2 text-3xl font-semibold text-white">{filteredServices.length}</div>
+        <div className={statCardClassName()}>
+          <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Treffer in Liste</div>
+          <div className="mt-4 text-[30px] font-semibold leading-none tracking-tight text-[var(--text)]">{filteredServices.length}</div>
         </div>
       </section>
 
-      <section className="mt-6 rounded-3xl border border-white/10 bg-white/[0.03] p-3 sm:p-4">
-        <div className="mb-3 flex items-center justify-between gap-3 px-2">
+      <section className="mt-6 rounded-[28px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] md:p-5">
+        <div className="mb-4 flex items-center justify-between gap-3 px-1">
           <div>
-            <h2 className="text-lg font-semibold text-white">Dienstleistungen</h2>
-            <p className="mt-1 text-sm text-white/60">
+            <h2 className="text-xl font-semibold text-[var(--text)]">Dienstleistungen</h2>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
               Kompakte Liste mit schnellen Aktionen statt großer Bearbeitungsblöcke.
             </p>
           </div>
         </div>
 
         {filteredServices.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-white/65">
+          <div className="rounded-[24px] border border-dashed border-white/10 bg-black/20 p-8 text-center text-sm text-white/65">
             Keine Dienstleistungen gefunden. Passe Suche oder Statusfilter an.
           </div>
         ) : (
@@ -340,7 +344,7 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
               return (
                 <article
                   key={service.id}
-                  className="rounded-2xl border border-white/10 bg-black/20 p-4 transition hover:border-white/20 hover:bg-black/25"
+                  className="rounded-[24px] border border-white/10 bg-black/20 p-4 transition hover:border-white/20 hover:bg-black/25 md:p-5"
                 >
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="min-w-0">
@@ -361,13 +365,13 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
                       ) : null}
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                      <form action={toggleServiceActive}>
+                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[160px]">
+                      <form action={toggleServiceActive} className="w-full">
                         <input type="hidden" name="service_id" value={service.id} />
                         <input type="hidden" name="next_active" value={active ? "0" : "1"} />
                         <button
                           type="submit"
-                          className="rounded-xl border border-white/15 px-3 py-2 text-sm text-white hover:bg-white/5"
+                          className="inline-flex h-10 w-full items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-3 text-sm font-semibold text-white transition hover:bg-white/10"
                         >
                           {active ? "Deaktivieren" : "Aktivieren"}
                         </button>
@@ -376,7 +380,7 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
                       <button
                         type="button"
                         onClick={() => setEditingServiceId(service.id)}
-                        className="rounded-xl bg-white px-3 py-2 text-sm font-medium text-black hover:opacity-90"
+                        className="inline-flex h-10 w-full items-center justify-center rounded-[16px] bg-white px-3 text-sm font-semibold text-black transition hover:opacity-90"
                       >
                         Bearbeiten
                       </button>

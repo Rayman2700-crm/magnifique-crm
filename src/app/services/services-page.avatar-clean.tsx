@@ -157,9 +157,6 @@ export default async function ServicesPage({
                 <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">
                   Dienstleistungen
                 </h1>
-                <p className="mt-2 max-w-3xl text-sm text-[var(--text-muted)]">
-                  Verwalte Services pro Behandler in einer kompakten, klaren Übersicht im gleichen Stil wie dein Kundenprofil.
-                </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-3 xl:justify-end">
@@ -197,18 +194,6 @@ export default async function ServicesPage({
               </div>
             </div>
           </div>
-
-          {params.success ? (
-            <div className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">
-              {decodeURIComponent(params.success)}
-            </div>
-          ) : null}
-
-          {params.error ? (
-            <div className="mt-5 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
-              {decodeURIComponent(params.error)}
-            </div>
-          ) : null}
 
           {!selectedTenantId ? (
             <section className="mt-6 rounded-[28px] border border-amber-400/20 bg-amber-400/10 p-5 text-amber-100 shadow-[0_18px_50px_rgba(0,0,0,0.18)]">

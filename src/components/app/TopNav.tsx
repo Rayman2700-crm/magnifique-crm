@@ -39,7 +39,7 @@ function getAvatarTheme(userLabel?: string) {
 
   const includesKey = Object.keys(tenantTheme).find((name) => {
     const key = name.toLowerCase();
-    return normalized.includes(key) || normalized.includes(key)
+    return normalized.includes(key);
   });
 
   return includesKey ? tenantTheme[includesKey as keyof typeof tenantTheme] : tenantTheme.Radu;
@@ -59,6 +59,25 @@ function SettingsIcon() {
     >
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82L4.21 7.1a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c0 .66.39 1.26 1 1.51.16.07.34.11.51.11H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+    </svg>
+  );
+}
+
+function MenuIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="h-[18px] w-[18px]"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M4 7h16" />
+      <path d="M4 12h16" />
+      <path d="M4 17h16" />
     </svg>
   );
 }
@@ -388,6 +407,176 @@ function SettingsMenuPopover({
   );
 }
 
+function MobileNavDrawer({
+  open,
+  shown,
+  onClose,
+  items,
+  pathname,
+  openChat,
+  openReminders,
+  openWaitlist,
+  unreadCount,
+  liveReminderCount,
+  liveWaitlistCount,
+  chatPulse,
+  reminderPulse,
+  waitlistPulse,
+}: {
+  open: boolean;
+  shown: boolean;
+  onClose: () => void;
+  items: { href: string; label: string }[];
+  pathname: string | null;
+  openChat: () => void;
+  openReminders: () => void;
+  openWaitlist: () => void;
+  unreadCount: number;
+  liveReminderCount: number;
+  liveWaitlistCount: number;
+  chatPulse: boolean;
+  reminderPulse: boolean;
+  waitlistPulse: boolean;
+}) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = "";
+    };
+  }, [open, onClose]);
+
+  if (!mounted || !open || typeof document === "undefined") return null;
+
+  const itemClass =
+    "flex w-full items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-left text-sm font-medium text-white/90 transition hover:bg-white/[0.08]";
+
+  return createPortal(
+    <div style={{ position: "fixed", inset: 0, zIndex: 1180, isolation: "isolate" }}>
+      <div
+        onClick={onClose}
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundColor: "rgba(0,0,0,0.60)",
+          backdropFilter: "blur(6px)",
+          opacity: shown ? 1 : 0,
+          transition: "opacity 200ms ease",
+        }}
+      />
+
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          bottom: 0,
+          width: "min(360px, calc(100vw - 20px))",
+          transform: shown ? "translateX(0)" : "translateX(-24px)",
+          opacity: shown ? 1 : 0,
+          transition: "transform 220ms ease, opacity 220ms ease",
+          borderRight: "1px solid rgba(255,255,255,0.08)",
+          background: "rgb(9,9,11)",
+          color: "white",
+          boxShadow: "12px 0 40px rgba(0,0,0,0.45)",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <div className="flex items-center justify-between border-b border-white/10 p-4">
+          <div>
+            <div className="text-xs uppercase tracking-[0.16em] text-white/45">Navigation</div>
+            <div className="mt-1 text-lg font-semibold text-white">Clientique Menü</div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/80"
+            aria-label="Menü schließen"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-3 overflow-y-auto p-4">
+          {items.map((item) => {
+            const isChat = item.href === "/dashboard/chat";
+            const active = isChat
+              ? pathname?.startsWith("/dashboard/chat")
+              : item.href === "/dashboard"
+                ? pathname === "/dashboard"
+                : pathname?.startsWith(item.href);
+
+            if (isChat) {
+              return (
+                <button
+                  key={item.href}
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    openChat();
+                  }}
+                  className={cn(itemClass, active && "border-white/20 bg-white/[0.08]")}
+                >
+                  <span>Team Chat</span>
+                  {unreadCount > 0 ? <BrandBadge count={unreadCount} pulse={chatPulse} /> : null}
+                </button>
+              );
+            }
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onClose}
+                className={cn(itemClass, active && "border-white/20 bg-white/[0.08]")}
+              >
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              openReminders();
+            }}
+            className={itemClass}
+          >
+            <span>Reminder</span>
+            {liveReminderCount > 0 ? <BrandBadge count={liveReminderCount} pulse={reminderPulse} /> : null}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              openWaitlist();
+            }}
+            className={itemClass}
+          >
+            <span>Warteliste</span>
+            {liveWaitlistCount > 0 ? <BrandBadge count={liveWaitlistCount} pulse={waitlistPulse} /> : null}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 export function TopNav({
   userLabel,
   userEmail,
@@ -423,6 +612,8 @@ export function TopNav({
   const [userMenuShown, setUserMenuShown] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [settingsMenuShown, setSettingsMenuShown] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileMenuShown, setMobileMenuShown] = useState(false);
   const [avatarHovered, setAvatarHovered] = useState(false);
   const [logoHovered, setLogoHovered] = useState(false);
 
@@ -458,6 +649,12 @@ export function TopNav({
     const t = window.setTimeout(() => setSettingsMenuShown(true), 10);
     return () => window.clearTimeout(t);
   }, [settingsMenuOpen]);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const t = window.setTimeout(() => setMobileMenuShown(true), 10);
+    return () => window.clearTimeout(t);
+  }, [mobileMenuOpen]);
 
   useEffect(() => {
     const styleId = "topnav-badge-pulse-style";
@@ -686,12 +883,18 @@ export function TopNav({
     window.setTimeout(() => setSettingsMenuOpen(false), 160);
   }
 
+  function closeMobileMenu() {
+    setMobileMenuShown(false);
+    window.setTimeout(() => setMobileMenuOpen(false), 160);
+  }
+
   function toggleSettingsMenu() {
     if (settingsMenuOpen) {
       closeSettingsMenu();
       return;
     }
 
+    closeMobileMenu();
     setUserMenuShown(false);
     setUserMenuOpen(false);
     setSettingsMenuOpen(true);
@@ -715,15 +918,15 @@ export function TopNav({
   const showGoogleSetupAlert = googleSetupAlertCount > 0;
 
   const pillClass =
-    "clientique-nav-pill inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[var(--text-muted)] hover:border-[rgba(255,255,255,0.08)] hover:bg-white/[0.04] hover:text-[var(--text)]";
+    "clientique-nav-pill shrink-0 inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[var(--text-muted)] hover:border-[rgba(255,255,255,0.08)] hover:bg-white/[0.04] hover:text-[var(--text)]";
 
   return (
     <div className="clientique-topbar sticky top-0 z-40">
-      <div className="mx-auto flex h-[74px] max-w-[1240px] items-center justify-between px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-3 lg:gap-6">
+      <div className="mx-auto flex h-[74px] max-w-[1240px] items-center justify-between px-3 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3 lg:gap-6">
           <Link
             href="/dashboard"
-            className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
+            className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full sm:h-12 sm:w-12"
             aria-label="Dashboard"
             onMouseEnter={() => setLogoHovered(true)}
             onMouseLeave={() => setLogoHovered(false)}
@@ -750,7 +953,21 @@ export function TopNav({
             </span>
           </Link>
 
-          <nav className="hidden items-center gap-1 sm:flex">
+          <button
+            type="button"
+            onClick={() => {
+              closeSettingsMenu();
+              closeUserMenu();
+              setMobileMenuOpen(true);
+            }}
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-[var(--text-muted)] hover:bg-white/[0.06] hover:text-[var(--text)] sm:hidden"
+            aria-label="Menü öffnen"
+            title="Menü"
+          >
+            <MenuIcon />
+          </button>
+
+          <nav className="hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto sm:flex">
             {nav.map((item) => {
               const isChat = item.href === "/dashboard/chat";
               const active = isChat
@@ -810,14 +1027,14 @@ export function TopNav({
           </nav>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          {rightSlot}
+        <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
+          <div className="hidden sm:block">{rightSlot}</div>
 
           <button
             type="button"
             onClick={toggleSettingsMenu}
             className={cn(
-              "relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-[var(--text-muted)] hover:bg-white/[0.06] hover:text-[var(--text)]",
+              "relative inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-[var(--text-muted)] hover:bg-white/[0.06] hover:text-[var(--text)] sm:h-11 sm:w-11",
               (settingsMenuOpen || googleSetupActive) && "bg-[var(--primary-soft)] text-[var(--text)]"
             )}
             aria-label="Einstellungen"
@@ -835,13 +1052,14 @@ export function TopNav({
             type="button"
             onClick={() => {
               closeSettingsMenu();
+              closeMobileMenu();
               setUserMenuOpen(true);
             }}
             onMouseEnter={() => setAvatarHovered(true)}
             onMouseLeave={() => setAvatarHovered(false)}
             onFocus={() => setAvatarHovered(true)}
             onBlur={() => setAvatarHovered(false)}
-            className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
+            className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full sm:h-12 sm:w-12"
             style={{
               transition: "transform 180ms ease, box-shadow 180ms ease",
               transform: avatarHovered ? "scale(1.04)" : "scale(1)",
@@ -867,6 +1085,23 @@ export function TopNav({
           </button>
         </div>
       </div>
+
+      <MobileNavDrawer
+        open={mobileMenuOpen}
+        shown={mobileMenuShown}
+        onClose={closeMobileMenu}
+        items={nav}
+        pathname={pathname}
+        openChat={openChat}
+        openReminders={openReminders}
+        openWaitlist={openWaitlist}
+        unreadCount={unreadCount}
+        liveReminderCount={liveReminderCount}
+        liveWaitlistCount={liveWaitlistCount}
+        chatPulse={chatPulse}
+        reminderPulse={reminderPulse}
+        waitlistPulse={waitlistPulse}
+      />
 
       <SettingsMenuPopover
         open={settingsMenuOpen}

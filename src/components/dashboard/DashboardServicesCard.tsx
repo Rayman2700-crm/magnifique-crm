@@ -111,12 +111,12 @@ function ServiceQuickCreateSlideover({
       <div
         style={{
           position: "absolute",
-          top: 18,
-          right: 18,
-          bottom: 18,
+          top: 10,
+          right: 10,
+          bottom: 10,
           width: 470,
-          maxWidth: "calc(100vw - 36px)",
-          borderRadius: 18,
+          maxWidth: "calc(100vw - 20px)",
+          borderRadius: 20,
           border: "1px solid rgba(255,255,255,0.12)",
           background: "linear-gradient(180deg, rgba(16,16,16,0.92) 0%, rgba(10,10,10,0.92) 100%)",
           boxShadow: "0 18px 60px rgba(0,0,0,0.55)",
@@ -293,7 +293,7 @@ export default function DashboardServicesCard({
   return (
     <>
       <Card className="h-full min-w-0 border-[var(--border)] bg-[var(--surface)] transition hover:border-white/20 hover:bg-white/[0.03]">
-        <CardContent className="flex h-full min-h-[132px] flex-col justify-between p-5">
+        <CardContent className="flex h-full min-h-[132px] flex-col justify-between gap-4 p-5 sm:min-h-[144px] sm:p-6">
           <div className="min-w-0 text-center">
             <div className="truncate text-[13px] font-semibold leading-4 text-white">
               Dienstleistungen
@@ -312,12 +312,12 @@ export default function DashboardServicesCard({
             </div>
           </div>
 
-          <div className="mt-3 flex items-center justify-center gap-2">
-            <button type="button" onClick={() => setOpen(true)}>
+          <div className="mt-2 flex flex-col items-stretch justify-center gap-2 sm:mt-3 sm:flex-row sm:items-center">
+            <button type="button" onClick={() => setOpen(true)} className="w-full sm:w-auto">
               <ServicesActionPill label="+ Neu" />
             </button>
 
-            <Link href="/services">
+            <Link href="/services" className="w-full sm:w-auto">
               <ServicesActionPill label="Öffnen" />
             </Link>
           </div>

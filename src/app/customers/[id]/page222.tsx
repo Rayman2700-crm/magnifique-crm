@@ -353,7 +353,7 @@ function ContactButton({
   variant?: "dark" | "whatsapp";
 }) {
   const baseStyle =
-    "inline-flex h-[38px] w-full items-center justify-center whitespace-nowrap rounded-[12px] px-[14px] text-[13px] font-extrabold no-underline border";
+    "inline-flex h-[38px] items-center justify-center whitespace-nowrap rounded-[12px] px-[14px] text-[13px] font-extrabold no-underline border";
 
   const className =
     variant === "whatsapp"
@@ -697,7 +697,7 @@ export default async function CustomerDetailPage({
                     <div className="mt-2 break-all text-base font-semibold text-[var(--text)]">
                       {person?.phone || "—"}
                     </div>
-                    <div className="mt-4 flex flex-col gap-2">
+                    <div className="mt-4 flex flex-wrap gap-2">
                       {person?.phone ? (
                         <>
                           <ContactButton
@@ -723,7 +723,7 @@ export default async function CustomerDetailPage({
                     <div className="mt-2 break-all text-base font-semibold text-[var(--text)]">
                       {person?.email || "—"}
                     </div>
-                    <div className="mt-4 w-full">
+                    <div className="mt-4">
                       {person?.email ? (
                         <ContactButton
                           label="E-Mail schreiben"
@@ -748,10 +748,10 @@ export default async function CustomerDetailPage({
                       {fmtDateTimeOrDash(intakeCreatedAt)}
                     </div>
                     <div className="mt-4">
-                      <Link href={`/customers/${customerProfileId}/intake`} className="inline-flex w-full">
+                      <Link href={`/customers/${customerProfileId}/intake`} className="inline-flex">
                         <button
                           type="button"
-                          className="inline-flex h-9 w-full items-center justify-center rounded-[14px] border px-3 text-sm font-semibold"
+                          className="inline-flex h-9 items-center justify-center rounded-[14px] border px-3 text-sm font-semibold"
                           style={
                             intakeIsDone
                               ? {
@@ -885,18 +885,15 @@ export default async function CustomerDetailPage({
                             </div>
                           </div>
 
-                          <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[140px] lg:justify-end">
-                            <AppointmentEditLauncher
-                              appointmentId={appointment.id}
-                              startAt={appointment.start_at}
-                              endAt={appointment.end_at}
-                              notesInternal={appointment.notes_internal}
-                            />
+                          <div className="flex flex-wrap gap-2 lg:justify-end">
+                            <Link href={`/customers/${customerProfileId}/appointments/${appointment.id}/edit`}>
+                              <Button variant="secondary" size="sm">Bearbeiten</Button>
+                            </Link>
 
-                            <form action={deleteAppointment.bind(null, customerProfileId, appointment.id)} className="w-full">
+                            <form action={deleteAppointment.bind(null, customerProfileId, appointment.id)}>
                               <button
                                 type="submit"
-                                className="inline-flex h-9 w-full items-center justify-center rounded-[14px] border border-red-400/25 bg-red-400/10 px-3 text-sm text-red-200"
+                                className="inline-flex h-9 items-center justify-center rounded-[14px] border border-red-400/25 bg-red-400/10 px-3 text-sm text-red-200"
                               >
                                 Löschen
                               </button>

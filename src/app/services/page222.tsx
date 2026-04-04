@@ -30,35 +30,6 @@ type ServiceRow = {
   updated_at: string | null;
 };
 
-type TenantAvatarOption = TenantOption & {
-  shortLabel: string;
-  ringClassName: string;
-};
-
-function toShortLabel(value: string | null, fallback: string) {
-  const source = String(value ?? "").trim() || fallback;
-  const parts = source.split(/\s+/).filter(Boolean);
-
-  if (parts.length === 1) {
-    return parts[0].slice(0, 2).toUpperCase();
-  }
-
-  return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
-}
-
-function avatarRingClassName(index: number) {
-  const styles = [
-    "border-white/20",
-    "border-sky-400/60",
-    "border-fuchsia-400/70",
-    "border-emerald-400/70",
-    "border-orange-400/70",
-    "border-violet-400/70",
-  ];
-
-  return styles[index % styles.length];
-}
-
 export default async function ServicesPage({
   searchParams,
 }: {
@@ -132,12 +103,6 @@ export default async function ServicesPage({
     services = (serviceRows ?? []) as ServiceRow[];
   }
 
-  const tenantAvatarOptions: TenantAvatarOption[] = tenantOptions.map((tenant, index) => ({
-    ...tenant,
-    shortLabel: toShortLabel(tenant.display_name, tenant.id),
-    ringClassName: avatarRingClassName(index),
-  }));
-
   return (
     <main className="mx-auto max-w-7xl p-4 md:p-6 xl:p-8">
       <section className="overflow-hidden rounded-[32px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
@@ -182,18 +147,31 @@ export default async function ServicesPage({
               </div>
             </div>
 
-            <div className="mt-5 rounded-[24px] border border-white/10 bg-black/20 px-4 py-4">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                Behandler auswählen
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              <div className="rounded-[22px] border border-white/10 bg-black/20 px-4 py-4">
+                <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Aktiver Behandler</div>
+                <div className="mt-2">
+                  <ServiceTenantSelect
+                    tenantOptions={tenantOptions}
+                    selectedTenantId={selectedTenantId}
+                    isAdmin={isAdmin}
+                    fallbackLabel={tenantName ?? "nicht gewählt"}
+                  />
+                </div>
               </div>
 
-              <div className="mt-4">
-                <ServiceTenantSelect
-                  tenantOptions={tenantAvatarOptions}
-                  selectedTenantId={selectedTenantId}
-                  isAdmin={isAdmin}
-                  fallbackLabel={tenantName ?? "nicht gewählt"}
-                />
+              <div className="rounded-[22px] border border-white/10 bg-black/20 px-4 py-4">
+                <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Rolle</div>
+                <div className="mt-2 text-base font-semibold text-[var(--text)]">
+                  {isAdmin ? "Admin" : "Behandler"}
+                </div>
+              </div>
+
+              <div className="rounded-[22px] border border-white/10 bg-black/20 px-4 py-4">
+                <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Dienstleistungen</div>
+                <div className="mt-2 text-base font-semibold text-[var(--text)]">
+                  {selectedTenantId ? services.length : 0}
+                </div>
               </div>
             </div>
           </div>

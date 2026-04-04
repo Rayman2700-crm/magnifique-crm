@@ -3,8 +3,8 @@ import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getEffectiveTenantId } from "@/lib/effectiveTenant";
+import { setActiveServiceTenant } from "./actions";
 import ServicesWorkspace from "./ServicesWorkspace";
-import ServiceTenantSelect from "./ServiceTenantSelect";
 
 type UserProfileRow = {
   role: string | null;
@@ -30,33 +30,12 @@ type ServiceRow = {
   updated_at: string | null;
 };
 
-type TenantAvatarOption = TenantOption & {
-  shortLabel: string;
-  ringClassName: string;
-};
-
-function toShortLabel(value: string | null, fallback: string) {
-  const source = String(value ?? "").trim() || fallback;
-  const parts = source.split(/\s+/).filter(Boolean);
-
-  if (parts.length === 1) {
-    return parts[0].slice(0, 2).toUpperCase();
-  }
-
-  return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
-}
-
-function avatarRingClassName(index: number) {
-  const styles = [
-    "border-white/20",
-    "border-sky-400/60",
-    "border-fuchsia-400/70",
-    "border-emerald-400/70",
-    "border-orange-400/70",
-    "border-violet-400/70",
-  ];
-
-  return styles[index % styles.length];
+function adminSelectClassName() {
+  return [
+    "mt-1 w-full rounded-[16px] border px-4 py-3",
+    "bg-white text-black border-white/15",
+    "focus:outline-none focus:ring-2 focus:ring-white/20",
+  ].join(" ");
 }
 
 export default async function ServicesPage({
@@ -132,12 +111,6 @@ export default async function ServicesPage({
     services = (serviceRows ?? []) as ServiceRow[];
   }
 
-  const tenantAvatarOptions: TenantAvatarOption[] = tenantOptions.map((tenant, index) => ({
-    ...tenant,
-    shortLabel: toShortLabel(tenant.display_name, tenant.id),
-    ringClassName: avatarRingClassName(index),
-  }));
-
   return (
     <main className="mx-auto max-w-7xl p-4 md:p-6 xl:p-8">
       <section className="overflow-hidden rounded-[32px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
@@ -182,18 +155,26 @@ export default async function ServicesPage({
               </div>
             </div>
 
-            <div className="mt-5 rounded-[24px] border border-white/10 bg-black/20 px-4 py-4">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                Behandler auswählen
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              <div className="rounded-[22px] border border-white/10 bg-black/20 px-4 py-4">
+                <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Aktiver Behandler</div>
+                <div className="mt-2 text-base font-semibold text-[var(--text)]">
+                  {tenantName ?? "nicht gewählt"}
+                </div>
               </div>
 
-              <div className="mt-4">
-                <ServiceTenantSelect
-                  tenantOptions={tenantAvatarOptions}
-                  selectedTenantId={selectedTenantId}
-                  isAdmin={isAdmin}
-                  fallbackLabel={tenantName ?? "nicht gewählt"}
-                />
+              <div className="rounded-[22px] border border-white/10 bg-black/20 px-4 py-4">
+                <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Rolle</div>
+                <div className="mt-2 text-base font-semibold text-[var(--text)]">
+                  {isAdmin ? "Admin" : "Behandler"}
+                </div>
+              </div>
+
+              <div className="rounded-[22px] border border-white/10 bg-black/20 px-4 py-4">
+                <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Dienstleistungen</div>
+                <div className="mt-2 text-base font-semibold text-[var(--text)]">
+                  {selectedTenantId ? services.length : 0}
+                </div>
               </div>
             </div>
           </div>
@@ -208,6 +189,42 @@ export default async function ServicesPage({
             <div className="mt-5 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">
               {decodeURIComponent(params.error)}
             </div>
+          ) : null}
+
+          {isAdmin ? (
+            <section className="mt-6 rounded-[28px] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+              <div className="mb-4">
+                <h2 className="text-xl font-semibold text-[var(--text)]">Behandler auswählen</h2>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">
+                  Wähle den Behandler aus, für den du Dienstleistungen verwalten möchtest.
+                </p>
+              </div>
+
+              <form action={setActiveServiceTenant} className="flex flex-col gap-4 md:flex-row md:items-end">
+                <div className="w-full md:max-w-md">
+                  <label className="text-sm font-medium text-[var(--text)]">Behandler / Tenant</label>
+                  <select
+                    name="tenant"
+                    defaultValue={selectedTenantId ?? "all"}
+                    className={adminSelectClassName()}
+                  >
+                    <option value="all">Bitte auswählen</option>
+                    {tenantOptions.map((tenant) => (
+                      <option key={tenant.id} value={tenant.id}>
+                        {tenant.display_name ?? tenant.id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  type="submit"
+                  className="inline-flex h-12 items-center justify-center rounded-[18px] bg-white px-5 text-sm font-semibold text-black transition hover:opacity-90"
+                >
+                  Behandler übernehmen
+                </button>
+              </form>
+            </section>
           ) : null}
 
           {!selectedTenantId ? (

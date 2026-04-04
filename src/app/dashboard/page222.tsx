@@ -287,8 +287,8 @@ function DashboardStatCard({
   accentColor?: string;
 }) {
   const content = (
-    <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-      <CardContent className="flex min-h-[144px] flex-col justify-between gap-5 p-6">
+    <Card className="h-full min-w-0 border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
+      <CardContent className="flex min-h-[132px] flex-col justify-between gap-4 p-5 sm:min-h-[144px] sm:gap-5 sm:p-6">
         <div>
           <div className="text-sm font-medium text-[var(--text-muted)]">{label}</div>
           {subtext ? <div className="mt-1 text-xs text-white/45">{subtext}</div> : null}
@@ -313,8 +313,8 @@ function DashboardStatCard({
 
 function InvoiceCreateCard() {
   return (
-    <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-      <CardContent className="flex min-h-[144px] flex-col justify-between gap-5 p-6">
+    <Card className="h-full min-w-0 border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
+      <CardContent className="flex min-h-[132px] flex-col justify-between gap-4 p-5 sm:min-h-[144px] sm:gap-5 sm:p-6">
         <div>
           <div className="text-sm font-medium text-[var(--text-muted)]">Rechnungen</div>
           <div className="mt-1 text-xs text-white/45">Neue Rechnung direkt starten</div>
@@ -785,35 +785,43 @@ export default async function DashboardPage() {
     <div className="space-y-8">
       <section>
         <Card className="overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
-          <CardContent className="p-6 md:p-8">
-            <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-6 md:p-7">
-              <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-5">
+          <CardContent className="p-4 sm:p-5 md:p-6 xl:p-8">
+            <div className="rounded-[24px] sm:rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 sm:p-5 md:p-6 xl:p-7">
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex min-w-0 items-center gap-4 sm:gap-5">
                   <div
-                    className="flex h-[88px] w-[88px] items-center justify-center overflow-hidden rounded-[24px] border-[4px] shadow-[0_0_0_2px_rgba(11,11,12,0.9)]"
+                    className="relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-[22px] border-[4px] shadow-[0_0_0_2px_rgba(11,11,12,0.9)] sm:h-[88px] sm:w-[88px] sm:rounded-[24px]"
                     style={{ borderColor: profileTheme.border, background: profileTheme.bg }}
                   >
-                    <img
-                      src={`/users/${user?.id}.png`}
-                      alt="Benutzerfoto"
-                      className="h-full w-full object-cover"
-                    />
+                    {user?.id ? (
+                      <div
+                        aria-label="Benutzerfoto"
+                        className="absolute inset-0 bg-center bg-cover bg-no-repeat"
+                        style={{ backgroundImage: `url(/users/${user.id}.png)` }}
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <span className="text-lg font-semibold text-[var(--text)] sm:text-xl">
+                          {getInitials(displayName)}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="min-w-0">
                     <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">
                       Clientique Dashboard
                     </div>
-                    <div className="mt-2 truncate text-[30px] font-semibold leading-none tracking-tight text-[var(--text)]">
+                    <div className="mt-2 truncate text-[24px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[30px]">
                       {displayName}
                     </div>
-                    <div className="mt-2 text-sm text-[var(--text-muted)]">
+                    <div className="mt-2 text-xs text-[var(--text-muted)] sm:text-sm">
                       {tenantDisplayName ?? "Studioansicht"}
                     </div>
                   </div>
                 </div>
 
-                <div className="rounded-[24px] border border-white/10 bg-black/20 px-5 py-4 sm:min-w-[210px]">
+                <div className="rounded-[22px] border border-white/10 bg-black/20 px-4 py-4 sm:px-5 sm:min-w-[210px] lg:self-stretch lg:min-w-[220px]">
                   <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Heute</div>
                   <div className="mt-2 text-base font-medium text-[var(--text)]">{currentDateLabel}</div>
                   <div className="mt-1 text-sm text-[var(--primary)]">{currentTimeLabel} Uhr</div>
@@ -821,7 +829,7 @@ export default async function DashboardPage() {
               </div>
             </div>
 
-            <div className="mt-7 grid gap-5 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
+            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xl:gap-5">
               <DashboardStatCard label="Termine heute" value={String(todayCount)} subtext="Heute im Plan" />
               <DashboardStatCard label="Termine Woche" value={String(weekCount)} subtext="Diese Woche" />
               <DashboardStatCard label="Kunden gesamt" value={String(customersCount)} subtext="Gespeicherte Profile" />
@@ -873,154 +881,6 @@ export default async function DashboardPage() {
         isAdmin={isAdmin}
       />
 
-      <section className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
-        <Card className="border-[var(--border)] bg-[var(--surface)]">
-          <CardContent className="p-5 md:p-6">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-xl font-semibold text-[var(--text)]">Nächste Termine heute</div>
-                <div className="mt-1 text-sm text-[var(--text-muted)]">
-                  Die nächsten Einträge für den laufenden Tag.
-                </div>
-              </div>
-              <Link href="/calendar">
-                <Button variant="secondary" size="sm">Zum Kalender</Button>
-              </Link>
-            </div>
-
-            <div className="mt-5 space-y-3">
-              {todayAppointments.length === 0 ? (
-                <div className="rounded-[22px] border border-dashed border-white/10 bg-black/20 p-6 text-sm text-[var(--text-muted)]">
-                  Für heute sind noch keine Termine angelegt.
-                </div>
-              ) : (
-                todayAppointments.map((appointment) => {
-                  const tenant = firstJoin(appointment.tenant);
-                  const person = firstJoin(appointment.person);
-                  const customerName = person?.full_name ?? "Walk-in";
-                  const customerPhone = person?.phone ?? "";
-                  const theme = tenantTheme(tenant?.display_name ?? "");
-
-                  return (
-                    <div
-                      key={appointment.id}
-                      className="rounded-[24px] border p-4 md:p-5"
-                      style={{ backgroundColor: theme.bg, borderColor: theme.border }}
-                    >
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                        <div className="flex min-w-0 items-start gap-4">
-                          <div
-                            className="rounded-[18px] border px-4 py-3 text-center"
-                            style={{ borderColor: theme.border, backgroundColor: "rgba(255,255,255,0.06)" }}
-                          >
-                            <div className="text-[20px] font-bold leading-none" style={{ color: theme.text }}>
-                              {formatTime(appointment.start_at)}
-                            </div>
-                            <div className="mt-2 text-[11px] uppercase tracking-[0.14em]" style={{ color: theme.subText }}>
-                              bis {formatTime(appointment.end_at)}
-                            </div>
-                          </div>
-
-                          <div className="min-w-0">
-                            <div className="truncate text-lg font-semibold" style={{ color: theme.text }}>
-                              {parseTitle(appointment.notes_internal)}
-                            </div>
-                            <div className="mt-1 truncate text-sm" style={{ color: theme.text }}>
-                              {customerName}
-                            </div>
-                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs" style={{ color: theme.subText }}>
-                              <Badge className="border border-white/10 bg-white/10 text-white">{tenant?.display_name ?? "Behandler"}</Badge>
-                              {customerPhone ? <span>{customerPhone}</span> : null}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2 lg:justify-end">
-                          {customerPhone ? (
-                            <Link href={`/customers?q=${encodeURIComponent(customerPhone)}`}>
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                className="border-white/15 bg-white/10 text-white hover:bg-white/15"
-                              >
-                                Kunde öffnen
-                              </Button>
-                            </Link>
-                          ) : null}
-
-                          <Link href="/calendar">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="bg-white/10 text-white hover:bg-white/15"
-                            >
-                              Plan ansehen
-                            </Button>
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-[var(--border)] bg-[var(--surface)]">
-          <CardContent className="p-5 md:p-6">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-xl font-semibold text-[var(--text)]">Neue Kunden</div>
-                <div className="mt-1 text-sm text-[var(--text-muted)]">Zuletzt angelegte Kundenprofile.</div>
-              </div>
-              <Link href="/customers">
-                <Button variant="secondary" size="sm">Alle Kunden</Button>
-              </Link>
-            </div>
-
-            <div className="mt-5 space-y-3">
-              {recentCustomers.length === 0 ? (
-                <div className="rounded-[22px] border border-dashed border-white/10 bg-black/20 p-6 text-sm text-[var(--text-muted)]">
-                  Noch keine Kunden im System.
-                </div>
-              ) : (
-                recentCustomers.map((customer) => {
-                  const person = firstJoin(customer.person);
-                  const tenant = firstJoin(customer.tenant);
-                  const name = person?.full_name ?? customer.display_name ?? "Unbekannter Kunde";
-                  const phone = person?.phone ?? "Kein Telefon";
-
-                  return (
-                    <Link
-                      key={customer.id}
-                      href={`/customers?q=${encodeURIComponent(person?.phone ?? name)}`}
-                      className="flex items-center gap-3 rounded-[22px] border border-white/10 bg-black/20 p-3.5 transition hover:border-white/20 hover:bg-black/30"
-                    >
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/5 text-sm font-semibold text-[var(--text)]">
-                        {getInitials(name)}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-semibold text-[var(--text)]">{name}</div>
-                        <div className="truncate text-xs text-[var(--text-muted)]">{phone}</div>
-                      </div>
-                      <div className="text-right text-xs text-white/45">
-                        <div>{tenant?.display_name ?? "—"}</div>
-                        <div className="mt-1">
-                          {new Intl.DateTimeFormat("de-AT", {
-                            day: "2-digit",
-                            month: "2-digit",
-                          }).format(new Date(customer.created_at))}
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </section>
 
       <OpenSlotsSlideover items={openSlotItems} />
       <WaitlistSlideover items={waitlistItems} />

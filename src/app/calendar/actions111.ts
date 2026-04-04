@@ -815,7 +815,6 @@ export async function updateAppointmentFromCalendar(appointmentId: string, formD
   const durationMin = Number(formData.get("duration") ?? 0);
   const notes = String(formData.get("notes") ?? "").trim();
   const status = normalizeStatus(String(formData.get("status") ?? "scheduled"));
-  const bufferFromForm = Number(formData.get("buffer") ?? 0);
   const returnToRaw = String(formData.get("returnTo") ?? "").trim();
 
   const baseReturnUrl = returnToRaw || "/calendar";
@@ -842,8 +841,7 @@ export async function updateAppointmentFromCalendar(appointmentId: string, formD
   }
 
   const bufferRaw = readLineValue(existing.notes_internal, "Buffer:");
-  const parsedExistingBuffer = Number(String(bufferRaw).replace(/[^\d]/g, "") || 0);
-  const bufferMin = Number.isFinite(bufferFromForm) && bufferFromForm >= 0 ? bufferFromForm : parsedExistingBuffer;
+  const bufferMin = Number(String(bufferRaw).replace(/[^\d]/g, "") || 0);
   const walkInName = readLineValue(existing.notes_internal, "Walk-in Name:");
   const walkInPhone = readLineValue(existing.notes_internal, "Walk-in Telefon:");
 
