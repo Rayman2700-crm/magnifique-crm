@@ -11,7 +11,6 @@ import { tenantTheme } from "@/lib/theme/tenantTheme";
 const nav = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/customers", label: "Kunden" },
-  { href: "/calendar", label: "Kalender" },
   { href: "/services", label: "Dienstleistungen" },
   { href: "/dashboard/chat", label: "Team Chat" },
 ];
@@ -25,11 +24,25 @@ type ChatMessageRow = {
 function getAvatarTheme(userLabel?: string) {
   if (!userLabel) return tenantTheme.Radu;
 
-  const key = Object.keys(tenantTheme).find(
-    (name) => name.toLowerCase() === userLabel.toLowerCase()
-  );
+  const normalized = userLabel.trim().toLowerCase();
+  const firstWord = normalized.split(/\s+/)[0] ?? normalized;
 
-  return key ? tenantTheme[key as keyof typeof tenantTheme] : tenantTheme.Radu;
+  const exactKey = Object.keys(tenantTheme).find(
+    (name) => name.toLowerCase() === normalized
+  );
+  if (exactKey) return tenantTheme[exactKey as keyof typeof tenantTheme];
+
+  const firstWordKey = Object.keys(tenantTheme).find(
+    (name) => name.toLowerCase() === firstWord
+  );
+  if (firstWordKey) return tenantTheme[firstWordKey as keyof typeof tenantTheme];
+
+  const includesKey = Object.keys(tenantTheme).find((name) => {
+    const key = name.toLowerCase();
+    return normalized.includes(key) || normalized.includes(key)
+  });
+
+  return includesKey ? tenantTheme[includesKey as keyof typeof tenantTheme] : tenantTheme.Radu;
 }
 
 function SettingsIcon() {

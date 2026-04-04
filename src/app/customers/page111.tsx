@@ -3,6 +3,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { setAdminTenant } from "@/app/admin/actions";
 import { getAdminTenantCookie, getEffectiveTenantId } from "@/lib/effectiveTenant";
+import AdminTenantSelect from "./AdminTenantSelect";
 import DeleteCustomerButton from "./DeleteCustomerButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -139,179 +140,6 @@ function getUserShortCode(tenantLabel: string) {
   return "—";
 }
 
-
-
-function normalizeTenantPersonKey(value: string) {
-  const label = (value || "").toLowerCase();
-
-  if (label.includes("radu")) return "radu";
-  if (label.includes("raluca")) return "raluca";
-  if (label.includes("alexandra")) return "alexandra";
-  if (label.includes("barbara")) return "barbara";
-
-  return "";
-}
-
-function getTenantDisplayLabel(tenantLabel: string) {
-  const key = normalizeTenantPersonKey(tenantLabel);
-
-  if (key === "radu") return "Radu";
-  if (key === "raluca") return "Raluca";
-  if (key === "alexandra") return "Alexandra";
-  if (key === "barbara") return "Barbara";
-
-  const first = (tenantLabel || "").trim().split(/\s+/)[0] || "—";
-  return first;
-}
-
-function getTenantAvatarRing(tenantLabel: string) {
-  const theme = tenantThemeByName(tenantLabel);
-  return {
-    ring: theme.accent,
-    glow: theme.border,
-  };
-}
-
-function buildOrderedTenantOptions(
-  options: { tenant_id: string; label: string; user_id: string | null }[]
-) {
-  const mapped = [...options].map((option) => ({
-    ...option,
-    normalizedLabel: option.label || "Behandler",
-    displayLabel: getTenantDisplayLabel(option.label),
-    ringColor: getTenantAvatarRing(option.label).ring,
-    shortCode: getUserShortCode(option.label),
-  }));
-
-  const order = ["radu", "raluca", "alexandra", "barbara"];
-
-  mapped.sort((a, b) => {
-    const ai = order.findIndex((key) => a.normalizedLabel.toLowerCase().includes(key));
-    const bi = order.findIndex((key) => b.normalizedLabel.toLowerCase().includes(key));
-
-    if (ai !== -1 || bi !== -1) {
-      return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
-    }
-
-    return a.normalizedLabel.localeCompare(b.normalizedLabel);
-  });
-
-  return mapped;
-}
-
-function AdminTenantAvatarPicker({
-  current,
-  options,
-  action,
-}: {
-  current: string;
-  options: { tenant_id: string; label: string; user_id: string | null }[];
-  action: (formData: FormData) => Promise<void>;
-}) {
-  const orderedOptions = buildOrderedTenantOptions(options);
-
-  return (
-    <div className="flex flex-wrap items-start gap-5">
-      <form action={action}>
-        <input type="hidden" name="tenantId" value="all" />
-        <button
-          type="submit"
-          className="flex flex-col items-center gap-2 transition-opacity opacity-100 hover:opacity-100"
-          title="Alle Kunden anzeigen"
-        >
-          <div
-            className="relative overflow-hidden rounded-full flex items-center justify-center text-sm font-extrabold"
-            style={{
-              width: 56,
-              height: 56,
-              border: "4px solid rgba(255,255,255,0.55)",
-              boxShadow: "0 12px 26px rgba(0,0,0,0.32)",
-              background: "rgba(255,255,255,0.96)",
-              color: "#000",
-            }}
-          >
-            Alle
-          </div>
-
-          <div
-            className={`px-3 py-1.5 rounded-full text-sm font-semibold ${
-              current === "all"
-                ? "border border-white bg-white text-black"
-                : "border border-white/10 bg-black/25 text-white/90"
-            }`}
-            style={{ backdropFilter: "blur(8px)", lineHeight: 1 }}
-          >
-            Alle
-          </div>
-        </button>
-      </form>
-
-      {orderedOptions.map((entry) => {
-        const active = current === entry.tenant_id;
-
-        return (
-          <form key={entry.tenant_id} action={action}>
-            <input type="hidden" name="tenantId" value={entry.tenant_id} />
-            <button
-              type="submit"
-              className="flex flex-col items-center gap-2 transition-opacity opacity-100 hover:opacity-100"
-              title={`${entry.displayLabel} anzeigen`}
-            >
-              <div
-                className="relative overflow-hidden rounded-full"
-                style={{
-                  width: 56,
-                  height: 56,
-                  border: `4px solid ${entry.ringColor}`,
-                  boxShadow: "0 12px 26px rgba(0,0,0,0.32)",
-                  background: "rgba(255,255,255,0.04)",
-                }}
-              >
-                {entry.user_id ? (
-                  <img
-                    src={`/users/${entry.user_id}.png`}
-                    alt={entry.displayLabel}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="h-full w-full flex items-center justify-center text-[13px] font-extrabold text-white/90">
-                    {entry.shortCode}
-                  </div>
-                )}
-
-                <div
-                  style={{
-                    position: "absolute",
-                    right: 3,
-                    bottom: 3,
-                    width: 10,
-                    height: 10,
-                    borderRadius: 999,
-                    backgroundColor: entry.ringColor,
-                    boxShadow: "0 0 0 2px rgba(0,0,0,0.65)",
-                  }}
-                />
-              </div>
-
-              <div
-                className={`px-3 py-1.5 rounded-full text-sm font-semibold ${
-                  active
-                    ? "border border-white bg-white text-black"
-                    : "border border-white/10 bg-black/25 text-white/90"
-                }`}
-                style={{ backdropFilter: "blur(8px)", lineHeight: 1 }}
-                title={entry.label}
-              >
-                {entry.displayLabel}
-              </div>
-            </button>
-          </form>
-        );
-      })}
-    </div>
-  );
-}
-
 function SummaryCard({
   label,
   value,
@@ -391,7 +219,7 @@ export default async function CustomersPage({
 
   const role = (profile?.role ?? "PRACTITIONER") as string;
 
-  let tenantOptions: { tenant_id: string; label: string; user_id: string | null }[] = [];
+  let tenantOptions: { tenant_id: string; label: string }[] = [];
   let currentAdminTenant = "all";
 
   if (role === "ADMIN") {
@@ -399,7 +227,7 @@ export default async function CustomersPage({
 
     const { data: practitioners } = await admin
       .from("user_profiles")
-      .select("user_id, tenant_id, calendar_tenant_id, full_name")
+      .select("tenant_id, calendar_tenant_id, full_name")
       .eq("role", "PRACTITIONER");
 
     const seen = new Set<string>();
@@ -412,10 +240,9 @@ export default async function CustomersPage({
         return {
           tenant_id: tenantId,
           label: (p?.full_name as string) || tenantId,
-          user_id: (p?.user_id as string | null) ?? null,
         };
       })
-      .filter((x): x is { tenant_id: string; label: string; user_id: string | null } => x !== null)
+      .filter((x): x is { tenant_id: string; label: string } => x !== null)
       .filter((x) => {
         if (seen.has(x.tenant_id)) return false;
         seen.add(x.tenant_id);
@@ -612,8 +439,8 @@ export default async function CustomersPage({
                 </p>
 
                 {role === "ADMIN" ? (
-                  <div className="mt-5 space-y-3">
-                    <AdminTenantAvatarPicker
+                  <div className="mt-4 space-y-2">
+                    <AdminTenantSelect
                       current={currentAdminTenant}
                       options={tenantOptions}
                       action={setAdminTenant}

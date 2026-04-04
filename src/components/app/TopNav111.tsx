@@ -6,11 +6,11 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { Logo } from "@/components/brand/Logo";
+import { tenantTheme } from "@/lib/theme/tenantTheme";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/customers", label: "Kunden" },
-  { href: "/calendar", label: "Kalender" },
   { href: "/services", label: "Dienstleistungen" },
   { href: "/dashboard/chat", label: "Team Chat" },
 ];
@@ -21,26 +21,14 @@ type ChatMessageRow = {
   created_at: string;
 };
 
-function getAvatarRingColor(userLabel?: string, currentUserId?: string) {
-  const normalized = `${userLabel ?? ""} ${currentUserId ?? ""}`.trim().toLowerCase();
+function getAvatarTheme(userLabel?: string) {
+  if (!userLabel) return tenantTheme.Radu;
 
-  if (normalized.includes("radu")) {
-    return "#3F51B5";
-  }
+  const key = Object.keys(tenantTheme).find(
+    (name) => name.toLowerCase() === userLabel.toLowerCase()
+  );
 
-  if (normalized.includes("raluca")) {
-    return "#7B1FA2";
-  }
-
-  if (normalized.includes("alexandra")) {
-    return "#0A8F08";
-  }
-
-  if (normalized.includes("barbara")) {
-    return "#F57C00";
-  }
-
-  return "#3F51B5";
+  return key ? tenantTheme[key as keyof typeof tenantTheme] : tenantTheme.Radu;
 }
 
 function SettingsIcon() {
@@ -51,7 +39,7 @@ function SettingsIcon() {
       className="h-[18px] w-[18px]"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.9"
       strokeLinecap="round"
       strokeLinejoin="round"
     >
@@ -68,27 +56,16 @@ function GoogleCalendarMark({ day }: { day: number }) {
       style={{
         width: 30,
         height: 30,
-        borderRadius: 7,
+        borderRadius: 8,
         overflow: "hidden",
         border: "1px solid rgba(255,255,255,0.10)",
         background: "#ffffff",
-        boxShadow: "0 8px 18px rgba(0,0,0,0.28)",
+        boxShadow: "0 10px 24px rgba(0,0,0,0.18)",
         flexShrink: 0,
       }}
     >
-      <div
-        style={{
-          height: 7,
-          background: "#4285F4",
-        }}
-      />
-      <div
-        style={{
-          height: 23,
-          display: "grid",
-          gridTemplateColumns: "6px 1fr",
-        }}
-      >
+      <div style={{ height: 7, background: "#4285F4" }} />
+      <div style={{ height: 23, display: "grid", gridTemplateColumns: "6px 1fr" }}>
         <div style={{ background: "#34A853" }} />
         <div
           style={{
@@ -113,6 +90,47 @@ function GoogleCalendarMark({ day }: { day: number }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function BrandBadge({
+  count,
+  tone = "blue",
+  pulse = false,
+}: {
+  count: number;
+  tone?: "blue" | "gold";
+  pulse?: boolean;
+}) {
+  if (count <= 0) return null;
+
+  const isGold = tone === "gold";
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minWidth: "22px",
+        height: "22px",
+        padding: "0 7px",
+        borderRadius: "999px",
+        background: isGold ? "#D6C3A3" : "#2563eb",
+        color: isGold ? "#0B0B0C" : "#fff",
+        fontSize: "12px",
+        fontWeight: 700,
+        lineHeight: "22px",
+        boxShadow: isGold
+          ? "0 0 0 2px rgba(11,11,12,0.82), 0 0 16px rgba(214,195,163,0.28)"
+          : "0 0 0 2px rgba(11,11,12,0.82), 0 0 12px rgba(37,99,235,0.42)",
+        transform: pulse ? "scale(1.08)" : "scale(1)",
+        transition: "transform 0.2s ease, box-shadow 0.2s ease",
+        animation: pulse ? "topnavBadgePulse 0.9s ease-in-out 3" : "none",
+      }}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
   );
 }
 
@@ -150,56 +168,43 @@ function UserMenuPopover({
 
   return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 1200, isolation: "isolate" }}>
-      <div
-        onClick={onClose}
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: "transparent",
-        }}
-      />
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "transparent" }} />
 
       <div
         style={{
           position: "absolute",
-          top: 62,
-          right: 24,
-          width: 290,
+          top: 72,
+          right: 20,
+          width: 300,
           maxWidth: "calc(100vw - 24px)",
-          borderRadius: 18,
+          borderRadius: 22,
           border: "1px solid rgba(255,255,255,0.10)",
           background:
-            "linear-gradient(180deg, rgba(58,58,64,0.98) 0%, rgba(24,24,28,0.98) 42%, rgba(18,18,22,0.98) 100%)",
-          boxShadow: "0 18px 60px rgba(0,0,0,0.45)",
+            "linear-gradient(180deg, rgba(28,28,31,0.98) 0%, rgba(18,19,22,0.98) 100%)",
+          boxShadow: "0 24px 70px rgba(0,0,0,0.44)",
           overflow: "hidden",
           transform: shown ? "translateY(0) scale(1)" : "translateY(-6px) scale(0.98)",
           opacity: shown ? 1 : 0,
           transformOrigin: "top right",
           transition: "transform 180ms ease, opacity 180ms ease",
-          backdropFilter: "blur(14px)",
+          backdropFilter: "blur(18px)",
         }}
       >
         <div
           style={{
-            padding: 14,
+            padding: 16,
             display: "flex",
             gap: 12,
             alignItems: "center",
-            background: "rgba(255,255,255,0.06)",
+            background: "rgba(255,255,255,0.04)",
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
           }}
         >
           <img
             src={`/users/${currentUserId}.png`}
             alt="Benutzerfoto"
-            className="shrink-0 rounded-xl border border-white/10 object-cover"
-            style={{
-              width: 44,
-              height: 44,
-              minWidth: 44,
-              minHeight: 44,
-              maxWidth: 44,
-              maxHeight: 44,
-            }}
+            className="shrink-0 rounded-2xl border border-white/10 object-cover"
+            style={{ width: 48, height: 48 }}
           />
           <div style={{ minWidth: 0 }}>
             <div
@@ -216,9 +221,9 @@ function UserMenuPopover({
             </div>
             <div
               style={{
-                marginTop: 3,
+                marginTop: 4,
                 fontSize: 13,
-                color: "rgba(255,255,255,0.56)",
+                color: "rgba(247,247,245,0.56)",
                 whiteSpace: "nowrap",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -239,15 +244,14 @@ function UserMenuPopover({
                 alignItems: "center",
                 justifyContent: "flex-start",
                 gap: 10,
-                height: 44,
-                borderRadius: 12,
+                height: 46,
+                borderRadius: 16,
                 border: "1px solid rgba(239,68,68,0.18)",
                 background: "rgba(239,68,68,0.08)",
                 color: "rgb(248,113,113)",
                 fontSize: 15,
                 fontWeight: 600,
                 padding: "0 14px",
-                cursor: "pointer",
               }}
             >
               <span style={{ fontSize: 16, lineHeight: 1 }}>⨯</span>
@@ -295,40 +299,33 @@ function SettingsMenuPopover({
 
   return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 1190, isolation: "isolate" }}>
-      <div
-        onClick={onClose}
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: "transparent",
-        }}
-      />
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "transparent" }} />
 
       <div
         style={{
           position: "absolute",
-          top: 62,
+          top: 72,
           right: 78,
-          width: 260,
+          width: 270,
           maxWidth: "calc(100vw - 24px)",
-          borderRadius: 18,
+          borderRadius: 22,
           border: "1px solid rgba(255,255,255,0.10)",
           background:
-            "linear-gradient(180deg, rgba(58,58,64,0.98) 0%, rgba(24,24,28,0.98) 42%, rgba(18,18,22,0.98) 100%)",
-          boxShadow: "0 18px 60px rgba(0,0,0,0.45)",
+            "linear-gradient(180deg, rgba(28,28,31,0.98) 0%, rgba(18,19,22,0.98) 100%)",
+          boxShadow: "0 24px 70px rgba(0,0,0,0.44)",
           overflow: "hidden",
           transform: shown ? "translateY(0) scale(1)" : "translateY(-6px) scale(0.98)",
           opacity: shown ? 1 : 0,
           transformOrigin: "top right",
           transition: "transform 180ms ease, opacity 180ms ease",
-          backdropFilter: "blur(14px)",
+          backdropFilter: "blur(18px)",
         }}
       >
         <div style={{ padding: 10 }}>
           <button
             type="button"
             onClick={onOpenGoogleSetup}
-            className="block w-full rounded-xl border border-white/8 bg-white/5 text-left transition hover:bg-white/10"
+            className="block w-full rounded-2xl border border-white/10 bg-white/[0.04] text-left transition hover:bg-white/[0.07]"
           >
             <div
               style={{
@@ -341,13 +338,7 @@ function SettingsMenuPopover({
               <GoogleCalendarMark day={day} />
 
               <div style={{ minWidth: 0 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div
                     style={{
                       fontSize: 14,
@@ -360,33 +351,14 @@ function SettingsMenuPopover({
                   </div>
 
                   {showGoogleSetupAlert ? (
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        minWidth: "22px",
-                        height: "22px",
-                        padding: "0 7px",
-                        borderRadius: "999px",
-                        background: "#2563eb",
-                        color: "#fff",
-                        fontSize: "12px",
-                        fontWeight: 700,
-                        lineHeight: "22px",
-                        boxShadow:
-                          "0 0 0 2px rgba(0,0,0,0.85), 0 0 12px rgba(37,99,235,0.55)",
-                      }}
-                    >
-                      {googleSetupAlertCount > 99 ? "99+" : googleSetupAlertCount}
-                    </span>
+                    <BrandBadge count={googleSetupAlertCount} tone="blue" />
                   ) : null}
                 </div>
                 <div
                   style={{
-                    marginTop: 3,
+                    marginTop: 4,
                     fontSize: 12,
-                    color: "rgba(255,255,255,0.58)",
+                    color: "rgba(247,247,245,0.58)",
                     lineHeight: 1.2,
                   }}
                 >
@@ -443,8 +415,8 @@ export function TopNav({
   const previousChatCount = useRef(0);
   const previousReminderCount = useRef(reminderCount);
   const previousWaitlistCount = useRef(waitlistCount);
-  const avatarRingColor = getAvatarRingColor(userLabel, currentUserId);
-  const logoRingColor = "#D4AF37";
+  const avatarTheme = getAvatarTheme(userLabel);
+  const logoRingColor = "#D6C3A3";
 
   const storageKey = useMemo(() => {
     if (!tenantId || !currentUserId) return null;
@@ -570,9 +542,7 @@ export function TopNav({
     const onFocus = () => loadUnreadCount();
 
     const onStorage = (e: StorageEvent) => {
-      if (e.key === storageKey) {
-        loadUnreadCount();
-      }
+      if (e.key === storageKey) loadUnreadCount();
     };
 
     window.addEventListener("focus", onFocus);
@@ -592,7 +562,6 @@ export function TopNav({
     async function loadReminderCount() {
       try {
         const res = await fetch("/api/reminders/count", { cache: "no-store" });
-
         if (!res.ok) return;
 
         const json = await res.json();
@@ -604,7 +573,6 @@ export function TopNav({
         }
 
         previousReminderCount.current = nextCount;
-
         if (!cancelled) setLiveReminderCount(nextCount);
       } catch (error) {
         console.error("[topnav] reminder count failed", error);
@@ -614,9 +582,7 @@ export function TopNav({
     loadReminderCount();
 
     const interval = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        loadReminderCount();
-      }
+      if (document.visibilityState === "visible") loadReminderCount();
     }, 3000);
 
     const onFocus = () => loadReminderCount();
@@ -636,7 +602,6 @@ export function TopNav({
     async function loadWaitlistCount() {
       try {
         const res = await fetch("/api/waitlist/count", { cache: "no-store" });
-
         if (!res.ok) return;
 
         const json = await res.json();
@@ -648,7 +613,6 @@ export function TopNav({
         }
 
         previousWaitlistCount.current = nextCount;
-
         if (!cancelled) setLiveWaitlistCount(nextCount);
       } catch (error) {
         console.error("[topnav] waitlist count failed", error);
@@ -658,9 +622,7 @@ export function TopNav({
     loadWaitlistCount();
 
     const interval = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        loadWaitlistCount();
-      }
+      if (document.visibilityState === "visible") loadWaitlistCount();
     }, 3000);
 
     const onFocus = () => loadWaitlistCount();
@@ -675,13 +637,8 @@ export function TopNav({
   }, []);
 
   useEffect(() => {
-    const baseTitle = "MBI CRM";
-
-    if (unreadCount > 0) {
-      document.title = `(${unreadCount}) ${baseTitle}`;
-    } else {
-      document.title = baseTitle;
-    }
+    const baseTitle = "Clientique";
+    document.title = unreadCount > 0 ? `(${unreadCount}) ${baseTitle}` : baseTitle;
   }, [unreadCount]);
 
   function openChat() {
@@ -743,13 +700,16 @@ export function TopNav({
     pathname?.startsWith("/calendar/google") || searchParams?.get("openGoogleSetup") === "1";
   const showGoogleSetupAlert = googleSetupAlertCount > 0;
 
+  const pillClass =
+    "clientique-nav-pill inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[var(--text-muted)] hover:border-[rgba(255,255,255,0.08)] hover:bg-white/[0.04] hover:text-[var(--text)]";
+
   return (
-    <div className="sticky top-0 z-40 border-b border-[var(--border)] bg-black/60 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8 rounded-full">
-        <div className="flex items-center gap-6">
+    <div className="clientique-topbar sticky top-0 z-40">
+      <div className="mx-auto flex h-[74px] max-w-[1240px] items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center gap-3 lg:gap-6">
           <Link
             href="/dashboard"
-            className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+            className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
             aria-label="Dashboard"
             onMouseEnter={() => setLogoHovered(true)}
             onMouseLeave={() => setLogoHovered(false)}
@@ -759,18 +719,15 @@ export function TopNav({
               transition: "transform 180ms ease, box-shadow 180ms ease",
               transform: logoHovered ? "scale(1.05)" : "scale(1)",
               boxShadow: logoHovered
-                ? `0 0 0 3px ${logoRingColor}, 0 0 18px rgba(212,175,55,0.32)`
-                : `0 0 0 3px ${logoRingColor}`,
-              background: "transparent",
+                ? `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px ${logoRingColor}, 0 0 24px rgba(214,195,163,0.28)`
+                : `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px ${logoRingColor}`,
             }}
           >
             <span
-              className="block h-full w-full overflow-hidden rounded-full border-2 border-[#101014]"
+              className="block h-full w-full overflow-hidden rounded-full border-2 border-[#111216]"
               style={{
-                transform: logoHovered ? "scale(1.06)" : "scale(1)",
+                transform: logoHovered ? "scale(1.05)" : "scale(1)",
                 transition: "transform 180ms ease",
-                transformOrigin: "center center",
-                willChange: "transform",
               }}
             >
               <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[#0d0d10] [&_img]:h-full [&_img]:w-full [&_img]:object-cover">
@@ -789,41 +746,14 @@ export function TopNav({
                   : pathname?.startsWith(item.href);
 
               const commonClass = cn(
-                "rounded-lg px-3 py-2 text-sm transition",
-                active
-                  ? "bg-white/10 font-medium text-white"
-                  : "text-white/70 hover:bg-white/10 hover:text-white"
+                pillClass,
+                active && "clientique-nav-pill-active"
               );
 
               const content = (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                <span className="inline-flex items-center gap-2.5">
                   {item.label}
-
-                  {isChat && unreadCount > 0 ? (
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        minWidth: "22px",
-                        height: "22px",
-                        padding: "0 7px",
-                        borderRadius: "999px",
-                        background: "#2563eb",
-                        color: "#fff",
-                        fontSize: "12px",
-                        fontWeight: 700,
-                        lineHeight: "22px",
-                        boxShadow:
-                          "0 0 0 2px rgba(0,0,0,0.85), 0 0 12px rgba(37,99,235,0.55)",
-                        transform: chatPulse ? "scale(1.08)" : "scale(1)",
-                        transition: "transform 0.2s ease, box-shadow 0.2s ease",
-                        animation: chatPulse ? "topnavBadgePulse 0.9s ease-in-out 3" : "none",
-                      }}
-                    >
-                      {unreadCount > 99 ? "99+" : unreadCount}
-                    </span>
-                  ) : null}
+                  {isChat && unreadCount > 0 ? <BrandBadge count={unreadCount} pulse={chatPulse} /> : null}
                 </span>
               );
 
@@ -845,129 +775,44 @@ export function TopNav({
             <button
               type="button"
               onClick={openReminders}
-              className={cn(
-                "rounded-lg px-3 py-2 text-sm transition",
-                reminderOpen
-                  ? "bg-white/10 font-medium text-white"
-                  : "text-white/70 hover:bg-white/10 hover:text-white"
-              )}
+              className={cn(pillClass, reminderOpen && "clientique-nav-pill-active")}
             >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+              <span className="inline-flex items-center gap-2.5">
                 Reminder
-
-                {liveReminderCount > 0 ? (
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      minWidth: "22px",
-                      height: "22px",
-                      padding: "0 7px",
-                      borderRadius: "999px",
-                      background: "#2563eb",
-                      color: "#fff",
-                      fontSize: "12px",
-                      fontWeight: 700,
-                      lineHeight: "22px",
-                      boxShadow:
-                        "0 0 0 2px rgba(0,0,0,0.85), 0 0 12px rgba(37,99,235,0.55)",
-                      transform: reminderPulse ? "scale(1.08)" : "scale(1)",
-                      transition: "transform 0.2s ease, box-shadow 0.2s ease",
-                      animation: reminderPulse ? "topnavBadgePulse 0.9s ease-in-out 3" : "none",
-                    }}
-                  >
-                    {liveReminderCount > 99 ? "99+" : liveReminderCount}
-                  </span>
-                ) : null}
+                {liveReminderCount > 0 ? <BrandBadge count={liveReminderCount} pulse={reminderPulse} /> : null}
               </span>
             </button>
 
             <button
               type="button"
               onClick={openWaitlist}
-              className={cn(
-                "rounded-lg px-3 py-2 text-sm transition",
-                waitlistOpen
-                  ? "bg-white/10 font-medium text-white"
-                  : "text-white/70 hover:bg-white/10 hover:text-white"
-              )}
+              className={cn(pillClass, waitlistOpen && "clientique-nav-pill-active")}
             >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+              <span className="inline-flex items-center gap-2.5">
                 Warteliste
-
-                {liveWaitlistCount > 0 ? (
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      minWidth: "22px",
-                      height: "22px",
-                      padding: "0 7px",
-                      borderRadius: "999px",
-                      background: "#2563eb",
-                      color: "#fff",
-                      fontSize: "12px",
-                      fontWeight: 700,
-                      lineHeight: "22px",
-                      boxShadow:
-                        "0 0 0 2px rgba(0,0,0,0.85), 0 0 12px rgba(37,99,235,0.55)",
-                      transform: waitlistPulse ? "scale(1.08)" : "scale(1)",
-                      transition: "transform 0.2s ease, box-shadow 0.2s ease",
-                      animation: waitlistPulse ? "topnavBadgePulse 0.9s ease-in-out 3" : "none",
-                    }}
-                  >
-                    {liveWaitlistCount > 99 ? "99+" : liveWaitlistCount}
-                  </span>
-                ) : null}
+                {liveWaitlistCount > 0 ? <BrandBadge count={liveWaitlistCount} pulse={waitlistPulse} /> : null}
               </span>
             </button>
           </nav>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           {rightSlot}
 
           <button
             type="button"
             onClick={toggleSettingsMenu}
             className={cn(
-              "relative rounded-lg px-3 py-2 text-sm transition",
-              settingsMenuOpen || googleSetupActive
-                ? "bg-white/10 font-medium text-white"
-                : "text-white/70 hover:bg-white/10 hover:text-white"
+              "relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-[var(--text-muted)] hover:bg-white/[0.06] hover:text-[var(--text)]",
+              (settingsMenuOpen || googleSetupActive) && "bg-[var(--primary-soft)] text-[var(--text)]"
             )}
             aria-label="Einstellungen"
             title="Einstellungen"
           >
-            <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-              <SettingsIcon />
-            </span>
-
+            <SettingsIcon />
             {showGoogleSetupAlert ? (
-              <span
-                style={{
-                  position: "absolute",
-                  top: "-7px",
-                  right: "-7px",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  minWidth: "22px",
-                  height: "22px",
-                  padding: "0 7px",
-                  borderRadius: "999px",
-                  background: "#2563eb",
-                  color: "#fff",
-                  fontSize: "12px",
-                  fontWeight: 700,
-                  lineHeight: "22px",
-                  boxShadow:
-                    "0 0 0 2px rgba(0,0,0,0.85), 0 0 12px rgba(37,99,235,0.55)",
-                }}
-              >
-                {googleSetupAlertCount > 99 ? "99+" : googleSetupAlertCount}
+              <span style={{ position: "absolute", top: "-7px", right: "-7px" }}>
+                <BrandBadge count={googleSetupAlertCount} />
               </span>
             ) : null}
           </button>
@@ -982,25 +827,21 @@ export function TopNav({
             onMouseLeave={() => setAvatarHovered(false)}
             onFocus={() => setAvatarHovered(true)}
             onBlur={() => setAvatarHovered(false)}
-            className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full cursor-pointer"
+            className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
             style={{
               transition: "transform 180ms ease, box-shadow 180ms ease",
-              transform: avatarHovered ? "scale(1.05)" : "scale(1)",
+              transform: avatarHovered ? "scale(1.04)" : "scale(1)",
               boxShadow: avatarHovered
-                ? `0 0 0 3px ${avatarRingColor}, 0 0 0 6px rgba(255,255,255,0.14)`
-                : `0 0 0 3px ${avatarRingColor}, 0 0 0 6px rgba(255,255,255,0.08)`,
-              background: "transparent",
-              cursor: "pointer",
+                ? `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px ${avatarTheme.color}, 0 0 16px ${avatarTheme.border}`
+                : `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px ${avatarTheme.color}`,
             }}
             aria-label="Benutzermenü öffnen"
           >
             <span
-              className="block h-full w-full overflow-hidden rounded-full border-2 border-[#101014]"
+              className="block h-full w-full overflow-hidden rounded-full border-2 border-[#111216]"
               style={{
-                transform: avatarHovered ? "scale(1.06)" : "scale(1)",
+                transform: avatarHovered ? "scale(1.05)" : "scale(1)",
                 transition: "transform 180ms ease",
-                transformOrigin: "center center",
-                willChange: "transform",
               }}
             >
               <img

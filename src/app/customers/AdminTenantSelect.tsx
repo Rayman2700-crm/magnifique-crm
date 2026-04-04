@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 
 export default function AdminTenantSelect({
   current,
@@ -32,7 +33,7 @@ export default function AdminTenantSelect({
 
     const input = formRef.current.querySelector(
       'input[name="tenant"]'
-    ) as HTMLInputElement;
+    ) as HTMLInputElement | null;
 
     if (input) input.value = value;
 
@@ -50,20 +51,22 @@ export default function AdminTenantSelect({
       <div ref={containerRef} className="relative inline-block">
         <input type="hidden" name="tenant" defaultValue={current} />
 
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          className="min-w-[240px] justify-between gap-3"
           onClick={() => setOpen((v) => !v)}
-          className="min-w-[220px] rounded-xl border border-white/10 bg-[var(--surface)] px-4 py-2 text-sm text-white hover:bg-white/5"
         >
-          {selected}
-        </button>
+          <span>{selected}</span>
+          <span className={`transition ${open ? "rotate-180" : ""}`}>⌄</span>
+        </Button>
 
         {open && (
-          <div className="absolute left-0 mt-2 w-full rounded-xl border border-white/10 bg-black shadow-2xl z-50">
+          <div className="absolute left-0 z-50 mt-2 min-w-full overflow-hidden rounded-[18px] border border-white/10 bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
             <button
               type="button"
               onClick={() => submit("all")}
-              className="w-full px-4 py-2 text-left text-sm text-white hover:bg-white/10"
+              className="block w-full border-b border-white/8 px-4 py-3 text-left text-sm text-white/90 transition hover:bg-white/[0.05]"
             >
               Alle (Admin)
             </button>
@@ -73,7 +76,7 @@ export default function AdminTenantSelect({
                 key={o.tenant_id}
                 type="button"
                 onClick={() => submit(o.tenant_id)}
-                className="w-full px-4 py-2 text-left text-sm text-white hover:bg-white/10"
+                className="block w-full px-4 py-3 text-left text-sm text-white/90 transition hover:bg-white/[0.05]"
               >
                 {o.label}
               </button>

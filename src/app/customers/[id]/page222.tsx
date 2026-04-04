@@ -764,7 +764,10 @@ export default async function CustomerDetailPage({
                         {customerStatus}
                       </span>
 
-                      
+                      <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
+                        Fragebogen
+                        <StatusIcon ok={intakeIsDone} />
+                      </span>
                     </div>
 
                     <div className="mt-4 flex flex-wrap gap-2">

@@ -172,33 +172,6 @@ function getTenantAvatarRing(tenantLabel: string) {
   };
 }
 
-function buildOrderedTenantOptions(
-  options: { tenant_id: string; label: string; user_id: string | null }[]
-) {
-  const mapped = [...options].map((option) => ({
-    ...option,
-    normalizedLabel: option.label || "Behandler",
-    displayLabel: getTenantDisplayLabel(option.label),
-    ringColor: getTenantAvatarRing(option.label).ring,
-    shortCode: getUserShortCode(option.label),
-  }));
-
-  const order = ["radu", "raluca", "alexandra", "barbara"];
-
-  mapped.sort((a, b) => {
-    const ai = order.findIndex((key) => a.normalizedLabel.toLowerCase().includes(key));
-    const bi = order.findIndex((key) => b.normalizedLabel.toLowerCase().includes(key));
-
-    if (ai !== -1 || bi !== -1) {
-      return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
-    }
-
-    return a.normalizedLabel.localeCompare(b.normalizedLabel);
-  });
-
-  return mapped;
-}
-
 function AdminTenantAvatarPicker({
   current,
   options,
@@ -208,102 +181,94 @@ function AdminTenantAvatarPicker({
   options: { tenant_id: string; label: string; user_id: string | null }[];
   action: (formData: FormData) => Promise<void>;
 }) {
-  const orderedOptions = buildOrderedTenantOptions(options);
+  const preferredOrder = ["radu", "raluca", "alexandra", "barbara"];
+  const byKey = new Map<string, { tenant_id: string; label: string; user_id: string | null }>();
+
+  for (const option of options) {
+    const key = normalizeTenantPersonKey(option.label) || option.tenant_id;
+    if (!byKey.has(key)) byKey.set(key, option);
+  }
+
+  const orderedOptions = preferredOrder
+    .map((key) => byKey.get(key))
+    .filter((entry): entry is { tenant_id: string; label: string; user_id: string | null } => Boolean(entry));
 
   return (
-    <div className="flex flex-wrap items-start gap-5">
+    <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
       <form action={action}>
         <input type="hidden" name="tenantId" value="all" />
-        <button
-          type="submit"
-          className="flex flex-col items-center gap-2 transition-opacity opacity-100 hover:opacity-100"
-          title="Alle Kunden anzeigen"
-        >
-          <div
-            className="relative overflow-hidden rounded-full flex items-center justify-center text-sm font-extrabold"
+        <button type="submit" className="group flex flex-col items-center gap-2">
+          <span
+            className="inline-flex h-[56px] w-[56px] items-center justify-center rounded-full transition duration-200"
             style={{
-              width: 56,
-              height: 56,
-              border: "4px solid rgba(255,255,255,0.55)",
-              boxShadow: "0 12px 26px rgba(0,0,0,0.32)",
-              background: "rgba(255,255,255,0.96)",
-              color: "#000",
+              background: "#ffffff",
+              color: "#0B0B0C",
+              boxShadow: current === "all"
+                ? "0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px rgba(255,255,255,0.92)"
+                : "0 0 0 1px rgba(255,255,255,0.14)",
+              transform: current === "all" ? "scale(1.03)" : "scale(1)",
+            }}
+          >
+            <span className="text-[15px] font-semibold">Alle</span>
+          </span>
+
+          <span
+            className="inline-flex min-h-[28px] items-center justify-center rounded-full border px-3 py-1 text-sm font-semibold transition"
+            style={{
+              borderColor: current === "all" ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.10)",
+              background: current === "all" ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)",
+              color: "#ffffff",
             }}
           >
             Alle
-          </div>
-
-          <div
-            className={`px-3 py-1.5 rounded-full text-sm font-semibold ${
-              current === "all"
-                ? "border border-white bg-white text-black"
-                : "border border-white/10 bg-black/25 text-white/90"
-            }`}
-            style={{ backdropFilter: "blur(8px)", lineHeight: 1 }}
-          >
-            Alle
-          </div>
+          </span>
         </button>
       </form>
 
       {orderedOptions.map((entry) => {
         const active = current === entry.tenant_id;
+        const ring = getTenantAvatarRing(entry.label);
+        const displayLabel = getTenantDisplayLabel(entry.label);
 
         return (
           <form key={entry.tenant_id} action={action}>
             <input type="hidden" name="tenantId" value={entry.tenant_id} />
-            <button
-              type="submit"
-              className="flex flex-col items-center gap-2 transition-opacity opacity-100 hover:opacity-100"
-              title={`${entry.displayLabel} anzeigen`}
-            >
-              <div
-                className="relative overflow-hidden rounded-full"
+            <button type="submit" className="group flex flex-col items-center gap-2">
+              <span
+                className="inline-flex h-[56px] w-[56px] items-center justify-center rounded-full bg-[#0d0d10] transition duration-200"
                 style={{
-                  width: 56,
-                  height: 56,
-                  border: `4px solid ${entry.ringColor}`,
-                  boxShadow: "0 12px 26px rgba(0,0,0,0.32)",
-                  background: "rgba(255,255,255,0.04)",
+                  boxShadow: active
+                    ? `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px ${ring.ring}, 0 0 16px ${ring.glow}`
+                    : `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 3px ${ring.ring}`,
+                  transform: active ? "scale(1.03)" : "scale(1)",
                 }}
               >
                 {entry.user_id ? (
                   <img
                     src={`/users/${entry.user_id}.png`}
-                    alt={entry.displayLabel}
-                    className="h-full w-full object-cover"
+                    alt={displayLabel}
+                    className="block h-full w-full rounded-full object-cover"
                   />
                 ) : (
-                  <div className="h-full w-full flex items-center justify-center text-[13px] font-extrabold text-white/90">
-                    {entry.shortCode}
-                  </div>
+                  <span
+                    className="flex h-full w-full items-center justify-center rounded-full text-sm font-semibold text-white"
+                    style={{ background: "rgba(255,255,255,0.08)" }}
+                  >
+                    {getUserShortCode(entry.label)}
+                  </span>
                 )}
+              </span>
 
-                <div
-                  style={{
-                    position: "absolute",
-                    right: 3,
-                    bottom: 3,
-                    width: 10,
-                    height: 10,
-                    borderRadius: 999,
-                    backgroundColor: entry.ringColor,
-                    boxShadow: "0 0 0 2px rgba(0,0,0,0.65)",
-                  }}
-                />
-              </div>
-
-              <div
-                className={`px-3 py-1.5 rounded-full text-sm font-semibold ${
-                  active
-                    ? "border border-white bg-white text-black"
-                    : "border border-white/10 bg-black/25 text-white/90"
-                }`}
-                style={{ backdropFilter: "blur(8px)", lineHeight: 1 }}
-                title={entry.label}
+              <span
+                className="inline-flex min-h-[28px] items-center justify-center rounded-full border px-3 py-1 text-sm font-semibold transition"
+                style={{
+                  borderColor: active ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.10)",
+                  background: active ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)",
+                  color: "#ffffff",
+                }}
               >
-                {entry.displayLabel}
-              </div>
+                {displayLabel}
+              </span>
             </button>
           </form>
         );

@@ -166,21 +166,38 @@ function overlaps(a: Positioned, b: Positioned) {
   return a._top < bBottom && b._top < aBottom;
 }
 
+function estimateEventWidthPx(dayColumnWidthPx: number, ev: Positioned) {
+  return Math.max(16, dayColumnWidthPx / Math.max(1, ev._cols) - 6);
+}
 
+function areClusterNeighbors(a: Positioned, b: Positioned, verticalGapPx = 12) {
+  if (overlaps(a, b)) return true;
+
+  const aBottom = a._top + a._height;
+  const bBottom = b._top + b._height;
+  const gap = Math.max(a._top - bBottom, b._top - aBottom, 0);
+
+  return gap <= verticalGapPx;
+}
+
+function isClusterCandidate(ev: Positioned, dayColumnWidthPx: number) {
+  const widthPx = estimateEventWidthPx(dayColumnWidthPx, ev);
+  return ev._cols >= 3 || (ev._cols >= 2 && widthPx <= 118) || widthPx <= 76 || ev._height <= 42;
+}
 
 function getClusterDisplayHeight(eventCount: number, sourceHeight: number) {
   const base = eventCount >= 5 ? 84 : eventCount === 4 ? 80 : 76;
   return Math.max(68, Math.min(base, Math.max(68, Math.min(sourceHeight, 86))));
 }
 
-function buildClusterGroups(events: Positioned[]) {
+function buildClusterGroups(events: Positioned[], dayColumnWidthPx: number) {
   const sorted = [...events].sort((a, b) => a._top - b._top || a._height - b._height || a.id.localeCompare(b.id));
   const visited = new Set<string>();
   const clusters: ClusterGroup[] = [];
   const hiddenIds = new Set<string>();
 
   for (const seed of sorted) {
-    if (visited.has(seed.id) || seed._cols < 3) continue;
+    if (visited.has(seed.id) || !isClusterCandidate(seed, dayColumnWidthPx)) continue;
 
     const queue: Positioned[] = [seed];
     const group: Positioned[] = [];
@@ -191,15 +208,16 @@ function buildClusterGroups(events: Positioned[]) {
       group.push(current);
 
       for (const candidate of sorted) {
-        if (visited.has(candidate.id) || candidate._cols < 3) continue;
-        if (overlaps(current, candidate)) {
+        if (visited.has(candidate.id) || !isClusterCandidate(candidate, dayColumnWidthPx)) continue;
+        if (areClusterNeighbors(current, candidate, 12)) {
           visited.add(candidate.id);
           queue.push(candidate);
         }
       }
     }
 
-    if (group.length < 3) continue;
+    const hasVeryTightCard = group.some((entry) => estimateEventWidthPx(dayColumnWidthPx, entry) <= 92);
+    if (group.length < 2 || (!hasVeryTightCard && group.length < 3)) continue;
 
     const dominantTenantName =
       [...group.reduce((acc, ev) => acc.set(ev.tenantName, (acc.get(ev.tenantName) ?? 0) + 1), new Map<string, number>()).entries()]
@@ -221,6 +239,21 @@ function buildClusterGroups(events: Positioned[]) {
   }
 
   return { clusters, hiddenIds };
+}
+
+
+function getEventChromeMetrics(isTiny: boolean, isCompact: boolean) {
+  const customerChipSize = isTiny ? 18 : isCompact ? 18 : 20;
+  const handleSize = isTiny ? 18 : isCompact ? 18 : 20;
+  const headerGap = isTiny ? 5 : 6;
+  const rightReserve = handleSize + 12;
+
+  return {
+    customerChipSize,
+    handleSize,
+    headerGap,
+    rightReserve,
+  };
 }
 
 export default function WeekDayGridView(props: {
@@ -512,11 +545,11 @@ export default function WeekDayGridView(props: {
 
     for (const iso of dayIsos) {
       const events = view === "week" ? positionedWeekByDay.get(iso) ?? [] : positionedDay;
-      map.set(iso, buildClusterGroups(events));
+      map.set(iso, buildClusterGroups(events, dayColumnWidthPx));
     }
 
     return map;
-  }, [anchorISO, positionedDay, positionedWeekByDay, view, weekDays]);
+  }, [anchorISO, dayColumnWidthPx, positionedDay, positionedWeekByDay, view, weekDays]);
 
   const openClusterData = useMemo(() => {
     if (!openClusterId) return null;
@@ -1088,10 +1121,9 @@ export default function WeekDayGridView(props: {
                           const eventWidthPx = Math.max(16, dayColumnWidthPx / ev._cols - 6);
                           const eventHeightPx = Math.max(28, ev._height);
                           const isTiny = eventWidthPx < 80 || eventHeightPx < 38;
-                          const isTallTiny = isTiny && eventHeightPx >= 42;
-                          const isCompact = !isTiny && (eventWidthPx < 138 || eventHeightPx < 68);
+                          const isCompact = !isTiny && (eventWidthPx < 152 || eventHeightPx < 68);
                           const isMedium = !isTiny && !isCompact && (eventWidthPx < 190 || eventHeightPx < 104);
-                          const tooltipOpen = hoveredTinyId === ev.id && isTiny && !dragging;
+                          const tooltipOpen = hoveredTinyId === ev.id && !dragging;
 
                           const titleText = isTiny
                             ? initialsFromName(ev._customer)
@@ -1100,14 +1132,48 @@ export default function WeekDayGridView(props: {
                               : clampText(ev._customer, isMedium ? 22 : 30);
 
                           const compactTimeText = getSmartCompactTime(ev._timeLine, eventWidthPx);
-                          const timeText = isCompact ? compactTimeText : ev._timeLine;
-                          const isTallCompact = isCompact && eventHeightPx >= 64;
-                          const narrowCardTitleText =
-                            eventWidthPx >= 72
-                              ? clampText(shortCustomerName(ev._customer), eventWidthPx >= 86 ? 10 : 8)
-                              : initialsFromName(ev._customer).slice(0, 1);
-                          const narrowTitleLooksLikeInitial = narrowCardTitleText.length <= 2;
+                          const timeText = isCompact ? fmtShortTime(ev._timeLine) : ev._timeLine;
                           const showTenant = !isTiny && !isCompact;
+                          const chrome = getEventChromeMetrics(isTiny, isCompact);
+                          const customerInitial = initialsFromName(ev._customer).slice(0, 1);
+                          const headerTimeText = isTiny ? fmtShortTime(ev._timeLine) : compactTimeText;
+                          const customerChip = (
+                            <div
+                              style={{
+                                position: "relative",
+                                minWidth: chrome.customerChipSize,
+                                width: chrome.customerChipSize,
+                                height: chrome.customerChipSize,
+                                borderRadius: 999,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                background: "rgba(255,255,255,0.05)",
+                                color: theme.cardText,
+                                border: `1px solid ${theme.accentMid}`,
+                                fontSize: isTiny ? 10 : 10,
+                                fontWeight: 900,
+                                lineHeight: 1,
+                                boxShadow: `0 0 10px ${theme.accentSoft}`,
+                                flexShrink: 0,
+                              }}
+                              title={`${ev._customer} · ${badge.sent ? "Reminder gesendet" : "Reminder offen"}`}
+                            >
+                              {customerInitial}
+                              <span
+                                style={{
+                                  position: "absolute",
+                                  top: -1,
+                                  right: -1,
+                                  width: 6,
+                                  height: 6,
+                                  borderRadius: 999,
+                                  background: badge.sent ? "#16a34a" : "#d89a17",
+                                  boxShadow: `0 0 0 1px rgba(10,11,14,0.92), 0 0 8px ${badge.sent ? "rgba(22,163,74,0.35)" : "rgba(216,154,23,0.35)"}`,
+                                }}
+                              />
+                            </div>
+                          );
 
                           return (
                             <button
@@ -1119,7 +1185,7 @@ export default function WeekDayGridView(props: {
                               }}
 
                               onMouseEnter={() => {
-                                if (!dragging && isTiny) setHoveredTinyId(ev.id);
+                                if (!dragging) setHoveredTinyId(ev.id);
                               }}
                               onMouseLeave={() => {
                                 if (hoveredTinyId === ev.id) setHoveredTinyId(null);
@@ -1127,7 +1193,7 @@ export default function WeekDayGridView(props: {
                               onBlur={() => {
                                 if (hoveredTinyId === ev.id) setHoveredTinyId(null);
                               }}
-                              title={!isTiny ? `${ev._timeLine} ${ev._customer} · ${ev.tenantName} · ${badge.sent ? "Reminder gesendet" : "Reminder offen"}` : undefined}
+                              title={undefined}
                               style={{
                                 position: "absolute",
                                 top: ev._top,
@@ -1140,7 +1206,7 @@ export default function WeekDayGridView(props: {
                                 borderRadius: isTiny ? 12 : 18,
                                 padding: isTiny ? "4px 7px 4px 13px" : isCompact ? "8px 9px 8px 15px" : "10px 11px 10px 16px",
                                 textAlign: "left",
-                                overflow: isTiny ? "visible" : "hidden",
+                                overflow: "visible",
                                 zIndex: tooltipOpen ? 30 : isDragging ? 20 : 1,
                                 boxShadow: isDragging
                                   ? `0 24px 40px rgba(0,0,0,0.50), 0 0 0 1px ${theme.accentLine}`
@@ -1191,41 +1257,47 @@ export default function WeekDayGridView(props: {
                                   }}
                                 />
                               ) : null}
-
-
                               <div
-                                role="button"
-                                aria-label="Termin verschieben"
-                                onPointerDownCapture={(e) => {
-                                  onPointerDownEvent(e, ev.id, iso, ev);
-                                }}
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                }}
                                 style={{
                                   position: "absolute",
-                                  top: isTiny ? 6 : 6,
-                                  right: isTiny ? 6 : 6,
-                                  width: isTiny ? 18 : isCompact ? 18 : 20,
-                                  height: isTiny ? 18 : isCompact ? 18 : 20,
-                                  borderRadius: 999,
-                                  display: "inline-flex",
+                                  top: 6,
+                                  right: 6,
+                                  display: "flex",
                                   alignItems: "center",
-                                  justifyContent: "center",
-                                  background: "rgba(255,255,255,0.10)",
-                                  border: "1px solid rgba(255,255,255,0.16)",
-                                  color: "rgba(255,255,255,0.78)",
-                                  cursor: isSaving ? "progress" : "grab",
-                                  zIndex: 3,
-                                  fontSize: isTiny ? 9 : isCompact ? 9 : 11,
-                                  lineHeight: 1,
-                                  userSelect: "none",
-                                  WebkitUserSelect: "none",
+                                  zIndex: 4,
                                 }}
-                                title="Ziehen zum Verschieben"
                               >
-                                ⋮⋮
+                                <div
+                                  role="button"
+                                  aria-label="Termin verschieben"
+                                  onPointerDownCapture={(e) => {
+                                    onPointerDownEvent(e, ev.id, iso, ev);
+                                  }}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                  }}
+                                  style={{
+                                    width: chrome.handleSize,
+                                    height: chrome.handleSize,
+                                    borderRadius: 999,
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    background: "rgba(255,255,255,0.10)",
+                                    border: "1px solid rgba(255,255,255,0.16)",
+                                    color: "rgba(255,255,255,0.78)",
+                                    cursor: isSaving ? "progress" : "grab",
+                                    fontSize: isTiny ? 9 : 11,
+                                    lineHeight: 1,
+                                    userSelect: "none",
+                                    WebkitUserSelect: "none",
+                                    flexShrink: 0,
+                                  }}
+                                  title="Ziehen zum Verschieben"
+                                >
+                                  ⋮⋮
+                                </div>
                               </div>
 
                               {tooltipOpen ? (
@@ -1314,306 +1386,59 @@ export default function WeekDayGridView(props: {
                               ) : null}
 
                               {isTiny ? (
-                                isTallTiny ? (
-                                  <div
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: chrome.headerGap,
+                                    width: "100%",
+                                    minWidth: 0,
+                                    paddingLeft: 2,
+                                    paddingRight: chrome.rightReserve,
+                                  }}
+                                >
+                                  <span
                                     style={{
-                                      display: "flex",
-                                      flexDirection: "column",
-                                      alignItems: "flex-start",
-                                      justifyContent: "flex-start",
-                                      gap: 7,
-                                      width: "100%",
-                                      minWidth: 0,
-                                      paddingLeft: 2,
-                                      paddingRight: 24,
-                                      paddingTop: 1,
-                                    }}
-                                  >
-                                    <span
-                                      style={{
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        borderRadius: 999,
-                                        padding: "2px 6px",
-                                        background: theme.labelBg,
-                                        border: `1px solid ${theme.labelBorder}`,
-                                        color: theme.cardSubtle,
-                                        fontSize: 9,
-                                        fontWeight: 700,
-                                        lineHeight: 1,
-                                        whiteSpace: "nowrap",
-                                        minWidth: 0,
-                                        maxWidth: "calc(100% - 2px)",
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
-                                      }}
-                                    >
-                                      {getStartTimeOnly(ev._timeLine)}
-                                    </span>
-                                    <div
-                                      style={{
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        gap: 5,
-                                        minWidth: 0,
-                                        maxWidth: "calc(100% - 2px)",
-                                      }}
-                                    >
-                                      <span
-                                        style={{
-                                          width: 6,
-                                          height: 6,
-                                          borderRadius: 999,
-                                          background: badge.sent ? "#16a34a" : "#d89a17",
-                                          boxShadow: `0 0 0 1px rgba(10,11,14,0.92), 0 0 8px ${badge.sent ? "rgba(22,163,74,0.35)" : "rgba(216,154,23,0.35)"}`,
-                                          flexShrink: 0,
-                                        }}
-                                      />
-                                      <span
-                                        style={{
-                                          minWidth: 0,
-                                          overflow: "hidden",
-                                          textOverflow: "ellipsis",
-                                          whiteSpace: "nowrap",
-                                          color: theme.cardText,
-                                          fontSize: narrowTitleLooksLikeInitial ? 12 : 10,
-                                          fontWeight: 900,
-                                          lineHeight: 1.05,
-                                          letterSpacing: narrowTitleLooksLikeInitial ? "0.01em" : "-0.01em",
-                                          textShadow: "0 1px 0 rgba(0,0,0,0.22)",
-                                        }}
-                                      >
-                                        {narrowCardTitleText}
-                                      </span>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div
-                                    style={{
-                                      display: "flex",
+                                      display: "inline-flex",
                                       alignItems: "center",
-                                      gap: 5,
-                                      width: "100%",
-                                      minWidth: 0,
-                                      paddingLeft: 2,
-                                      paddingRight: 24,
+                                      borderRadius: 999,
+                                      padding: "2px 6px",
+                                      background: theme.labelBg,
+                                      border: `1px solid ${theme.labelBorder}`,
+                                      color: theme.cardSubtle,
+                                      fontSize: 9,
+                                      fontWeight: 700,
+                                      lineHeight: 1,
+                                      whiteSpace: "nowrap",
+                                      flexShrink: 0,
+                                      maxWidth: "100%",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
                                     }}
                                   >
-                                    <span
-                                      style={{
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        borderRadius: 999,
-                                        padding: "2px 6px",
-                                        background: theme.labelBg,
-                                        border: `1px solid ${theme.labelBorder}`,
-                                        color: theme.cardSubtle,
-                                        fontSize: 9,
-                                        fontWeight: 700,
-                                        lineHeight: 1,
-                                        whiteSpace: "nowrap",
-                                        flexShrink: 0,
-                                        minWidth: 0,
-                                        maxWidth: eventWidthPx < 62 ? "26px" : "38px",
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
-                                      }}
-                                    >
-                                      {getStartTimeOnly(ev._timeLine)}
-                                    </span>
-                                    <div
-                                      style={{
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        gap: 4,
-                                        minWidth: 0,
-                                        marginLeft: "auto",
-                                      }}
-                                    >
-                                      <span
-                                        style={{
-                                          width: 6,
-                                          height: 6,
-                                          borderRadius: 999,
-                                          background: badge.sent ? "#16a34a" : "#d89a17",
-                                          boxShadow: `0 0 0 1px rgba(10,11,14,0.92), 0 0 8px ${badge.sent ? "rgba(22,163,74,0.35)" : "rgba(216,154,23,0.35)"}`,
-                                          flexShrink: 0,
-                                        }}
-                                      />
-                                      <span
-                                        style={{
-                                          minWidth: 0,
-                                          overflow: "hidden",
-                                          textOverflow: "ellipsis",
-                                          whiteSpace: "nowrap",
-                                          color: theme.cardText,
-                                          fontSize: 9,
-                                          fontWeight: 900,
-                                          lineHeight: 1,
-                                          letterSpacing: "-0.01em",
-                                          maxWidth: eventWidthPx < 62 ? "10px" : "18px",
-                                        }}
-                                      >
-                                        {eventWidthPx < 62 ? initialsFromName(ev._customer).slice(0, 1) : initialsFromName(ev._customer).slice(0, 2)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                )
+                                    {headerTimeText}
+                                  </span>
+                                  {customerChip}
+                                </div>
                               ) : (
                                 <>
-                                  <div style={{ paddingRight: isCompact ? 42 : 22 }}>
-                                    {isCompact ? (
-                                      isTallCompact ? (
-                                        <div
-                                          style={{
-                                            display: "flex",
-                                            flexDirection: "column",
-                                            alignItems: "flex-start",
-                                            gap: 7,
-                                            minWidth: 0,
-                                            width: "100%",
-                                            paddingRight: 24,
-                                          }}
-                                        >
-                                          <div
-                                            style={{
-                                              display: "inline-flex",
-                                              alignItems: "center",
-                                              maxWidth: "calc(100% - 2px)",
-                                              minWidth: 0,
-                                              borderRadius: 999,
-                                              padding: "2px 6px",
-                                              background: theme.labelBg,
-                                              border: `1px solid ${theme.labelBorder}`,
-                                              fontSize: 9,
-                                              fontWeight: 700,
-                                              color: theme.cardSubtle,
-                                              lineHeight: 1.05,
-                                              whiteSpace: "nowrap",
-                                              overflow: "hidden",
-                                              textOverflow: "ellipsis",
-                                              letterSpacing: "0.02em",
-                                              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-                                            }}
-                                          >
-                                            {fmtShortTime(ev._timeLine)}
-                                          </div>
-
-                                          <div
-                                            style={{
-                                              display: "inline-flex",
-                                              alignItems: "center",
-                                              gap: 5,
-                                              minWidth: 0,
-                                              maxWidth: "calc(100% - 2px)",
-                                            }}
-                                          >
-                                            <span
-                                              style={{
-                                                width: 6,
-                                                height: 6,
-                                                borderRadius: 999,
-                                                background: badge.sent ? "#16a34a" : "#d89a17",
-                                                boxShadow: `0 0 0 1px rgba(10,11,14,0.92), 0 0 8px ${badge.sent ? "rgba(22,163,74,0.35)" : "rgba(216,154,23,0.35)"}`,
-                                                flexShrink: 0,
-                                              }}
-                                            />
-                                            <span
-                                              style={{
-                                                minWidth: 0,
-                                                overflow: "hidden",
-                                                textOverflow: "ellipsis",
-                                                whiteSpace: "nowrap",
-                                                color: theme.cardText,
-                                                fontSize: 10,
-                                                fontWeight: 900,
-                                                lineHeight: 1.05,
-                                                letterSpacing: "-0.01em",
-                                                textShadow: "0 1px 0 rgba(0,0,0,0.22)",
-                                              }}
-                                            >
-                                              {narrowCardTitleText}
-                                            </span>
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <div
-                                          style={{
-                                            display: "grid",
-                                            gridTemplateColumns: "minmax(0, 1fr) 18px",
-                                            alignItems: "center",
-                                            columnGap: 6,
-                                            minWidth: 0,
-                                            width: "100%",
-                                            paddingRight: 24,
-                                          }}
-                                        >
-                                          <div
-                                            style={{
-                                              display: "inline-flex",
-                                              alignItems: "center",
-                                              justifySelf: "start",
-                                              maxWidth: "100%",
-                                              minWidth: 0,
-                                              borderRadius: 999,
-                                              padding: "2px 6px",
-                                              background: theme.labelBg,
-                                              border: `1px solid ${theme.labelBorder}`,
-                                              fontSize: 9,
-                                              fontWeight: 700,
-                                              color: theme.cardSubtle,
-                                              lineHeight: 1.05,
-                                              whiteSpace: "nowrap",
-                                              overflow: "hidden",
-                                              textOverflow: "ellipsis",
-                                              letterSpacing: "0.02em",
-                                              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-                                            }}
-                                          >
-                                            {timeText}
-                                          </div>
-
-                                          <div
-                                            style={{
-                                              position: "relative",
-                                              width: 18,
-                                              height: 18,
-                                              borderRadius: 999,
-                                              display: "inline-flex",
-                                              alignItems: "center",
-                                              justifyContent: "center",
-                                              background: "rgba(255,255,255,0.05)",
-                                              color: theme.cardText,
-                                              border: `1px solid ${theme.accentMid}`,
-                                              fontSize: 10,
-                                              fontWeight: 900,
-                                              lineHeight: 1,
-                                              boxShadow: `0 0 10px ${theme.accentSoft}`,
-                                              flexShrink: 0,
-                                            }}
-                                          >
-                                            {initialsFromName(ev._customer).slice(0, 1)}
-                                            <span
-                                              style={{
-                                                position: "absolute",
-                                                top: -1,
-                                                right: -1,
-                                                width: 6,
-                                                height: 6,
-                                                borderRadius: 999,
-                                                background: badge.sent ? "#16a34a" : "#d89a17",
-                                                boxShadow: `0 0 0 1px rgba(10,11,14,0.92), 0 0 8px ${badge.sent ? "rgba(22,163,74,0.35)" : "rgba(216,154,23,0.35)"}`,
-                                              }}
-                                            />
-                                          </div>
-                                        </div>
-                                      )
-                                    ) : (
+                                  <div style={{ paddingRight: chrome.rightReserve }}>
+                                    <div
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: chrome.headerGap,
+                                        minWidth: 0,
+                                        maxWidth: "100%",
+                                      }}
+                                    >
                                       <div
                                         style={{
                                           display: "inline-flex",
                                           alignItems: "center",
+                                          width: "fit-content",
                                           maxWidth: "100%",
+                                          minWidth: 0,
                                           borderRadius: 999,
                                           padding: "2px 6px",
                                           background: theme.labelBg,
@@ -1627,11 +1452,13 @@ export default function WeekDayGridView(props: {
                                           textOverflow: "ellipsis",
                                           letterSpacing: "0.02em",
                                           boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+                                          flexShrink: 0,
                                         }}
                                       >
-                                        {timeText}
+                                        {headerTimeText}
                                       </div>
-                                    )}
+                                      {customerChip}
+                                    </div>
 
                                     <div
                                       style={{
@@ -1702,30 +1529,7 @@ export default function WeekDayGridView(props: {
                                       <div />
                                     )}
 
-                                    {!isCompact ? (
-                                      <span
-                                        style={{
-                                          flexShrink: 0,
-                                          minWidth: 19,
-                                          height: 19,
-                                          borderRadius: 999,
-                                          display: "inline-flex",
-                                          alignItems: "center",
-                                          justifyContent: "center",
-                                          background: badge.bg,
-                                          color: badge.text,
-                                          border: `1px solid ${badge.border}`,
-                                          fontSize: 10,
-                                          fontWeight: 900,
-                                          lineHeight: 1,
-                                          boxShadow: `0 0 12px ${badge.sent ? "rgba(16,185,129,0.10)" : "rgba(245,158,11,0.12)"}`,
-                                        }}
-                                      >
-                                        {badge.tinyLabel}
-                                      </span>
-                                    ) : (
-                                      <div />
-                                    )}
+                                    <div />
                                   </div>
                                 </>
                               )}
@@ -2017,3 +1821,4 @@ export default function WeekDayGridView(props: {
     </>
   );
 }
+//ggaaga
