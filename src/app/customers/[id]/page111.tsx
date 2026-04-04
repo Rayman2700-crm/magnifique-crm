@@ -480,13 +480,13 @@ function MetricCard({
   subtext: string;
 }) {
   return (
-    <Card className="border-[var(--border)] bg-[var(--surface)]">
-      <CardContent className="min-h-[126px] p-5">
+    <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition-all duration-200 hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035] hover:shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
+      <CardContent className="flex min-h-[150px] h-full flex-col justify-between p-5">
         <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">{label}</div>
         <div className="mt-4 text-[30px] font-semibold leading-none tracking-tight text-[var(--text)]">
           {value}
         </div>
-        <div className="mt-3 text-sm text-white/50">{subtext}</div>
+        <div className="mt-4 text-sm text-white/50">{subtext}</div>
       </CardContent>
     </Card>
   );
@@ -712,11 +712,27 @@ export default async function CustomerDetailPage({
   );
 
   const { data: photos } = await supabase
-    .from("customer_media")
+    .from("customer_photos")
     .select("id, storage_path, original_name, mime_type, size_bytes, created_at")
     .eq("customer_profile_id", customerProfileId)
     .order("created_at", { ascending: false })
     .limit(200);
+
+  const photoRows = ((photos as PhotoRow[] | null) ?? []);
+  const photoPaths = photoRows
+    .map((photo) => photo.storage_path)
+    .filter((path): path is string => !!path);
+
+  const signedUrlMap = new Map<string, string | null>();
+  if (photoPaths.length > 0) {
+    const { data: signedUrls } = await supabase.storage
+      .from("customer-photos")
+      .createSignedUrls(photoPaths, 60 * 60);
+
+    for (const entry of signedUrls ?? []) {
+      signedUrlMap.set(entry.path, entry.signedUrl ?? null);
+    }
+  }
 
   const { data: servicesRaw } = tenantId
     ? await supabase
@@ -755,16 +771,14 @@ export default async function CustomerDetailPage({
                     </h1>
                   </div>
 
-                  <div className="xl:w-[180px]">
-                    <div className="rounded-[22px] border border-white/10 bg-black/20 px-4 py-3">
-                      <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Nächster Termin</div>
-                      <div className="mt-2 text-base font-medium text-[var(--text)]">
-                        {fmtDateOrDash(nextAppointmentAt)}
-                      </div>
-                      <div className="mt-1 text-sm text-white/50">
-                        {nextAppointmentAt ? "Folgetermin vorhanden" : "Kein Termin geplant"}
-                      </div>
-                    </div>
+                  <div className="flex flex-wrap items-center gap-3 xl:justify-end">
+                    <Link href={`/customers/${customerProfileId}/edit`}>
+                      <Button variant="secondary" size="sm">Bearbeiten</Button>
+                    </Link>
+
+                    <Link href={`/customers/${customerProfileId}/appointments/new`}>
+                      <Button size="sm">Neuer Termin</Button>
+                    </Link>
                   </div>
                 </div>
 
@@ -859,19 +873,7 @@ export default async function CustomerDetailPage({
                   </div>
                 </div>
 
-                <div className="border-t border-white/8 pt-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <Link href={`/customers/${customerProfileId}/edit`}>
-                        <Button variant="secondary" size="sm">Bearbeiten</Button>
-                      </Link>
-                    </div>
 
-                    <Link href={`/customers/${customerProfileId}/appointments/new`}>
-                      <Button size="sm">Neuer Termin</Button>
-                    </Link>
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -887,7 +889,7 @@ export default async function CustomerDetailPage({
               </div>
             ) : null}
 
-            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-5 items-stretch">
               <MetricCard
                 label="Besuche"
                 value={String(visitCount)}
@@ -906,7 +908,12 @@ export default async function CustomerDetailPage({
               <MetricCard
                 label="Letzter Besuch"
                 value={daysSinceLastVisit !== null ? `${daysSinceLastVisit} Tage` : "—"}
-                subtext={nextAppointmentAt ? `Nächster Termin: ${fmtDateOrDash(nextAppointmentAt)}` : "Kein Folgetermin"}
+                subtext={lastVisitAt ? fmtDateOrDash(lastVisitAt) : "Kein Besuch"}
+              />
+              <MetricCard
+                label="Nächster Termin"
+                value={fmtDateOrDash(nextAppointmentAt)}
+                subtext={nextAppointmentAt ? "Folgetermin vorhanden" : "Kein Termin geplant"}
               />
             </div>
           </CardContent>
@@ -1247,9 +1254,9 @@ export default async function CustomerDetailPage({
             <div className="mt-5">
               <CustomerMediaGalleryClient
                 customerProfileId={customerProfileId}
-                items={((photos as PhotoRow[] | null) ?? []).map((photo) => ({
+                items={photoRows.map((photo) => ({
                   id: photo.id,
-                  url: photo.storage_path,
+                  url: signedUrlMap.get(photo.storage_path) ?? null,
                   originalName: photo.original_name ?? null,
                   mimeType: photo.mime_type ?? null,
                   sizeBytes: photo.size_bytes ?? null,
