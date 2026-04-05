@@ -965,58 +965,22 @@ export default function DashboardCalendarCardClient({
               </div>
             </div>
 
-            {isAdmin ? (
-              <div className="hidden md:block">
-                <TenantLegendClient
-                  users={legendUsers}
-                  activeTenantId={selectedTenantId}
-                  onSelect={setSelectedTenantId}
-                />
-              </div>
-            ) : currentLegendUser ? (
-              <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/80">
+            {currentLegendUser && !isAdmin ? (
+              <div className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/80 md:inline-flex md:w-fit">
                 {currentLegendUser.fullName ?? currentLegendUser.tenantDisplayName}
               </div>
             ) : null}
           </div>
 
-          <div className="hidden flex-wrap gap-3 md:flex">
-            <Button
-              type="button"
-              className="whitespace-nowrap"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setCreateOpen(true);
-              }}
-            >
-              + Neuer Termin
-            </Button>
-
-            <Button
-              type="button"
-              variant="secondary"
-              className="whitespace-nowrap"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setCalendarState({
-                  view: "week",
-                  anchorISO: toLocalISODate(new Date()),
-                });
-              }}
-            >
-              Kalender öffnen
-            </Button>
-          </div>
+          {isAdmin ? (
+            <div className="hidden md:block">
+              <TenantLegendClient
+                users={legendUsers}
+                activeTenantId={selectedTenantId}
+                onSelect={setSelectedTenantId}
+              />
+            </div>
+          ) : null}
         </div>
 
         <div className="mt-7">
@@ -1038,7 +1002,7 @@ export default function DashboardCalendarCardClient({
               )}
 
               <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Button
                     type="button"
                     variant="secondary"
@@ -1098,6 +1062,41 @@ export default function DashboardCalendarCardClient({
 
                 <div className="hidden md:block"><ViewSwitch value={view} onChange={handleChangeView} /></div>
               </div>
+
+              <button
+                type="button"
+                aria-label="Neuen Termin erstellen"
+                className="absolute left-2 top-[88px] z-20 hidden h-12 w-12 items-center justify-center rounded-full border md:inline-flex"
+                style={{
+                  color: "#60a5fa",
+                  background: "linear-gradient(180deg, rgba(37,99,235,0.26) 0%, rgba(37,99,235,0.18) 100%)",
+                  borderColor: "rgba(96,165,250,0.42)",
+                  boxShadow: "0 14px 32px rgba(37,99,235,0.26), 0 0 0 2px rgba(11,11,12,0.92)",
+                }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setCreateOpen(true);
+                }}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-[20px] w-[20px]"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 5v14" />
+                  <path d="M5 12h14" />
+                </svg>
+              </button>
 
               <DashboardWeekGridClient
                 items={items}

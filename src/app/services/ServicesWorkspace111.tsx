@@ -217,6 +217,7 @@ function ServiceSheet({
 }
 
 export default function ServicesWorkspace({ selectedTenantId, tenantName, services, initialCreateOpen = false }: Props) {
+  const missingCreateTenant = selectedTenantId === "all";
   const [mounted, setMounted] = useState(false);
   const [createOpen, setCreateOpen] = useState(initialCreateOpen);
   const [createShown, setCreateShown] = useState(false);
@@ -259,6 +260,15 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
     }
   };
 
+  const openCreate = () => {
+    setCreateOpen(true);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("create", "1");
+      window.history.replaceState({}, "", url.pathname + (url.search ? `?${url.searchParams.toString()}` : ""));
+    }
+  };
+
   const closeEdit = () => {
     setEditShown(false);
     window.setTimeout(() => setEditingServiceId(null), 180);
@@ -272,11 +282,39 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
   return (
     <>
       <section className="mt-6 rounded-[28px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] md:p-5">
-        <div className="mb-4 px-1">
-          <h2 className="text-xl font-semibold text-[var(--text)]">Dienstleistungen</h2>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">
-            Kompakte Liste mit schnellen Aktionen für <span className="text-[var(--text)]">{tenantName ?? "aktuellen Behandler"}</span>.
-          </p>
+        <div className="mb-4 flex items-start justify-between gap-4 px-1">
+          <div>
+            <h2 className="text-xl font-semibold text-[var(--text)]">Dienstleistungen</h2>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
+              Kompakte Liste mit schnellen Aktionen für <span className="text-[var(--text)]">{tenantName ?? "aktuellen Behandler"}</span>.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={openCreate}
+            aria-label="Dienstleistung hinzufügen"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border font-semibold transition hover:-translate-y-0.5 md:inline-flex"
+            style={{
+              color: "#60a5fa",
+              backgroundColor: "rgba(96,165,250,0.14)",
+              borderColor: "rgba(96,165,250,0.30)",
+            }}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-[18px] w-[18px]"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 5v14" />
+              <path d="M5 12h14" />
+            </svg>
+          </button>
         </div>
 
         {services.length === 0 ? (
@@ -284,7 +322,7 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
             Keine Dienstleistungen gefunden. Passe Suche oder Statusfilter an.
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3 relative z-0">
             {services.map((service) => {
               const active = Boolean(service.is_active);
               const tenant = firstJoin(service.tenant);
@@ -374,6 +412,12 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
             <div className="mt-1 font-medium text-white">{tenantName ?? "Aktueller Behandler"}</div>
           </div>
 
+          {missingCreateTenant ? (
+            <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+              Wähle zuerst einen Behandler aus, bevor du eine neue Dienstleistung speicherst.
+            </div>
+          ) : null}
+
           <div>
             <label className="text-white text-sm">Name *</label>
             <input name="name" required className={fieldClassName()} placeholder="z. B. Neues Set Klassisch" />
@@ -413,7 +457,7 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
             </label>
           </div>
 
-          <Button type="submit" className="w-full">
+          <Button type="submit" className="w-full" disabled={missingCreateTenant}>
             Dienstleistung speichern
           </Button>
 
@@ -503,7 +547,7 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
               Aktiv-Status änderst du direkt in der Liste über den Button Aktivieren / Deaktivieren.
             </div>
 
-            <Button type="submit" className="w-full">
+            <Button type="submit" className="w-full" disabled={missingCreateTenant}>
               Änderungen speichern
             </Button>
 

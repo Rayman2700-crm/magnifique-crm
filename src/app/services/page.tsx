@@ -80,12 +80,6 @@ function buildServicesHref(q: string, status: StatusFilter, createOpen = false) 
   return query ? `/services?${query}` : "/services";
 }
 
-function isTenantOption(
-  entry: { id: string; display_name: string | null; user_id: string | null } | null
-): entry is TenantOption {
-  return entry !== null;
-}
-
 function statusLinkClass(isActive: boolean) {
   return [
     "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition whitespace-nowrap",
@@ -117,20 +111,44 @@ function MobileStatusMenu({
     { key: "all", label: "Alle", count: counts.all },
   ];
 
+  const activeCount =
+    statusFilter === "inactive"
+      ? counts.inactive
+      : statusFilter === "all"
+        ? counts.all
+        : counts.active;
+
   return (
-    <details className="relative md:hidden">
-      <summary
-        className="flex h-12 w-12 cursor-pointer list-none items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/85 shadow-[0_0_0_2px_rgba(11,11,12,0.95),0_10px_28px_rgba(0,0,0,0.30)] [&::-webkit-details-marker]:hidden"
+    <>
+      <button
+        type="button"
+        popoverTarget="services-status-menu"
+        popoverTargetAction="toggle"
+        className="relative flex h-12 w-12 cursor-pointer list-none items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/85 shadow-[0_0_0_2px_rgba(11,11,12,0.95),0_10px_28px_rgba(0,0,0,0.30)] md:hidden"
         aria-label="Statusfilter öffnen"
       >
-        <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <svg
+          viewBox="0 0 24 24"
+          className="h-[18px] w-[18px]"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        >
           <path d="M4 7h16" />
           <path d="M4 12h16" />
           <path d="M4 17h16" />
         </svg>
-      </summary>
+        <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#2563eb] px-1 text-[10px] font-extrabold text-white shadow-[0_0_0_2px_rgba(11,11,12,0.92)]">
+          {activeCount}
+        </span>
+      </button>
 
-      <div className="absolute left-0 top-[calc(100%+12px)] z-30 w-[220px] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl">
+      <div
+        id="services-status-menu"
+        popover="auto"
+        className="md:hidden fixed left-[116px] top-[332px] z-[2147483647] m-0 w-[220px] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.995)_0%,rgba(12,13,16,0.995)_100%)] p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.62)] backdrop-blur-xl"
+      >
         <div className="px-1 pb-2">
           <div className="text-sm font-semibold text-white">Status wählen</div>
           <div className="mt-0.5 text-xs text-white/45">Dienstleistungen filtern</div>
@@ -158,7 +176,43 @@ function MobileStatusMenu({
           })}
         </div>
       </div>
-    </details>
+    </>
+  );
+}
+
+function MobileCreateButton({
+  qRaw,
+  statusFilter,
+}: {
+  qRaw: string;
+  statusFilter: StatusFilter;
+}) {
+  return (
+    <Link
+      href={buildServicesHref(qRaw, statusFilter, true)}
+      aria-label="Dienstleistung hinzufügen"
+      className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border md:hidden"
+      style={{
+        color: "#0b0b0c",
+        background: "linear-gradient(180deg, rgba(214,195,163,0.96) 0%, rgba(214,195,163,0.88) 100%)",
+        borderColor: "rgba(214,195,163,0.28)",
+        boxShadow: "0 12px 28px rgba(214,195,163,0.22), 0 0 0 2px rgba(11,11,12,0.95)",
+      }}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        className="h-[18px] w-[18px]"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M12 5v14" />
+        <path d="M5 12h14" />
+      </svg>
+    </Link>
   );
 }
 
@@ -211,22 +265,17 @@ export default async function ServicesPage({
       .in("role", ["PRACTITIONER", "ADMIN"]);
 
     const seen = new Set<string>();
-    tenantOptions = ((tenantProfiles ?? []) as UserProfileRow[])
-      .map((entry) => {
-        const tenantId = entry.tenant_id ?? entry.calendar_tenant_id ?? null;
-        if (!tenantId) return null;
-        return {
-          id: tenantId,
-          display_name: entry.full_name ?? tenantId,
-          user_id: entry.user_id ?? null,
-        };
-      })
-      .filter(isTenantOption)
-      .filter((entry) => {
-        if (seen.has(entry.id)) return false;
-        seen.add(entry.id);
-        return true;
+    tenantOptions = ((tenantProfiles ?? []) as UserProfileRow[]).reduce<TenantOption[]>((acc, entry) => {
+      const tenantId = entry.tenant_id ?? entry.calendar_tenant_id ?? null;
+      if (!tenantId || seen.has(tenantId)) return acc;
+      seen.add(tenantId);
+      acc.push({
+        id: tenantId,
+        display_name: entry.full_name ?? tenantId,
+        user_id: entry.user_id ?? null,
       });
+      return acc;
+    }, []);
   } else if (selectedTenantId) {
     const { data: ownTenant } = await admin
       .from("tenants")
@@ -314,10 +363,10 @@ export default async function ServicesPage({
 
   return (
     <main className="mx-auto max-w-7xl p-4 md:p-6 xl:p-8">
-      <section className="overflow-hidden rounded-[32px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+      <section className="overflow-visible rounded-[32px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
         <div className="p-5 md:p-7">
           <div
-            className="rounded-[28px] border p-5 md:p-6"
+            className="overflow-visible rounded-[28px] border p-5 md:p-6"
             style={{
               background: "linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015))",
               borderColor: "rgba(255,255,255,0.08)",
@@ -359,19 +408,26 @@ export default async function ServicesPage({
                 </div>
 
                 <div className="w-full xl:w-auto xl:max-w-[620px] xl:min-w-[420px] xl:shrink-0">
-                  <div className="flex items-start justify-between gap-3 xl:block">
+                  <div className="flex items-center justify-between gap-3 md:hidden">
                     <MobileStatusMenu qRaw={qRaw} statusFilter={statusFilter} counts={counts} />
+                    <MobileCreateButton qRaw={qRaw} statusFilter={statusFilter} />
+                    <ServiceTenantSelect
+                      tenantOptions={tenantAvatarOptions}
+                      selectedTenantId={selectedTenantId}
+                      isAdmin={isAdmin}
+                      fallbackLabel={tenantName ?? "nicht gewählt"}
+                    />
+                  </div>
 
-                    <div className="min-w-0 flex-1 xl:flex xl:justify-end">
-                      <div className="max-w-full overflow-x-auto xl:max-w-none">
-                        <div className="min-w-max xl:flex xl:justify-end">
-                          <ServiceTenantSelect
-                            tenantOptions={tenantAvatarOptions}
-                            selectedTenantId={selectedTenantId}
-                            isAdmin={isAdmin}
-                            fallbackLabel={tenantName ?? "nicht gewählt"}
-                          />
-                        </div>
+                  <div className="hidden md:flex md:justify-end">
+                    <div className="max-w-full overflow-x-auto">
+                      <div className="min-w-max">
+                        <ServiceTenantSelect
+                          tenantOptions={tenantAvatarOptions}
+                          selectedTenantId={selectedTenantId}
+                          isAdmin={isAdmin}
+                          fallbackLabel={tenantName ?? "nicht gewählt"}
+                        />
                       </div>
                     </div>
                   </div>
@@ -415,7 +471,7 @@ export default async function ServicesPage({
               selectedTenantId={selectedTenantId ?? "all"}
               tenantName={tenantName}
               services={filteredServices}
-              initialCreateOpen={!shouldShowAllServices && createOpen}
+              initialCreateOpen={createOpen}
             />
           )}
         </div>

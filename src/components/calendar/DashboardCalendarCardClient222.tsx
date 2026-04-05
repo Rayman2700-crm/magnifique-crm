@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import DashboardWeekGridClient from "@/components/calendar/DashboardWeekGridClient";
@@ -229,146 +230,361 @@ function MobileLegendPicker({
   onSelect,
 }: MobileLegendPickerProps) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [panelTop, setPanelTop] = useState(0);
+  const [panelRight, setPanelRight] = useState(12);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
     };
+
+    const updatePosition = () => {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setPanelTop(Math.round(rect.bottom + 12));
+      setPanelRight(Math.max(12, Math.round(window.innerWidth - rect.right)));
+    };
+
+    updatePosition();
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+      document.body.style.overflow = "";
+    };
   }, [open]);
 
-  const visibleUsers = users.slice(0, 3);
   const totalCount = users.length + 1;
   const activeUser =
     activeTenantId === null
       ? null
       : users.find((user) => user.filterTenantId === activeTenantId || user.tenantId === activeTenantId) ?? null;
 
+  const ringColors = ["#d6c3a3", ...users.map((user) => getLegendAvatarTheme(user.fullName ?? user.tenantDisplayName).ring)];
+  const ringBackground = useMemo(() => {
+    const step = 100 / ringColors.length;
+    return `conic-gradient(${ringColors
+      .map((color, index) => `${color} ${Math.round(index * step)}% ${Math.round((index + 1) * step)}%`)
+      .join(", ")})`;
+  }, [ringColors]);
+
+  const avatarLabel = activeUser
+    ? getLegendInitials(activeUser.fullName ?? activeUser.tenantDisplayName)
+    : "TC";
+
   return (
-    <div className="relative md:hidden">
+    <>
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="relative inline-flex h-12 min-w-[70px] items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-3 shadow-[0_14px_34px_rgba(0,0,0,0.28)] backdrop-blur"
+        className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full md:hidden"
         aria-label="Behandler auswählen"
         aria-expanded={open}
+        style={{
+          background: ringBackground,
+          boxShadow: "0 0 0 2px rgba(11,11,12,0.95), 0 10px 28px rgba(0,0,0,0.34)",
+        }}
       >
-        <div className="flex items-center">
-          {visibleUsers.map((user, index) => {
-            const theme = getLegendAvatarTheme(user.fullName ?? user.tenantDisplayName);
-            return (
-              <span
-                key={user.userId}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border-2 text-[11px] font-extrabold text-white shadow-[0_8px_18px_rgba(0,0,0,0.24)]"
-                style={{
-                  marginLeft: index === 0 ? 0 : -10,
-                  backgroundColor: "#111216",
-                  borderColor: theme.ring,
-                }}
-              >
-                {getLegendInitials(user.fullName ?? user.tenantDisplayName)}
-              </span>
-            );
-          })}
-        </div>
+        <span className="flex h-[42px] w-[42px] items-center justify-center rounded-full border-2 border-[#111216] bg-[#0f1013] text-[12px] font-extrabold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+          {avatarLabel}
+        </span>
 
-        <span className="absolute -right-1 -top-1 inline-flex h-6 min-w-[24px] items-center justify-center rounded-full bg-[#2563eb] px-1.5 text-[11px] font-extrabold text-white shadow-[0_0_0_2px_rgba(11,11,12,0.9)]">
+        <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#2563eb] px-1 text-[10px] font-extrabold text-white shadow-[0_0_0_2px_rgba(11,11,12,0.92)]">
           {activeUser ? "1" : totalCount}
         </span>
       </button>
 
-      {open ? (
-        <>
-          <button
-            type="button"
-            aria-label="Behandler-Auswahl schließen"
-            className="fixed inset-0 z-30 bg-transparent"
-            onClick={() => setOpen(false)}
-          />
-          <div className="absolute right-0 top-[56px] z-40 w-[260px] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl">
-            <div className="flex items-center justify-between px-1 pb-2">
-              <div className="text-sm font-semibold text-white">Behandler wählen</div>
+      {mounted && open
+        ? createPortal(
+            <>
               <button
                 type="button"
+                aria-label="Behandler-Auswahl schließen"
+                className="fixed inset-0 z-[120] bg-[rgba(0,0,0,0.45)] backdrop-blur-[2px] md:hidden"
                 onClick={() => setOpen(false)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-lg leading-none text-white/70"
-                aria-label="Schließen"
-              >
-                ×
-              </button>
-            </div>
+              />
 
-            <div className="grid gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  onSelect(null);
-                  setOpen(false);
-                }}
-                className="flex items-center justify-between rounded-2xl border px-3 py-3 text-left"
-                style={{
-                  borderColor: activeTenantId === null ? "rgba(214,195,163,0.28)" : "rgba(255,255,255,0.10)",
-                  backgroundColor: activeTenantId === null ? "rgba(214,195,163,0.14)" : "rgba(255,255,255,0.04)",
-                }}
+              <div
+                className="fixed z-[121] w-[min(320px,calc(100vw-24px))] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl md:hidden"
+                style={{ top: panelTop, right: panelRight, maxHeight: "min(70vh, 520px)" }}
               >
-                <div className="flex items-center gap-3">
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-sm font-extrabold text-black">
-                    Alle
-                  </span>
+                <div className="flex items-center justify-between px-1 pb-2">
                   <div>
-                    <div className="text-sm font-semibold text-white">Alle</div>
-                    <div className="text-xs text-white/50">Alle Behandler</div>
+                    <div className="text-sm font-semibold text-white">Behandler wählen</div>
+                    <div className="mt-0.5 text-xs text-white/45">Team-Kalender Filter</div>
                   </div>
-                </div>
-                {activeTenantId === null ? <span className="text-xs font-semibold text-[var(--primary)]">Aktiv</span> : null}
-              </button>
-
-              {users.map((user) => {
-                const theme = getLegendAvatarTheme(user.fullName ?? user.tenantDisplayName);
-                const selected =
-                  activeTenantId === user.filterTenantId || activeTenantId === user.tenantId;
-                return (
                   <button
-                    key={user.userId}
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-lg leading-none text-white/70"
+                    aria-label="Schließen"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="grid max-h-[calc(min(70vh,520px)-56px)] gap-2 overflow-y-auto pr-1">
+                  <button
                     type="button"
                     onClick={() => {
-                      onSelect(user.filterTenantId);
+                      onSelect(null);
                       setOpen(false);
                     }}
                     className="flex items-center justify-between rounded-2xl border px-3 py-3 text-left"
                     style={{
-                      borderColor: selected ? `${theme.ring}66` : "rgba(255,255,255,0.10)",
-                      backgroundColor: selected ? theme.bg : "rgba(255,255,255,0.04)",
+                      borderColor: activeTenantId === null ? "rgba(214,195,163,0.28)" : "rgba(255,255,255,0.10)",
+                      backgroundColor: activeTenantId === null ? "rgba(214,195,163,0.14)" : "rgba(255,255,255,0.04)",
                     }}
                   >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-full border-2 bg-[#111216] text-sm font-extrabold text-white"
-                        style={{ borderColor: theme.ring }}
-                      >
-                        {getLegendInitials(user.fullName ?? user.tenantDisplayName)}
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-sm font-extrabold text-black">
+                        Alle
                       </span>
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-white">
-                          {user.fullName ?? user.tenantDisplayName}
-                        </div>
-                        <div className="truncate text-xs text-white/50">{user.tenantDisplayName}</div>
+                        <div className="truncate text-sm font-semibold text-white">Alle</div>
+                        <div className="truncate text-xs text-white/50">Alle Behandler</div>
                       </div>
                     </div>
-                    {selected ? <span className="text-xs font-semibold text-[var(--primary)]">Aktiv</span> : null}
+                    {activeTenantId === null ? <span className="pl-3 text-xs font-semibold text-[var(--primary)]">Aktiv</span> : null}
                   </button>
-                );
-              })}
-            </div>
-          </div>
-        </>
-      ) : null}
-    </div>
+
+                  {users.map((user) => {
+                    const theme = getLegendAvatarTheme(user.fullName ?? user.tenantDisplayName);
+                    const selected = activeTenantId === user.filterTenantId || activeTenantId === user.tenantId;
+                    return (
+                      <button
+                        key={user.userId}
+                        type="button"
+                        onClick={() => {
+                          onSelect(user.filterTenantId);
+                          setOpen(false);
+                        }}
+                        className="flex items-center justify-between rounded-2xl border px-3 py-3 text-left"
+                        style={{
+                          borderColor: selected ? `${theme.ring}66` : "rgba(255,255,255,0.10)",
+                          backgroundColor: selected ? theme.bg : "rgba(255,255,255,0.04)",
+                        }}
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span
+                            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 bg-[#111216] text-sm font-extrabold text-white"
+                            style={{ borderColor: theme.ring }}
+                          >
+                            {getLegendInitials(user.fullName ?? user.tenantDisplayName)}
+                          </span>
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-semibold text-white">
+                              {user.fullName ?? user.tenantDisplayName}
+                            </div>
+                            <div className="truncate text-xs text-white/50">{user.tenantDisplayName}</div>
+                          </div>
+                        </div>
+                        {selected ? <span className="pl-3 text-xs font-semibold text-[var(--primary)]">Aktiv</span> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>,
+            document.body
+          )
+        : null}
+    </>
   );
 }
 
+
+
+function MobileCircleActionButton({
+  label,
+  onClick,
+  variant = "dark",
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  variant?: "dark" | "primary";
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onMouseDown={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      }}
+      className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border md:hidden"
+      aria-label={label}
+      style={{
+        borderColor: variant === "primary" ? "rgba(214,195,163,0.28)" : "rgba(255,255,255,0.10)",
+        background: variant === "primary"
+          ? "linear-gradient(180deg, rgba(214,195,163,0.96) 0%, rgba(214,195,163,0.88) 100%)"
+          : "rgba(255,255,255,0.04)",
+        color: variant === "primary" ? "#0b0b0c" : "rgba(255,255,255,0.88)",
+        boxShadow: variant === "primary"
+          ? "0 12px 28px rgba(214,195,163,0.22), 0 0 0 2px rgba(11,11,12,0.95)"
+          : "0 0 0 2px rgba(11,11,12,0.95), 0 10px 28px rgba(0,0,0,0.30)",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function MobileViewPicker({
+  value,
+  onChange,
+}: {
+  value: ViewMode;
+  onChange: (v: ViewMode) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [panelTop, setPanelTop] = useState(0);
+  const [panelRight, setPanelRight] = useState(12);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    const updatePosition = () => {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setPanelTop(Math.round(rect.bottom + 12));
+      setPanelRight(Math.max(12, Math.round(window.innerWidth - rect.right)));
+    };
+
+    updatePosition();
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+
+  const options: { value: ViewMode; label: string }[] = [
+    { value: "day", label: "Tag" },
+    { value: "week", label: "Woche" },
+    { value: "month", label: "Monat" },
+    { value: "year", label: "Jahr" },
+  ];
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border md:hidden"
+        aria-label="Kalenderansicht auswählen"
+        aria-expanded={open}
+        style={{
+          borderColor: "rgba(255,255,255,0.10)",
+          background: "rgba(255,255,255,0.04)",
+          color: "rgba(255,255,255,0.88)",
+          boxShadow: "0 0 0 2px rgba(11,11,12,0.95), 0 10px 28px rgba(0,0,0,0.30)",
+        }}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <path d="M4 7h16" />
+          <path d="M4 12h16" />
+          <path d="M4 17h16" />
+        </svg>
+      </button>
+
+      {mounted && open
+        ? createPortal(
+            <>
+              <button
+                type="button"
+                aria-label="Ansichtsauswahl schließen"
+                className="fixed inset-0 z-[120] bg-[rgba(0,0,0,0.45)] backdrop-blur-[2px] md:hidden"
+                onClick={() => setOpen(false)}
+              />
+
+              <div
+                className="fixed z-[121] w-[min(260px,calc(100vw-24px))] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl md:hidden"
+                style={{ top: panelTop, right: panelRight }}
+              >
+                <div className="flex items-center justify-between px-1 pb-2">
+                  <div>
+                    <div className="text-sm font-semibold text-white">Ansicht wählen</div>
+                    <div className="mt-0.5 text-xs text-white/45">Kalender-Modus</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-lg leading-none text-white/70"
+                    aria-label="Schließen"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="grid gap-2">
+                  {options.map((option) => {
+                    const selected = value === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => {
+                          onChange(option.value);
+                          setOpen(false);
+                        }}
+                        className="flex items-center justify-between rounded-2xl border px-3 py-3 text-left"
+                        style={{
+                          borderColor: selected ? "rgba(214,195,163,0.28)" : "rgba(255,255,255,0.10)",
+                          backgroundColor: selected ? "rgba(214,195,163,0.14)" : "rgba(255,255,255,0.04)",
+                        }}
+                      >
+                        <span className="text-sm font-semibold text-white">{option.label}</span>
+                        {selected ? <span className="text-xs font-semibold text-[var(--primary)]">Aktiv</span> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>,
+            document.body
+          )
+        : null}
+    </>
+  );
+}
 
 function ViewSwitch({
   value,
@@ -723,73 +939,48 @@ export default function DashboardCalendarCardClient({
     <Card className="border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
       <CardContent className="p-6 md:p-8">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-  <div className="flex items-start justify-between gap-4">
-    <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:gap-6">
-      <div>
-        <div className="text-lg font-semibold text-white">Kalender</div>
-        <div className="text-sm text-white/60">Team-Übersicht</div>
-      </div>
+          <div className="flex min-w-0 flex-col gap-4 lg:gap-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-lg font-semibold text-white">Kalender</div>
+                <div className="text-sm text-white/60">Team-Übersicht</div>
+              </div>
 
-      {isAdmin ? (
-        <>
-          <div className="hidden md:block">
-            <TenantLegendClient
-              users={legendUsers}
-              activeTenantId={selectedTenantId}
-              onSelect={setSelectedTenantId}
-            />
+              <div className="flex items-center gap-2 md:hidden">
+                <MobileCircleActionButton
+                  label="Neuen Termin erstellen"
+                  variant="primary"
+                  onClick={() => setCreateOpen(true)}
+                >
+                  <span className="text-[26px] font-semibold leading-none">+</span>
+                </MobileCircleActionButton>
+                <MobileViewPicker value={view} onChange={handleChangeView} />
+                {isAdmin ? (
+                  <MobileLegendPicker
+                    users={legendUsers}
+                    activeTenantId={selectedTenantId}
+                    onSelect={setSelectedTenantId}
+                  />
+                ) : null}
+              </div>
+            </div>
+
+            {currentLegendUser && !isAdmin ? (
+              <div className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/80 md:inline-flex md:w-fit">
+                {currentLegendUser.fullName ?? currentLegendUser.tenantDisplayName}
+              </div>
+            ) : null}
           </div>
-          <MobileLegendPicker
-            users={legendUsers}
-            activeTenantId={selectedTenantId}
-            onSelect={setSelectedTenantId}
-          />
-        </>
-      ) : currentLegendUser ? (
-        <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/80">
-          {currentLegendUser.fullName ?? currentLegendUser.tenantDisplayName}
-        </div>
-      ) : null}
-    </div>
-  </div>
 
-  <div className="flex flex-wrap gap-3">
-            <Button
-              type="button"
-              className="whitespace-nowrap"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setCreateOpen(true);
-              }}
-            >
-              + Neuer Termin
-            </Button>
-
-            <Button
-              type="button"
-              variant="secondary"
-              className="whitespace-nowrap"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setCalendarState({
-                  view: "week",
-                  anchorISO: toLocalISODate(new Date()),
-                });
-              }}
-            >
-              Kalender öffnen
-            </Button>
-          </div>
+          {isAdmin ? (
+            <div className="hidden md:block">
+              <TenantLegendClient
+                users={legendUsers}
+                activeTenantId={selectedTenantId}
+                onSelect={setSelectedTenantId}
+              />
+            </div>
+          ) : null}
         </div>
 
         <div className="mt-7">
@@ -811,7 +1002,33 @@ export default function DashboardCalendarCardClient({
               )}
 
               <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    aria-label="Neuen Termin erstellen"
+                    className="hidden h-11 w-11 items-center justify-center rounded-full border md:inline-flex"
+                    style={{
+                      color: "#60a5fa",
+                      backgroundColor: "rgba(96,165,250,0.14)",
+                      borderColor: "rgba(96,165,250,0.30)",
+                      boxShadow: "0 10px 24px rgba(37,99,235,0.18)",
+                    }}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setCreateOpen(true);
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M12 5v14" />
+                      <path d="M5 12h14" />
+                    </svg>
+                  </button>
+
                   <Button
                     type="button"
                     variant="secondary"
@@ -869,7 +1086,7 @@ export default function DashboardCalendarCardClient({
                   </div>
                 </div>
 
-                <ViewSwitch value={view} onChange={handleChangeView} />
+                <div className="hidden md:block"><ViewSwitch value={view} onChange={handleChangeView} /></div>
               </div>
 
               <DashboardWeekGridClient

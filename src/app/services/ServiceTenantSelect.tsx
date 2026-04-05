@@ -43,7 +43,7 @@ function MobileTenantPicker({
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [panelTop, setPanelTop] = useState(0);
-  const [panelRight, setPanelRight] = useState(12);
+  const [panelLeft, setPanelLeft] = useState(12);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
@@ -60,8 +60,13 @@ function MobileTenantPicker({
     const updatePosition = () => {
       const rect = buttonRef.current?.getBoundingClientRect();
       if (!rect) return;
+      const panelWidth = Math.min(320, window.innerWidth - 24);
+      const nextLeft = Math.min(
+        Math.max(12, Math.round(rect.right - panelWidth)),
+        Math.max(12, window.innerWidth - panelWidth - 12)
+      );
       setPanelTop(Math.round(rect.bottom + 12));
-      setPanelRight(Math.max(12, Math.round(window.innerWidth - rect.right)));
+      setPanelLeft(nextLeft);
     };
 
     updatePosition();
@@ -130,13 +135,13 @@ function MobileTenantPicker({
               <button
                 type="button"
                 aria-label="Behandler-Auswahl schließen"
-                className="fixed inset-0 z-[120] bg-[rgba(0,0,0,0.45)] backdrop-blur-[2px] md:hidden"
+                className="fixed inset-0 z-[320] bg-[rgba(0,0,0,0.45)] backdrop-blur-[2px] md:hidden"
                 onClick={() => setOpen(false)}
               />
 
               <div
-                className="fixed z-[121] w-[min(320px,calc(100vw-24px))] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl md:hidden"
-                style={{ top: panelTop, right: panelRight, maxHeight: "min(70vh, 520px)" }}
+                className="fixed z-[321] w-[min(320px,calc(100vw-24px))] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl md:hidden"
+                style={{ top: panelTop, left: panelLeft, maxHeight: "min(70vh, 520px)" }}
               >
                 <div className="flex items-center justify-between px-1 pb-2">
                   <div>
@@ -254,9 +259,9 @@ export default function ServiceTenantSelect({
             type="submit"
             name="tenant"
             value="all"
-            className="inline-flex flex-col items-center gap-2 shrink-0"
+            className="inline-flex shrink-0 flex-col items-center gap-2"
           >
-            <span className="relative overflow-hidden rounded-full flex h-11 w-11 items-center justify-center border border-white/10 bg-white text-sm font-extrabold text-black shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
+            <span className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white text-sm font-extrabold text-black shadow-[0_8px_24px_rgba(0,0,0,0.35)]">
               Alle
             </span>
             <span className={chipClassName(!selectedTenantId)}>
@@ -273,7 +278,7 @@ export default function ServiceTenantSelect({
                 type="submit"
                 name="tenant"
                 value={tenant.id}
-                className="inline-flex flex-col items-center gap-2 shrink-0"
+                className="inline-flex shrink-0 flex-col items-center gap-2"
                 title={tenant.display_name ?? tenant.id}
               >
                 <span
