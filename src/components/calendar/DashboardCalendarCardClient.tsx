@@ -337,7 +337,7 @@ function MobileLegendPicker({
                   </button>
                 </div>
 
-                <div className="grid max-h-[calc(min(50vh,720px)-106px)] gap-3 overflow-y-auto pr-1">
+                <div className="grid max-h-[calc(min(70vh,520px)-56px)] gap-2 overflow-y-auto pr-1">
                   <button
                     type="button"
                     onClick={() => {
