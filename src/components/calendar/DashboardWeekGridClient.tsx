@@ -450,7 +450,15 @@ export default function DashboardWeekGridClient({
           itemsById={itemsById}
           onMoveAppointment={moveAppointment}
           moveSavingId={moveSavingId}
-          onOpenCreate={onOpenCreate}
+          onOpenCreate={() => {
+  if (onOpenCreate) {
+    onOpenCreate();
+  } else {
+    // Fallback → direkt öffnen
+    setCreateVisible(true);
+    setCreateShown(true);
+  }
+}}
         />
       )}
 
