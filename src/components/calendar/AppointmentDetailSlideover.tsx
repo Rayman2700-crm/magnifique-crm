@@ -1134,10 +1134,6 @@ export default function AppointmentDetailSlideover({
                   ) : null}
                 </div>
               ) : null}
-                    </>
-                  ) : null}
-                </div>
-              ) : null}
             </div>
           </div>
 
