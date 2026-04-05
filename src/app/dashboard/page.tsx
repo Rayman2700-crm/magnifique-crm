@@ -844,7 +844,7 @@ export default async function DashboardPage() {
               <div className="hidden flex-col gap-6 md:flex md:flex-row md:items-center md:justify-between">
                 <div className="flex items-center gap-5">
                   <div
-                    className="flex h-[102px] w-[102px] items-center justify-center overflow-hidden rounded-[24px] border-[4px] shadow-[0_0_0_2px_rgba(11,11,12,0.9)]"
+                    className="flex h-[98px] w-[98px] items-center justify-center overflow-hidden rounded-[24px] border-[4px] shadow-[0_0_0_2px_rgba(11,11,12,0.9)]"
                     style={{ borderColor: profileTheme.border, background: profileTheme.bg }}
                   >
                     <img
