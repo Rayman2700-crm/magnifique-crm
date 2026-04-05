@@ -299,7 +299,7 @@ function MobileLegendPicker({
           boxShadow: "0 0 0 2px rgba(11,11,12,0.95), 0 10px 28px rgba(0,0,0,0.34)",
         }}
       >
-        <span className="flex h-[32px] w-[42px] items-center justify-center rounded-full border-2 border-[#111216] bg-[#0f1013] text-[12px] font-extrabold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+        <span className="flex h-[42px] w-[42px] items-center justify-center rounded-full border-2 border-[#111216] bg-[#0f1013] text-[12px] font-extrabold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
           {avatarLabel}
         </span>
 
@@ -337,7 +337,7 @@ function MobileLegendPicker({
                   </button>
                 </div>
 
-                <div className="grid max-h-[calc(min(70vh,520px)-56px)] gap-2 overflow-y-auto pr-1">
+                <div className="grid max-h-[calc(min(50vh,520px)-56px)] gap-2 overflow-y-auto pr-1">
                   <button
                     type="button"
                     onClick={() => {
