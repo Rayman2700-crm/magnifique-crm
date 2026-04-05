@@ -325,7 +325,7 @@ export default function DashboardWeekGridClient({
     [services]
   );
 
-  const isMobileCalendar = viewportWidth < 568;
+  const isMobileCalendar = viewportWidth < 1068;
   const mobileAgendaDays = useMemo(() => {
     if (!isMobileCalendar) return [] as { iso: string; date: Date; events: Item[] }[];
 
