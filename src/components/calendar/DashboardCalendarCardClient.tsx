@@ -625,7 +625,7 @@ function ViewSwitch({
   };
 
   return (
-    <div className="flex flex-col gap-5 md:flex-row md:items-between md:justify-between">
+    <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
       {btn("day", "Tag")}
       {btn("week", "Woche")}
       {btn("month", "Monat")}
