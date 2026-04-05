@@ -1007,7 +1007,7 @@ export default function DashboardCalendarCardClient({
                 </div>
               )}
 
-              <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     type="button"
