@@ -168,15 +168,6 @@ type PaymentRow = {
   payment_method: PaymentMethodJoin;
 };
 
-type AvatarFilterOption = {
-  tenantId: string | null;
-  userId: string;
-  label: string;
-  imageUrl: string;
-  initials: string;
-};
-
-
 function euroFromCents(value: number | null | undefined, currencyCode?: string | null) {
   if (typeof value !== "number") return "—";
   return new Intl.NumberFormat("de-AT", { style: "currency", currency: currencyCode || "EUR" }).format(value / 100);
@@ -206,30 +197,6 @@ function shortId(value: string | null | undefined) {
   return `${value.slice(0, 8)}…${value.slice(-4)}`;
 }
 
-
-function initialsFromName(value: string | null | undefined, fallback = "AL") {
-  const parts = String(value ?? "").trim().split(/\s+/).filter(Boolean).slice(0, 2);
-  if (parts.length === 0) return fallback;
-  return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || fallback;
-}
-
-
-function avatarRingColor(label: string | null | undefined) {
-  const value = String(label ?? "").toLowerCase();
-
-  if (value.includes("radu")) return "#3b82f6";
-  if (value.includes("raluca")) return "#a855f7";
-  if (value.includes("alexandra")) return "#22c55e";
-  if (value.includes("barbara")) return "#f97316";
-
-  return "rgba(255,255,255,0.55)";
-}
-
-function firstNameLabel(label: string | null | undefined, fallback = "Behandler") {
-  const value = String(label ?? "").trim() || fallback;
-  return value.split(/\s+/)[0] || fallback;
-}
-
 function escapeIlikeValue(value: string) {
   return value.replace(/[,%]/g, "").replace(/\s+/g, " ").trim();
 }
@@ -250,36 +217,6 @@ function formatEventLabel(value: string | null | undefined, referenceData?: Reco
 function firstJoin<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
   return Array.isArray(value) ? (value[0] ?? null) : value;
-}
-
-
-function parsePayload(value: string | null | undefined) {
-  if (!value) return null;
-  try {
-    return JSON.parse(value) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
-
-function getNestedValue(source: unknown, path: string[]) {
-  let current: unknown = source;
-  for (const part of path) {
-    if (!current || typeof current !== "object" || !(part in current)) return null;
-    current = (current as Record<string, unknown>)[part];
-  }
-  return current;
-}
-
-function readFirstString(source: unknown, candidates: string[][]) {
-  for (const path of candidates) {
-    const value = getNestedValue(source, path);
-    if (typeof value === "string") {
-      const trimmed = value.trim();
-      if (trimmed) return trimmed;
-    }
-  }
-  return "";
 }
 
 function readMetaLineValue(existing: string | null | undefined, prefix: string) {
@@ -374,93 +311,16 @@ function formatPaymentMethod(value: string | PaymentMethodJoin | null | undefine
   return normalized || "—";
 }
 
-function startOfDay(date: Date) {
-  const copy = new Date(date);
-  copy.setHours(0, 0, 0, 0);
-  return copy;
-}
-
-function startOfMonth(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
-}
-
-function endExclusive(date: Date, days: number) {
-  const copy = new Date(date);
-  copy.setDate(copy.getDate() + days);
-  return copy;
-}
-
-function isBetween(dateValue: string | null | undefined, start: Date, end: Date) {
-  if (!dateValue) return false;
-  const date = new Date(dateValue);
-  if (Number.isNaN(date.getTime())) return false;
-  return date >= start && date < end;
-}
-
-function getReceiptBusinessState(item: SlideoverReceipt) {
-  const verification = String(item.verificationStatus ?? "").toUpperCase();
-  const signature = String(item.signatureState ?? "").toUpperCase();
-  const status = String(item.status ?? "").toUpperCase();
-
-  if (verification.includes("INVALID") || signature.includes("FAIL") || status.includes("FAIL")) {
-    return { key: "error", label: "Fehler", tone: "red" as const };
-  }
-
-  if (status === "CREATED" || status === "PENDING" || status === "DRAFT") {
-    return { key: "open", label: "Offen", tone: "amber" as const };
-  }
-
-  if (verification === "VALID") {
-    return { key: "paid", label: "Bezahlt", tone: "green" as const };
-  }
-
-  if (signature === "SIMULATED") {
-    return { key: "simulated", label: "Simuliert", tone: "blue" as const };
-  }
-
-  return { key: "neutral", label: status || "Unklar", tone: "neutral" as const };
-}
-
-
-function statusLinkClass(isActive: boolean) {
-  return [
-    "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition whitespace-nowrap",
-    isActive
-      ? "border-white bg-white text-black shadow-[0_10px_24px_rgba(255,255,255,0.10)]"
-      : "border-white/10 bg-black/20 text-white hover:bg-white/10",
-  ].join(" ");
-}
-
-function statusCountClass(isActive: boolean) {
-  return [
-    "inline-flex min-w-[28px] items-center justify-center rounded-full px-2 py-0.5 text-xs font-bold",
-    isActive ? "bg-black/10 text-black" : "bg-white/10 text-white/90",
-  ].join(" ");
-}
-function getQuickFilterLabel(filter: string) {
-  const labels: Record<string, string> = {
-    all: "Alle",
-    today: "Heute",
-    week: "Woche",
-    month: "Monat",
-    open: "Offen",
-    error: "Fehler",
-  };
-  return labels[filter] ?? "Alle";
-}
-
 export default async function RechnungenPage({
   searchParams,
 }: {
   searchParams?:
-    | Promise<{ q?: string; filter?: string; practitioner?: string; receipt?: string; appointmentId?: string; salesOrder?: string; payment?: string; success?: string; error?: string }>
-    | { q?: string; filter?: string; practitioner?: string; receipt?: string; appointmentId?: string; salesOrder?: string; payment?: string; success?: string; error?: string };
+    | Promise<{ q?: string; receipt?: string; appointmentId?: string; salesOrder?: string; payment?: string; success?: string; error?: string }>
+    | { q?: string; receipt?: string; appointmentId?: string; salesOrder?: string; payment?: string; success?: string; error?: string };
 }) {
   const sp = searchParams ? await searchParams : undefined;
   const qRaw = String(sp?.q ?? "").trim();
   const q = qRaw.toLowerCase();
-  const currentFilter = String(sp?.filter ?? "all").trim().toLowerCase() || "all";
-  const practitionerFilter = String(sp?.practitioner ?? "all").trim();
   const appointmentId = String(sp?.appointmentId ?? "").trim();
   const salesOrderId = String(sp?.salesOrder ?? "").trim();
   const paymentId = String(sp?.payment ?? "").trim();
@@ -491,67 +351,6 @@ export default async function RechnungenPage({
     tenant_id: profile?.tenant_id ?? null,
     calendar_tenant_id: profile?.calendar_tenant_id ?? null,
   });
-  const isAdmin = String(profile?.role ?? "").toUpperCase() === "ADMIN";
-
-
-  let avatarOptions: AvatarFilterOption[] = [];
-  const tenantNameById = new Map<string, string>();
-
-  if (isAdmin) {
-    const [{ data: tenantRows }, { data: practitionerRows }] = await Promise.all([
-      admin.from("tenants").select("id, display_name").order("display_name", { ascending: true }),
-      admin
-        .from("user_profiles")
-        .select("user_id, full_name, tenant_id, calendar_tenant_id")
-        .not("calendar_tenant_id", "is", null),
-    ]);
-
-    for (const tenant of (tenantRows ?? []) as Array<{ id: string; display_name: string | null }>) {
-      tenantNameById.set(String(tenant.id), String(tenant.display_name ?? "").trim() || "Behandler");
-    }
-
-    avatarOptions = [
-      {
-        tenantId: "all",
-        userId: "all",
-        label: "Alle",
-        imageUrl: "",
-        initials: "AL",
-      },
-      ...((practitionerRows ?? []) as Array<{
-        user_id: string | null;
-        full_name: string | null;
-        tenant_id: string | null;
-        calendar_tenant_id: string | null;
-      }>)
-        .filter((row) => String(row.user_id ?? "").trim() && String(row.calendar_tenant_id ?? row.tenant_id ?? "").trim())
-        .map((row) => {
-          const resolvedTenantId = String(row.calendar_tenant_id ?? row.tenant_id ?? "").trim();
-          const label =
-            tenantNameById.get(resolvedTenantId) ||
-            String(row.full_name ?? "").trim() ||
-            "Behandler";
-          return {
-            tenantId: resolvedTenantId,
-            userId: String(row.user_id),
-            label,
-            imageUrl: `/users/${row.user_id}.png`,
-            initials: initialsFromName(label, "BE"),
-          } satisfies AvatarFilterOption;
-        }),
-    ];
-  } else {
-    const resolvedTenantId = String(profile?.calendar_tenant_id ?? profile?.tenant_id ?? effectiveTenantId ?? "").trim();
-    avatarOptions = [
-      {
-        tenantId: resolvedTenantId || null,
-        userId: String(user.id),
-        label: String(profile?.full_name ?? "Mein Bereich").trim() || "Mein Bereich",
-        imageUrl: `/users/${user.id}.png`,
-        initials: initialsFromName(String(profile?.full_name ?? "Mein Bereich")),
-      },
-    ];
-  }
 
   let checkoutAppointment: CheckoutAppointmentRow | null = null;
   let checkoutServices: CheckoutServiceRow[] = [];
@@ -785,21 +584,6 @@ export default async function RechnungenPage({
   const items: SlideoverReceipt[] = receipts.map((row) => {
     const receiptEvents = eventsByReceipt.get(row.id) ?? [];
     const latestEvent = receiptEvents[0] ?? null;
-    const payload = parsePayload(row.receipt_payload_canonical);
-    const customerName =
-      readFirstString(payload, [
-        ["customer_name"],
-        ["person_name"],
-        ["customer", "full_name"],
-        ["customer", "name"],
-      ]) || null;
-    const providerName =
-      readFirstString(payload, [
-        ["provider_name"],
-        ["tenant_display_name"],
-        ["tenant_name"],
-        ["tenant", "display_name"],
-      ]) || null;
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -830,68 +614,9 @@ export default async function RechnungenPage({
       createdAt: row.created_at,
       latestEventType: latestEvent?.eventType ?? null,
       events: receiptEvents,
-      customerName,
-      providerName,
-      providerAvatarUrl:
-        avatarOptions.find((option) => String(option.tenantId ?? "").trim() === String(row.tenant_id ?? "").trim())?.imageUrl ?? null,
-      providerInitials:
-        avatarOptions.find((option) => String(option.tenantId ?? "").trim() === String(row.tenant_id ?? "").trim())?.initials ??
-        initialsFromName(providerName, "BE"),
       availableServices: servicesByTenant.get(String(row.tenant_id ?? '').trim()) ?? [],
     };
   });
-
-
-  const now = new Date();
-  const todayStart = startOfDay(now);
-  const tomorrowStart = endExclusive(todayStart, 1);
-  const weekStart = startOfDay(now);
-  const weekday = weekStart.getDay();
-  const diffToMonday = (weekday + 6) % 7;
-  weekStart.setDate(weekStart.getDate() - diffToMonday);
-  const weekEnd = endExclusive(weekStart, 7);
-  const monthStart = startOfMonth(now);
-  const nextMonthStart = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
-
-  const filteredItems = items.filter((item) => {
-    const issued = item.issuedAt ?? item.createdAt;
-    const businessState = getReceiptBusinessState(item);
-
-    if (practitionerFilter !== "all" && String(item.tenantId ?? "").trim() !== practitionerFilter) {
-      return false;
-    }
-
-    if (currentFilter === "today") return isBetween(issued, todayStart, tomorrowStart);
-    if (currentFilter === "week") return isBetween(issued, weekStart, weekEnd);
-    if (currentFilter === "month") return isBetween(issued, monthStart, nextMonthStart);
-    if (currentFilter === "open") return businessState.key === "open";
-    if (currentFilter === "error") return businessState.key === "error";
-    return true;
-  });
-
-  const scopedItems = items.filter((item) =>
-    practitionerFilter === "all" ? true : String(item.tenantId ?? "").trim() === practitionerFilter
-  );
-
-  const countTotal = filteredItems.length;
-  const openCount = scopedItems.filter((item) => getReceiptBusinessState(item).key === "open").length;
-  const errorCount = scopedItems.filter((item) => getReceiptBusinessState(item).key === "error").length;
-  const paidCount = scopedItems.filter((item) => getReceiptBusinessState(item).key === "paid").length;
-
-  const revenueTodayCents = scopedItems.reduce((sum, item) => {
-    const issued = item.issuedAt ?? item.createdAt;
-    return isBetween(issued, todayStart, tomorrowStart) ? sum + Number(item.turnoverValueCents ?? 0) : sum;
-  }, 0);
-
-  const revenueWeekCents = scopedItems.reduce((sum, item) => {
-    const issued = item.issuedAt ?? item.createdAt;
-    return isBetween(issued, weekStart, weekEnd) ? sum + Number(item.turnoverValueCents ?? 0) : sum;
-  }, 0);
-
-  const revenueMonthCents = scopedItems.reduce((sum, item) => {
-    const issued = item.issuedAt ?? item.createdAt;
-    return isBetween(issued, monthStart, nextMonthStart) ? sum + Number(item.turnoverValueCents ?? 0) : sum;
-  }, 0);
 
   const checkoutTenant = firstJoin(checkoutAppointment?.tenant);
   const checkoutPerson = firstJoin(checkoutAppointment?.person);
@@ -940,270 +665,29 @@ export default async function RechnungenPage({
     !createdReceipt
   );
 
+  const validCount = items.filter((item) => String(item.verificationStatus ?? "").toUpperCase() === "VALID").length;
+  const pendingCount = items.filter((item) => String(item.signatureState ?? "").toUpperCase() === "PENDING").length;
+  const failedCount = items.filter((item) => {
+    const verification = String(item.verificationStatus ?? "").toUpperCase();
+    const signature = String(item.signatureState ?? "").toUpperCase();
+    return verification.startsWith("INVALID") || signature.includes("FAIL");
+  }).length;
+  const simulatedCount = items.filter((item) => String(item.signatureState ?? "").toUpperCase() === "SIMULATED").length;
 
   return (
-    <main className="mx-auto max-w-7xl p-4 md:p-6 xl:p-8 text-white">
-      <section className="overflow-visible rounded-[32px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
-        <div className="p-5 md:p-7">
-          <div
-            className="overflow-visible rounded-[28px] border p-5 md:p-6"
-            style={{
-              background: "linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015))",
-              borderColor: "rgba(255,255,255,0.08)",
-            }}
-          >
-            <div className="flex flex-col gap-6">
-              <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-                <div className="min-w-0 flex-1">
-                  <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)] whitespace-nowrap">
-                    Clientique Backoffice
-                  </div>
-                  <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">
-                    Rechnungen
-                  </h1>
-
-                  <div className="mt-4 hidden items-center gap-2 md:flex md:flex-wrap">
-                    {[
-                      ["all", "Alle", countTotal],
-                      ["today", "Heute", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, todayStart, tomorrowStart)).length],
-                      ["week", "Woche", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, weekStart, weekEnd)).length],
-                      ["month", "Monat", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, monthStart, nextMonthStart)).length],
-                      ["open", "Offen", openCount],
-                      ["error", "Fehler", errorCount],
-                    ].map(([key, label, count]) => {
-                      const active = currentFilter === key;
-                      const params = new URLSearchParams();
-                      if (qRaw) params.set("q", qRaw);
-                      if (practitionerFilter !== "all") params.set("practitioner", practitionerFilter);
-                      if (key !== "all") params.set("filter", String(key));
-                      const href = `/rechnungen${params.toString() ? `?${params.toString()}` : ""}`;
-                      return (
-                        <Link key={String(key)} href={href} className={statusLinkClass(active)}>
-                          <span>{label}</span>
-                          <span className={statusCountClass(active)}>{count}</span>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="w-full xl:w-auto xl:max-w-[620px] xl:min-w-[420px] xl:shrink-0">
-                  <div className="hidden md:flex md:justify-end">
-                    <div className="max-w-full overflow-x-auto">
-                      <div className="min-w-max">
-                        <div className="flex flex-nowrap items-start gap-5">
-                          {avatarOptions.map((option) => {
-                            const active = String(option.tenantId ?? "all") === practitionerFilter;
-                            const params = new URLSearchParams();
-                            if (qRaw) params.set("q", qRaw);
-                            if (currentFilter !== "all") params.set("filter", currentFilter);
-                            if ((option.tenantId ?? "all") !== "all") params.set("practitioner", String(option.tenantId));
-                            const href = `/rechnungen${params.toString() ? `?${params.toString()}` : ""}`;
-                            const ringColor = option.tenantId === "all" ? "rgba(255,255,255,0.55)" : avatarRingColor(option.label);
-                            const chipLabel = option.tenantId === "all" ? "Alle" : firstNameLabel(option.label, "Behandler");
-                            return (
-                              <Link
-                                key={`${option.userId}-${option.tenantId ?? "self"}`}
-                                href={href}
-                                className="inline-flex shrink-0 flex-col items-center gap-2"
-                                title={option.label}
-                              >
-                                <span
-                                  className="relative overflow-hidden rounded-full"
-                                  style={{
-                                    width: 56,
-                                    height: 56,
-                                    border: option.tenantId === "all" ? "4px solid rgba(255,255,255,0.55)" : `4px solid ${ringColor}`,
-                                    boxShadow: active
-                                      ? `0 12px 26px rgba(0,0,0,0.32), 0 0 0 2px ${ringColor}33`
-                                      : "0 12px 26px rgba(0,0,0,0.32)",
-                                    background: option.tenantId === "all" ? "rgba(255,255,255,0.96)" : "rgba(255,255,255,0.04)",
-                                  }}
-                                >
-                                  {option.tenantId === "all" ? (
-                                    <span className="flex h-full w-full items-center justify-center text-sm font-extrabold text-black">
-                                      Alle
-                                    </span>
-                                  ) : option.imageUrl ? (
-                                    <img
-                                      src={option.imageUrl}
-                                      alt={option.label}
-                                      className="h-full w-full object-cover"
-                                    />
-                                  ) : (
-                                    <span className="flex h-full w-full items-center justify-center text-[13px] font-extrabold text-white/90">
-                                      {option.initials}
-                                    </span>
-                                  )}
-
-                                  {option.tenantId !== "all" ? (
-                                    <span
-                                      style={{
-                                        position: "absolute",
-                                        right: 3,
-                                        bottom: 3,
-                                        width: 10,
-                                        height: 10,
-                                        borderRadius: 999,
-                                        backgroundColor: ringColor,
-                                        boxShadow: "0 0 0 2px rgba(0,0,0,0.65)",
-                                      }}
-                                    />
-                                  ) : null}
-                                </span>
-
-                                <span
-                                  className={`px-3 py-1.5 rounded-full text-sm font-semibold ${
-                                    active
-                                      ? "border border-white bg-white text-black"
-                                      : "border border-white/10 bg-black/25 text-white/90"
-                                  }`}
-                                  style={{ backdropFilter: "blur(8px)", lineHeight: 1 }}
-                                >
-                                  {chipLabel}
-                                </span>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                <div className="flex items-center gap-3 md:hidden">
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      ["all", "Alle", countTotal],
-                      ["today", "Heute", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, todayStart, tomorrowStart)).length],
-                      ["week", "Woche", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, weekStart, weekEnd)).length],
-                      ["month", "Monat", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, monthStart, nextMonthStart)).length],
-                      ["open", "Offen", openCount],
-                      ["error", "Fehler", errorCount],
-                    ].map(([key, label, count]) => {
-                      const active = currentFilter === key;
-                      const params = new URLSearchParams();
-                      if (qRaw) params.set("q", qRaw);
-                      if (practitionerFilter !== "all") params.set("practitioner", practitionerFilter);
-                      if (key !== "all") params.set("filter", String(key));
-                      const href = `/rechnungen${params.toString() ? `?${params.toString()}` : ""}`;
-                      return (
-                        <Link key={`mobile-${String(key)}`} href={href} className={statusLinkClass(active)}>
-                          <span>{label}</span>
-                          <span className={statusCountClass(active)}>{count}</span>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="md:hidden overflow-x-auto">
-                  <div className="flex min-w-max items-start gap-4 pb-1">
-                    {avatarOptions.map((option) => {
-                      const active = String(option.tenantId ?? "all") === practitionerFilter;
-                      const params = new URLSearchParams();
-                      if (qRaw) params.set("q", qRaw);
-                      if (currentFilter !== "all") params.set("filter", currentFilter);
-                      if ((option.tenantId ?? "all") !== "all") params.set("practitioner", String(option.tenantId));
-                      const href = `/rechnungen${params.toString() ? `?${params.toString()}` : ""}`;
-                      const ringColor = option.tenantId === "all" ? "rgba(255,255,255,0.55)" : avatarRingColor(option.label);
-                      const chipLabel = option.tenantId === "all" ? "Alle" : firstNameLabel(option.label, "Behandler");
-                      return (
-                        <Link key={`mobile-${option.userId}-${option.tenantId ?? "self"}`} href={href} className="flex shrink-0 flex-col items-center gap-2" title={option.label}>
-                          <span
-                            className="relative overflow-hidden rounded-full"
-                            style={{
-                              width: 50,
-                              height: 50,
-                              border: option.tenantId === "all" ? "4px solid rgba(255,255,255,0.55)" : `4px solid ${ringColor}`,
-                              boxShadow: active
-                                ? `0 12px 26px rgba(0,0,0,0.32), 0 0 0 2px ${ringColor}33`
-                                : "0 12px 26px rgba(0,0,0,0.32)",
-                              background: option.tenantId === "all" ? "rgba(255,255,255,0.96)" : "rgba(255,255,255,0.04)",
-                            }}
-                          >
-                            {option.tenantId === "all" ? (
-                              <span className="flex h-full w-full items-center justify-center text-sm font-extrabold text-black">
-                                Alle
-                              </span>
-                            ) : option.imageUrl ? (
-                              <img src={option.imageUrl} alt={option.label} className="h-full w-full object-cover" />
-                            ) : (
-                              <span className="flex h-full w-full items-center justify-center text-[12px] font-extrabold text-white/90">
-                                {option.initials}
-                              </span>
-                            )}
-
-                            {option.tenantId !== "all" ? (
-                              <span
-                                style={{
-                                  position: "absolute",
-                                  right: 3,
-                                  bottom: 3,
-                                  width: 9,
-                                  height: 9,
-                                  borderRadius: 999,
-                                  backgroundColor: ringColor,
-                                  boxShadow: "0 0 0 2px rgba(0,0,0,0.65)",
-                                }}
-                              />
-                            ) : null}
-                          </span>
-
-                          <span
-                            className={`px-3 py-1.5 rounded-full text-sm font-semibold ${
-                              active
-                                ? "border border-white bg-white text-black"
-                                : "border border-white/10 bg-black/25 text-white/90"
-                            }`}
-                            style={{ backdropFilter: "blur(8px)", lineHeight: 1 }}
-                          >
-                            {chipLabel}
-                          </span>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="flex w-full items-center gap-3 xl:max-w-[620px]">
-                  <form action="/rechnungen" method="get" className="w-full">
-                    {currentFilter !== "all" ? <input type="hidden" name="filter" value={currentFilter} /> : null}
-                    {practitionerFilter !== "all" ? <input type="hidden" name="practitioner" value={practitionerFilter} /> : null}
-                    <div className="flex h-11 items-center rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
-                      <span className="mr-3 inline-flex h-4 w-4 shrink-0 items-center justify-center text-white/35">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-                          <circle cx="11" cy="11" r="7" />
-                          <path d="m20 20-3.5-3.5" />
-                        </svg>
-                      </span>
-                      <input
-                        type="text"
-                        name="q"
-                        defaultValue={qRaw}
-                        placeholder="Belegnr., Kunde, Sales Order, Payment oder Status"
-                        className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/35"
-                      />
-                    </div>
-                  </form>
-
-                  <Link href="/calendar" className="hidden h-11 shrink-0 items-center rounded-[16px] border border-emerald-500/30 bg-emerald-600/90 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500 xl:inline-flex">
-                    + Abrechnen
-                  </Link>
-                </div>
-
-                <div className="xl:hidden flex justify-end">
-                  <Link href="/calendar" className="inline-flex h-11 shrink-0 items-center rounded-[16px] border border-emerald-500/30 bg-emerald-600/90 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500">
-                    + Abrechnen
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
+    <main className="mx-auto max-w-7xl p-6 text-white">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <div className="text-sm font-semibold uppercase tracking-[0.18em] text-white/45">Backoffice</div>
+          <h1 className="mt-1 text-3xl font-black tracking-tight">Rechnungen / Fiscal</h1>
+          <p className="mt-2 max-w-3xl text-sm text-white/60">Interne Übersicht für Fiscal-Receipts, Checkout-Entwürfe, Sales Orders und Kettenstatus.</p>
+          {qRaw ? <div className="mt-2 text-xs text-white/45">Suche: <span className="text-white">{qRaw}</span> · {items.length} Treffer</div> : null}
         </div>
-      </section>
+        <form className="flex w-full max-w-xl gap-2 md:justify-end" action="/rechnungen">
+          <input type="text" name="q" defaultValue={qRaw} placeholder="Belegnr., Sales Order, Payment, Receipt-ID oder Status" className="h-10 w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm outline-none placeholder:text-white/35" />
+          <button type="submit" className="inline-flex h-10 items-center rounded-xl border border-white/10 bg-white/10 px-4 text-sm font-semibold hover:bg-white/15">Suchen</button>
+        </form>
+      </div>
 
       {successMessage ? <div className="mt-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{decodeURIComponent(successMessage)}</div> : null}
       {errorMessage ? <div className="mt-6 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{decodeURIComponent(errorMessage)}</div> : null}
@@ -1212,13 +696,10 @@ export default async function RechnungenPage({
           Der Checkout-Kontext ist noch da, aber die zugehörige Sales Order konnte nicht geladen werden. Der Builder bleibt absichtlich ausgeblendet, damit der Flow nicht zurückspringt. Nutze jetzt entweder <span className="font-semibold text-white">Checkout schließen</span> oder suche die Sales Order über die normale Rechnungsübersicht.
         </div>
       ) : null}
-            {!isCheckoutFlow && (qRaw || currentFilter !== "all") ? (
+            {!isCheckoutFlow && qRaw ? (
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
-          <div className="text-white/75">
-            {qRaw ? <>Suche aktiv für <span className="font-semibold text-white">{qRaw}</span></> : <>Filter aktiv: <span className="font-semibold text-white">{getQuickFilterLabel(currentFilter)}</span></>}
-            <span className="ml-2 text-white/55">{countTotal} Treffer</span>
-          </div>
-          <Link href="/rechnungen" className="inline-flex h-9 items-center rounded-lg border border-white/10 bg-white/10 px-3 text-sm font-medium text-white hover:bg-white/15">Zurücksetzen</Link>
+          <div className="text-white/75">Suche aktiv für <span className="font-semibold text-white">{qRaw}</span> · <span className="text-white/55">{items.length} Treffer</span></div>
+          <Link href="/rechnungen" className="inline-flex h-9 items-center rounded-lg border border-white/10 bg-white/10 px-3 text-sm font-medium text-white hover:bg-white/15">Suche zurücksetzen</Link>
         </div>
       ) : null}
 
@@ -1421,94 +902,38 @@ export default async function RechnungenPage({
 
       {!isCheckoutFlow ? (
         <>
-          <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3">
-              <div className="text-xs uppercase tracking-wide text-white/45">Umsatz heute</div>
-              <div className="mt-2 text-2xl font-bold text-white">{euroFromCents(revenueTodayCents, "EUR")}</div>
-              <div className="mt-1 text-xs text-white/55">direkt kassiert heute</div>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3">
-              <div className="text-xs uppercase tracking-wide text-white/45">Umsatz Woche</div>
-              <div className="mt-2 text-2xl font-bold text-white">{euroFromCents(revenueWeekCents, "EUR")}</div>
-              <div className="mt-1 text-xs text-white/55">laufende Kalenderwoche</div>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3">
-              <div className="text-xs uppercase tracking-wide text-white/45">Umsatz Monat</div>
-              <div className="mt-2 text-2xl font-bold text-white">{euroFromCents(revenueMonthCents, "EUR")}</div>
-              <div className="mt-1 text-xs text-white/55">aktueller Monat</div>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3">
-              <div className="text-xs uppercase tracking-wide text-white/45">Offene Belege</div>
-              <div className="mt-2 text-2xl font-bold text-white">{openCount}</div>
-              <div className="mt-1 text-xs text-white/55">{errorCount} mit Fehler · {paidCount} bezahlt</div>
-            </div>
+          <div className="mt-6 grid gap-3 md:grid-cols-4">
+            <SummaryCard label="Belege" value={items.length} subtext="geladene Fiscal-Receipts" />
+            <SummaryCard label="Valid" value={validCount} subtext="Verifikation erfolgreich" />
+            <SummaryCard label="Pending" value={pendingCount} subtext="noch nicht final signiert" />
+            <SummaryCard label="Simulated / Fehler" value={simulatedCount + failedCount} subtext="Simulationsstatus und Auffälligkeiten" />
           </div>
-
-          {(qRaw || currentFilter !== "all") && filteredItems.length === 0 ? (
-
+          {qRaw && items.length === 0 ? (
             <Card className="mt-6 border-white/10 bg-white/[0.03]">
               <CardContent className="p-5 text-sm text-white/70">
-                Keine Treffer für diese Ansicht. Nutze eine andere Suche oder wechsle den Filter.
+                Keine Treffer für <span className="font-semibold text-white">{qRaw}</span>. Suche nach Belegnummer, Sales Order, Payment, Receipt-ID oder Status.
               </CardContent>
             </Card>
           ) : null}
-
           <Card className="mt-6 overflow-hidden border-white/10 bg-white/[0.03]">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
-                  <thead className="border-b border-white/10 bg-white/[0.03] text-left text-white/55">
-                    <tr>
-                      <th className="px-4 py-3 font-semibold">Beleg</th>
-                      <th className="px-4 py-3 font-semibold">Kunde</th>
-                      <th className="px-4 py-3 font-semibold">Behandler</th>
-                      <th className="px-4 py-3 font-semibold">Erstellt</th>
-                      <th className="px-4 py-3 font-semibold">Betrag</th>
-                      <th className="px-4 py-3 font-semibold">Status</th>
-                      <th className="px-4 py-3 font-semibold">Letzter Event</th>
-                      <th className="px-4 py-3 font-semibold text-right">Aktion</th>
-                    </tr>
-                  </thead>
+                  <thead className="border-b border-white/10 bg-white/[0.03] text-left text-white/55"><tr><th className="px-4 py-3 font-semibold">Beleg</th><th className="px-4 py-3 font-semibold">Erstellt</th><th className="px-4 py-3 font-semibold">Sales Order</th><th className="px-4 py-3 font-semibold">Kasse</th><th className="px-4 py-3 font-semibold">Betrag</th><th className="px-4 py-3 font-semibold">Signatur</th><th className="px-4 py-3 font-semibold">Verifikation</th><th className="px-4 py-3 font-semibold">Letzter Event</th><th className="px-4 py-3 font-semibold text-right">Aktion</th></tr></thead>
                   <tbody>
-                    {filteredItems.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="px-4 py-10 text-center text-white/45">Keine Fiscal-Receipts gefunden.</td>
+                    {items.length === 0 ? <tr><td colSpan={9} className="px-4 py-10 text-center text-white/45">Keine Fiscal-Receipts gefunden.</td></tr> : items.map((item) => (
+                      <tr key={item.id} className="border-b border-white/5 last:border-b-0 hover:bg-white/[0.03]">
+                        <td className="px-4 py-3 align-top"><div className="font-semibold text-white">{item.receiptNumber}</div><div className="mt-1 text-xs text-white/45">{shortId(item.id)}</div></td>
+                        <td className="px-4 py-3 align-top text-white/75">{formatDateTime(item.createdAt)}</td>
+                        <td className="px-4 py-3 align-top"><div className="text-white/85">{shortId(item.salesOrderId)}</div><div className="mt-1 text-xs text-white/45">Payment {shortId(item.paymentId)}</div></td>
+                        <td className="px-4 py-3 align-top text-white/75">{shortId(item.cashRegisterId)}</td>
+                        <td className="px-4 py-3 align-top text-white/85">{euroFromCents(item.turnoverValueCents, item.currencyCode)}</td>
+                        <td className="px-4 py-3 align-top"><Badge tone={toneForSignature(item.signatureState)}>{item.signatureState ?? "—"}</Badge></td>
+                        <td className="px-4 py-3 align-top"><Badge tone={toneForVerification(item.verificationStatus)}>{item.verificationStatus ?? "—"}</Badge></td>
+                        <td className="px-4 py-3 align-top text-white/75">{formatEventLabel(item.latestEventType, item.events[0]?.referenceData ?? null)}</td>
+                        <td className="px-4 py-3 text-right align-top"><Link href={`/rechnungen?${new URLSearchParams({ ...(qRaw ? { q: qRaw } : {}), receipt: item.id }).toString()}`} className="inline-flex h-9 items-center rounded-lg border border-white/10 bg-white/10 px-3 text-sm font-medium text-white hover:bg-white/15">Details</Link></td>
                       </tr>
-                    ) : (
-                      filteredItems.map((item) => {
-                        const businessState = getReceiptBusinessState(item);
-                        const detailParams = new URLSearchParams();
-                        if (qRaw) detailParams.set("q", qRaw);
-                        if (currentFilter !== "all") detailParams.set("filter", currentFilter);
-                        detailParams.set("receipt", item.id);
-
-                        return (
-                          <tr key={item.id} className="border-b border-white/5 last:border-b-0 hover:bg-white/[0.03]">
-                            <td className="px-4 py-3 align-top">
-                              <div className="font-semibold text-white">{item.receiptNumber}</div>
-                              <div className="mt-1 text-xs text-white/45">{shortId(item.id)}</div>
-                            </td>
-                            <td className="px-4 py-3 align-top">
-                              <div className="text-white/85">{item.customerName ?? "—"}</div>
-                              <div className="mt-1 text-xs text-white/45">SO {shortId(item.salesOrderId)}</div>
-                            </td>
-                            <td className="px-4 py-3 align-top text-white/75">{item.providerName ?? "—"}</td>
-                            <td className="px-4 py-3 align-top text-white/75">{formatDateTime(item.createdAt)}</td>
-                            <td className="px-4 py-3 align-top text-white/85">{euroFromCents(item.turnoverValueCents, item.currencyCode)}</td>
-                            <td className="px-4 py-3 align-top">
-                              <div className="flex flex-wrap gap-2">
-                                <Badge tone={businessState.tone}>{businessState.label}</Badge>
-                                <Badge tone={toneForVerification(item.verificationStatus)}>{item.verificationStatus ?? "—"}</Badge>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 align-top text-white/75">{formatEventLabel(item.latestEventType, item.events[0]?.referenceData ?? null)}</td>
-                            <td className="px-4 py-3 text-right align-top">
-                              <Link href={`/rechnungen?${detailParams.toString()}`} className="inline-flex h-9 items-center rounded-lg border border-white/10 bg-white/10 px-3 text-sm font-medium text-white hover:bg-white/15">Details</Link>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
+                    ))}
                   </tbody>
                 </table>
               </div>

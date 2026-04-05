@@ -1107,7 +1107,7 @@ export default function AppointmentDetailSlideover({
                   ) : <button type="button" disabled className={disabledActionButtonStyle() + " w-full whitespace-nowrap rounded-xl"}>Zur Warteliste</button>}
 
                   {canStartCheckout ? (
-                    <button type="button" onClick={openInlineCheckout} className="inline-flex h-10 w-full items-center justify-center rounded-xl border 1px solid border-emerald-500/30 bg-emerald-600/80 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-600 whitespace-nowrap">
+                    <button type="button" onClick={openInlineCheckout} className="h-10 shrink-0 items-center rounded-[16px] border border-emerald-500/30 bg-emerald-600/90 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500 xl:inline-flex">
                       Abrechnen
                     </button>
                   ) : (
