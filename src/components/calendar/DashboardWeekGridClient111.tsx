@@ -49,7 +49,6 @@ export default function DashboardWeekGridClient({
   onSetView,
   createOpen,
   onCloseCreate,
-  onOpenCreate,
 }: {
   items: Item[];
   view: ViewMode;
@@ -62,7 +61,6 @@ export default function DashboardWeekGridClient({
   onSetView: (view: ViewMode) => void;
   createOpen: boolean;
   onCloseCreate: () => void;
-  onOpenCreate?: () => void;
 }) {
   const [createVisible, setCreateVisible] = useState(createOpen);
   const [createShown, setCreateShown] = useState(false);
@@ -450,7 +448,6 @@ export default function DashboardWeekGridClient({
           itemsById={itemsById}
           onMoveAppointment={moveAppointment}
           moveSavingId={moveSavingId}
-          onOpenCreate={onOpenCreate}
         />
       )}
 

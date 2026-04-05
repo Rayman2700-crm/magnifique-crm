@@ -935,6 +935,12 @@ export default function DashboardCalendarCardClient({
     }));
   }, []);
 
+  useEffect(() => {
+    const openCreate = () => setCreateOpen(true);
+    document.addEventListener("open-create-appointment", openCreate as EventListener);
+    return () => document.removeEventListener("open-create-appointment", openCreate as EventListener);
+  }, []);
+
   return (
     <Card className="border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
       <CardContent className="p-6 md:p-8">
@@ -1110,6 +1116,7 @@ export default function DashboardCalendarCardClient({
                 onSetView={handleChangeView}
                 createOpen={createOpen}
                 onCloseCreate={() => setCreateOpen(false)}
+                onOpenCreate={() => setCreateOpen(true)}
               />
             </div>
           )}

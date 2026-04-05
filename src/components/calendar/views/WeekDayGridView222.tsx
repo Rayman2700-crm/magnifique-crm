@@ -286,7 +286,6 @@ export default function WeekDayGridView(props: {
   itemsById: Map<string, ItemLite>;
   onMoveAppointment: (appointmentId: string, startAt: string, endAt: string) => Promise<void>;
   moveSavingId: string | null;
-  onOpenCreate?: () => void;
 }) {
   const {
     view,
@@ -311,7 +310,6 @@ export default function WeekDayGridView(props: {
     itemsById,
     onMoveAppointment,
     moveSavingId,
-    onOpenCreate,
   } = props;
 
   const totalHeight = (endHour - startHour + 1) * pxPerHour;
@@ -597,19 +595,19 @@ export default function WeekDayGridView(props: {
               type="button"
               aria-label="Neuen Termin erstellen"
               onClick={() => {
-                onOpenCreate?.();
+                document.dispatchEvent(new CustomEvent("open-create-appointment"));
               }}
               style={{
                 position: "absolute",
-                left: 18,
-                top: 12,
-                zIndex: 70,
-                width: 50,
-                height: 50,
+                left: 10,
+                top: 96,
+                zIndex: 60,
+                width: 46,
+                height: 46,
                 borderRadius: 999,
                 background: "linear-gradient(180deg, #3b82f6 0%, #2563eb 100%)",
                 color: "#ffffff",
-                fontSize: 26,
+                fontSize: 24,
                 fontWeight: 900,
                 display: "inline-flex",
                 alignItems: "center",
@@ -1854,4 +1852,4 @@ export default function WeekDayGridView(props: {
     </>
   );
 }
-//gdgdg
+//ggaaga
