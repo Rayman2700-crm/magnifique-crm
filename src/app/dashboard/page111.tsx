@@ -392,7 +392,7 @@ function InvoiceCreateCard({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="text-xs font-medium text-[var(--text-muted)] sm:text-sm">Rechnungen</div>
-              <div className="mt-1 hidden text-[11px] text-white/45 sm:text-xs md:block">
+              <div className="mt-1 text-[11px] text-white/45 sm:text-xs">
                 Abrechnen, prüfen und direkt weitermachen
               </div>
             </div>
@@ -402,7 +402,7 @@ function InvoiceCreateCard({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 sm:gap-3 md:grid-cols-3">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
             <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-2.5">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Heute</div>
               <div className="mt-1 text-sm font-semibold text-white">{formatMoney(todayRevenueCents)}</div>
@@ -412,20 +412,20 @@ function InvoiceCreateCard({
             <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-2.5">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Offen</div>
               <div className="mt-1 text-sm font-semibold text-white">{openReceiptCount}</div>
-              <div className="mt-0.5 hidden text-[10px] text-white/40 md:block">noch prüfen</div>
+              <div className="mt-0.5 text-[10px] text-white/40">noch prüfen</div>
             </div>
 
             <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-2.5">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Woche</div>
               <div className="mt-1 text-sm font-semibold text-white">{formatMoney(weekRevenueCents)}</div>
-              <div className="mt-0.5 hidden text-[10px] text-white/40 md:block">laufender Stand</div>
+              <div className="mt-0.5 text-[10px] text-white/40">laufender Stand</div>
             </div>
           </div>
 
           <div className="mt-auto flex flex-col gap-2">
             <Link
               href="/rechnungen"
-              className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] bg-[var(--primary)] px-3 text-sm font-medium text-[var(--primary-foreground)] shadow-[0_4px_20px_rgba(214,195,163,0.18)] transition hover:opacity-90"
+              className="inline-flex h-10 w-full items-center justify-center rounded-[16px] bg-[var(--primary)] px-4 text-sm font-medium text-[var(--primary-foreground)] shadow-[0_4px_20px_rgba(214,195,163,0.18)] transition hover:opacity-90"
             >
               Abrechnen
             </Link>
@@ -433,17 +433,17 @@ function InvoiceCreateCard({
             {openReceiptCount > 0 ? (
               <Link
                 href="/rechnungen?filter=open"
-                className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
+                className="inline-flex h-10 w-full items-center justify-center rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-4 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
               >
-                Offen prüfen ({openReceiptCount})
+                Offene prüfen ({openReceiptCount})
               </Link>
             ) : null}
 
             <Link
               href="/rechnungen"
-              className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-white/10 bg-transparent px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
+              className="inline-flex h-10 w-full items-center justify-center rounded-[16px] border border-white/10 bg-transparent px-4 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
             >
-              {hasRecentReceipt ? "Belege öffnen" : "Belege"}
+              {hasRecentReceipt ? "Letzten Beleg öffnen" : "Alle anzeigen"}
             </Link>
           </div>
         </div>

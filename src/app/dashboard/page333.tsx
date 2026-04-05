@@ -431,19 +431,35 @@ function InvoiceCreateCard({
             </Link>
 
             {openReceiptCount > 0 ? (
-              <Link
-                href="/rechnungen?filter=open"
-                className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
-              >
-                Offen prüfen ({openReceiptCount})
-              </Link>
+              <>
+                <Link
+                  href="/rechnungen?filter=open"
+                  className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10 md:hidden"
+                >
+                  Offen ({openReceiptCount})
+                </Link>
+
+                <Link
+                  href="/rechnungen?filter=open"
+                  className="hidden h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10 md:inline-flex"
+                >
+                  Offene prüfen ({openReceiptCount})
+                </Link>
+              </>
             ) : null}
 
             <Link
               href="/rechnungen"
-              className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-white/10 bg-transparent px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
+              className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-white/10 bg-transparent px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10 md:hidden"
             >
-              {hasRecentReceipt ? "Belege öffnen" : "Belege"}
+              Belege
+            </Link>
+
+            <Link
+              href="/rechnungen"
+              className="hidden h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-white/10 bg-transparent px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10 md:inline-flex"
+            >
+              {hasRecentReceipt ? "Letzten Beleg öffnen" : "Alle anzeigen"}
             </Link>
           </div>
         </div>

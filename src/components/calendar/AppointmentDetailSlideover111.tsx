@@ -153,6 +153,44 @@ function IconButton({
   );
 }
 
+function clientiqueButtonClass(variant: "dark" | "primary" | "success" | "danger" | "accent" = "dark", fullWidth = false) {
+  const width = fullWidth ? " w-full" : "";
+  if (variant === "primary") {
+    return "inline-flex h-10 items-center justify-center rounded-xl border border-[#d6c3a3]/30 bg-[#d6c3a3] px-4 text-sm font-semibold text-black transition-colors hover:bg-[#e2d2b6]" + width;
+  }
+  if (variant === "success") {
+    return "inline-flex h-10 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-600/80 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-600" + width;
+  }
+  if (variant === "danger") {
+    return "inline-flex h-10 items-center justify-center rounded-xl border border-red-500/30 bg-red-600/80 px-4 text-sm font-semibold text-white transition-colors hover:bg-red-600" + width;
+  }
+  if (variant === "accent") {
+    return "inline-flex h-10 items-center justify-center rounded-xl border border-fuchsia-400/20 bg-fuchsia-400/10 px-4 text-sm font-semibold text-fuchsia-100 transition-colors hover:bg-fuchsia-400/15" + width;
+  }
+  return "inline-flex h-10 items-center justify-center rounded-xl border border-white/12 bg-white/[0.04] px-4 text-sm font-semibold text-white/90 transition-colors hover:bg-white/[0.08]" + width;
+}
+
+function clientiqueActionButtonStyle(fullWidth = false): React.CSSProperties {
+  return {
+    height: 40,
+    padding: "0 8px",
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.04)",
+    color: "rgba(255,255,255,0.92)",
+    fontSize: 14,
+    fontWeight: 700,
+    width: fullWidth ? "100%" : undefined,
+  };
+}
+
+function clientiqueIconButtonClass(variant: "dark" | "primary" = "dark") {
+  if (variant === "primary") {
+    return "inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-[#d6c3a3]/30 bg-[#d6c3a3] text-black shadow-[0_10px_30px_rgba(214,195,163,0.18)] transition-all hover:bg-[#e2d2b6]";
+  }
+  return "inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/12 bg-white/[0.04] text-white/90 transition-all hover:border-white/20 hover:bg-white/[0.08]";
+}
+
 function formatGrossEuro(value: number | null | undefined, currencyCode = "EUR") {
   if (!Number.isFinite(value)) return "€ 0,00";
   return new Intl.NumberFormat("de-DE", {
@@ -382,21 +420,33 @@ function getWaitlistHref(selected: Item) {
 
 function statusButtonStyle(status: AppointmentStatus, active: boolean): React.CSSProperties {
   const base: React.CSSProperties = {
-    height: 42,
+    height: 38,
     padding: "0 14px",
-    borderRadius: 12,
+    borderRadius: 999,
     fontSize: 13,
-    fontWeight: 800,
-    border: "1px solid rgba(255,255,255,0.12)",
+    fontWeight: 700,
+    textAlign: "center",
+    justifyContent: "center",
+    display: "inline-flex",
+    alignItems: "center",
+    whiteSpace: "nowrap",
+    width: "100%",
+    border: "1px solid rgba(255,255,255,0.10)",
+    background: "rgba(255,255,255,0.035)",
+    color: "rgba(255,255,255,0.78)",
     transition: "all 120ms ease",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
   };
   if (status === "scheduled") {
-    return { ...base, border: active ? "1px solid rgba(56,189,248,0.45)" : base.border, background: active ? "rgba(56,189,248,0.18)" : "rgba(255,255,255,0.04)", color: active ? "#bae6fd" : "rgba(255,255,255,0.80)", boxShadow: active ? "inset 0 0 0 1px rgba(56,189,248,0.18)" : "none" };
+    return { ...base, border: active ? "1px solid rgba(214,195,163,0.34)" : base.border, background: active ? "rgba(214,195,163,0.16)" : base.background, color: active ? "#f5e7ca" : base.color };
   }
   if (status === "completed") {
-    return { ...base, border: active ? "1px solid rgba(34,197,94,0.45)" : base.border, background: active ? "rgba(34,197,94,0.18)" : "rgba(255,255,255,0.04)", color: active ? "#bbf7d0" : "rgba(255,255,255,0.80)", boxShadow: active ? "inset 0 0 0 1px rgba(34,197,94,0.18)" : "none" };
+    return { ...base, border: active ? "1px solid rgba(34,197,94,0.34)" : base.border, background: active ? "rgba(16,185,129,0.16)" : base.background, color: active ? "#bbf7d0" : base.color };
   }
-  return { ...base, border: active ? "1px solid rgba(248,113,113,0.45)" : base.border, background: active ? "rgba(248,113,113,0.18)" : "rgba(255,255,255,0.04)", color: active ? "#fecaca" : "rgba(255,255,255,0.80)", boxShadow: active ? "inset 0 0 0 1px rgba(248,113,113,0.18)" : "none" };
+  if (status === "cancelled") {
+    return { ...base, border: active ? "1px solid rgba(248,113,113,0.34)" : base.border, background: active ? "rgba(248,113,113,0.16)" : base.background, color: active ? "#fecaca" : base.color };
+  }
+  return { ...base, border: active ? "1px solid rgba(168,85,247,0.34)" : base.border, background: active ? "rgba(168,85,247,0.16)" : base.background, color: active ? "#e9d5ff" : base.color };
 }
 
 function disabledActionButtonStyle(): string {
@@ -423,6 +473,7 @@ export default function AppointmentDetailSlideover({
   const [waitlistError, setWaitlistError] = useState<string | null>(null);
   const [waitlistLoading, setWaitlistLoading] = useState(false);
   const [waitlistStatusPendingId, setWaitlistStatusPendingId] = useState<string | null>(null);
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
 
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
@@ -472,6 +523,7 @@ export default function AppointmentDetailSlideover({
     setNotesValue(selected.note || "");
     setStatusValue(inferEditableStatus(selected.status, selected.start_at));
     setCheckoutOpen(false);
+    setWaitlistOpen(false);
     setCheckoutLoading(false);
     setCheckoutError(null);
     setCheckoutSuccess(null);
@@ -872,35 +924,125 @@ export default function AppointmentDetailSlideover({
   const content = (
     <div style={{ position: "fixed", inset: 0, zIndex: 99999, isolation: "isolate" }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.82)", backdropFilter: "blur(6px)" }} />
-      <div style={{ position: "absolute", top: 0, right: 0, height: "100%", width: "min(720px, calc(100vw - 1rem))", padding: 12, display: "flex" }}>
-        <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", height: "100%", backgroundColor: "#0b0b0c", borderRadius: 16, border: "1px solid rgba(255,255,255,0.14)", boxShadow: "0 20px 60px rgba(0,0,0,0.65)", display: "flex", flexDirection: "column" }}>
-          <div style={{ padding: 16, borderBottom: "1px solid rgba(255,255,255,0.10)", display: "flex", justifyContent: "space-between", gap: 12 }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>Behandler</div>
-              <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: "rgba(255,255,255,0.95)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{selected.tenantName}</div>
-              <div style={{ marginTop: 10, fontSize: 12, color: "rgba(255,255,255,0.6)" }}>Kunde</div>
-              <div style={{ marginTop: 6, fontSize: 20, fontWeight: 800, color: "rgba(255,255,255,0.95)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{selected.customerName ?? "Unbekannter Kunde"}</div>
-              <div style={{ marginTop: 6, fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.62)" }}>Datum: {fmtDate(startDate)}</div>
-              <div style={{ marginTop: 6, fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.75)" }}>Zeit: {fmtTime(startDate)}–{fmtTime(endDate)}</div>
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>Dienstleistung</div>
-                <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: "rgba(255,255,255,0.95)" }}>{serviceLabel}</div>
-                  <span style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 999, padding: "4px 10px", fontSize: 12, color: "rgba(255,255,255,0.60)" }}>Dauer: {serviceDurationLabel}</span>
-                  {serviceBufferLabel ? <span style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 999, padding: "4px 10px", fontSize: 12, color: "rgba(255,255,255,0.60)" }}>Buffer: {serviceBufferLabel}</span> : null}
+      <div style={{ position: "absolute", top: 0, right: 0, height: "100%", width: "min(704px, calc(100vw - 1rem))", padding: 12, display: "flex" }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", height: "100%", backgroundColor: "#0b0b0c", borderRadius: 20, border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 24px 70px rgba(0,0,0,0.62)", display: "flex", flexDirection: "column" }}>
+          
+<div
+            style={{
+              padding: 20,
+              borderBottom: "1px solid rgba(255,255,255,0.08)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 18,
+              background: "linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    letterSpacing: "0.16em",
+                    textTransform: "uppercase",
+                    color: "rgba(255,255,255,0.42)",
+                  }}
+                >
+                  Termin Details
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 10,
+                    fontSize: 28,
+                    fontWeight: 900,
+                    lineHeight: 1.02,
+                    color: "rgba(255,255,255,0.98)",
+                  }}
+                >
+                  {selected.customerName ?? "Unbekannter Kunde"}
+                </div>
+
+                <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  <span style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 999, padding: "5px 10px", fontSize: 12, color: "rgba(255,255,255,0.72)" }}>
+                    {selected.tenantName}
+                  </span>
+                  <span style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 999, padding: "5px 10px", fontSize: 12, color: "rgba(255,255,255,0.60)" }}>
+                    {fmtDate(startDate)}
+                  </span>
+                  <span style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 999, padding: "5px 10px", fontSize: 12, color: "rgba(255,255,255,0.82)" }}>
+                    {fmtTime(startDate)}–{fmtTime(endDate)}
+                  </span>
+                </div>
+
+                <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                  <div style={{ fontSize: 17, fontWeight: 800, color: "rgba(255,255,255,0.95)" }}>{serviceLabel}</div>
+                  <span style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 999, padding: "4px 10px", fontSize: 12, color: "rgba(255,255,255,0.60)" }}>
+                    Dauer: {serviceDurationLabel}
+                  </span>
+                  {serviceBufferLabel ? (
+                    <span style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 999, padding: "4px 10px", fontSize: 12, color: "rgba(255,255,255,0.60)" }}>
+                      Buffer: {serviceBufferLabel}
+                    </span>
+                  ) : null}
                   {servicePriceLabel ? (
-                    <span style={{ border: "1px solid rgba(16,185,129,0.25)", background: "rgba(16,185,129,0.12)", color: "#bbf7d0", borderRadius: 999, padding: "4px 10px", fontSize: 12 }}>Preis: {servicePriceLabel}</span>
+                    <span style={{ border: "1px solid rgba(16,185,129,0.25)", background: "rgba(16,185,129,0.12)", color: "#bbf7d0", borderRadius: 999, padding: "4px 10px", fontSize: 12 }}>
+                      {servicePriceLabel}
+                    </span>
                   ) : null}
                 </div>
               </div>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "stretch", flexShrink: 0 }}>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
+
+              <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end", flexShrink: 0 }}>
                 {!checkoutOpen ? (
-                  <Button variant="secondary" onClick={() => setEditMode((v) => !v)}>
-                    {editMode ? "Abbrechen" : "Bearbeiten"}
-                  </Button>
+                  <button
+                    type="button"
+                    aria-label={editMode ? "Bearbeiten abbrechen" : "Termin bearbeiten"}
+                    title={editMode ? "Bearbeiten abbrechen" : "Termin bearbeiten"}
+                    className={clientiqueIconButtonClass("primary")}
+                    onClick={() => setEditMode((v) => !v)}
+                  >
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.05" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M6 3h9l3 3v12H6z" />
+                      <path d="M15 3v4h4" />
+                      <path d="M9 9.5h5" />
+                      <path d="M9 13h4" />
+                      <circle cx="12" cy="17" r="2.2" />
+                    </svg>
+                  </button>
                 ) : null}
+
+                {!checkoutOpen ? (
+                  canOpenCustomerProfile ? (
+                    selected.customerProfileId ? (
+                      <Link href={`/customers/${selected.customerProfileId}?tab=appointments#appointments`}>
+                        <span className={clientiqueIconButtonClass("dark")} title="Zum Kundenprofil" aria-label="Zum Kundenprofil">
+                          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.15" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M4 20h4l10-10-4-4L4 16v4z" />
+                            <path d="M12 6l4 4" />
+                          </svg>
+                        </span>
+                      </Link>
+                    ) : (
+                      <form action={openCustomerProfileFromAppointment.bind(null, selected.id)}>
+                        <input type="hidden" name="returnTo" value={returnTo} />
+                        <button type="submit" className={clientiqueIconButtonClass("dark")} title="Zum Kundenprofil" aria-label="Zum Kundenprofil">
+                          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.15" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M4 20h4l10-10-4-4L4 16v4z" />
+                            <path d="M12 6l4 4" />
+                          </svg>
+                        </button>
+                      </form>
+                    )
+                  ) : (
+                    <button type="button" disabled className={clientiqueIconButtonClass("dark")} title="Zum Kundenprofil" aria-label="Zum Kundenprofil" style={{ opacity: 0.45, cursor: "not-allowed" }}>
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.15" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M4 20h4l10-10-4-4L4 16v4z" />
+                        <path d="M12 6l4 4" />
+                      </svg>
+                    </button>
+                  )
+                ) : null}
+
                 {checkoutOpen && checkoutState.receipt ? (
                   <IconButton onClick={() => window.print()} title="Drucken" hoverClassName="hover:bg-emerald-400 hover:text-black">
                     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -911,137 +1053,155 @@ export default function AppointmentDetailSlideover({
                     </svg>
                   </IconButton>
                 ) : null}
+
                 <IconButton onClick={onClose} title="Schließen" hoverClassName="hover:bg-red-600">
                   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
                     <path d="M6 6l12 12M18 6L6 18" />
                   </svg>
                 </IconButton>
               </div>
-              {!checkoutOpen ? (
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
-                  {canOpenCustomerProfile ? (
+            </div>
+
+            {!checkoutOpen ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(255,255,255,0.42)" }}>
+                  Status
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10, width: "100%" }}>
+                  <button type="button" disabled={!canChangeStatus || isStatusPending} onClick={() => handleStatusClick("scheduled")} style={statusButtonStyle("scheduled", statusValue === "scheduled")}>Geplant</button>
+                  <button type="button" disabled={!canChangeStatus || isStatusPending} onClick={() => handleStatusClick("completed")} style={statusButtonStyle("completed", statusValue === "completed")}>Gekommen</button>
+                  <button type="button" disabled={!canChangeStatus || isStatusPending} onClick={() => handleStatusClick("cancelled")} style={statusButtonStyle("cancelled", statusValue === "cancelled")}>Abgesagt</button>
+                  <button type="button" disabled={!canChangeStatus || isStatusPending} onClick={() => handleStatusClick("no_show")} style={statusButtonStyle("no_show", statusValue === "no_show")}>Nicht gekommen</button>
+                </div>
+
+                {statusError ? <div style={{ fontSize: 12, color: "#fca5a5" }}>{statusError}</div> : null}
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10, width: "100%" }}>
+                  {canDeleteAppointment ? (
+                    <form style={{ width: "100%" }} action={deleteAppointmentFromCalendar.bind(null, selected.id)} onSubmit={(e) => { if (!confirm("Termin wirklich löschen? Das löscht auch den Google-Kalender Eintrag.")) e.preventDefault(); }}>
+                      <input type="hidden" name="returnTo" value={returnTo} />
+                      <button type="submit" className={clientiqueButtonClass("danger", true) + " whitespace-nowrap rounded-full"}>Termin löschen</button>
+                    </form>
+                  ) : <button type="button" disabled className={disabledActionButtonStyle() + " w-full whitespace-nowrap rounded-full"}>Termin löschen</button>}
+
+                  {canCreateFollowUp ? (
                     selected.customerProfileId ? (
-                      <Link href={`/customers/${selected.customerProfileId}?tab=appointments#appointments`}>
-                        <Button>Zum Kundenprofil</Button>
-                      </Link>
+                      <Link href={followUpHref} className="w-full"><button type="button" className={clientiqueButtonClass("dark", true) + " whitespace-nowrap rounded-full"}>Folgetermin</button></Link>
                     ) : (
-                      <form action={openCustomerProfileFromAppointment.bind(null, selected.id)}>
+                      <form style={{ width: "100%" }} action={openFollowUpFromAppointment.bind(null, selected.id)}>
                         <input type="hidden" name="returnTo" value={returnTo} />
-                        <Button type="submit">Zum Kundenprofil</Button>
+                        <button type="submit" className={clientiqueButtonClass("dark", true) + " whitespace-nowrap rounded-full"}>Folgetermin</button>
                       </form>
                     )
-                  ) : (
-                    <button type="button" disabled className={disabledActionButtonStyle()}>Zum Kundenprofil</button>
-                  )}
+                  ) : <button type="button" disabled className={disabledActionButtonStyle() + " w-full whitespace-nowrap rounded-full"}>Folgetermin</button>}
+
+                  {canOpenCustomerProfile ? (
+                    selected.customerProfileId ? (
+                      <Link href={waitlistHref} className="w-full"><button type="button" className={clientiqueButtonClass("accent", true) + " whitespace-nowrap rounded-full"}>Zur Warteliste</button></Link>
+                    ) : (
+                      <form style={{ width: "100%" }} action={openWaitlistFromAppointment.bind(null, selected.id)}>
+                        <input type="hidden" name="returnTo" value={returnTo} />
+                        <button type="submit" className={clientiqueButtonClass("accent", true) + " whitespace-nowrap rounded-full"}>Zur Warteliste</button>
+                      </form>
+                    )
+                  ) : <button type="button" disabled className={disabledActionButtonStyle() + " w-full whitespace-nowrap rounded-full"}>Zur Warteliste</button>}
 
                   {canStartCheckout ? (
-                    <button
-                      type="button"
-                      onClick={openInlineCheckout}
-                      className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-600/80 px-4 text-sm font-semibold text-white hover:bg-emerald-600"
-                    >
+                    <button type="button" onClick={openInlineCheckout} className={clientiqueButtonClass("success", true) + " whitespace-nowrap rounded-full"}>
                       Abrechnen
                     </button>
                   ) : (
-                    <button type="button" disabled className={disabledActionButtonStyle()}>Abrechnen</button>
+                    <button type="button" disabled className={disabledActionButtonStyle() + " w-full whitespace-nowrap rounded-full"}>Abrechnen</button>
                   )}
                 </div>
-              ) : null}
+              </div>
+            ) : null}
 
-              {checkoutOpen ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "stretch" }}>
-                  <button
-                    type="button"
-                    disabled={isCheckoutPending || !!checkoutState.payment}
-                    onClick={handleCreateSalesOrder}
-                    className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-600/80 px-4 text-sm font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {checkoutState.payment ? "Rechnung bereits erstellt" : "Rechnung erstellen"}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isCheckoutPending || !checkoutState.payment || !!checkoutState.receipt}
-                    onClick={handleCreateReceipt}
-                    className="inline-flex h-10 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500 px-4 text-sm font-semibold text-black hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {checkoutState.receipt ? "Fiskal Beleg bereits erzeugt" : "Fiskal Beleg"}
-                  </button>
-                  {checkoutState.receipt ? (
-                    <>
-                      <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-white">
-                        Belegnummer: {checkoutState.receipt.receiptNumber || checkoutState.receipt.id}
-                      </div>
-                      {checkoutState.salesOrder?.id ? (
-                        <Link href={`/rechnungen?${new URLSearchParams({ q: checkoutState.salesOrder.id }).toString()}`}>
-                          <button
-                            type="button"
-                            className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
-                          >
-                            Beleg anzeigen
-                          </button>
-                        </Link>
-                      ) : null}
-                    </>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
+            {checkoutOpen ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "stretch", width: 260, maxWidth: "100%" }}>
+                <button
+                  type="button"
+                  disabled={isCheckoutPending || !!checkoutState.payment}
+                  onClick={handleCreateSalesOrder}
+                  className={clientiqueButtonClass("success", true) + " disabled:cursor-not-allowed disabled:opacity-60"}
+                >
+                  {checkoutState.payment ? "Rechnung bereits erstellt" : "Rechnung erstellen"}
+                </button>
+                <button
+                  type="button"
+                  disabled={isCheckoutPending || !checkoutState.payment || !!checkoutState.receipt}
+                  className={clientiqueButtonClass("primary", true) + " disabled:cursor-not-allowed disabled:opacity-60"}
+                  onClick={handleCreateReceipt}
+                >
+                  {checkoutState.receipt ? "Fiskal Beleg bereits erzeugt" : "Fiskal Beleg"}
+                </button>
+                {checkoutState.receipt ? (
+                  <>
+                    <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-white">
+                      Belegnummer: {checkoutState.receipt.receiptNumber || checkoutState.receipt.id}
+                    </div>
+                    {checkoutState.salesOrder?.id ? (
+                      <Link href={`/rechnungen?${new URLSearchParams({ q: checkoutState.salesOrder.id }).toString()}`}>
+                        <button type="button" className={clientiqueButtonClass("dark", true)}>Beleg anzeigen</button>
+                      </Link>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <div className="appointment-detail-scroll" style={{ padding: 16, display: "grid", gap: 14, overflow: "auto", scrollbarWidth: "none", msOverflowStyle: "none" }}>
             {!checkoutOpen ? (
               <>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="text-sm font-semibold text-white/80">Kundenkontakt</div>
-                  <div className="mt-3 space-y-3">
-                    <div className="flex flex-wrap gap-3">
-                      <ActionPill
-                        variant="whatsapp"
-                        href={selected.customerPhone ? `https://wa.me/${normalizePhoneForWhatsApp(selected.customerPhone)}?text=${encodeURIComponent(buildWhatsAppText(selected))}` : undefined}
-                        target="_blank"
-                        rel="noreferrer"
-                        disabled={!selected.customerPhone}
-                      >WhatsApp</ActionPill>
-                      <ActionPill href={selected.customerPhone ? `tel:${normalizePhoneForTel(selected.customerPhone)}` : undefined} disabled={!selected.customerPhone}>Anrufen</ActionPill>
-                      <ActionPill href={selected.customerEmail ? `mailto:${selected.customerEmail}` : undefined} disabled={!selected.customerEmail}>E-Mail</ActionPill>
+                <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045)_0%,rgba(255,255,255,0.02)_100%)] p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-white">Schnellaktionen</div>
+                      <div className="mt-1 text-xs text-white/50">Kontakt, Reminder und Kundenzugriff kompakt an einem Ort.</div>
+                    </div>
+                    <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-semibold text-white/60">
+                      {isReminderSent ? "Reminder gesendet" : "Reminder offen"}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <ActionPill
+                      variant="whatsapp"
+                      href={selected.customerPhone ? `https://wa.me/${normalizePhoneForWhatsApp(selected.customerPhone)}?text=${encodeURIComponent(buildWhatsAppText(selected))}` : undefined}
+                      target="_blank"
+                      rel="noreferrer"
+                      disabled={!selected.customerPhone}
+                    >WhatsApp</ActionPill>
+                    <ActionPill href={selected.customerPhone ? `tel:${normalizePhoneForTel(selected.customerPhone)}` : undefined} disabled={!selected.customerPhone}>Anrufen</ActionPill>
+                    <ActionPill href={selected.customerEmail ? `mailto:${selected.customerEmail}` : undefined} disabled={!selected.customerEmail}>E-Mail</ActionPill>
+                    <ActionPill href={canSendReminder && reminderWhatsAppUrl ? reminderWhatsAppUrl : undefined} target="_blank" rel="noreferrer" disabled={!canSendReminder || !reminderWhatsAppUrl}>
+                      {isReminderSent ? "Reminder erneut" : "Reminder senden"}
+                    </ActionPill>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45">Kontakt</div>
+                      <div className="mt-2 text-sm font-semibold text-white/85">{selected.customerPhone || "Keine Telefonnummer hinterlegt"}</div>
+                      <div className="mt-1 text-xs text-white/50">{selected.customerEmail || "Keine E-Mail hinterlegt"}</div>
                     </div>
                     <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-3">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45">Reminder</div>
-                          {!isReminderSent ? (
-                            <div className="mt-1 text-sm font-semibold text-white/80">Noch nicht gesendet</div>
-                          ) : (
-                            <>
-                              <div className="mt-1 text-sm font-semibold text-emerald-300">Reminder gesendet</div>
-                              {selected.reminderSentAt ? <div className="mt-1 text-xs text-white/55">gesendet am {fmtSentAt(selected.reminderSentAt)}</div> : null}
-                            </>
-                          )}
-                          {reminderPermissionHint ? <div className="mt-2 text-xs text-white/45">Nur der zuständige Behandler oder Radu als Admin darf Reminder für diesen Termin senden.</div> : null}
-                        </div>
-                        <div className="shrink-0">
-                          <ActionPill href={canSendReminder && reminderWhatsAppUrl ? reminderWhatsAppUrl : undefined} target="_blank" rel="noreferrer" disabled={!canSendReminder || !reminderWhatsAppUrl}>
-                            {isReminderSent ? "Erneut senden" : "Reminder senden"}
-                          </ActionPill>
-                        </div>
-                      </div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45">Reminder</div>
+                      {!isReminderSent ? (
+                        <div className="mt-2 text-sm font-semibold text-white/80">Noch nicht gesendet</div>
+                      ) : (
+                        <>
+                          <div className="mt-2 text-sm font-semibold text-emerald-300">Reminder gesendet</div>
+                          {selected.reminderSentAt ? <div className="mt-1 text-xs text-white/55">{fmtSentAt(selected.reminderSentAt)}</div> : null}
+                        </>
+                      )}
+                      {reminderPermissionHint ? <div className="mt-2 text-xs text-white/45">Nur zuständiger Behandler oder Admin darf Reminder senden.</div> : null}
                     </div>
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="text-sm font-semibold text-white/80">Status</div>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    <button type="button" disabled={!canChangeStatus || isStatusPending} onClick={() => handleStatusClick("scheduled")} style={statusButtonStyle("scheduled", statusValue === "scheduled")}>Geplant</button>
-                    <button type="button" disabled={!canChangeStatus || isStatusPending} onClick={() => handleStatusClick("completed")} style={statusButtonStyle("completed", statusValue === "completed")}>Gekommen</button>
-                    <button type="button" disabled={!canChangeStatus || isStatusPending} onClick={() => handleStatusClick("cancelled")} style={statusButtonStyle("cancelled", statusValue === "cancelled")}>Abgesagt</button>
-                    <button type="button" disabled={!canChangeStatus || isStatusPending} onClick={() => handleStatusClick("no_show")} style={statusButtonStyle("no_show", statusValue === "no_show")}>Nicht gekommen</button>
-                  </div>
-                  <div className="mt-2 text-xs text-white/50">
-                    {statusPermissionHint ? "Nur der zuständige Behandler oder Radu als Admin darf diesen Status ändern." : isStatusPending ? "Status wird gespeichert..." : "Ein Klick speichert den Status direkt automatisch."}
-                  </div>
-                  {statusError ? <div className="mt-2 text-xs text-red-300">{statusError}</div> : null}
-                </div>
               </>
             ) : null}
 
@@ -1067,7 +1227,7 @@ export default function AppointmentDetailSlideover({
                     <label className="text-xs text-white/80">Notiz (optional)</label>
                     <textarea name="notes" value={notesValue} onChange={(e) => setNotesValue(e.target.value)} className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white placeholder:text-white/30 outline-none focus:ring-2 focus:ring-white/15" placeholder="Interne Notiz" rows={3} />
                   </div>
-                  <button type="submit" className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-600/70 px-4 text-sm font-semibold text-white hover:bg-emerald-600">Änderungen speichern</button>
+                  <button type="submit" className={clientiqueButtonClass("success")}>Änderungen speichern</button>
                   <div className="text-xs text-white/50">Speichert in DB und aktualisiert Google Calendar.</div>
                 </form>
               </div>
@@ -1075,55 +1235,70 @@ export default function AppointmentDetailSlideover({
 
             {!checkoutOpen ? (
               <div className="rounded-xl border border-fuchsia-400/20 bg-fuchsia-400/5 p-3">
-                <div className="flex items-start justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setWaitlistOpen((value) => !value)}
+                  className="flex w-full items-start justify-between gap-3 text-left"
+                >
                   <div>
                     <div className="text-sm font-semibold text-fuchsia-100">Passende Warteliste</div>
-                    <div className="mt-1 text-xs text-white/55">Aktive Wartelisten-Einträge – Akut-Kandidaten wie „heute angefragt“, „kurzfristig möglich“ und „heute erreichbar“ rutschen automatisch nach oben.</div>
+                    <div className="mt-1 text-xs text-white/55">
+                      {waitlistOpen ? "Treffer und Aktionen geöffnet." : "Platzsparend eingeklappt – bei Bedarf öffnen."}
+                    </div>
                   </div>
-                  <div className="rounded-full border border-fuchsia-300/20 bg-fuchsia-400/10 px-3 py-1 text-xs font-semibold text-fuchsia-100">{waitlistLoading ? "lädt..." : `${waitlistMatches.length} Treffer`}</div>
-                </div>
-                {waitlistError ? <div className="mt-3 text-xs text-red-300">{waitlistError}</div> : null}
-                {waitlistLoading ? (
-                  <div className="mt-3 rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white/60">Warteliste wird geladen...</div>
-                ) : waitlistMatches.length === 0 ? (
-                  <div className="mt-3 rounded-xl border border-dashed border-white/10 bg-black/20 px-3 py-3 text-sm text-white/55">Noch kein passender aktiver Wartelisten-Eintrag für diesen Slot gefunden.</div>
-                ) : (
-                  <div className="mt-3 grid gap-3">
-                    {waitlistMatches.map((entry) => {
-                      const createHref = getCreateForWaitlistHref(selected, entry);
-                      const isPending = waitlistStatusPendingId === entry.id;
-                      return (
-                        <div key={entry.id} className="rounded-2xl border border-white/10 bg-black/25 p-3">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="text-base font-semibold text-white">{entry.customer_name || "Unbekannter Kunde"}</div>
-                              <div className="mt-1 text-sm text-white/70">{entry.service_title || "ohne Behandlungswunsch"}</div>
-                              <div className="mt-2 flex flex-wrap gap-2 text-xs text-white/55">
-                                <span className="rounded-full border border-white/10 px-2 py-1">{formatWaitlistDays(entry.preferred_days)}</span>
-                                <span className="rounded-full border border-white/10 px-2 py-1">{formatOptionalTimeRange(entry.time_from, entry.time_to)}</span>
-                                <span className="rounded-full border border-white/10 px-2 py-1">Priorität: {getPriorityLabel(entry.priority)}</span>
-                                {entry.short_notice_ok ? <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-emerald-200">Kurzfristig möglich</span> : null}
-                                {entry.reachable_today ? <span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-2 py-1 text-sky-200">Heute erreichbar</span> : null}
-                                {recentRequestLabel(entry.requested_recently_at) ? <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-1 text-amber-200">{recentRequestLabel(entry.requested_recently_at)}</span> : null}
-                                <span className="rounded-full border border-fuchsia-300/20 bg-fuchsia-400/10 px-2 py-1 text-fuchsia-100">Match {entry.score}</span>
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-full border border-fuchsia-300/20 bg-fuchsia-400/10 px-3 py-1 text-xs font-semibold text-fuchsia-100">
+                      {waitlistLoading ? "lädt..." : `${waitlistMatches.length} Treffer`}
+                    </div>
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-lg text-white/80">
+                      {waitlistOpen ? "−" : "+"}
+                    </span>
+                  </div>
+                </button>
+
+                {waitlistOpen ? (
+                  <>
+                    {waitlistError ? <div className="mt-3 text-xs text-red-300">{waitlistError}</div> : null}
+                    {waitlistLoading ? (
+                      <div className="mt-3 rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-white/60">Warteliste wird geladen...</div>
+                    ) : waitlistMatches.length === 0 ? (
+                      <div className="mt-3 rounded-xl border border-dashed border-white/10 bg-black/20 px-3 py-3 text-sm text-white/55">Noch kein passender aktiver Wartelisten-Eintrag für diesen Slot gefunden.</div>
+                    ) : (
+                      <div className="mt-3 grid gap-3">
+                        {waitlistMatches.map((entry) => {
+                          const createHref = getCreateForWaitlistHref(selected, entry);
+                          const isPending = waitlistStatusPendingId === entry.id;
+                          return (
+                            <div key={entry.id} className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                              <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="text-base font-semibold text-white">{entry.customer_name || "Unbekannter Kunde"}</div>
+                                  <div className="mt-1 text-sm text-white/70">{entry.service_title || "ohne Behandlungswunsch"}</div>
+                                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-white/55">
+                                    <span className="rounded-full border border-white/10 px-2 py-1">{formatWaitlistDays(entry.preferred_days)}</span>
+                                    <span className="rounded-full border border-white/10 px-2 py-1">{formatOptionalTimeRange(entry.time_from, entry.time_to)}</span>
+                                    <span className="rounded-full border border-white/10 px-2 py-1">Priorität: {getPriorityLabel(entry.priority)}</span>
+                                    {entry.short_notice_ok ? <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-emerald-200">Kurzfristig möglich</span> : null}
+                                    {entry.reachable_today ? <span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-2 py-1 text-sky-200">Heute erreichbar</span> : null}
+                                    {recentRequestLabel(entry.requested_recently_at) ? <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-1 text-amber-200">{recentRequestLabel(entry.requested_recently_at)}</span> : null}
+                                    <span className="rounded-full border border-fuchsia-300/20 bg-fuchsia-400/10 px-2 py-1 text-fuchsia-100">Match {entry.score}</span>
+                                  </div>
+                                  {entry.notes ? <div className="mt-2 text-xs text-white/55">{entry.notes}</div> : null}
+                                </div>
+                                <div className="flex flex-wrap items-center justify-end gap-2">
+                                  <Link href={createHref}><button type="button" className={clientiqueButtonClass("success")}>Termin anlegen</button></Link>
+                                  <button type="button" style={clientiqueActionButtonStyle()} disabled={!canManageForThisAppointment || isPending} onClick={() => handleWaitlistStatusChange(entry.id, "contacted")}>Kontaktiert</button>
+                                  <button type="button" className={clientiqueButtonClass("accent")} disabled={!canManageForThisAppointment || isPending} onClick={() => handleWaitlistStatusChange(entry.id, "booked")}>Als vergeben</button>
+                                </div>
                               </div>
-                              {entry.notes ? <div className="mt-2 text-xs text-white/55">{entry.notes}</div> : null}
                             </div>
-                            <div className="flex flex-wrap items-center justify-end gap-2">
-                              <ActionPill variant="whatsapp" href={entry.phone ? `https://wa.me/${normalizePhoneForWhatsApp(entry.phone)}?text=${encodeURIComponent(`Hallo ${entry.customer_name || ""}, es ist kurzfristig ein Termin am ${fmtDate(startDate)} um ${fmtTime(startDate)} frei geworden.`)}` : undefined} target="_blank" rel="noreferrer" disabled={!entry.phone}>WhatsApp</ActionPill>
-                              <ActionPill href={entry.phone ? `tel:${normalizePhoneForTel(entry.phone)}` : undefined} disabled={!entry.phone}>Anrufen</ActionPill>
-                              <Link href={`/customers/${entry.customer_profile_id}?tab=waitlist#waitlist`}><button type="button" className="inline-flex h-10 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white hover:bg-white/10">Zum Kunden</button></Link>
-                              <Link href={createHref}><button type="button" className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-600/70 px-4 text-sm font-semibold text-white hover:bg-emerald-600">Termin anlegen</button></Link>
-                              <button type="button" disabled={!canManageForThisAppointment || isPending} onClick={() => handleWaitlistStatusChange(entry.id, "contacted")} className="inline-flex h-10 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50">Kontaktiert</button>
-                              <button type="button" disabled={!canManageForThisAppointment || isPending} onClick={() => handleWaitlistStatusChange(entry.id, "booked")} className="inline-flex h-10 items-center justify-center rounded-xl border border-fuchsia-400/20 bg-fuchsia-400/10 px-4 text-sm font-semibold text-fuchsia-100 hover:bg-fuchsia-400/15 disabled:cursor-not-allowed disabled:opacity-50">Als vergeben</button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                <div className="mt-2 text-xs text-white/50">Tipp: Erst Kunden kontaktieren, dann den Ersatztermin direkt aus dem freien Slot anlegen.</div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div className="mt-2 text-xs text-white/50">Tipp: Erst Kunden kontaktieren, dann den Ersatztermin direkt aus dem freien Slot anlegen.</div>
+                  </>
+                ) : null}
               </div>
             ) : null}
 
@@ -1160,10 +1335,10 @@ export default function AppointmentDetailSlideover({
                                   ))}
                                 </select>
                                 {index === checkoutLines.length - 1 ? (
-                                  <button type="button" onClick={addCheckoutLine} className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-600/80 text-xl font-semibold text-white hover:bg-emerald-600" title="Weitere Leistung hinzufügen">+</button>
+                                  <button type="button" onClick={addCheckoutLine} className={clientiqueButtonClass("success")} title="Weitere Leistung hinzufügen">+</button>
                                 ) : null}
                                 {checkoutLines.length > 1 ? (
-                                  <button type="button" onClick={() => removeCheckoutLine(line.id)} className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-semibold text-white hover:bg-white/10">Entfernen</button>
+                                  <button type="button" onClick={() => removeCheckoutLine(line.id)} className={clientiqueButtonClass("dark")}>Entfernen</button>
                                 ) : null}
                               </div>
                             </div>
@@ -1217,37 +1392,6 @@ export default function AppointmentDetailSlideover({
 
                                </div>
               </div>
-            ) : null}
-
-            {!checkoutOpen ? (
-              <>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="text-sm font-semibold text-white/80">Termin</div>
-                  <div className="mt-3 flex flex-wrap gap-3">
-                    {canDeleteAppointment ? (
-                      <form action={deleteAppointmentFromCalendar.bind(null, selected.id)} onSubmit={(e) => { if (!confirm("Termin wirklich löschen? Das löscht auch den Google-Kalender Eintrag.")) e.preventDefault(); }}>
-                        <input type="hidden" name="returnTo" value={returnTo} />
-                        <button type="submit" className="inline-flex h-10 items-center justify-center rounded-xl border border-red-500/30 bg-red-600/80 px-4 text-sm font-semibold text-white hover:bg-red-600">Termin löschen</button>
-                      </form>
-                    ) : <button type="button" disabled className={disabledActionButtonStyle()}>Termin löschen</button>}
-                    {canCreateFollowUp ? (
-                      selected.customerProfileId ? (
-                        <Link href={followUpHref}><button type="button" className="inline-flex h-10 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white hover:bg-white/10">Folgetermin</button></Link>
-                      ) : (
-                        <form action={openFollowUpFromAppointment.bind(null, selected.id)}><input type="hidden" name="returnTo" value={returnTo} /><button type="submit" className="inline-flex h-10 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white hover:bg-white/10">Folgetermin</button></form>
-                      )
-                    ) : <button type="button" disabled className={disabledActionButtonStyle()}>Folgetermin</button>}
-                    {canOpenCustomerProfile ? (
-                      selected.customerProfileId ? (
-                        <Link href={waitlistHref}><button type="button" className="inline-flex h-10 items-center justify-center rounded-xl border border-fuchsia-400/20 bg-fuchsia-400/10 px-4 text-sm font-semibold text-fuchsia-200 hover:bg-fuchsia-400/15">Zur Warteliste</button></Link>
-                      ) : (
-                        <form action={openWaitlistFromAppointment.bind(null, selected.id)}><input type="hidden" name="returnTo" value={returnTo} /><button type="submit" className="inline-flex h-10 items-center justify-center rounded-xl border border-fuchsia-400/20 bg-fuchsia-400/10 px-4 text-sm font-semibold text-fuchsia-200 hover:bg-fuchsia-400/15">Zur Warteliste</button></form>
-                      )
-                    ) : <button type="button" disabled className={disabledActionButtonStyle()}>Zur Warteliste</button>}
-                  </div>
-                </div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>Tipp: ESC schließt dieses Fenster.</div>
-              </>
             ) : null}
           </div>
 

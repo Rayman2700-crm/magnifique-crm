@@ -412,13 +412,13 @@ function InvoiceCreateCard({
             <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-2.5">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Offen</div>
               <div className="mt-1 text-sm font-semibold text-white">{openReceiptCount}</div>
-              <div className="mt-0.5 hidden text-[10px] text-white/40 md:block">noch prüfen</div>
+              <div className="mt-0.5 text-[10px] text-white/40 hidden md:block">noch prüfen</div>
             </div>
 
             <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-2.5">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Woche</div>
               <div className="mt-1 text-sm font-semibold text-white">{formatMoney(weekRevenueCents)}</div>
-              <div className="mt-0.5 hidden text-[10px] text-white/40 md:block">laufender Stand</div>
+              <div className="mt-0.5 text-[10px] text-white/40 hidden md:block">laufender Stand</div>
             </div>
           </div>
 
@@ -435,7 +435,8 @@ function InvoiceCreateCard({
                 href="/rechnungen?filter=open"
                 className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
               >
-                Offen prüfen ({openReceiptCount})
+                <span className="md:hidden">Offen ({openReceiptCount})</span>
+                <span className="hidden md:inline">Offene prüfen ({openReceiptCount})</span>
               </Link>
             ) : null}
 
@@ -443,7 +444,8 @@ function InvoiceCreateCard({
               href="/rechnungen"
               className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-white/10 bg-transparent px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
             >
-              {hasRecentReceipt ? "Belege öffnen" : "Belege"}
+              <span className="md:hidden">Belege</span>
+              <span className="hidden md:inline">{hasRecentReceipt ? "Letzten Beleg öffnen" : "Alle anzeigen"}</span>
             </Link>
           </div>
         </div>

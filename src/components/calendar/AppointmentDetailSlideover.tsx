@@ -146,7 +146,7 @@ function IconButton({
       onClick={onClick}
       aria-label={title}
       title={title}
-      className={`inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white transition-colors ${hoverClassName ?? "hover:bg-white/10"}`}
+      className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white transition-colors ${hoverClassName ?? "hover:bg-white/10"}`}
     >
       {children}
     </button>
@@ -172,8 +172,8 @@ function clientiqueButtonClass(variant: "dark" | "primary" | "success" | "danger
 
 function clientiqueActionButtonStyle(fullWidth = false): React.CSSProperties {
   return {
-    height: 40,
-    padding: "0 8px",
+    height: 35,
+    padding: "0 7px",
     borderRadius: 12,
     border: "1px solid rgba(255,255,255,0.12)",
     background: "rgba(255,255,255,0.04)",
@@ -186,9 +186,9 @@ function clientiqueActionButtonStyle(fullWidth = false): React.CSSProperties {
 
 function clientiqueIconButtonClass(variant: "dark" | "primary" = "dark") {
   if (variant === "primary") {
-    return "inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-[#d6c3a3]/30 bg-[#d6c3a3] text-black shadow-[0_10px_30px_rgba(214,195,163,0.18)] transition-all hover:bg-[#e2d2b6]";
+    return "inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white transition-colors hover:bg-white/10";
   }
-  return "inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/12 bg-white/[0.04] text-white/90 transition-all hover:border-white/20 hover:bg-white/[0.08]";
+  return "inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white transition-colors hover:bg-white/10";
 }
 
 function formatGrossEuro(value: number | null | undefined, currencyCode = "EUR") {
@@ -420,27 +420,32 @@ function getWaitlistHref(selected: Item) {
 
 function statusButtonStyle(status: AppointmentStatus, active: boolean): React.CSSProperties {
   const base: React.CSSProperties = {
-    height: 42,
-    padding: "0 8px",
-    borderRadius: 12,
-    fontSize: 12,
-    fontWeight: 800,
+    height: 28,
+    padding: "0 12px",
+    borderRadius: 999,
+    fontSize: 10,
+    fontWeight: 400,
     textAlign: "center",
     justifyContent: "center",
-    display: "flex",
+    display: "inline-flex",
     alignItems: "center",
     whiteSpace: "nowrap",
     width: "100%",
-    border: "1px solid rgba(255,255,255,0.12)",
+    border: "1px solid rgba(255,255,255,0.10)",
+    background: "rgba(255,255,255,0.03)",
+    color: "rgba(255,255,255,0.72)",
     transition: "all 120ms ease",
   };
   if (status === "scheduled") {
-    return { ...base, border: active ? "1px solid rgba(56,189,248,0.45)" : base.border, background: active ? "rgba(56,189,248,0.18)" : "rgba(255,255,255,0.04)", color: active ? "#bae6fd" : "rgba(255,255,255,0.80)", boxShadow: active ? "inset 0 0 0 1px rgba(56,189,248,0.18)" : "none" };
+    return { ...base, border: active ? "1px solid rgba(214,195,163,0.30)" : base.border, background: active ? "rgba(214,195,163,0.12)" : base.background, color: active ? "#f5e7ca" : base.color };
   }
   if (status === "completed") {
-    return { ...base, border: active ? "1px solid rgba(34,197,94,0.45)" : base.border, background: active ? "rgba(34,197,94,0.18)" : "rgba(255,255,255,0.04)", color: active ? "#bbf7d0" : "rgba(255,255,255,0.80)", boxShadow: active ? "inset 0 0 0 1px rgba(34,197,94,0.18)" : "none" };
+    return { ...base, border: active ? "1px solid rgba(16,185,129,0.30)" : base.border, background: active ? "rgba(16,185,129,0.14)" : base.background, color: active ? "#bbf7d0" : base.color };
   }
-  return { ...base, border: active ? "1px solid rgba(248,113,113,0.45)" : base.border, background: active ? "rgba(248,113,113,0.18)" : "rgba(255,255,255,0.04)", color: active ? "#fecaca" : "rgba(255,255,255,0.80)", boxShadow: active ? "inset 0 0 0 1px rgba(248,113,113,0.18)" : "none" };
+  if (status === "cancelled") {
+    return { ...base, border: active ? "1px solid rgba(248,113,113,0.30)" : base.border, background: active ? "rgba(248,113,113,0.14)" : base.background, color: active ? "#fecaca" : base.color };
+  }
+  return { ...base, border: active ? "1px solid rgba(248,113,113,0.24)" : base.border, background: active ? "rgba(248,113,113,0.10)" : base.background, color: active ? "#f3d0d0" : base.color };
 }
 
 function disabledActionButtonStyle(): string {
@@ -963,7 +968,7 @@ export default function AppointmentDetailSlideover({
                   <span style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 999, padding: "5px 10px", fontSize: 12, color: "rgba(255,255,255,0.60)" }}>
                     {fmtDate(startDate)}
                   </span>
-                  <span style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 999, padding: "5px 10px", fontSize: 12, color: "rgba(255,255,255,0.82)" }}>
+                  <span style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 999, padding: "5px 10px", fontSize: 12, color: "rgba(255,255,255,0.72)" }}>
                     {fmtTime(startDate)}–{fmtTime(endDate)}
                   </span>
                 </div>
@@ -992,12 +997,15 @@ export default function AppointmentDetailSlideover({
                     type="button"
                     aria-label={editMode ? "Bearbeiten abbrechen" : "Termin bearbeiten"}
                     title={editMode ? "Bearbeiten abbrechen" : "Termin bearbeiten"}
-                    className={clientiqueIconButtonClass("dark")}
+                    className={clientiqueIconButtonClass("primary")}
                     onClick={() => setEditMode((v) => !v)}
                   >
-                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M4 20h4l10-10-4-4L4 16v4z" />
-                      <path d="M12 6l4 4" />
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.05" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M6 3h9l3 3v12H6z" />
+                      <path d="M15 3v4h4" />
+                      <path d="M9 9.5h5" />
+                      <path d="M9 13h4" />
+                      <circle cx="12" cy="17" r="2.2" />
                     </svg>
                   </button>
                 ) : null}
@@ -1006,41 +1014,29 @@ export default function AppointmentDetailSlideover({
                   canOpenCustomerProfile ? (
                     selected.customerProfileId ? (
                       <Link href={`/customers/${selected.customerProfileId}?tab=appointments#appointments`}>
-                        <span className={clientiqueIconButtonClass("primary")} title="Zum Kundenprofil" aria-label="Zum Kundenprofil">
-                          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <path d="M6 3h9l3 3v12H6z" />
-                            <path d="M15 3v4h4" />
-                            <circle cx="11" cy="11" r="2.2" />
-                            <path d="M8.4 16.3c.8-1.6 1.9-2.4 2.6-2.4.8 0 1.9.8 2.6 2.4" />
-                            <path d="M17 17v4" />
-                            <path d="M15 19h4" />
+                        <span className={clientiqueIconButtonClass("dark")} title="Zum Kundenprofil" aria-label="Zum Kundenprofil">
+                          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.15" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M4 20h4l10-10-4-4L4 16v4z" />
+                            <path d="M12 6l4 4" />
                           </svg>
                         </span>
                       </Link>
                     ) : (
                       <form action={openCustomerProfileFromAppointment.bind(null, selected.id)}>
                         <input type="hidden" name="returnTo" value={returnTo} />
-                        <button type="submit" className={clientiqueIconButtonClass("primary")} title="Zum Kundenprofil" aria-label="Zum Kundenprofil">
-                          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <path d="M6 3h9l3 3v12H6z" />
-                            <path d="M15 3v4h4" />
-                            <circle cx="11" cy="11" r="2.2" />
-                            <path d="M8.4 16.3c.8-1.6 1.9-2.4 2.6-2.4.8 0 1.9.8 2.6 2.4" />
-                            <path d="M17 17v4" />
-                            <path d="M15 19h4" />
+                        <button type="submit" className={clientiqueIconButtonClass("dark")} title="Zum Kundenprofil" aria-label="Zum Kundenprofil">
+                          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.15" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M4 20h4l10-10-4-4L4 16v4z" />
+                            <path d="M12 6l4 4" />
                           </svg>
                         </button>
                       </form>
                     )
                   ) : (
                     <button type="button" disabled className={clientiqueIconButtonClass("dark")} title="Zum Kundenprofil" aria-label="Zum Kundenprofil" style={{ opacity: 0.45, cursor: "not-allowed" }}>
-                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M6 3h9l3 3v12H6z" />
-                        <path d="M15 3v4h4" />
-                        <circle cx="11" cy="11" r="2.2" />
-                        <path d="M8.4 16.3c.8-1.6 1.9-2.4 2.6-2.4.8 0 1.9.8 2.6 2.4" />
-                        <path d="M17 17v4" />
-                        <path d="M15 19h4" />
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.15" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M4 20h4l10-10-4-4L4 16v4z" />
+                        <path d="M12 6l4 4" />
                       </svg>
                     </button>
                   )
@@ -1080,42 +1076,42 @@ export default function AppointmentDetailSlideover({
 
                 {statusError ? <div style={{ fontSize: 12, color: "#fca5a5" }}>{statusError}</div> : null}
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8, width: "100%" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10, width: "100%" }}>
                   {canDeleteAppointment ? (
                     <form style={{ width: "100%" }} action={deleteAppointmentFromCalendar.bind(null, selected.id)} onSubmit={(e) => { if (!confirm("Termin wirklich löschen? Das löscht auch den Google-Kalender Eintrag.")) e.preventDefault(); }}>
                       <input type="hidden" name="returnTo" value={returnTo} />
-                      <button type="submit" className={clientiqueButtonClass("danger", true)}>Termin löschen</button>
+                      <button type="submit" className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-red-400/25 bg-red-500/12 px-4 text-sm font-semibold text-white transition-colors hover:bg-red-600 whitespace-nowrap  ">Termin löschen</button>
                     </form>
-                  ) : <button type="button" disabled className={disabledActionButtonStyle() + " w-full"}>Termin löschen</button>}
+                  ) : <button type="button" disabled className={disabledActionButtonStyle() + " w-full whitespace-nowrap rounded-xl"}>Termin löschen</button>}
 
                   {canCreateFollowUp ? (
                     selected.customerProfileId ? (
-                      <Link href={followUpHref} className="w-full"><button type="button" className={clientiqueButtonClass("dark", true)}>Folgetermin</button></Link>
+                      <Link href={followUpHref} className="w-full"><button type="button" className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white text-sm font-semibold transition-colors hover:bg-white/10">Folgetermin</button></Link>
                     ) : (
                       <form style={{ width: "100%" }} action={openFollowUpFromAppointment.bind(null, selected.id)}>
                         <input type="hidden" name="returnTo" value={returnTo} />
-                        <button type="submit" className={clientiqueButtonClass("dark", true)}>Folgetermin</button>
+                        <button type="submit" className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white text-sm font-semibold transition-colors hover:bg-white/10">Folgetermin</button>
                       </form>
                     )
-                  ) : <button type="button" disabled className={disabledActionButtonStyle() + " w-full"}>Folgetermin</button>}
+                  ) : <button type="button" disabled className={disabledActionButtonStyle() + " w-full whitespace-nowrap rounded-xl"}>Folgetermin</button>}
 
                   {canOpenCustomerProfile ? (
                     selected.customerProfileId ? (
-                      <Link href={waitlistHref} className="w-full"><button type="button" className={clientiqueButtonClass("accent", true)}>Zur Warteliste</button></Link>
+                      <Link href={waitlistHref} className="w-full"><button type="button" className={clientiqueButtonClass("accent", true) + " whitespace-nowrap rounded-xl"}>Zur Warteliste</button></Link>
                     ) : (
                       <form style={{ width: "100%" }} action={openWaitlistFromAppointment.bind(null, selected.id)}>
                         <input type="hidden" name="returnTo" value={returnTo} />
-                        <button type="submit" className={clientiqueButtonClass("accent", true)}>Zur Warteliste</button>
+                        <button type="submit" className={clientiqueButtonClass("accent", true) + " whitespace-nowrap rounded-xl"}>Zur Warteliste</button>
                       </form>
                     )
-                  ) : <button type="button" disabled className={disabledActionButtonStyle() + " w-full"}>Zur Warteliste</button>}
+                  ) : <button type="button" disabled className={disabledActionButtonStyle() + " w-full whitespace-nowrap rounded-xl"}>Zur Warteliste</button>}
 
                   {canStartCheckout ? (
-                    <button type="button" onClick={openInlineCheckout} className={clientiqueButtonClass("success", true)}>
+                    <button type="button" onClick={openInlineCheckout} className="inline-flex h-10 w-full items-center justify-center rounded-xl border 1px solid border-emerald-500/30 bg-emerald-600/80 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-600 whitespace-nowrap">
                       Abrechnen
                     </button>
                   ) : (
-                    <button type="button" disabled className={disabledActionButtonStyle() + " w-full"}>Abrechnen</button>
+                    <button type="button" disabled className={disabledActionButtonStyle() + " w-full whitespace-nowrap rounded-xl"}>Abrechnen</button>
                   )}
                 </div>
               </div>
