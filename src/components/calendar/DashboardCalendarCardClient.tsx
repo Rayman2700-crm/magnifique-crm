@@ -944,7 +944,7 @@ export default function DashboardCalendarCardClient({
   return (
     <Card className="border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
       <CardContent className="p-6 md:p-8">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
           <div className="flex min-w-0 flex-col gap-4 lg:gap-6">
             <div className="flex items-start justify-between gap-4">
               <div>
