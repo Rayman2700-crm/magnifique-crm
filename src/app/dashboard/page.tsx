@@ -875,7 +875,7 @@ export default async function DashboardPage() {
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-4 min-[480px]:grid-cols-3 sm:gap-5 md:mt-7 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8">
+            <div className="mt-4 grid grid-cols-2 gap-4 min-[768px]:grid-cols-3 sm:gap-5 md:mt-7 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8">
               <DashboardStatCard label="Termine heute" value={String(todayCount)} subtext="Heute im Plan" />
               <DashboardStatCard label="Termine Woche" value={String(weekCount)} subtext="Diese Woche" />
               <DashboardStatCard label="Kunden gesamt" value={String(customersCount)} subtext="Gespeicherte Profile" />
