@@ -916,7 +916,7 @@ export default function AppointmentDetailSlideover({
   const content = (
     <div style={{ position: "fixed", inset: 0, zIndex: 99999, isolation: "isolate" }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.82)", backdropFilter: "blur(6px)" }} />
-      <div style={{ position: "absolute", top: 0, right: 0, height: "100%", width: "min(648px, calc(100vw - 1rem))", padding: 12, display: "flex" }}>
+      <div style={{ position: "absolute", top: 0, right: 0, height: "100%", width: "min(480px, calc(100vw - 1rem))", padding: 12, display: "flex" }}>
         <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", height: "100%", backgroundColor: "#0b0b0c", borderRadius: 20, border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 24px 70px rgba(0,0,0,0.62)", display: "flex", flexDirection: "column" }}>
           
 <div
