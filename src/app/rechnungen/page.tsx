@@ -1344,8 +1344,8 @@ export default async function RechnungenPage({
                     Rechnungen
                   </h1>
 
-                  <div className="mt-5 overflow-x-auto pb-1">
-                    <div className="flex min-w-max flex-nowrap items-start gap-4">
+                  <div className="mt-5 pb-1">
+                    <div className="flex flex-wrap items-start gap-4">
                       {avatarOptions.map((option) => {
                         const active = option.filterKey === practitionerFilter;
                         const ringColor = option.tenantId === "all" ? "rgba(255,255,255,0.55)" : avatarRingColor(option.label);
