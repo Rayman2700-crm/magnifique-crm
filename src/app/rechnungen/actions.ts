@@ -137,6 +137,44 @@ function parsePositiveInt(value: FormDataEntryValue | null, fallback = 1) {
   return Math.max(1, Math.round(raw));
 }
 
+type InlineEditableLine = {
+  serviceId: string | null;
+  name: string;
+  quantity: number;
+  priceCents: number;
+  taxRate: number;
+  lineType: "SERVICE" | "ITEM";
+};
+
+function parseInlineEditableLines(raw: FormDataEntryValue | null) {
+  const source = String(raw ?? "").trim();
+  if (!source) return [] as InlineEditableLine[];
+
+  let parsed: unknown = [];
+  try {
+    parsed = JSON.parse(source);
+  } catch {
+    return [] as InlineEditableLine[];
+  }
+
+  if (!Array.isArray(parsed)) return [] as InlineEditableLine[];
+
+  return parsed
+    .map((entry) => {
+      const row = entry as Record<string, unknown>;
+      const serviceId = String(row.serviceId ?? "").trim() || null;
+      const name = String(row.name ?? "").trim();
+      const quantityRaw = Number(row.quantity ?? 1);
+      const quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 ? Math.max(1, Math.round(quantityRaw)) : 1;
+      const priceCents = Math.max(0, parseMoneyToCents(String(row.price ?? row.unitPriceGross ?? "0")));
+      const taxRateRaw = Number(String(row.taxRate ?? "0").replace(",", "."));
+      const taxRate = Number.isFinite(taxRateRaw) ? taxRateRaw : 0;
+      const lineType: "SERVICE" | "ITEM" = serviceId ? "SERVICE" : "ITEM";
+      return { serviceId, name, quantity, priceCents, taxRate, lineType } satisfies InlineEditableLine;
+    })
+    .filter((row) => row.name && row.quantity > 0 && row.priceCents >= 0);
+}
+
 function toGrossNumber(cents: number) {
   return Number((cents / 100).toFixed(2));
 }
@@ -161,52 +199,116 @@ async function requireContext() {
     tenant_id: typedProfile?.tenant_id ?? null,
     calendar_tenant_id: typedProfile?.calendar_tenant_id ?? null,
   });
+  const isAdmin = String(typedProfile?.role ?? "").toUpperCase() === "ADMIN";
 
-  return { admin, user, effectiveTenantId };
+  return {
+    admin,
+    user,
+    effectiveTenantId,
+    isAdmin,
+    profileTenantId: String(typedProfile?.tenant_id ?? "").trim() || null,
+    profileCalendarTenantId: String(typedProfile?.calendar_tenant_id ?? "").trim() || null,
+  };
 }
 
-async function resolvePaymentMethodId(admin: any, tenantId: string, requestedCode: string) {
-  const normalized = requestedCode.trim().toUpperCase();
-  const { data, error } = await admin
-    .from("payment_methods")
-    .select("id, code, name")
-    .eq("tenant_id", tenantId)
-    .eq("is_active", true)
-    .order("sort_order", { ascending: true });
+function uniqueTenantIds(...values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean)));
+}
 
-  if (error) throw new Error(error.message ?? "Zahlungsarten konnten nicht geladen werden.");
+function normalizePaymentToken(value: string | null | undefined) {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9]+/g, "");
+}
 
-  const rows = data ?? [];
+async function resolvePaymentMethodId(admin: any, tenantIds: string | string[], requestedCode: string) {
+  const normalized = normalizePaymentToken(requestedCode);
+  const candidates = Array.isArray(tenantIds) ? uniqueTenantIds(...tenantIds) : uniqueTenantIds(tenantIds);
+  if (candidates.length === 0) {
+    throw new Error("Für diesen Vorgang konnte kein Tenant für die Zahlungsart ermittelt werden.");
+  }
+
   const aliases: Record<string, string[]> = {
-    CASH: ["CASH", "BAR", "BARE", "cash"],
-    CARD: ["CARD", "KARTE", "CARD_PRESENT", "card_present"],
-    TRANSFER: ["TRANSFER", "UEBERWEISUNG", "ÜBERWEISUNG", "BANK", "BANK_TRANSFER", "bank_transfer"],
+    CASH: ["CASH", "BAR", "BARE", "BARGELD", "BARZAHLUNG"],
+    BAR: ["CASH", "BAR", "BARE", "BARGELD", "BARZAHLUNG"],
+    CARD: ["CARD", "KARTE", "KARTENZAHLUNG", "CARDPRESENT", "EC", "MAESTRO", "VISA", "MASTERCARD"],
+    KARTE: ["CARD", "KARTE", "KARTENZAHLUNG", "CARDPRESENT", "EC", "MAESTRO", "VISA", "MASTERCARD"],
+    TRANSFER: ["TRANSFER", "UBERWEISUNG", "UEBERWEISUNG", "BANK", "BANKTRANSFER", "SEPA"],
+    UBERWEISUNG: ["TRANSFER", "UBERWEISUNG", "UEBERWEISUNG", "BANK", "BANKTRANSFER", "SEPA"],
   };
-  const acceptable = aliases[normalized] ?? [normalized];
+  const acceptable = new Set([normalized, ...(aliases[normalized] ?? [])].map(normalizePaymentToken).filter(Boolean));
 
-  for (const row of rows) {
-    const code = String(row.code ?? "").trim();
-    const name = String(row.name ?? "").trim().toUpperCase();
-    if (acceptable.includes(code) || acceptable.includes(code.toUpperCase()) || acceptable.includes(name)) {
-      return String(row.id);
+  let fallbackRows: any[] = [];
+
+  for (const tenantId of candidates) {
+    const { data, error } = await admin
+      .from("payment_methods")
+      .select("id, code, name, tenant_id")
+      .eq("tenant_id", tenantId)
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true });
+
+    if (error) throw new Error(error.message ?? "Zahlungsarten konnten nicht geladen werden.");
+
+    const rows = data ?? [];
+    if (rows.length === 0) continue;
+    fallbackRows = fallbackRows.length === 0 ? rows : fallbackRows;
+
+    for (const row of rows) {
+      const codeToken = normalizePaymentToken(String(row.code ?? ""));
+      const nameToken = normalizePaymentToken(String(row.name ?? ""));
+      if (acceptable.has(codeToken) || acceptable.has(nameToken)) {
+        return String(row.id);
+      }
+    }
+
+    for (const row of rows) {
+      const codeToken = normalizePaymentToken(String(row.code ?? ""));
+      const nameToken = normalizePaymentToken(String(row.name ?? ""));
+      for (const token of acceptable) {
+        if ((codeToken && codeToken.includes(token)) || (nameToken && nameToken.includes(token)) || (token && codeToken.includes(token)) || (token && nameToken.includes(token))) {
+          return String(row.id);
+        }
+      }
+    }
+
+    if (rows.length === 1) {
+      return String(rows[0].id);
     }
   }
 
-  throw new Error(`Keine aktive Zahlungsart für ${requestedCode} gefunden.`);
+  if (fallbackRows.length === 1) {
+    return String(fallbackRows[0].id);
+  }
+
+  if (fallbackRows.length > 1) {
+    throw new Error(`Keine aktive Zahlungsart für ${requestedCode} gefunden.`);
+  }
+
+  throw new Error("Für diesen Tenant sind keine aktiven Zahlungsarten vorhanden.");
 }
 
-async function resolveCashRegister(admin: any, tenantId: string) {
-  const { data, error } = await admin
-    .from("cash_registers")
-    .select("id, tenant_id, register_code, name, status, created_at")
-    .eq("tenant_id", tenantId)
-    .order("created_at", { ascending: true })
-    .limit(1);
+async function resolveCashRegister(admin: any, tenantIds: string | string[]) {
+  const candidates = Array.isArray(tenantIds) ? uniqueTenantIds(...tenantIds) : uniqueTenantIds(tenantIds);
+  if (candidates.length === 0) throw new Error("Für diesen Vorgang konnte kein Tenant für die Kassa ermittelt werden.");
 
-  if (error) throw new Error(error.message ?? "Kassa konnte nicht geladen werden.");
-  const row = ((data ?? [])[0] ?? null) as CashRegisterRow | null;
-  if (!row?.id) throw new Error("Für diesen Tenant wurde keine Kassa gefunden.");
-  return row;
+  for (const tenantId of candidates) {
+    const { data, error } = await admin
+      .from("cash_registers")
+      .select("id, tenant_id, register_code, name, status, created_at")
+      .eq("tenant_id", tenantId)
+      .order("created_at", { ascending: true })
+      .limit(1);
+
+    if (error) throw new Error(error.message ?? "Kassa konnte nicht geladen werden.");
+    const row = ((data ?? [])[0] ?? null) as CashRegisterRow | null;
+    if (row?.id) return row;
+  }
+
+  throw new Error("Für diesen Tenant wurde keine Kassa gefunden.");
 }
 
 async function resolveSalesOrder(admin: any, salesOrderId: string) {
@@ -297,7 +399,7 @@ export async function createSalesOrderFromAppointment(formData: FormData) {
   const appointmentId = String(formData.get("appointment_id") ?? "").trim();
   if (!appointmentId) redirect(buildRechnungenUrl({ error: "Termin konnte nicht zugeordnet werden." }));
 
-  const { admin, user, effectiveTenantId } = await requireContext();
+  const { admin, user, effectiveTenantId, isAdmin, profileTenantId, profileCalendarTenantId } = await requireContext();
   const { data: appointmentRaw, error: appointmentError } = await admin
     .from("appointments")
     .select("id, tenant_id, person_id, service_id, service_name_snapshot, service_price_cents_snapshot, notes_internal, start_at, end_at")
@@ -309,12 +411,12 @@ export async function createSalesOrderFromAppointment(formData: FormData) {
   const appointment = appointmentRaw as AppointmentRow;
   const tenantId = String(appointment.tenant_id ?? "").trim();
   if (!tenantId) redirect(buildRechnungenUrl({ appointmentId, error: "Termin hat keinen Tenant." }));
-  if (effectiveTenantId && effectiveTenantId !== tenantId) redirect(buildRechnungenUrl({ appointmentId, error: "Dieser Termin gehört nicht zum aktiven Tenant." }));
+  if (!isAdmin && effectiveTenantId && effectiveTenantId !== tenantId) redirect(buildRechnungenUrl({ appointmentId, error: "Dieser Termin gehört nicht zum aktiven Tenant." }));
 
   const status = normalizeAppointmentStatus(readMetaLineValue(appointment.notes_internal, "Status:"));
   if (status !== "completed") redirect(buildRechnungenUrl({ appointmentId, error: "Nur Termine mit Status Gekommen dürfen abgerechnet werden." }));
 
-  const cashRegister = await resolveCashRegister(admin, tenantId);
+  const cashRegister = await resolveCashRegister(admin, uniqueTenantIds(tenantId, profileTenantId, profileCalendarTenantId, effectiveTenantId));
 
   const primaryName =
     String(formData.get("primary_name") ?? "").trim() ||
@@ -448,12 +550,12 @@ export async function createPaymentForSalesOrder(formData: FormData) {
   const appointmentId = String(formData.get("appointment_id") ?? "").trim();
   if (!salesOrderId) redirect(buildRechnungenUrl({ appointmentId, error: "Sales Order konnte nicht zugeordnet werden." }));
 
-  const { admin, user, effectiveTenantId } = await requireContext();
+  const { admin, user, effectiveTenantId, isAdmin, profileTenantId, profileCalendarTenantId } = await requireContext();
   const salesOrder = await resolveSalesOrder(admin, salesOrderId);
 
   const tenantId = String(salesOrder.tenant_id ?? "").trim();
   if (!tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, error: "Sales Order hat keinen Tenant." }));
-  if (effectiveTenantId && effectiveTenantId !== tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, error: "Diese Sales Order gehört nicht zum aktiven Tenant." }));
+  if (!isAdmin && effectiveTenantId && effectiveTenantId !== tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, error: "Diese Sales Order gehört nicht zum aktiven Tenant." }));
 
   const { data: lineRows, error: linesError } = await admin.from("sales_order_lines").select("line_total_gross").eq("sales_order_id", salesOrderId);
   if (linesError) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, error: "Sales-Order-Positionen konnten nicht geladen werden." }));
@@ -464,10 +566,10 @@ export async function createPaymentForSalesOrder(formData: FormData) {
   const totalCents = Math.max(0, Math.round(totalGross * 100));
   const paidAmountCents = Math.max(0, parseMoneyToCents(formData.get("payment_amount")) || totalCents);
   const paymentMethodCode = String(formData.get("payment_method") ?? "CASH").trim().toUpperCase();
-  const paymentMethodId = await resolvePaymentMethodId(admin, tenantId, paymentMethodCode);
+  const paymentMethodId = await resolvePaymentMethodId(admin, uniqueTenantIds(tenantId, profileTenantId, profileCalendarTenantId, effectiveTenantId), paymentMethodCode);
   const paymentNotes = String(formData.get("payment_notes") ?? "").trim();
   const paidAt = new Date().toISOString();
-  const cashRegister = salesOrder.cash_register_id ? { id: salesOrder.cash_register_id } : await resolveCashRegister(admin, tenantId);
+  const cashRegister = salesOrder.cash_register_id ? { id: salesOrder.cash_register_id } : await resolveCashRegister(admin, uniqueTenantIds(tenantId, profileTenantId, profileCalendarTenantId, effectiveTenantId));
 
   const { data: paymentInsert, error: paymentError } = await admin
     .from("payments")
@@ -506,11 +608,11 @@ export async function createFiscalReceiptForPayment(formData: FormData) {
     redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Sales Order oder Payment fehlt für Fiscal." }));
   }
 
-  const { admin, user, effectiveTenantId } = await requireContext();
+  const { admin, user, effectiveTenantId, isAdmin, profileTenantId, profileCalendarTenantId } = await requireContext();
   const salesOrder = await resolveSalesOrder(admin, salesOrderId);
   const tenantId = String(salesOrder.tenant_id ?? "").trim();
   if (!tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Sales Order hat keinen Tenant." }));
-  if (effectiveTenantId && effectiveTenantId !== tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Diese Sales Order gehört nicht zum aktiven Tenant." }));
+  if (!isAdmin && effectiveTenantId && effectiveTenantId !== tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Diese Sales Order gehört nicht zum aktiven Tenant." }));
 
   const { data: paymentRaw, error: paymentError } = await admin
     .from("payments")
@@ -531,7 +633,7 @@ export async function createFiscalReceiptForPayment(formData: FormData) {
     redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, receiptId: existingReceiptId, success: "Fiscal Receipt bereits vorhanden ✅" }));
   }
 
-  const cashRegister = payment.cash_register_id ? { id: payment.cash_register_id } : await resolveCashRegister(admin, tenantId);
+  const cashRegister = payment.cash_register_id ? { id: payment.cash_register_id } : await resolveCashRegister(admin, uniqueTenantIds(tenantId, profileTenantId, profileCalendarTenantId, effectiveTenantId));
 
   const appointmentLookupId = String(salesOrder.appointment_id ?? appointmentId ?? "").trim();
   let appointmentDetails: AppointmentDetailLookupRow | null = null;
@@ -1518,7 +1620,7 @@ export async function createSalesOrderFromAppointmentInline(formData: FormData):
     const appointmentId = String(formData.get("appointment_id") ?? "").trim();
     if (!appointmentId) throw new Error("Termin konnte nicht zugeordnet werden.");
 
-    const { admin, user, effectiveTenantId } = await requireContext();
+    const { admin, user, effectiveTenantId, isAdmin, profileTenantId, profileCalendarTenantId } = await requireContext();
     const { data: appointmentRaw, error: appointmentError } = await admin
       .from("appointments")
       .select("id, tenant_id, person_id, service_id, service_name_snapshot, service_price_cents_snapshot, notes_internal, start_at, end_at")
@@ -1530,66 +1632,87 @@ export async function createSalesOrderFromAppointmentInline(formData: FormData):
     const appointment = appointmentRaw as AppointmentRow;
     const tenantId = String(appointment.tenant_id ?? "").trim();
     if (!tenantId) throw new Error("Termin hat keinen Tenant.");
-    if (effectiveTenantId && effectiveTenantId !== tenantId) throw new Error("Dieser Termin gehört nicht zum aktiven Tenant.");
+    if (!isAdmin && effectiveTenantId && effectiveTenantId !== tenantId) throw new Error("Dieser Termin gehört nicht zum aktiven Tenant.");
 
     const status = normalizeAppointmentStatus(readMetaLineValue(appointment.notes_internal, "Status:"));
     if (status !== "completed") throw new Error("Nur Termine mit Status Gekommen dürfen abgerechnet werden.");
 
-    const cashRegister = await resolveCashRegister(admin, tenantId);
+    const cashRegister = await resolveCashRegister(
+      admin,
+      uniqueTenantIds(tenantId, profileTenantId, profileCalendarTenantId, effectiveTenantId)
+    );
 
-    const primaryName =
+    const parsedLines = parseInlineEditableLines(formData.get("lines_json"));
+    const fallbackPrimaryName =
       String(formData.get("primary_name") ?? "").trim() ||
       String(appointment.service_name_snapshot ?? "").trim() ||
       readMetaLineValue(appointment.notes_internal, "Dienstleistung:") ||
       readMetaLineValue(appointment.notes_internal, "Titel:") ||
       "Termin";
-    const primaryQuantity = parsePositiveInt(formData.get("primary_quantity"), 1);
-    const primaryPriceCents = Math.max(0, parseMoneyToCents(formData.get("primary_price")) || Number(appointment.service_price_cents_snapshot ?? 0) || 0);
-    const primaryTaxRate = Number(String(formData.get("primary_tax_rate") ?? "20").replace(",", "."));
-    const safePrimaryTaxRate = Number.isFinite(primaryTaxRate) ? primaryTaxRate : 20;
-    if (!primaryName) throw new Error("Bitte mindestens eine abrechenbare Position angeben.");
+    const fallbackPrimaryQuantity = parsePositiveInt(formData.get("primary_quantity"), 1);
+    const fallbackPrimaryPriceCents = Math.max(
+      0,
+      parseMoneyToCents(formData.get("primary_price")) || Number(appointment.service_price_cents_snapshot ?? 0) || 0
+    );
+    const fallbackPrimaryTaxRateRaw = Number(String(formData.get("primary_tax_rate") ?? "20").replace(",", "."));
+    const fallbackPrimaryTaxRate = Number.isFinite(fallbackPrimaryTaxRateRaw) ? fallbackPrimaryTaxRateRaw : 20;
 
     const addExtraLine = String(formData.get("add_extra_line") ?? "0") === "1";
     const extraServiceId = String(formData.get("extra_service_id") ?? "").trim();
     const extraNameRaw = String(formData.get("extra_name") ?? "").trim();
     const extraQuantity = parsePositiveInt(formData.get("extra_quantity"), 1);
     const extraPriceCentsInput = parseMoneyToCents(formData.get("extra_price"));
-    const extraTaxRate = Number(String(formData.get("extra_tax_rate") ?? "20").replace(",", "."));
-    const safeExtraTaxRate = Number.isFinite(extraTaxRate) ? extraTaxRate : 20;
+    const extraTaxRateRaw = Number(String(formData.get("extra_tax_rate") ?? "20").replace(",", "."));
+    const extraTaxRate = Number.isFinite(extraTaxRateRaw) ? extraTaxRateRaw : 20;
 
-    let extraLine: { referenceId: string | null; name: string; quantity: number; priceCents: number; taxRate: number; lineType: "SERVICE" | "ITEM" } | null = null;
-    if (addExtraLine) {
-      let fallbackServicePriceCents = 0;
-      let fallbackServiceName = "Zusatzleistung";
-      if (extraServiceId) {
-        const { data: serviceRow } = await admin
-          .from("services")
-          .select("id, name, default_price_cents")
-          .eq("id", extraServiceId)
-          .eq("tenant_id", tenantId)
-          .maybeSingle();
-        if (serviceRow?.id) {
-          fallbackServicePriceCents = Number(serviceRow.default_price_cents ?? 0) || 0;
-          fallbackServiceName = String(serviceRow.name ?? "Zusatzleistung").trim() || "Zusatzleistung";
+    let checkoutLines: InlineEditableLine[] = parsedLines;
+    if (checkoutLines.length === 0) {
+      checkoutLines = [
+        {
+          serviceId: String(appointment.service_id ?? "").trim() || null,
+          name: fallbackPrimaryName,
+          quantity: fallbackPrimaryQuantity,
+          priceCents: fallbackPrimaryPriceCents,
+          taxRate: fallbackPrimaryTaxRate,
+          lineType: "SERVICE",
+        },
+      ];
+
+      if (addExtraLine) {
+        let fallbackServicePriceCents = 0;
+        let fallbackServiceName = "Zusatzleistung";
+        if (extraServiceId) {
+          const { data: serviceRow } = await admin
+            .from("services")
+            .select("id, name, default_price_cents")
+            .eq("id", extraServiceId)
+            .eq("tenant_id", tenantId)
+            .maybeSingle();
+          if (serviceRow?.id) {
+            fallbackServicePriceCents = Number(serviceRow.default_price_cents ?? 0) || 0;
+            fallbackServiceName = String(serviceRow.name ?? "Zusatzleistung").trim() || "Zusatzleistung";
+          }
         }
-      }
-      const finalExtraName = extraNameRaw || fallbackServiceName;
-      const finalExtraPriceCents = Math.max(0, extraPriceCentsInput || fallbackServicePriceCents || 0);
-      if (finalExtraName && finalExtraPriceCents > 0) {
-        extraLine = {
-          referenceId: extraServiceId || null,
-          name: finalExtraName,
-          quantity: extraQuantity,
-          priceCents: finalExtraPriceCents,
-          taxRate: safeExtraTaxRate,
-          lineType: extraServiceId ? "SERVICE" : "ITEM",
-        };
+        const finalExtraName = extraNameRaw || fallbackServiceName;
+        const finalExtraPriceCents = Math.max(0, extraPriceCentsInput || fallbackServicePriceCents || 0);
+        if (finalExtraName && finalExtraPriceCents > 0) {
+          checkoutLines.push({
+            serviceId: extraServiceId || null,
+            name: finalExtraName,
+            quantity: extraQuantity,
+            priceCents: finalExtraPriceCents,
+            taxRate: extraTaxRate,
+            lineType: extraServiceId ? "SERVICE" : "ITEM",
+          });
+        }
       }
     }
 
-    const primaryLineTotalCents = primaryPriceCents * primaryQuantity;
-    let totalCents = primaryLineTotalCents;
-    let taxTotalCents = roundTaxPortionFromGross(primaryLineTotalCents, safePrimaryTaxRate);
+    if (checkoutLines.length === 0) throw new Error("Bitte mindestens eine abrechenbare Position angeben.");
+
+    let totalCents = 0;
+    let taxTotalCents = 0;
+    const lineSummary: InlineSalesOrderLine[] = [];
 
     const { data: salesOrderInsert, error: salesOrderError } = await admin
       .from("sales_orders")
@@ -1612,58 +1735,37 @@ export async function createSalesOrderFromAppointmentInline(formData: FormData):
     if (salesOrderError || !salesOrderInsert?.id) throw new Error(salesOrderError?.message ?? "Sales Order konnte nicht erstellt werden.");
 
     const salesOrderId = String(salesOrderInsert.id);
-    const lineSummary: InlineSalesOrderLine[] = [
-      {
-        name: primaryName,
-        quantity: primaryQuantity,
-        unitPriceGross: toGrossNumber(primaryPriceCents),
-        taxRate: safePrimaryTaxRate,
-        lineTotalGross: toGrossNumber(primaryLineTotalCents),
-      },
-    ];
 
-    const { error: primaryLineError } = await admin.from("sales_order_lines").insert({
-      sales_order_id: salesOrderId,
-      line_type: "SERVICE",
-      reference_id: appointment.service_id ?? appointment.id,
-      name: primaryName,
-      description: `Quelle: Termin ${appointment.id}`,
-      quantity: primaryQuantity,
-      unit_price_gross: toGrossNumber(primaryPriceCents),
-      discount_amount: 0,
-      tax_rate: safePrimaryTaxRate,
-      line_total_gross: toGrossNumber(primaryLineTotalCents),
-      sort_order: 10,
-    });
+    for (const [index, line] of checkoutLines.entries()) {
+      const safeQuantity = Math.max(1, Number(line.quantity ?? 1) || 1);
+      const safePriceCents = Math.max(0, Number(line.priceCents ?? 0) || 0);
+      const safeTaxRate = Number.isFinite(line.taxRate) ? line.taxRate : 0;
+      const lineTotalCents = safeQuantity * safePriceCents;
+      totalCents += lineTotalCents;
+      taxTotalCents += roundTaxPortionFromGross(lineTotalCents, safeTaxRate);
 
-    if (primaryLineError) throw new Error(primaryLineError.message ?? "Hauptposition konnte nicht erstellt werden.");
-
-    if (extraLine) {
-      const extraLineTotalCents = extraLine.priceCents * extraLine.quantity;
-      taxTotalCents += roundTaxPortionFromGross(extraLineTotalCents, extraLine.taxRate);
-      totalCents += extraLineTotalCents;
-
-      const { error: extraLineError } = await admin.from("sales_order_lines").insert({
+      const { error: lineError } = await admin.from("sales_order_lines").insert({
         sales_order_id: salesOrderId,
-        line_type: extraLine.lineType,
-        reference_id: extraLine.referenceId,
-        name: extraLine.name,
+        line_type: line.lineType,
+        reference_id: line.serviceId ?? (index === 0 ? appointment.service_id ?? appointment.id : null),
+        name: line.name,
         description: `Quelle: Termin ${appointment.id}`,
-        quantity: extraLine.quantity,
-        unit_price_gross: toGrossNumber(extraLine.priceCents),
+        quantity: safeQuantity,
+        unit_price_gross: toGrossNumber(safePriceCents),
         discount_amount: 0,
-        tax_rate: extraLine.taxRate,
-        line_total_gross: toGrossNumber(extraLineTotalCents),
-        sort_order: 20,
+        tax_rate: safeTaxRate,
+        line_total_gross: toGrossNumber(lineTotalCents),
+        sort_order: (index + 1) * 10,
       });
 
-      if (extraLineError) throw new Error(extraLineError.message ?? "Zusatzposition konnte nicht erstellt werden.");
+      if (lineError) throw new Error(lineError.message ?? "Position konnte nicht erstellt werden.");
+
       lineSummary.push({
-        name: extraLine.name,
-        quantity: extraLine.quantity,
-        unitPriceGross: toGrossNumber(extraLine.priceCents),
-        taxRate: extraLine.taxRate,
-        lineTotalGross: toGrossNumber(extraLineTotalCents),
+        name: line.name,
+        quantity: safeQuantity,
+        unitPriceGross: toGrossNumber(safePriceCents),
+        taxRate: safeTaxRate,
+        lineTotalGross: toGrossNumber(lineTotalCents),
       });
     }
 
@@ -1704,12 +1806,12 @@ export async function createPaymentForSalesOrderInline(formData: FormData): Prom
     const appointmentId = String(formData.get("appointment_id") ?? "").trim();
     if (!salesOrderId) throw new Error("Sales Order konnte nicht zugeordnet werden.");
 
-    const { admin, user, effectiveTenantId } = await requireContext();
+    const { admin, user, effectiveTenantId, isAdmin, profileTenantId, profileCalendarTenantId } = await requireContext();
     const salesOrder = await resolveSalesOrder(admin, salesOrderId);
 
     const tenantId = String(salesOrder.tenant_id ?? "").trim();
     if (!tenantId) throw new Error("Sales Order hat keinen Tenant.");
-    if (effectiveTenantId && effectiveTenantId !== tenantId) throw new Error("Diese Sales Order gehört nicht zum aktiven Tenant.");
+    if (!isAdmin && effectiveTenantId && effectiveTenantId !== tenantId) throw new Error("Diese Sales Order gehört nicht zum aktiven Tenant.");
 
     const { data: lineRows, error: linesError } = await admin.from("sales_order_lines").select("line_total_gross").eq("sales_order_id", salesOrderId);
     if (linesError) throw new Error("Sales-Order-Positionen konnten nicht geladen werden.");
@@ -1720,10 +1822,10 @@ export async function createPaymentForSalesOrderInline(formData: FormData): Prom
     const totalCents = Math.max(0, Math.round(totalGross * 100));
     const paidAmountCents = Math.max(0, parseMoneyToCents(formData.get("payment_amount")) || totalCents);
     const paymentMethodCode = String(formData.get("payment_method") ?? "CASH").trim().toUpperCase();
-    const paymentMethodId = await resolvePaymentMethodId(admin, tenantId, paymentMethodCode);
+    const paymentMethodId = await resolvePaymentMethodId(admin, uniqueTenantIds(tenantId, profileTenantId, profileCalendarTenantId, effectiveTenantId), paymentMethodCode);
     const paymentNotes = String(formData.get("payment_notes") ?? "").trim();
     const paidAt = new Date().toISOString();
-    const cashRegister = salesOrder.cash_register_id ? { id: salesOrder.cash_register_id } : await resolveCashRegister(admin, tenantId);
+    const cashRegister = salesOrder.cash_register_id ? { id: salesOrder.cash_register_id } : await resolveCashRegister(admin, uniqueTenantIds(tenantId, profileTenantId, profileCalendarTenantId, effectiveTenantId));
 
     const { data: paymentInsert, error: paymentError } = await admin
       .from("payments")
@@ -1779,11 +1881,11 @@ export async function createFiscalReceiptForPaymentInline(formData: FormData): P
     const appointmentId = String(formData.get("appointment_id") ?? "").trim();
     if (!salesOrderId || !paymentId) throw new Error("Sales Order oder Payment fehlt für Fiscal.");
 
-    const { admin, user, effectiveTenantId } = await requireContext();
+    const { admin, user, effectiveTenantId, isAdmin, profileTenantId, profileCalendarTenantId } = await requireContext();
     const salesOrder = await resolveSalesOrder(admin, salesOrderId);
     const tenantId = String(salesOrder.tenant_id ?? "").trim();
     if (!tenantId) throw new Error("Sales Order hat keinen Tenant.");
-    if (effectiveTenantId && effectiveTenantId !== tenantId) throw new Error("Diese Sales Order gehört nicht zum aktiven Tenant.");
+    if (!isAdmin && effectiveTenantId && effectiveTenantId !== tenantId) throw new Error("Diese Sales Order gehört nicht zum aktiven Tenant.");
 
     const { data: paymentRaw, error: paymentError } = await admin
       .from("payments")
@@ -1821,7 +1923,7 @@ export async function createFiscalReceiptForPaymentInline(formData: FormData): P
       };
     }
 
-    const cashRegister = payment.cash_register_id ? { id: payment.cash_register_id } : await resolveCashRegister(admin, tenantId);
+    const cashRegister = payment.cash_register_id ? { id: payment.cash_register_id } : await resolveCashRegister(admin, uniqueTenantIds(tenantId, profileTenantId, profileCalendarTenantId, effectiveTenantId));
 
     const appointmentLookupId = String(salesOrder.appointment_id ?? appointmentId ?? "").trim();
     let appointmentDetails: AppointmentDetailLookupRow | null = null;

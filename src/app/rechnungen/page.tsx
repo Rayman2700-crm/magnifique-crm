@@ -683,7 +683,7 @@ function MobileReceiptAvatarMenu({
       <div
         id="receipts-avatar-menu"
         popover="auto"
-        className="md:hidden fixed right-4 top-[332px] z-[2147483647] m-0 w-[min(420px,calc(100vw-24px))] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl"
+        className="md:hidden fixed right-4 top-[332px] z-[2147483647] m-0 w-[min(640px,calc(100vw-24px))] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl"
       >
         <div className="px-1 pb-2">
           <div className="text-sm font-semibold text-white">Behandler wählen</div>
@@ -1418,8 +1418,8 @@ export default async function RechnungenPage({
                   </div>
                 </div>
 
-                <div className="flex w-full max-w-[640px] flex-col gap-3 sm:flex-row flex-col gap-3 xl:pt-1">
-                  <div className="flex w-full flex-col gap-3 sm:flex-row">
+                <div className="flex w-full max-w-[640px] flex-col gap-3 sm:flex-row">
+                  <div className="flex w-full max-w-[640px] flex-col gap-3 sm:flex-row">
                     <form action="/rechnungen" method="get" className="flex-1">
                       {currentFilter !== "all" ? <input type="hidden" name="filter" value={currentFilter} /> : null}
                       {practitionerFilter !== "all" ? <input type="hidden" name="practitioner" value={practitionerFilter} /> : null}
@@ -1756,14 +1756,14 @@ export default async function RechnungenPage({
                 <div className="mt-1 text-sm text-[var(--text-muted)]">{filteredItems.length} Ergebnis(se)</div>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[920px] table-auto text-sm">
+                <table className="w-full min-w-[820px] table-auto text-sm">
                   <thead className="bg-white/[0.03]">
                     <tr>
-                      <th className="w-[14%] px-6 py-4 font-semibold text-left text-white/60">Beleg</th>
-                      <th className="w-[34%] px-4 py-4 font-semibold text-left text-white/60">Kunde</th>
-                      <th className="w-[20%] px-4 py-4 font-semibold text-left text-white/60">Erstellt</th>
+                      <th className="w-[12%] px-6 py-4 font-semibold text-left text-white/60">Beleg</th>
+                      <th className="w-[30%] px-4 py-4 font-semibold text-left text-white/60">Kunde</th>
+                      <th className="w-[22%] px-4 py-4 font-semibold text-left text-white/60">Erstellt</th>
                       <th className="w-[14%] px-4 py-4 font-semibold text-left text-white/60">Betrag</th>
-                      <th className="w-[18%] px-6 py-4 font-semibold text-right text-white/60">Aktion</th>
+                      <th className="w-[22%] px-6 py-4 font-semibold text-right text-white/60">Aktion</th>
                     </tr>
                   </thead>
                   <tbody>
