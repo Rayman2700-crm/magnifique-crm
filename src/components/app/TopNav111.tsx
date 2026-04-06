@@ -510,7 +510,7 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
       </aside>
 
       <div className="clientique-topbar fixed left-[84px] right-0 top-0 z-40 border-b border-white/10">
-        <div className="relative flex h-[64px] items-center justify-between px-3 sm:px-5 lg:px-8">
+        <div className="relative flex h-[74px] items-center justify-between px-3 sm:px-5 lg:px-8">
           <div className="pointer-events-none absolute left-1/2 top-1/2 block -translate-x-1/2 -translate-y-1/2 md:hidden">
             <div className="text-center text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">
               Clientique Dashboard
@@ -527,7 +527,7 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
                   : pathname?.startsWith(item.href);
 
               const commonClass = cn(
-                "clientique-nav-pill shrink-0 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-[var(--text-muted)] hover:border-[rgba(255,255,255,0.08)] hover:bg-white/[0.04] hover:text-[var(--text)]",
+                "clientique-nav-pill shrink-0 inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[var(--text-muted)] hover:border-[rgba(255,255,255,0.08)] hover:bg-white/[0.04] hover:text-[var(--text)]",
                 active && "clientique-nav-pill-active"
               );
 
@@ -553,14 +553,14 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
               );
             })}
 
-            <button type="button" onClick={openReminders} className={cn("clientique-nav-pill shrink-0 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-[var(--text-muted)] hover:border-[rgba(255,255,255,0.08)] hover:bg-white/[0.04] hover:text-[var(--text)]", searchParams?.get("openReminders") === "1" && "clientique-nav-pill-active")}>
+            <button type="button" onClick={openReminders} className={cn("clientique-nav-pill shrink-0 inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[var(--text-muted)] hover:border-[rgba(255,255,255,0.08)] hover:bg-white/[0.04] hover:text-[var(--text)]", searchParams?.get("openReminders") === "1" && "clientique-nav-pill-active")}>
               <span className="inline-flex items-center gap-2.5">
                 Reminder
                 {liveReminderCount > 0 ? <BrandBadge count={liveReminderCount} pulse={reminderPulse} /> : null}
               </span>
             </button>
 
-            <button type="button" onClick={openWaitlist} className={cn("clientique-nav-pill shrink-0 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-[var(--text-muted)] hover:border-[rgba(255,255,255,0.08)] hover:bg-white/[0.04] hover:text-[var(--text)]", searchParams?.get("openWaitlist") === "1" && "clientique-nav-pill-active")}>
+            <button type="button" onClick={openWaitlist} className={cn("clientique-nav-pill shrink-0 inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[var(--text-muted)] hover:border-[rgba(255,255,255,0.08)] hover:bg-white/[0.04] hover:text-[var(--text)]", searchParams?.get("openWaitlist") === "1" && "clientique-nav-pill-active")}>
               <span className="inline-flex items-center gap-2.5">
                 Warteliste
                 {liveWaitlistCount > 0 ? <BrandBadge count={liveWaitlistCount} pulse={waitlistPulse} /> : null}
@@ -570,8 +570,8 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
 
           <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-2.5">
             <div className="hidden md:block">{rightSlot}</div>
-            <button type="button" onClick={toggleSettingsMenu} className={cn("relative inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-[rgba(10,10,11,0.86)] text-[var(--text-muted)] backdrop-blur-xl hover:bg-white/[0.06] hover:text-[var(--text)]", (settingsMenuOpen || googleSetupActive) && "bg-[var(--primary-soft)] text-[var(--text)]")} aria-label="Einstellungen" title="Einstellungen"><SettingsIcon />{showGoogleSetupAlert ? <span style={{ position: "absolute", top: "-7px", right: "-7px" }}><BrandBadge count={googleSetupAlertCount} /></span> : null}</button>
-            <button type="button" onClick={() => { closeSettingsMenu(); closeMobileMenu(); setUserMenuOpen(true); }} className="relative inline-flex h-10 w-10 items-center justify-center rounded-full" style={{ boxShadow: `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px ${avatarTheme.color}` }} aria-label="Benutzermenü öffnen">
+            <button type="button" onClick={toggleSettingsMenu} className={cn("relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-[rgba(10,10,11,0.86)] text-[var(--text-muted)] backdrop-blur-xl hover:bg-white/[0.06] hover:text-[var(--text)]", (settingsMenuOpen || googleSetupActive) && "bg-[var(--primary-soft)] text-[var(--text)]")} aria-label="Einstellungen" title="Einstellungen"><SettingsIcon />{showGoogleSetupAlert ? <span style={{ position: "absolute", top: "-7px", right: "-7px" }}><BrandBadge count={googleSetupAlertCount} /></span> : null}</button>
+            <button type="button" onClick={() => { closeSettingsMenu(); closeMobileMenu(); setUserMenuOpen(true); }} className="relative inline-flex h-12 w-12 items-center justify-center rounded-full" style={{ boxShadow: `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px ${avatarTheme.color}` }} aria-label="Benutzermenü öffnen">
               <span className="block h-full w-full overflow-hidden rounded-full border-2 border-[#111216]"><img src={`/users/${currentUserId}.png`} alt="Benutzerfoto" className="block h-full w-full object-cover" /></span>
             </button>
           </div>
