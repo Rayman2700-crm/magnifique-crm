@@ -802,7 +802,7 @@ export default async function RechnungenPage({
       }>)
         .filter((row) => String(row.user_id ?? "").trim() && String(row.calendar_tenant_id ?? row.tenant_id ?? "").trim())
         .map((row) => {
-          const resolvedTenantId = String(row.tenant_id ?? row.calendar_tenant_id ?? "").trim();
+          const resolvedTenantId = String(row.calendar_tenant_id ?? row.tenant_id ?? "").trim();
           const label =
             tenantNameById.get(resolvedTenantId) ||
             String(row.full_name ?? "").trim() ||
@@ -817,7 +817,7 @@ export default async function RechnungenPage({
         }),
     ];
   } else {
-    const resolvedTenantId = String(profile?.tenant_id ?? profile?.calendar_tenant_id ?? effectiveTenantId ?? "").trim();
+    const resolvedTenantId = String(profile?.calendar_tenant_id ?? profile?.tenant_id ?? effectiveTenantId ?? "").trim();
     avatarOptions = [
       {
         tenantId: resolvedTenantId || null,
@@ -1325,8 +1325,8 @@ export default async function RechnungenPage({
                     Rechnungen
                   </h1>
 
-                  <div className="mt-5 overflow-x-auto pb-1">
-                    <div className="flex min-w-max flex-nowrap items-start gap-4">
+                  <div className="mt-5">
+                    <div className="flex flex-wrap items-start gap-4">
                       {avatarOptions.map((option) => {
                         const active = String(option.tenantId ?? "all") === practitionerFilter;
                         const ringColor = option.tenantId === "all" ? "rgba(255,255,255,0.55)" : avatarRingColor(option.label);
