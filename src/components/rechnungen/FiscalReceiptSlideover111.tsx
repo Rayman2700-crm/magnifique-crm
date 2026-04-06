@@ -132,7 +132,7 @@ function formatEventLabel(value: string | null | undefined) {
 
   const labels: Record<string, string> = {
     RECEIPT_CREATION_STARTED: "Belegerstellung gestartet",
-    STANDARD_RECEIPT_CREATED: "Beleg erstellt",
+    STANDARD_RECEIPT_CREATED: "Beleg erfolgreich erstellt",
     RECEIPT_VERIFICATION_SUCCEEDED: "Verifikation erfolgreich",
     RECEIPT_CREATION_FAILED: "Belegerstellung fehlgeschlagen",
   };
@@ -434,7 +434,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
         <div className="border-b border-white/10 p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <div className="text-sm text-white/55">Rechnungen / Belegdetails</div>
+              <div className="text-sm text-white/55">Rechnungen / Fiscal</div>
               <div className="text-2xl font-extrabold text-white">Beleg {selected.receiptNumber}</div>
               <div className="mt-1 text-sm text-white/55">
                 {formatDateTime(selected.createdAt)} · {euroFromCents(selected.turnoverValueCents, selected.currencyCode)}
@@ -475,7 +475,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
 
         <div className="flex-1 overflow-y-auto p-5">
           <div className="space-y-5">
-            <InfoCard title="Belegübersicht">
+            <InfoCard title="Beleg erfolgreich erstellt">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40">Belegnummer</div>
@@ -493,7 +493,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
               </div>
 
               <div className="mt-3 rounded-2xl border border-amber-400/15 bg-amber-400/10 px-4 py-3 text-sm text-amber-50/90">
-                Änderungen sind hier möglich. Für den finalen Live-Betrieb wäre es sauberer, Anpassungen vor der Fiskalisierung in der Sales Order zu machen.
+                Fachlich ist Bearbeiten hier möglich. Für den finalen Live-Flow wäre es sauberer, Änderungen vor Fiscal in der Sales Order zu machen. Für euren aktuellen Simulationsstand ist es aber absolut sinnvoll.
               </div>
             </InfoCard>
 

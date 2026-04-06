@@ -166,7 +166,30 @@ function parseInlineEditableLines(raw: FormDataEntryValue | null) {
       const name = String(row.name ?? "").trim();
       const quantityRaw = Number(row.quantity ?? 1);
       const quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 ? Math.max(1, Math.round(quantityRaw)) : 1;
-      const priceCents = Math.max(0, parseMoneyToCents(String(row.price ?? row.unitPriceGross ?? "0")));
+
+      const explicitPriceCentsRaw =
+        typeof row.priceCents === "number"
+          ? row.priceCents
+          : typeof row.priceCents === "string"
+            ? Number(row.priceCents)
+            : NaN;
+
+      const explicitLineTotalCentsRaw =
+        typeof row.lineTotalCents === "number"
+          ? row.lineTotalCents
+          : typeof row.lineTotalCents === "string"
+            ? Number(row.lineTotalCents)
+            : NaN;
+
+      let priceCents = 0;
+      if (Number.isFinite(explicitPriceCentsRaw) && explicitPriceCentsRaw >= 0) {
+        priceCents = Math.max(0, Math.round(explicitPriceCentsRaw));
+      } else if (Number.isFinite(explicitLineTotalCentsRaw) && explicitLineTotalCentsRaw >= 0 && quantity > 0) {
+        priceCents = Math.max(0, Math.round(explicitLineTotalCentsRaw / quantity));
+      } else {
+        priceCents = Math.max(0, parseMoneyToCents(String(row.price ?? row.unitPriceGross ?? "0")));
+      }
+
       const taxRateRaw = Number(String(row.taxRate ?? "0").replace(",", "."));
       const taxRate = Number.isFinite(taxRateRaw) ? taxRateRaw : 0;
       const lineType: "SERVICE" | "ITEM" = serviceId ? "SERVICE" : "ITEM";
@@ -1902,26 +1925,6 @@ export async function createFiscalReceiptForPaymentInline(formData: FormData): P
       .order("created_at", { ascending: false })
       .limit(1);
     const existingReceipt = ((existingReceiptRows ?? [])[0] ?? null) as any;
-    if (existingReceipt?.id) {
-      return {
-        ok: true,
-        success: "Fiscal Receipt bereits vorhanden ✅",
-        appointmentId,
-        salesOrderId,
-        paymentId,
-        receiptId: String(existingReceipt.id),
-        receipt: {
-          id: String(existingReceipt.id),
-          receiptNumber: String(existingReceipt.receipt_number ?? ""),
-          status: String(existingReceipt.status ?? "REQUESTED"),
-          verificationStatus: existingReceipt.verification_status ?? null,
-          issuedAt: String(existingReceipt.issued_at ?? new Date().toISOString()),
-          turnoverValueCents: Number(existingReceipt.turnover_value_cents ?? 0) || 0,
-          currencyCode: String(existingReceipt.currency_code ?? payment.currency_code ?? salesOrder.currency_code ?? "EUR"),
-          lineCount: 0,
-        },
-      };
-    }
 
     const cashRegister = payment.cash_register_id ? { id: payment.cash_register_id } : await resolveCashRegister(admin, uniqueTenantIds(tenantId, profileTenantId, profileCalendarTenantId, effectiveTenantId));
 
@@ -2023,6 +2026,142 @@ export async function createFiscalReceiptForPaymentInline(formData: FormData): P
     };
     const payloadCanonical = JSON.stringify(payload);
     const payloadHash = createHash("sha256").update(payloadCanonical).digest("hex");
+
+    if (existingReceipt?.id) {
+      const existingReceiptId = String(existingReceipt.id);
+      const editedAt = new Date().toISOString();
+
+      const { error: updateSalesOrderError } = await admin
+        .from("sales_orders")
+        .update({
+          subtotal_gross: toGrossNumber(totalCents),
+          tax_total: toGrossNumber(normalCents + reduced1Cents + reduced2Cents > 0 ? roundTaxPortionFromGross(normalCents, 20) + roundTaxPortionFromGross(reduced2Cents, 13) + roundTaxPortionFromGross(reduced1Cents, 10) : 0),
+          grand_total: toGrossNumber(totalCents),
+          updated_at: editedAt,
+        })
+        .eq("id", salesOrderId);
+      if (updateSalesOrderError) throw new Error(updateSalesOrderError.message ?? "Sales Order konnte nicht synchronisiert werden.");
+
+      const { error: updatePaymentError } = await admin
+        .from("payments")
+        .update({
+          amount: toGrossNumber(totalCents),
+          cash_register_id: cashRegister.id,
+          updated_at: editedAt,
+        })
+        .eq("id", paymentId);
+      if (updatePaymentError) throw new Error(updatePaymentError.message ?? "Payment konnte nicht synchronisiert werden.");
+
+      const { error: updateReceiptError } = await admin
+        .from("fiscal_receipts")
+        .update({
+          cash_register_id: cashRegister.id,
+          currency_code: payment.currency_code || salesOrder.currency_code || "EUR",
+          sum_tax_set_normal: normalCents,
+          sum_tax_set_reduced1: reduced1Cents,
+          sum_tax_set_reduced2: reduced2Cents,
+          sum_tax_set_zero: zeroCents,
+          turnover_value_cents: totalCents,
+          receipt_payload_canonical: payloadCanonical,
+          receipt_payload_hash: payloadHash,
+          signature_created_at: editedAt,
+          signature_state: "SIMULATED",
+          verification_status: "VALID",
+          verification_checked_at: editedAt,
+          verification_notes: "Bestehender Fiscal-Receipt wurde aus aktueller Sales Order neu synchronisiert.",
+          updated_at: editedAt,
+        })
+        .eq("id", existingReceiptId);
+      if (updateReceiptError) throw new Error(updateReceiptError.message ?? "Bestehender Fiscal Receipt konnte nicht synchronisiert werden.");
+
+      const { data: existingReceiptLinesRaw, error: existingReceiptLinesError } = await admin
+        .from("fiscal_receipt_lines")
+        .select("id, source_line_id")
+        .eq("fiscal_receipt_id", existingReceiptId);
+      if (existingReceiptLinesError) throw new Error(existingReceiptLinesError.message ?? "Bestehende Receipt-Zeilen konnten nicht geladen werden.");
+
+      const existingReceiptLines = (existingReceiptLinesRaw ?? []) as Array<{ id: string; source_line_id: string | null }>;
+      const existingBySource = new Map(existingReceiptLines.map((line) => [String(line.source_line_id ?? ""), line]));
+      const nextSourceIds = new Set(receiptLinePayload.map((line) => String(line.source_line_id ?? "")));
+
+      const removableIds = existingReceiptLines
+        .filter((line) => !nextSourceIds.has(String(line.source_line_id ?? "")))
+        .map((line) => line.id);
+
+      if (removableIds.length > 0) {
+        const { error: removeReceiptLinesError } = await admin
+          .from("fiscal_receipt_lines")
+          .delete()
+          .eq("fiscal_receipt_id", existingReceiptId)
+          .in("id", removableIds);
+        if (removeReceiptLinesError) throw new Error(removeReceiptLinesError.message ?? "Veraltete Receipt-Zeilen konnten nicht entfernt werden.");
+      }
+
+      for (const line of receiptLinePayload) {
+        const existingLine = existingBySource.get(String(line.source_line_id ?? ""));
+        if (existingLine?.id) {
+          const { error: updateReceiptLineError } = await admin
+            .from("fiscal_receipt_lines")
+            .update({
+              name: line.name,
+              quantity: line.quantity,
+              unit_price_gross: line.unit_price_gross,
+              tax_rate: line.tax_rate,
+              line_total_gross: line.line_total_gross,
+            })
+            .eq("id", existingLine.id)
+            .eq("fiscal_receipt_id", existingReceiptId);
+          if (updateReceiptLineError) throw new Error(updateReceiptLineError.message ?? "Receipt-Zeile konnte nicht aktualisiert werden.");
+          continue;
+        }
+
+        const { error: insertReceiptLineError } = await admin
+          .from("fiscal_receipt_lines")
+          .insert({ ...line, fiscal_receipt_id: existingReceiptId });
+        if (insertReceiptLineError) throw new Error(insertReceiptLineError.message ?? "Receipt-Zeile konnte nicht ergänzt werden.");
+      }
+
+      await insertReceiptEditedEventSafe(admin, {
+        tenantId,
+        cashRegisterId: cashRegister.id,
+        fiscalReceiptId: existingReceiptId,
+        performedBy: user.id,
+        notes: "Bestehender Fiscal-Receipt im Inline-Checkout mit aktueller Sales Order synchronisiert.",
+        referenceData: {
+          appointment_id: appointmentId || null,
+          sales_order_id: salesOrderId,
+          payment_id: paymentId,
+          receipt_id: existingReceiptId,
+          turnover_value_cents: totalCents,
+          line_count: receiptLinePayload.length,
+          customer_name: customerName,
+          provider_name: providerName,
+        },
+      });
+
+      revalidatePath("/rechnungen");
+      revalidatePath("/calendar");
+      revalidatePath("/dashboard");
+
+      return {
+        ok: true,
+        success: "Fiscal Receipt bereits vorhanden und synchronisiert ✅",
+        appointmentId,
+        salesOrderId,
+        paymentId,
+        receiptId: existingReceiptId,
+        receipt: {
+          id: existingReceiptId,
+          receiptNumber: String(existingReceipt.receipt_number ?? ""),
+          status: String(existingReceipt.status ?? "REQUESTED"),
+          verificationStatus: "VALID",
+          issuedAt: String(existingReceipt.issued_at ?? new Date().toISOString()),
+          turnoverValueCents: totalCents,
+          currencyCode: String(existingReceipt.currency_code ?? payment.currency_code ?? salesOrder.currency_code ?? "EUR"),
+          lineCount: receiptLinePayload.length,
+        },
+      };
+    }
 
     const { data: receiptInsert, error: receiptError } = await admin
       .from("fiscal_receipts")

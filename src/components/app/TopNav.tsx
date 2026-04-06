@@ -12,6 +12,7 @@ const nav = [
   { href: "/dashboard", label: "Dashboard", key: "dashboard" },
   { href: "/customers", label: "Kunden", key: "customers" },
   { href: "/services", label: "Dienstleistungen", key: "services" },
+  { href: "/rechnungen", label: "Rechnungen", key: "receipts" },
   { href: "/dashboard/chat", label: "Team Chat", key: "chat" },
   { href: "#reminders", label: "Reminder", key: "reminders" },
   { href: "#waitlist", label: "Warteliste", key: "waitlist" },
@@ -49,7 +50,7 @@ function getAvatarTheme(userLabel?: string) {
 
 function HomeIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 10.5 12 3l9 7.5" />
       <path d="M5 9.5V20h14V9.5" />
     </svg>
@@ -58,7 +59,7 @@ function HomeIcon() {
 
 function UsersIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
       <circle cx="9.5" cy="7" r="3" />
       <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
@@ -69,7 +70,7 @@ function UsersIcon() {
 
 function ServicesIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="4" width="18" height="6" rx="1.5" />
       <rect x="3" y="14" width="18" height="6" rx="1.5" />
       <path d="M7 10v4" />
@@ -78,9 +79,20 @@ function ServicesIcon() {
   );
 }
 
+function ReceiptIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 3h8l4 4v13l-2.25-1.5L14.5 20 12 18.5 9.5 20 7.25 18.5 5 20V5a2 2 0 0 1 2-2Z" />
+      <path d="M15 3v5h5" />
+      <path d="M9 10h6" />
+      <path d="M9 14h6" />
+    </svg>
+  );
+}
+
 function ChatIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
     </svg>
   );
@@ -88,7 +100,7 @@ function ChatIcon() {
 
 function BellIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
       <path d="M10 21a2 2 0 0 0 4 0" />
     </svg>
@@ -97,7 +109,7 @@ function BellIcon() {
 
 function ClockIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="9" />
       <path d="M12 7v5l3 3" />
     </svg>
@@ -106,7 +118,7 @@ function ClockIcon() {
 
 function SettingsIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82L4.21 7.1a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c0 .66.39 1.26 1 1.51.16.07.34.11.51.11H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
     </svg>
@@ -115,7 +127,7 @@ function SettingsIcon() {
 
 function MenuIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 7h16" />
       <path d="M4 12h16" />
       <path d="M4 17h16" />
@@ -275,7 +287,7 @@ function MobileNavDrawer({ open, shown, onClose, pathname, openChat, openReminde
           <button type="button" onClick={onClose} className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/80" aria-label="Menü schließen">✕</button>
         </div>
         <div className="flex-1 space-y-3 overflow-y-auto p-4">
-          {nav.slice(0, 3).map((item) => (
+          {nav.slice(0, 4).map((item) => (
             <Link key={item.key} href={item.href} onClick={onClose} className={cn(itemClass, isActive(item.href) && "border-white/20 bg-white/[0.08]")}>{item.label}</Link>
           ))}
           <button type="button" onClick={() => { onClose(); openChat(); }} className={cn(itemClass, pathname?.startsWith("/dashboard/chat") && "border-white/20 bg-white/[0.08]")}>
@@ -293,7 +305,7 @@ function MobileNavDrawer({ open, shown, onClose, pathname, openChat, openReminde
 function SidebarItem({ icon, label, active = false, badgeCount = 0, pulse = false, expanded, href, onClick, divider = false }: { icon: React.ReactNode; label: string; active?: boolean; badgeCount?: number; pulse?: boolean; expanded: boolean; href?: string; onClick?: () => void; divider?: boolean; }) {
   const content = (
     <>
-      <span className={cn("relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border", active ? "border-[rgba(214,195,163,0.24)] bg-[var(--primary-soft)] text-[var(--text)]" : "border-white/10 bg-white/[0.03] text-white/72 group-hover:bg-white/[0.06] group-hover:text-white")}>{icon}
+      <span className={cn("relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border", active ? "border-[rgba(214,195,163,0.24)] bg-[var(--primary-soft)] text-[var(--text)]" : "border-white/10 bg-white/[0.03] text-white/72 group-hover:bg-white/[0.06] group-hover:text-white")}>{icon}
         {badgeCount > 0 && !expanded ? (
           <span className="absolute -right-1 -top-1"><BrandBadge count={badgeCount} pulse={pulse} /></span>
         ) : null}
@@ -305,7 +317,7 @@ function SidebarItem({ icon, label, active = false, badgeCount = 0, pulse = fals
     </>
   );
 
-  const className = cn("group flex h-11 items-center rounded-2xl px-2 text-left", divider && "mt-3 pt-3 border-t border-white/8");
+  const className = cn("group flex h-9 items-center rounded-xl px-1.5 text-left", divider && "mt-3 pt-3 border-t border-white/8");
   if (href) return <Link href={href} className={className}>{content}</Link>;
   return <button type="button" onClick={onClick} className={cn(className, "w-full")}>{content}</button>;
 }
@@ -467,7 +479,7 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
               className="flex w-full items-center rounded-2xl px-2 py-2 text-left"
               aria-label="Sidebar ein- oder ausklappen"
             >
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#111216] shadow-[0_0_0_2px_rgba(11,11,12,0.95),0_0_0_4px_#D6C3A3]">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#111216] shadow-[0_0_0_2px_rgba(11,11,12,0.95),0_0_0_4px_#D6C3A3]">
                 <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[#0d0d10] [&_img]:h-full [&_img]:w-full [&_img]:object-cover">
                   <Logo showText={false} />
                 </span>
@@ -484,7 +496,8 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
               <SidebarItem icon={<HomeIcon />} label="Dashboard" href="/dashboard" active={isActive("/dashboard")} expanded={expanded} />
               <SidebarItem icon={<UsersIcon />} label="Kunden" href="/customers" active={isActive("/customers")} expanded={expanded} />
               <SidebarItem icon={<ServicesIcon />} label="Dienstleistungen" href="/services" active={isActive("/services")} expanded={expanded} />
-              <SidebarItem icon={<ChatIcon />} label="Team Chat" onClick={openChat} active={pathname?.startsWith("/dashboard/chat") || searchParams?.get("openChat") === "1"} badgeCount={unreadCount} pulse={chatPulse} expanded={expanded} divider />
+              <SidebarItem icon={<ReceiptIcon />} label="Rechnungen" href="/rechnungen" active={isActive("/rechnungen")} expanded={expanded} />
+              <SidebarItem icon={<ChatIcon />} label="Team Chat" onClick={openChat} active={pathname?.startsWith("/dashboard/chat") || searchParams?.get("openChat") === "1"} badgeCount={unreadCount} pulse={chatPulse} expanded={expanded} />
               <SidebarItem icon={<BellIcon />} label="Reminder" onClick={openReminders} active={searchParams?.get("openReminders") === "1"} badgeCount={liveReminderCount} pulse={reminderPulse} expanded={expanded} />
               <SidebarItem icon={<ClockIcon />} label="Warteliste" onClick={openWaitlist} active={searchParams?.get("openWaitlist") === "1"} badgeCount={liveWaitlistCount} pulse={waitlistPulse} expanded={expanded} />
             </div>
@@ -505,7 +518,7 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
           </div>
 
           <nav className="hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto md:flex">
-            {nav.slice(0, 4).map((item) => {
+            {nav.slice(0, 5).map((item) => {
               const isChat = item.href === "/dashboard/chat";
               const active = isChat
                 ? pathname?.startsWith("/dashboard/chat") || searchParams?.get("openChat") === "1"

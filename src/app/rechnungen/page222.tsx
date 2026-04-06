@@ -493,36 +493,6 @@ function getReceiptBusinessState(item: SlideoverReceipt) {
 }
 
 
-
-
-function getReceiptSearchHaystack(item: SlideoverReceipt) {
-  const latestEventLabel = formatEventLabel(item.latestEventType, item.events[0]?.referenceData ?? null);
-
-  return [
-    item.receiptNumber,
-    item.id,
-    item.salesOrderId,
-    item.paymentId,
-    item.cashRegisterId,
-    item.customerName,
-    item.providerName,
-    item.status,
-    item.signatureState,
-    item.verificationStatus,
-    latestEventLabel,
-    item.latestEventType,
-  ]
-    .map((entry) => String(entry ?? "").trim().toLowerCase())
-    .filter(Boolean)
-    .join(" ");
-}
-
-function matchesReceiptSearch(item: SlideoverReceipt, query: string) {
-  const normalized = String(query ?? "").trim().toLowerCase();
-  if (!normalized) return true;
-  return getReceiptSearchHaystack(item).includes(normalized);
-}
-
 function statusLinkClass(isActive: boolean) {
   return [
     "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition whitespace-nowrap",
@@ -1175,17 +1145,14 @@ export default async function RechnungenPage({
   const monthStart = startOfMonth(now);
   const nextMonthStart = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
 
-  const practitionerScopedItems = items.filter((item) =>
-    practitionerFilter === "all"
-      ? true
-      : normalizePractitionerKey(item.providerName) === practitionerFilter
-  );
-
-  const searchScopedItems = practitionerScopedItems.filter((item) => matchesReceiptSearch(item, qRaw));
-
-  const filteredItems = searchScopedItems.filter((item) => {
+  const filteredItems = items.filter((item) => {
     const issued = item.issuedAt ?? item.createdAt;
     const businessState = getReceiptBusinessState(item);
+    const itemPractitionerKey = normalizePractitionerKey(item.providerName);
+
+    if (practitionerFilter !== "all" && itemPractitionerKey !== practitionerFilter) {
+      return false;
+    }
 
     if (currentFilter === "today") return isBetween(issued, todayStart, tomorrowStart);
     if (currentFilter === "week") return isBetween(issued, weekStart, weekEnd);
@@ -1195,31 +1162,28 @@ export default async function RechnungenPage({
     return true;
   });
 
-  const quickFilterCounts = {
-    all: searchScopedItems.length,
-    today: searchScopedItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, todayStart, tomorrowStart)).length,
-    week: searchScopedItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, weekStart, weekEnd)).length,
-    month: searchScopedItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, monthStart, nextMonthStart)).length,
-    open: searchScopedItems.filter((item) => getReceiptBusinessState(item).key === "open").length,
-    error: searchScopedItems.filter((item) => getReceiptBusinessState(item).key === "error").length,
-  };
+  const scopedItems = items.filter((item) =>
+    practitionerFilter === "all"
+      ? true
+      : normalizePractitionerKey(item.providerName) === practitionerFilter
+  );
 
   const countTotal = filteredItems.length;
-  const openCount = quickFilterCounts.open;
-  const errorCount = quickFilterCounts.error;
-  const paidCount = searchScopedItems.filter((item) => getReceiptBusinessState(item).key === "paid").length;
+  const openCount = scopedItems.filter((item) => getReceiptBusinessState(item).key === "open").length;
+  const errorCount = scopedItems.filter((item) => getReceiptBusinessState(item).key === "error").length;
+  const paidCount = scopedItems.filter((item) => getReceiptBusinessState(item).key === "paid").length;
 
-  const revenueTodayCents = searchScopedItems.reduce((sum, item) => {
+  const revenueTodayCents = scopedItems.reduce((sum, item) => {
     const issued = item.issuedAt ?? item.createdAt;
     return isBetween(issued, todayStart, tomorrowStart) ? sum + Number(item.turnoverValueCents ?? 0) : sum;
   }, 0);
 
-  const revenueWeekCents = searchScopedItems.reduce((sum, item) => {
+  const revenueWeekCents = scopedItems.reduce((sum, item) => {
     const issued = item.issuedAt ?? item.createdAt;
     return isBetween(issued, weekStart, weekEnd) ? sum + Number(item.turnoverValueCents ?? 0) : sum;
   }, 0);
 
-  const revenueMonthCents = searchScopedItems.reduce((sum, item) => {
+  const revenueMonthCents = scopedItems.reduce((sum, item) => {
     const issued = item.issuedAt ?? item.createdAt;
     return isBetween(issued, monthStart, nextMonthStart) ? sum + Number(item.turnoverValueCents ?? 0) : sum;
   }, 0);
@@ -1301,7 +1265,14 @@ export default async function RechnungenPage({
                       qRaw={qRaw}
                       currentFilter={currentFilter}
                       practitionerFilter={practitionerFilter}
-                      counts={quickFilterCounts}
+                      counts={{
+                        all: countTotal,
+                        today: filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, todayStart, tomorrowStart)).length,
+                        week: filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, weekStart, weekEnd)).length,
+                        month: filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, monthStart, nextMonthStart)).length,
+                        open: openCount,
+                        error: errorCount,
+                      }}
                     />
 
                     <Link
@@ -1474,12 +1445,12 @@ export default async function RechnungenPage({
 
               <div className="mt-6 flex items-center gap-2 md:flex-wrap">
                 {[
-                  ["all", "Alle", quickFilterCounts.all],
-                  ["today", "Heute", quickFilterCounts.today],
-                  ["week", "Woche", quickFilterCounts.week],
-                  ["month", "Monat", quickFilterCounts.month],
-                  ["open", "Offen", quickFilterCounts.open],
-                  ["error", "Fehler", quickFilterCounts.error],
+                  ["all", "Alle", countTotal],
+                  ["today", "Heute", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, todayStart, tomorrowStart)).length],
+                  ["week", "Woche", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, weekStart, weekEnd)).length],
+                  ["month", "Monat", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, monthStart, nextMonthStart)).length],
+                  ["open", "Offen", openCount],
+                  ["error", "Fehler", errorCount],
                 ].map(([key, label, count]) => {
                   const active = currentFilter === key;
                   return (
@@ -1697,7 +1668,7 @@ export default async function RechnungenPage({
                   <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
                     <div className="text-xs uppercase tracking-wide text-amber-200/80">Nächster Schritt</div>
                     <div className="mt-2 text-lg font-semibold text-white">Fiscal Receipt erzeugen</div>
-                    <div className="mt-2 text-sm text-white/70">Jetzt wird aus Sales Order + Payment der Fiscal-Beleg erzeugt. Erst danach ist der Checkout fachlich komplett abgeschlossen.</div>
+                    <div className="mt-2 text-sm text-white/70">Jetzt wird aus Sales Order + Payment der Fiskalbeleg erzeugt. Erst danach ist der Checkout fachlich abgeschlossen.</div>
                     <form action={createFiscalReceiptForPayment} className="mt-4 space-y-4">
                       <input type="hidden" name="appointment_id" value={appointmentId} />
                       <input type="hidden" name="sales_order_id" value={createdSalesOrder.id} />
@@ -1714,14 +1685,14 @@ export default async function RechnungenPage({
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4">
-                    <div className="text-xs uppercase tracking-wide text-sky-200/80">Fiscal Receipt erzeugt</div>
+                    <div className="text-xs uppercase tracking-wide text-sky-200/80">Fiskalbeleg erstellt</div>
                     <div className="mt-2 text-2xl font-black text-white">{createdReceipt.receipt_number ?? shortId(createdReceipt.id)}</div>
                     <div className="mt-3 flex flex-wrap gap-2 text-xs text-white/75">
                       <span className="rounded-full border border-white/10 px-2.5 py-1">Status: {createdReceipt.status ?? "CREATED"}</span>
                       <span className="rounded-full border border-white/10 px-2.5 py-1">Signatur: {createdReceipt.signature_state ?? "—"}</span>
                       <span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-2.5 py-1 text-sky-100">Betrag: {euroFromCents(createdReceipt.turnover_value_cents, createdReceipt.currency_code || "EUR")}</span>
                     </div>
-                    <div className="mt-3 text-sm text-white/70">Der Checkout ist jetzt bis Fiscal durchgelaufen. Als Nächstes könnt ihr die Receipt-Details prüfen.</div>
+                    <div className="mt-3 text-sm text-white/70">Der Checkout ist jetzt vollständig. Als Nächstes kannst du den Beleg direkt öffnen und prüfen.</div>
                     <div className="mt-4 flex flex-wrap gap-2">
                       <Link href={`/rechnungen?${new URLSearchParams({
                         ...(qRaw ? { q: qRaw } : {}),
@@ -1730,7 +1701,7 @@ export default async function RechnungenPage({
                         ...(createdPayment?.id ? { payment: createdPayment.id } : {}),
                         receipt: createdReceipt.id,
                       }).toString()}`} className="inline-flex h-10 items-center rounded-xl border border-white/10 bg-white/10 px-4 text-sm font-semibold text-white hover:bg-white/15">
-                        Receipt Details
+                        Beleg öffnen
                       </Link>
                       <Link href="/rechnungen" className="inline-flex h-10 items-center rounded-xl border border-sky-500/30 bg-sky-600 px-4 text-sm font-semibold text-white hover:bg-sky-500">
                         Checkout schließen
@@ -1810,7 +1781,6 @@ export default async function RechnungenPage({
                         const detailParams = new URLSearchParams();
                         if (qRaw) detailParams.set("q", qRaw);
                         if (currentFilter !== "all") detailParams.set("filter", currentFilter);
-                        if (practitionerFilter !== "all") detailParams.set("practitioner", practitionerFilter);
                         detailParams.set("receipt", item.id);
 
                         return (

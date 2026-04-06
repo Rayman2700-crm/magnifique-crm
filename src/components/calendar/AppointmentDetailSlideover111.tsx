@@ -895,7 +895,7 @@ export default function AppointmentDetailSlideover({
         salesOrder,
         payment: paymentResult.payment ?? null,
       }));
-      setCheckoutSuccess("Rechnung und Zahlung wurden erfasst.");
+      setCheckoutSuccess("Rechnung und Zahlung erfasst ✅");
     });
   };
 
@@ -916,7 +916,7 @@ export default function AppointmentDetailSlideover({
         return;
       }
       setCheckoutState((current) => ({ ...current, receipt: result.receipt ?? null }));
-      setCheckoutSuccess(result.success ?? "Fiskalbeleg wurde erzeugt.");
+      setCheckoutSuccess(result.success ?? "Fiscal Receipt erzeugt ✅");
     });
   };
 
@@ -1111,7 +1111,7 @@ export default function AppointmentDetailSlideover({
                       Abrechnen
                     </button>
                   ) : (
-                    <button type="button" disabled className={disabledActionButtonStyle() + " w-full whitespace-nowrap rounded-xl"}>Checkout starten</button>
+                    <button type="button" disabled className={disabledActionButtonStyle() + " w-full whitespace-nowrap rounded-xl"}>Abrechnen</button>
                   )}
                 </div>
               </div>
@@ -1125,7 +1125,7 @@ export default function AppointmentDetailSlideover({
                   onClick={handleCreateSalesOrder}
                   className={clientiqueButtonClass("success", true) + " disabled:cursor-not-allowed disabled:opacity-60"}
                 >
-                  {checkoutState.payment ? "Rechnung erfasst" : "1. Rechnung erfassen"}
+                  {checkoutState.payment ? "Rechnung bereits erstellt" : "Rechnung erstellen"}
                 </button>
                 <button
                   type="button"
@@ -1133,7 +1133,7 @@ export default function AppointmentDetailSlideover({
                   className={clientiqueButtonClass("primary", true) + " disabled:cursor-not-allowed disabled:opacity-60"}
                   onClick={handleCreateReceipt}
                 >
-                  {checkoutState.receipt ? "Beleg bereits fiskalisiert" : "2. Fiskalbeleg erzeugen"}
+                  {checkoutState.receipt ? "Fiskal Beleg bereits erzeugt" : "Fiskal Beleg"}
                 </button>
                 {checkoutState.receipt ? (
                   <>
@@ -1142,7 +1142,7 @@ export default function AppointmentDetailSlideover({
                     </div>
                     {checkoutState.salesOrder?.id ? (
                       <Link href={`/rechnungen?${new URLSearchParams({ q: checkoutState.salesOrder.id }).toString()}`}>
-                        <button type="button" className={clientiqueButtonClass("dark", true)}>In Rechnungen öffnen</button>
+                        <button type="button" className={clientiqueButtonClass("dark", true)}>Beleg anzeigen</button>
                       </Link>
                     ) : null}
                   </>
@@ -1306,7 +1306,7 @@ export default function AppointmentDetailSlideover({
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Checkout</div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Checkout Builder</div>
                       <h3 className="mt-1 text-2xl font-black text-white">Abrechnung für {selected.customerName ?? "Kunde"}</h3>
                     </div>
                   </div>

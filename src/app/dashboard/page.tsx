@@ -9,6 +9,7 @@ import DashboardCalendarCardClient from "@/components/calendar/DashboardCalendar
 import OpenSlotsSlideover from "@/components/dashboard/OpenSlotsSlideover";
 import WaitlistSlideover from "@/components/dashboard/WaitlistSlideover";
 import DashboardServicesCard from "@/components/dashboard/DashboardServicesCard";
+import DashboardInvoiceSlideover from "@/components/dashboard/DashboardInvoiceSlideover";
 
 type TenantRow = {
   id: string;
@@ -107,6 +108,47 @@ type CalendarServiceRow = {
   buffer_minutes: number | null;
   default_price_cents: number | null;
   is_active: boolean | null;
+};
+
+
+type DashboardCustomerOption = {
+  id: string;
+  tenantId: string;
+  displayName: string;
+  phone: string | null;
+  email: string | null;
+};
+
+type DashboardCustomerRow = {
+  id: string;
+  tenant_id: string | null;
+  person_id: string | null;
+  person:
+    | {
+        id: string | null;
+        full_name: string | null;
+        phone: string | null;
+        email: string | null;
+        birthday?: string | null;
+      }
+    | {
+        id: string | null;
+        full_name: string | null;
+        phone: string | null;
+        email: string | null;
+        birthday?: string | null;
+      }[]
+    | null;
+  tenant:
+    | {
+        id: string | null;
+        display_name: string | null;
+      }
+    | {
+        id: string | null;
+        display_name: string | null;
+      }[]
+    | null;
 };
 
 type ThemeLike = {
@@ -397,9 +439,9 @@ function InvoiceCreateCard({
               </div>
             </div>
 
-            <div className="shrink-0">
+            <Link href="/dashboard?invoice=1" className="shrink-0">
               <DashboardActionPill icon={<InvoiceIcon />} compact accentColor="#d6c3a3" />
-            </div>
+            </Link>
           </div>
 
           <div className="grid grid-cols-1 gap-2 sm:gap-3 md:grid-cols-3">
@@ -424,7 +466,7 @@ function InvoiceCreateCard({
 
           <div className="mt-auto flex flex-col gap-2">
             <Link
-              href="/rechnungen"
+              href="/dashboard?invoice=1"
               className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] bg-[var(--primary)] px-3 text-sm font-medium text-[var(--primary-foreground)] shadow-[0_4px_20px_rgba(214,195,163,0.18)] transition hover:opacity-90"
             >
               Abrechnen
@@ -705,6 +747,32 @@ export default async function DashboardPage() {
     .eq("is_active", true)
     .order("name", { ascending: true });
 
+  const dashboardCustomersBaseQuery = admin
+    .from("customer_profiles")
+    .select(`
+      id,
+      tenant_id,
+      person_id,
+      person:persons (
+        id,
+        full_name,
+        phone,
+        email,
+        birthday
+      ),
+      tenant:tenants (
+        id,
+        display_name
+      )
+    `)
+    .order("created_at", { ascending: false })
+    .limit(600);
+
+  const dashboardCustomersQuery =
+    isAdmin || !effectiveCustomerTenantId
+      ? dashboardCustomersBaseQuery
+      : dashboardCustomersBaseQuery.eq("tenant_id", effectiveCustomerTenantId);
+
   const [
     todayCountResult,
     weekCountResult,
@@ -716,6 +784,7 @@ export default async function DashboardPage() {
     openSlotsResult,
     activeWaitlistResult,
     calendarServicesResult,
+    dashboardCustomersResult,
     receiptsResult,
   ] = await Promise.all([
     todayCountQuery,
@@ -728,6 +797,7 @@ export default async function DashboardPage() {
     openSlotsQuery,
     activeWaitlistQuery,
     calendarServicesQuery,
+    dashboardCustomersQuery,
     receiptsQuery,
   ]);
 
@@ -749,6 +819,30 @@ export default async function DashboardPage() {
   }[]).filter((row) => String(row.status ?? "active").toLowerCase() === "active");
 
   const calendarServices = (calendarServicesResult.data ?? []) as CalendarServiceRow[];
+
+  const dashboardCustomerRows = (dashboardCustomersResult.data ?? []) as DashboardCustomerRow[];
+
+  const dashboardCustomers = dashboardCustomerRows
+    .map((row) => {
+      const tenantId = String(row.tenant_id ?? "").trim();
+      if (!tenantId) return null;
+
+      const person = firstJoin(row.person);
+
+      const displayName =
+        String(person?.full_name ?? "").trim() ||
+        "Kunde";
+
+      return {
+        id: String(row.id),
+        tenantId,
+        displayName,
+        phone: String(person?.phone ?? "").trim() || null,
+        email: String(person?.email ?? "").trim() || null,
+      } satisfies DashboardCustomerOption;
+    })
+    .filter(Boolean) as DashboardCustomerOption[];
+
   const fiscalReceipts = (receiptsResult.data ?? []) as FiscalReceiptRow[];
 
   const waitlistCustomerProfileIds = Array.from(
@@ -1049,6 +1143,23 @@ export default async function DashboardPage() {
 
       <OpenSlotsSlideover items={openSlotItems} />
       <WaitlistSlideover items={waitlistItems} />
+      <DashboardInvoiceSlideover
+        tenants={tenantRows.map((tenant) => ({
+          id: tenant.id,
+          displayName: tenant.display_name ?? "Behandler",
+        }))}
+        services={calendarServices.map((service) => ({
+          id: service.id,
+          tenantId: service.tenant_id,
+          name: service.name,
+          defaultPriceCents: service.default_price_cents ?? null,
+        }))}
+        customers={dashboardCustomers}
+        selectedTenantId={servicesCardTenantId ?? effectiveCustomerTenantId ?? ""}
+        currentUserName={displayName}
+        currentTenantName={tenantDisplayName ?? servicesCardTenantName}
+        isAdmin={isAdmin}
+      />
     </div>
   );
 }
