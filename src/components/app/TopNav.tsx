@@ -466,12 +466,12 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
       <aside
         className={cn(
           "clientique-sidebar-rail fixed inset-y-0 left-0 z-50 border-r border-white/8 bg-[rgba(10,10,11,0.86)] backdrop-blur-xl transition-[width] duration-200",
-          expanded ? "w-[248px]" : "w-[84px]"
+          expanded ? "w-[248px]" : "w-[72px]"
         )}
         onMouseEnter={() => setExpanded(true)}
         onMouseLeave={() => setExpanded(false)}
       >
-        <div className="flex h-full flex-col px-3 pt-[6px] pb-4">
+        <div className="flex h-full flex-col px-1 pt-[6px] pb-4">
           <div className="pb-4">
             <button
               type="button"
@@ -479,7 +479,7 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
               className="flex w-full items-center rounded-2xl px-2 py-2 text-left"
               aria-label="Sidebar ein- oder ausklappen"
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#111216] shadow-[0_0_0_2px_rgba(11,11,12,0.95),0_0_0_4px_#D6C3A3]">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#111216] shadow-[0_0_0_2px_rgba(11,11,12,0.95),0_0_0_4px_#D6C3A3]">
                 <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[#0d0d10] [&_img]:h-full [&_img]:w-full [&_img]:object-cover">
                   <Logo showText={false} />
                 </span>
