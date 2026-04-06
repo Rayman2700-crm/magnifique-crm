@@ -683,7 +683,7 @@ function MobileReceiptAvatarMenu({
       <div
         id="receipts-avatar-menu"
         popover="auto"
-        className="md:hidden fixed right-4 top-[332px] z-[2147483647] m-0 w-[min(320px,calc(100vw-24px))] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl"
+        className="md:hidden fixed right-4 top-[332px] z-[2147483647] m-0 w-[min(420px,calc(100vw-24px))] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl"
       >
         <div className="px-1 pb-2">
           <div className="text-sm font-semibold text-white">Behandler wählen</div>
