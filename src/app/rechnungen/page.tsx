@@ -230,6 +230,28 @@ function firstNameLabel(label: string | null | undefined, fallback = "Behandler"
   return value.split(/\s+/)[0] || fallback;
 }
 
+function customerBadgeClass(value: string | null | undefined) {
+  const palette = [
+    "border-fuchsia-500/30 bg-fuchsia-500/15 text-fuchsia-100",
+    "border-blue-500/30 bg-blue-500/15 text-blue-100",
+    "border-violet-500/30 bg-violet-500/15 text-violet-100",
+    "border-emerald-500/30 bg-emerald-500/15 text-emerald-100",
+    "border-amber-500/30 bg-amber-500/15 text-amber-100",
+  ];
+  const seed = String(value ?? "").trim();
+  const hash = Array.from(seed).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return palette[hash % palette.length] ?? palette[0];
+}
+
+function eventBadgeTone(value: string | null | undefined, referenceData?: Record<string, unknown> | null) {
+  const normalized = String(value ?? "").toUpperCase();
+  const auditAction = String(referenceData?.audit_action ?? "").trim().toLowerCase();
+  if (auditAction === "receipt_edited") return "blue" as const;
+  if (normalized.includes("FAILED")) return "red" as const;
+  if (normalized.includes("SUCCEEDED") || normalized.includes("CREATED")) return "green" as const;
+  return "neutral" as const;
+}
+
 function escapeIlikeValue(value: string) {
   return value.replace(/[,%]/g, "").replace(/\s+/g, " ").trim();
 }
@@ -1363,8 +1385,8 @@ export default async function RechnungenPage({
                 </form>
               </div>
 
-              <div className="hidden md:flex md:items-center md:gap-5">
-                <form action="/rechnungen" method="get" className="min-w-0 flex-1 md:pr-1">
+              <div className="hidden md:flex md:items-center md:gap-4">
+                <form action="/rechnungen" method="get" className="min-w-0 flex-1">
                   {currentFilter !== "all" ? <input type="hidden" name="filter" value={currentFilter} /> : null}
                   {practitionerFilter !== "all" ? <input type="hidden" name="practitioner" value={practitionerFilter} /> : null}
                   <div className="flex h-11 w-full items-center rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
@@ -1646,55 +1668,74 @@ export default async function RechnungenPage({
 
           <Card className="mt-6 overflow-hidden border-white/10 bg-white/[0.03]">
             <CardContent className="p-0">
+              <div className="border-b border-white/10 px-6 py-5">
+                <div className="text-3xl font-semibold text-white">Belegliste</div>
+                <div className="mt-2 text-lg text-[var(--primary)]">{filteredItems.length} Ergebnis(se)</div>
+              </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead className="border-b border-white/10 bg-white/[0.03] text-left text-white/55">
                     <tr>
-                      <th className="px-4 py-3 font-semibold">Beleg</th>
-                      <th className="px-4 py-3 font-semibold">Kunde</th>
-                      <th className="px-4 py-3 font-semibold">Behandler</th>
-                      <th className="px-4 py-3 font-semibold">Erstellt</th>
-                      <th className="px-4 py-3 font-semibold">Betrag</th>
-                      <th className="px-4 py-3 font-semibold">Status</th>
-                      <th className="px-4 py-3 font-semibold">Letzter Event</th>
-                      <th className="px-4 py-3 font-semibold text-right">Aktion</th>
+                      <th className="px-6 py-5 font-semibold">Beleg</th>
+                      <th className="px-6 py-5 font-semibold">Kunde</th>
+                      <th className="px-6 py-5 font-semibold">Erstellt</th>
+                      <th className="px-6 py-5 font-semibold">Betrag</th>
+                      <th className="px-6 py-5 font-semibold text-right">Aktion</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredItems.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="px-4 py-10 text-center text-white/45">Keine Fiscal-Receipts gefunden.</td>
+                        <td colSpan={5} className="px-6 py-10 text-center text-white/45">Keine Fiscal-Receipts gefunden.</td>
                       </tr>
                     ) : (
                       filteredItems.map((item) => {
                         const businessState = getReceiptBusinessState(item);
+                        const latestEventLabel = formatEventLabel(item.latestEventType, item.events[0]?.referenceData ?? null);
+                        const latestEventTone = eventBadgeTone(item.latestEventType, item.events[0]?.referenceData ?? null);
+                        const customerName = item.customerName?.trim() || "Unbekannt";
+                        const customerInitials = initialsFromName(customerName, "KU");
+                        const customerBadge = customerBadgeClass(customerName);
                         const detailParams = new URLSearchParams();
                         if (qRaw) detailParams.set("q", qRaw);
                         if (currentFilter !== "all") detailParams.set("filter", currentFilter);
                         detailParams.set("receipt", item.id);
 
                         return (
-                          <tr key={item.id} className="border-b border-white/5 last:border-b-0 hover:bg-white/[0.03]">
-                            <td className="px-4 py-3 align-top">
+                          <tr key={item.id} className="border-b border-white/5 last:border-b-0 hover:bg-white/[0.02]">
+                            <td className="px-6 py-4 align-middle">
                               <div className="font-semibold text-white">{item.receiptNumber}</div>
-                              <div className="mt-1 text-xs text-white/45">{shortId(item.id)}</div>
                             </td>
-                            <td className="px-4 py-3 align-top">
-                              <div className="text-white/85">{item.customerName ?? "—"}</div>
-                              <div className="mt-1 text-xs text-white/45">SO {shortId(item.salesOrderId)}</div>
-                            </td>
-                            <td className="px-4 py-3 align-top text-white/75">{item.providerName ?? "—"}</td>
-                            <td className="px-4 py-3 align-top text-white/75">{formatDateTime(item.createdAt)}</td>
-                            <td className="px-4 py-3 align-top text-white/85">{euroFromCents(item.turnoverValueCents, item.currencyCode)}</td>
-                            <td className="px-4 py-3 align-top">
-                              <div className="flex flex-wrap gap-2">
-                                <Badge tone={businessState.tone}>{businessState.label}</Badge>
-                                <Badge tone={toneForVerification(item.verificationStatus)}>{item.verificationStatus ?? "—"}</Badge>
+                            <td className="px-6 py-4 align-middle">
+                              <div className="flex items-center gap-4">
+                                <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${customerBadge}`}>
+                                  {customerInitials}
+                                </span>
+                                <span className="truncate font-semibold text-white">{customerName}</span>
                               </div>
                             </td>
-                            <td className="px-4 py-3 align-top text-white/75">{formatEventLabel(item.latestEventType, item.events[0]?.referenceData ?? null)}</td>
-                            <td className="px-4 py-3 text-right align-top">
-                              <Link href={`/rechnungen?${detailParams.toString()}`} className="inline-flex h-9 items-center rounded-lg border border-white/10 bg-white/10 px-3 text-sm font-medium text-white hover:bg-white/15">Details</Link>
+                            <td className="px-6 py-4 align-middle text-white/75">{formatDateTime(item.createdAt)}</td>
+                            <td className="px-6 py-4 align-middle font-medium text-white">{euroFromCents(item.turnoverValueCents, item.currencyCode)}</td>
+                            <td className="px-6 py-4 text-right align-middle">
+                              <div className="flex items-center justify-end gap-2">
+                                <span title={businessState.label}>
+                                  <Badge tone={businessState.tone}>
+                                    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                      <circle cx="10" cy="10" r="7" />
+                                      <path d="m7.5 10 1.6 1.6 3.4-3.7" />
+                                    </svg>
+                                  </Badge>
+                                </span>
+                                <span title={latestEventLabel}>
+                                  <Badge tone={latestEventTone}>
+                                    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                      <path d="M10 5v5l3 2" />
+                                      <circle cx="10" cy="10" r="7" />
+                                    </svg>
+                                  </Badge>
+                                </span>
+                                <Link href={`/rechnungen?${detailParams.toString()}`} className="inline-flex h-10 items-center rounded-xl border border-white/10 bg-white/10 px-4 text-sm font-medium text-white hover:bg-white/15">Details</Link>
+                              </div>
                             </td>
                           </tr>
                         );
