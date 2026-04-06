@@ -1177,40 +1177,9 @@ export default async function RechnungenPage({
                   <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">
                     Rechnungen
                   </h1>
-
-                  <div className="mt-4 hidden items-center gap-2 md:flex md:flex-wrap">
-                    {[
-                      ["all", "Alle", countTotal],
-                      ["today", "Heute", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, todayStart, tomorrowStart)).length],
-                      ["week", "Woche", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, weekStart, weekEnd)).length],
-                      ["month", "Monat", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, monthStart, nextMonthStart)).length],
-                      ["open", "Offen", openCount],
-                      ["error", "Fehler", errorCount],
-                    ].map(([key, label, count]) => {
-                      const active = currentFilter === key;
-                      return (
-                        <Link
-                          key={String(key)}
-                          href={buildRechnungenHref({
-                            qRaw,
-                            filter: String(key),
-                            practitioner: practitionerFilter,
-                            appointmentId,
-                            salesOrder: salesOrderId,
-                            payment: paymentId,
-                            receipt: receiptId,
-                          })}
-                          className={statusLinkClass(active)}
-                        >
-                          <span>{label}</span>
-                          <span className={statusCountClass(active)}>{count}</span>
-                        </Link>
-                      );
-                    })}
-                  </div>
                 </div>
 
-                <div className="hidden md:flex md:justify-end xl:min-w-[430px] xl:pl-8">
+                <div className="hidden md:flex md:justify-end md:pt-3 xl:min-w-[430px] xl:pl-10 xl:pt-4">
                   <div className="max-w-full overflow-x-auto">
                     <div className="min-w-max">
                       <div className="flex flex-nowrap items-start gap-5">
@@ -1292,6 +1261,37 @@ export default async function RechnungenPage({
                 </div>
               </div>
 
+              <div className="mt-4 hidden items-center gap-2 md:flex md:flex-wrap xl:mt-6">
+                {[
+                  ["all", "Alle", countTotal],
+                  ["today", "Heute", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, todayStart, tomorrowStart)).length],
+                  ["week", "Woche", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, weekStart, weekEnd)).length],
+                  ["month", "Monat", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, monthStart, nextMonthStart)).length],
+                  ["open", "Offen", openCount],
+                  ["error", "Fehler", errorCount],
+                ].map(([key, label, count]) => {
+                  const active = currentFilter === key;
+                  return (
+                    <Link
+                      key={String(key)}
+                      href={buildRechnungenHref({
+                        qRaw,
+                        filter: String(key),
+                        practitioner: practitionerFilter,
+                        appointmentId,
+                        salesOrder: salesOrderId,
+                        payment: paymentId,
+                        receipt: receiptId,
+                      })}
+                      className={statusLinkClass(active)}
+                    >
+                      <span>{label}</span>
+                      <span className={statusCountClass(active)}>{count}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+
               <div className="md:hidden flex items-center justify-between gap-3">
                 <MobileReceiptFilterMenu
                   qRaw={qRaw}
@@ -1341,36 +1341,55 @@ export default async function RechnungenPage({
                 />
               </div>
 
-              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                <div className="hidden md:block" />
-                <div className="flex w-full items-center gap-4 xl:max-w-[760px] xl:ml-auto">
-                  <form action="/rechnungen" method="get" className="w-full">
-                    {currentFilter !== "all" ? <input type="hidden" name="filter" value={currentFilter} /> : null}
-                    {practitionerFilter !== "all" ? <input type="hidden" name="practitioner" value={practitionerFilter} /> : null}
-                    <div className="flex h-11 items-center rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
-                      <span className="mr-3 inline-flex h-4 w-4 shrink-0 items-center justify-center text-white/35">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-                          <circle cx="11" cy="11" r="7" />
-                          <path d="m20 20-3.5-3.5" />
-                        </svg>
-                      </span>
-                      <input
-                        type="text"
-                        name="q"
-                        defaultValue={qRaw}
-                        placeholder="Belegnr., Kunde, Sales Order, Payment oder Status"
-                        className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/35"
-                      />
-                    </div>
-                  </form>
+              <div className="md:hidden flex flex-col gap-3">
+                <form action="/rechnungen" method="get" className="w-full">
+                  {currentFilter !== "all" ? <input type="hidden" name="filter" value={currentFilter} /> : null}
+                  {practitionerFilter !== "all" ? <input type="hidden" name="practitioner" value={practitionerFilter} /> : null}
+                  <div className="flex h-11 items-center rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
+                    <span className="mr-3 inline-flex h-4 w-4 shrink-0 items-center justify-center text-white/35">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="m20 20-3.5-3.5" />
+                      </svg>
+                    </span>
+                    <input
+                      type="text"
+                      name="q"
+                      defaultValue={qRaw}
+                      placeholder="Belegnr., Kunde, Sales Order, Payment oder Status"
+                      className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/35"
+                    />
+                  </div>
+                </form>
+              </div>
 
-                  <Link
-                    href="/calendar"
-                    className="hidden h-11 shrink-0 items-center rounded-[16px] border border-emerald-500/30 bg-emerald-600/90 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500 md:inline-flex"
-                  >
-                    + Abrechnen
-                  </Link>
-                </div>
+              <div className="hidden md:flex md:items-center md:gap-4">
+                <form action="/rechnungen" method="get" className="min-w-0 flex-1">
+                  {currentFilter !== "all" ? <input type="hidden" name="filter" value={currentFilter} /> : null}
+                  {practitionerFilter !== "all" ? <input type="hidden" name="practitioner" value={practitionerFilter} /> : null}
+                  <div className="flex h-11 w-full items-center rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
+                    <span className="mr-3 inline-flex h-4 w-4 shrink-0 items-center justify-center text-white/35">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="m20 20-3.5-3.5" />
+                      </svg>
+                    </span>
+                    <input
+                      type="text"
+                      name="q"
+                      defaultValue={qRaw}
+                      placeholder="Belegnr., Kunde, Sales Order, Payment oder Status"
+                      className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/35"
+                    />
+                  </div>
+                </form>
+
+                <Link
+                  href="/calendar"
+                  className="inline-flex h-11 min-w-[164px] shrink-0 items-center justify-center rounded-[16px] border border-emerald-500/30 bg-emerald-600/90 px-5 text-sm font-semibold text-white transition hover:bg-emerald-500"
+                >
+                  + Abrechnen
+                </Link>
               </div>
             </div>
           </div>

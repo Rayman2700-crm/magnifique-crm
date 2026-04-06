@@ -213,6 +213,23 @@ function initialsFromName(value: string | null | undefined, fallback = "AL") {
   return parts.map((part) => part[0]?.toUpperCase() ?? "").join("") || fallback;
 }
 
+
+function avatarRingColor(label: string | null | undefined) {
+  const value = String(label ?? "").toLowerCase();
+
+  if (value.includes("radu")) return "#3b82f6";
+  if (value.includes("raluca")) return "#a855f7";
+  if (value.includes("alexandra")) return "#22c55e";
+  if (value.includes("barbara")) return "#f97316";
+
+  return "rgba(255,255,255,0.55)";
+}
+
+function firstNameLabel(label: string | null | undefined, fallback = "Behandler") {
+  const value = String(label ?? "").trim() || fallback;
+  return value.split(/\s+/)[0] || fallback;
+}
+
 function escapeIlikeValue(value: string) {
   return value.replace(/[,%]/g, "").replace(/\s+/g, " ").trim();
 }
@@ -431,6 +448,222 @@ function getQuickFilterLabel(filter: string) {
   };
   return labels[filter] ?? "Alle";
 }
+
+function buildRechnungenHref({
+  qRaw,
+  filter,
+  practitioner,
+  receipt,
+  appointmentId,
+  salesOrder,
+  payment,
+}: {
+  qRaw?: string;
+  filter?: string;
+  practitioner?: string;
+  receipt?: string;
+  appointmentId?: string;
+  salesOrder?: string;
+  payment?: string;
+}) {
+  const params = new URLSearchParams();
+  if (qRaw?.trim()) params.set("q", qRaw.trim());
+  if (filter && filter !== "all") params.set("filter", filter);
+  if (practitioner && practitioner !== "all") params.set("practitioner", practitioner);
+  if (receipt) params.set("receipt", receipt);
+  if (appointmentId) params.set("appointmentId", appointmentId);
+  if (salesOrder) params.set("salesOrder", salesOrder);
+  if (payment) params.set("payment", payment);
+  const query = params.toString();
+  return query ? `/rechnungen?${query}` : "/rechnungen";
+}
+
+function MobileReceiptFilterMenu({
+  qRaw,
+  currentFilter,
+  practitionerFilter,
+  counts,
+}: {
+  qRaw: string;
+  currentFilter: string;
+  practitionerFilter: string;
+  counts: { all: number; today: number; week: number; month: number; open: number; error: number };
+}) {
+  const items = [
+    { key: "all", label: "Alle", count: counts.all },
+    { key: "today", label: "Heute", count: counts.today },
+    { key: "week", label: "Woche", count: counts.week },
+    { key: "month", label: "Monat", count: counts.month },
+    { key: "open", label: "Offen", count: counts.open },
+    { key: "error", label: "Fehler", count: counts.error },
+  ];
+  const activeCount = items.find((item) => item.key === currentFilter)?.count ?? counts.all;
+
+  return (
+    <>
+      <button
+        type="button"
+        popoverTarget="receipts-filter-menu"
+        popoverTargetAction="toggle"
+        className="relative flex h-12 w-12 cursor-pointer list-none items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/85 shadow-[0_0_0_2px_rgba(11,11,12,0.95),0_10px_28px_rgba(0,0,0,0.30)] md:hidden"
+        aria-label="Rechnungsfilter öffnen"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          className="h-[18px] w-[18px]"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        >
+          <path d="M4 7h16" />
+          <path d="M4 12h16" />
+          <path d="M4 17h16" />
+        </svg>
+        <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#2563eb] px-1 text-[10px] font-extrabold text-white shadow-[0_0_0_2px_rgba(11,11,12,0.92)]">
+          {activeCount}
+        </span>
+      </button>
+
+      <div
+        id="receipts-filter-menu"
+        popover="auto"
+        className="md:hidden fixed left-[116px] top-[332px] z-[2147483647] m-0 w-[224px] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.995)_0%,rgba(12,13,16,0.995)_100%)] p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.62)] backdrop-blur-xl"
+      >
+        <div className="px-1 pb-2">
+          <div className="text-sm font-semibold text-white">Filter wählen</div>
+          <div className="mt-0.5 text-xs text-white/45">Belege filtern</div>
+        </div>
+        <div className="grid gap-2">
+          {items.map((item) => {
+            const selected = currentFilter === item.key;
+            return (
+              <Link
+                key={item.key}
+                href={buildRechnungenHref({ qRaw, filter: item.key, practitioner: practitionerFilter })}
+                className="flex items-center justify-between rounded-2xl border px-3 py-3 text-left"
+                style={{
+                  borderColor: selected ? "rgba(214,195,163,0.28)" : "rgba(255,255,255,0.10)",
+                  backgroundColor: selected ? "rgba(214,195,163,0.14)" : "rgba(255,255,255,0.04)",
+                }}
+              >
+                <span className="text-sm font-semibold text-white">{item.label}</span>
+                <span className="inline-flex min-w-[28px] items-center justify-center rounded-full bg-white/10 px-2 py-0.5 text-xs font-bold text-white/90">
+                  {item.count}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function MobileReceiptAvatarMenu({
+  avatarOptions,
+  practitionerFilter,
+  qRaw,
+  currentFilter,
+}: {
+  avatarOptions: AvatarFilterOption[];
+  practitionerFilter: string;
+  qRaw: string;
+  currentFilter: string;
+}) {
+  const activeOption =
+    avatarOptions.find((option) => String(option.tenantId ?? "all") === practitionerFilter) ??
+    avatarOptions[0] ??
+    null;
+
+  const ringColors = ["#d6c3a3", ...avatarOptions.filter((option) => option.tenantId !== "all").map((option) => avatarRingColor(option.label))];
+  const step = 100 / Math.max(1, ringColors.length);
+  const ringBackground = `conic-gradient(${ringColors
+    .map((color, index) => `${color} ${Math.round(index * step)}% ${Math.round((index + 1) * step)}%`)
+    .join(", ")})`;
+
+  return (
+    <>
+      <button
+        type="button"
+        popoverTarget="receipts-avatar-menu"
+        popoverTargetAction="toggle"
+        className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full md:hidden"
+        aria-label="Behandler auswählen"
+        style={{
+          background: ringBackground,
+          boxShadow: "0 0 0 2px rgba(11,11,12,0.95), 0 10px 28px rgba(0,0,0,0.34)",
+        }}
+      >
+        <span className="flex h-[42px] w-[42px] items-center justify-center overflow-hidden rounded-full border-2 border-[#111216] bg-[#0f1013] text-[12px] font-extrabold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+          {activeOption?.tenantId === "all" ? (
+            <span className="flex h-full w-full items-center justify-center rounded-full bg-white text-black">Alle</span>
+          ) : activeOption?.imageUrl ? (
+            <img src={activeOption.imageUrl} alt={activeOption.label} className="h-full w-full object-cover" />
+          ) : (
+            activeOption?.initials ?? "BE"
+          )}
+        </span>
+        <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#2563eb] px-1 text-[10px] font-extrabold text-white shadow-[0_0_0_2px_rgba(11,11,12,0.92)]">
+          {activeOption?.tenantId === "all" ? avatarOptions.length : "1"}
+        </span>
+      </button>
+
+      <div
+        id="receipts-avatar-menu"
+        popover="auto"
+        className="md:hidden fixed right-4 top-[332px] z-[2147483647] m-0 w-[min(320px,calc(100vw-24px))] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl"
+      >
+        <div className="px-1 pb-2">
+          <div className="text-sm font-semibold text-white">Behandler wählen</div>
+          <div className="mt-0.5 text-xs text-white/45">Rechnungen filtern</div>
+        </div>
+        <div className="grid gap-2">
+          {avatarOptions.map((option) => {
+            const selected = String(option.tenantId ?? "all") === practitionerFilter;
+            const ringColor = option.tenantId === "all" ? "rgba(255,255,255,0.55)" : avatarRingColor(option.label);
+            return (
+              <Link
+                key={`mobile-avatar-${option.userId}-${option.tenantId ?? "self"}`}
+                href={buildRechnungenHref({
+                  qRaw,
+                  filter: currentFilter,
+                  practitioner: String(option.tenantId ?? "all"),
+                })}
+                className="flex items-center justify-between rounded-2xl border px-3 py-3 text-left"
+                style={{
+                  borderColor: selected ? `${ringColor}66` : "rgba(255,255,255,0.10)",
+                  backgroundColor: selected ? `${ringColor}22` : "rgba(255,255,255,0.04)",
+                }}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <span
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 bg-[#111216] text-sm font-extrabold text-white"
+                    style={{ borderColor: option.tenantId === "all" ? "rgba(255,255,255,0.55)" : ringColor }}
+                  >
+                    {option.tenantId === "all" ? (
+                      <span className="flex h-full w-full items-center justify-center rounded-full bg-white text-black">Alle</span>
+                    ) : option.imageUrl ? (
+                      <img src={option.imageUrl} alt={option.label} className="h-full w-full object-cover" />
+                    ) : (
+                      option.initials
+                    )}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-white">{option.tenantId === "all" ? "Alle" : firstNameLabel(option.label, "Behandler")}</div>
+                    <div className="truncate text-xs text-white/50">{option.tenantId === "all" ? "Alle Behandler" : option.label}</div>
+                  </div>
+                </div>
+                {selected ? <span className="pl-3 text-xs font-semibold text-[var(--primary)]">Aktiv</span> : null}
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}
+
 
 export default async function RechnungenPage({
   searchParams,
@@ -942,134 +1175,176 @@ export default async function RechnungenPage({
                     Clientique Backoffice
                   </div>
                   <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">
-                    Rechnungen / Abrechnung
+                    Rechnungen
                   </h1>
-
-                  <div className="mt-4 hidden items-center gap-2 md:flex md:flex-wrap">
-                    {[
-                      ["all", "Alle", countTotal],
-                      ["today", "Heute", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, todayStart, tomorrowStart)).length],
-                      ["week", "Woche", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, weekStart, weekEnd)).length],
-                      ["month", "Monat", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, monthStart, nextMonthStart)).length],
-                      ["open", "Offen", openCount],
-                      ["error", "Fehler", errorCount],
-                    ].map(([key, label, count]) => {
-                      const active = currentFilter === key;
-                      const params = new URLSearchParams();
-                      if (qRaw) params.set("q", qRaw);
-                      if (practitionerFilter !== "all") params.set("practitioner", practitionerFilter);
-                      if (key !== "all") params.set("filter", String(key));
-                      const href = `/rechnungen${params.toString() ? `?${params.toString()}` : ""}`;
-                      return (
-                        <Link key={String(key)} href={href} className={statusLinkClass(active)}>
-                          <span>{label}</span>
-                          <span className={statusCountClass(active)}>{count}</span>
-                        </Link>
-                      );
-                    })}
-                  </div>
                 </div>
 
-                <div className="w-full xl:w-auto xl:max-w-[620px] xl:min-w-[420px] xl:shrink-0">
-                  <div className="hidden md:flex md:justify-end">
-                    <div className="max-w-full overflow-x-auto">
-                      <div className="min-w-max">
-                        <div className="flex items-start gap-3">
-                          {avatarOptions.map((option, index) => {
-                            const active = String(option.tenantId ?? "all") === practitionerFilter;
-                            const params = new URLSearchParams();
-                            if (qRaw) params.set("q", qRaw);
-                            if (currentFilter !== "all") params.set("filter", currentFilter);
-                            if ((option.tenantId ?? "all") !== "all") params.set("practitioner", String(option.tenantId));
-                            const href = `/rechnungen${params.toString() ? `?${params.toString()}` : ""}`;
-                            const ringColors = ["rgba(255,255,255,0.55)", "#3b82f6", "#a855f7", "#22c55e", "#f97316"];
-                            const ringColor = option.tenantId === "all" ? "rgba(255,255,255,0.55)" : ringColors[index % ringColors.length];
-                            return (
-                              <Link key={`${option.userId}-${option.tenantId ?? "self"}`} href={href} className="flex flex-col items-center gap-2">
-                                <span
-                                  className="inline-flex h-[12px] w-[12px] items-center justify-center overflow-hidden rounded-full border-2 bg-black/30"
-                                  style={{
-                                    borderColor: active ? ringColor : "rgba(255,255,255,0.22)",
-                                    boxShadow: active ? `0 0 0 2px ${ringColor}40` : "none",
-                                  }}
-                                >
-                                  {option.tenantId === "all" ? (
-                                    <span className="text-base font-black text-black rounded-full bg-white h-full w-full flex items-center justify-center">Alle</span>
-                                  ) : (
-                                    <img src={option.imageUrl} alt={option.label} className="h-full w-full object-cover" />
-                                  )}
-                                </span>
-                                <span className={`inline-flex h-9 items-center rounded-full border px-3 text-sm font-semibold transition ${active ? "border-white bg-white text-black" : "border-white/10 bg-black/20 text-white hover:bg-white/10"}`}>
-                                  {option.label}
-                                </span>
-                              </Link>
-                            );
-                          })}
-                        </div>
+                <div className="hidden md:flex md:justify-end md:pt-3 xl:min-w-[430px] xl:pl-10 xl:pt-4">
+                  <div className="max-w-full overflow-x-auto">
+                    <div className="min-w-max">
+                      <div className="flex flex-nowrap items-start gap-5">
+                        {avatarOptions.map((option) => {
+                          const active = String(option.tenantId ?? "all") === practitionerFilter;
+                          const ringColor = option.tenantId === "all" ? "rgba(255,255,255,0.55)" : avatarRingColor(option.label);
+                          const chipLabel = option.tenantId === "all" ? "Alle" : firstNameLabel(option.label, "Behandler");
+                          return (
+                            <Link
+                              key={`${option.userId}-${option.tenantId ?? "self"}`}
+                              href={buildRechnungenHref({
+                                qRaw,
+                                filter: currentFilter,
+                                practitioner: String(option.tenantId ?? "all"),
+                                appointmentId,
+                                salesOrder: salesOrderId,
+                                payment: paymentId,
+                                receipt: receiptId,
+                              })}
+                              className="inline-flex shrink-0 flex-col items-center gap-2"
+                              title={option.label}
+                            >
+                              <span
+                                className="relative overflow-hidden rounded-full"
+                                style={{
+                                  width: 56,
+                                  height: 56,
+                                  border: option.tenantId === "all" ? "4px solid rgba(255,255,255,0.55)" : `4px solid ${ringColor}`,
+                                  boxShadow: active
+                                    ? `0 12px 26px rgba(0,0,0,0.32), 0 0 0 2px ${ringColor}33`
+                                    : "0 12px 26px rgba(0,0,0,0.32)",
+                                  background: option.tenantId === "all" ? "rgba(255,255,255,0.96)" : "rgba(255,255,255,0.04)",
+                                }}
+                              >
+                                {option.tenantId === "all" ? (
+                                  <span className="flex h-full w-full items-center justify-center text-sm font-extrabold text-black">
+                                    Alle
+                                  </span>
+                                ) : option.imageUrl ? (
+                                  <img src={option.imageUrl} alt={option.label} className="h-full w-full object-cover" />
+                                ) : (
+                                  <span className="flex h-full w-full items-center justify-center text-[13px] font-extrabold text-white/90">
+                                    {option.initials}
+                                  </span>
+                                )}
+
+                                {option.tenantId !== "all" ? (
+                                  <span
+                                    style={{
+                                      position: "absolute",
+                                      right: 3,
+                                      bottom: 3,
+                                      width: 10,
+                                      height: 10,
+                                      borderRadius: 999,
+                                      backgroundColor: ringColor,
+                                      boxShadow: "0 0 0 2px rgba(0,0,0,0.65)",
+                                    }}
+                                  />
+                                ) : null}
+                              </span>
+
+                              <span
+                                className={`px-3 py-1.5 rounded-full text-sm font-semibold ${
+                                  active
+                                    ? "border border-white bg-white text-black"
+                                    : "border border-white/10 bg-black/25 text-white/90"
+                                }`}
+                                style={{ backdropFilter: "blur(8px)", lineHeight: 1 }}
+                              >
+                                {chipLabel}
+                              </span>
+                            </Link>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
 
+              <div className="mt-4 hidden items-center gap-2 md:flex md:flex-wrap xl:mt-6">
+                {[
+                  ["all", "Alle", countTotal],
+                  ["today", "Heute", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, todayStart, tomorrowStart)).length],
+                  ["week", "Woche", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, weekStart, weekEnd)).length],
+                  ["month", "Monat", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, monthStart, nextMonthStart)).length],
+                  ["open", "Offen", openCount],
+                  ["error", "Fehler", errorCount],
+                ].map(([key, label, count]) => {
+                  const active = currentFilter === key;
+                  return (
+                    <Link
+                      key={String(key)}
+                      href={buildRechnungenHref({
+                        qRaw,
+                        filter: String(key),
+                        practitioner: practitionerFilter,
+                        appointmentId,
+                        salesOrder: salesOrderId,
+                        payment: paymentId,
+                        receipt: receiptId,
+                      })}
+                      className={statusLinkClass(active)}
+                    >
+                      <span>{label}</span>
+                      <span className={statusCountClass(active)}>{count}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+
+              <div className="md:hidden flex items-center justify-between gap-3">
+                <MobileReceiptFilterMenu
+                  qRaw={qRaw}
+                  currentFilter={currentFilter}
+                  practitionerFilter={practitionerFilter}
+                  counts={{
+                    all: countTotal,
+                    today: filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, todayStart, tomorrowStart)).length,
+                    week: filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, weekStart, weekEnd)).length,
+                    month: filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, monthStart, nextMonthStart)).length,
+                    open: openCount,
+                    error: errorCount,
+                  }}
+                />
+
+                <Link
+                  href="/calendar"
+                  aria-label="Abrechnung starten"
+                  className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border md:hidden"
+                  style={{
+                    color: "#0b0b0c",
+                    background: "linear-gradient(180deg, rgba(214,195,163,0.96) 0%, rgba(214,195,163,0.88) 100%)",
+                    borderColor: "rgba(214,195,163,0.28)",
+                    boxShadow: "0 12px 28px rgba(214,195,163,0.22), 0 0 0 2px rgba(11,11,12,0.95)",
+                  }}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-[18px] w-[18px]"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 5v14" />
+                    <path d="M5 12h14" />
+                  </svg>
+                </Link>
+
+                <MobileReceiptAvatarMenu
+                  avatarOptions={avatarOptions}
+                  practitionerFilter={practitionerFilter}
+                  qRaw={qRaw}
+                  currentFilter={currentFilter}
+                />
+              </div>
+
               <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                <div className="flex items-center gap-3 md:hidden">
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      ["all", "Alle", countTotal],
-                      ["today", "Heute", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, todayStart, tomorrowStart)).length],
-                      ["week", "Woche", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, weekStart, weekEnd)).length],
-                      ["month", "Monat", filteredItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, monthStart, nextMonthStart)).length],
-                      ["open", "Offen", openCount],
-                      ["error", "Fehler", errorCount],
-                    ].map(([key, label, count]) => {
-                      const active = currentFilter === key;
-                      const params = new URLSearchParams();
-                      if (qRaw) params.set("q", qRaw);
-                      if (practitionerFilter !== "all") params.set("practitioner", practitionerFilter);
-                      if (key !== "all") params.set("filter", String(key));
-                      const href = `/rechnungen${params.toString() ? `?${params.toString()}` : ""}`;
-                      return (
-                        <Link key={`mobile-${String(key)}`} href={href} className={statusLinkClass(active)}>
-                          <span>{label}</span>
-                          <span className={statusCountClass(active)}>{count}</span>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="md:hidden overflow-x-auto">
-                  <div className="flex min-w-max items-start gap-3 pb-1">
-                    {avatarOptions.map((option, index) => {
-                      const active = String(option.tenantId ?? "all") === practitionerFilter;
-                      const params = new URLSearchParams();
-                      if (qRaw) params.set("q", qRaw);
-                      if (currentFilter !== "all") params.set("filter", currentFilter);
-                      if ((option.tenantId ?? "all") !== "all") params.set("practitioner", String(option.tenantId));
-                      const href = `/rechnungen${params.toString() ? `?${params.toString()}` : ""}`;
-                      const ringColors = ["rgba(255,255,255,0.55)", "#3b82f6", "#a855f7", "#22c55e", "#f97316"];
-                      const ringColor = option.tenantId === "all" ? "rgba(255,255,255,0.55)" : ringColors[index % ringColors.length];
-                      return (
-                        <Link key={`mobile-${option.userId}-${option.tenantId ?? "self"}`} href={href} className="flex flex-col items-center gap-2">
-                          <span className="inline-flex h-[12px] w-[12px] items-center justify-center overflow-hidden rounded-full border-2 bg-black/30" style={{ borderColor: active ? ringColor : "rgba(255,255,255,0.22)", boxShadow: active ? `0 0 0 2px ${ringColor}40` : "none" }}>
-                            {option.tenantId === "all" ? (
-                              <span className="text-sm font-black text-black rounded-full bg-white h-full w-full flex items-center justify-center">Alle</span>
-                            ) : (
-                              <img src={option.imageUrl} alt={option.label} className="h-full w-full object-cover" />
-                            )}
-                          </span>
-                          <span className={`inline-flex h-9 items-center rounded-full border px-3 text-sm font-semibold transition ${active ? "border-white bg-white text-black" : "border-white/10 bg-black/20 text-white hover:bg-white/10"}`}>
-                            {option.label}
-                          </span>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="flex w-full items-center gap-3 xl:max-w-[620px]">
-                  <form action="/rechnungen" method="get" className="w-full">
+                <div className="hidden md:block" />
+                <div className="flex w-full items-center gap-4 md:flex-nowrap">
+                  <form action="/rechnungen" method="get" className="min-w-0 flex-1">
                     {currentFilter !== "all" ? <input type="hidden" name="filter" value={currentFilter} /> : null}
                     {practitionerFilter !== "all" ? <input type="hidden" name="practitioner" value={practitionerFilter} /> : null}
                     <div className="flex h-11 items-center rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
@@ -1089,13 +1364,10 @@ export default async function RechnungenPage({
                     </div>
                   </form>
 
-                  <Link href="/calendar" className="hidden h-11 shrink-0 items-center rounded-[16px] border border-emerald-500/30 bg-emerald-600/90 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500 xl:inline-flex">
-                    + Abrechnen
-                  </Link>
-                </div>
-
-                <div className="xl:hidden flex justify-end">
-                  <Link href="/calendar" className="inline-flex h-11 shrink-0 items-center rounded-[16px] border border-emerald-500/30 bg-emerald-600/90 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500">
+                  <Link
+                    href="/calendar"
+                    className="hidden h-11 min-w-[148px] shrink-0 items-center justify-center rounded-[16px] border border-emerald-500/30 bg-emerald-600/90 px-4 text-sm font-semibold text-white transition hover:bg-emerald-500 md:inline-flex"
+                  >
                     + Abrechnen
                   </Link>
                 </div>
