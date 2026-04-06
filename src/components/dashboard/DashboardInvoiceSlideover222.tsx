@@ -76,7 +76,7 @@ function SubmitButton({ disabled }: { disabled: boolean }) {
       disabled={disabled || pending}
       className="inline-flex h-12 w-full items-center justify-center rounded-[16px] bg-[var(--primary)] px-4 text-base font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
     >
-      {pending ? "Rechnung wird erstellt..." : "Rechnung erstellen"}
+      {pending ? "Rechnung wird erstellt..." : "Rechnung direkt erstellen"}
     </button>
   );
 }
@@ -304,7 +304,7 @@ export default function DashboardInvoiceSlideover({
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.58)" }}>Rechnungen</div>
             <div style={{ fontSize: 18, fontWeight: 800, color: "white" }}>Neue Rechnung</div>
             <div style={{ marginTop: 6, fontSize: 13, color: "rgba(255,255,255,0.46)" }}>
-              Sales Order, Payment und Fiskalbeleg werden direkt erzeugt.
+              Schneller Zugriff direkt aus dem Dashboard.
             </div>
           </div>
 
@@ -334,8 +334,19 @@ export default function DashboardInvoiceSlideover({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3">
+                <div className="rounded-[16px] border border-emerald-400/15 bg-emerald-400/10 px-4 py-2.5 text-xs text-emerald-50/90">
+                  Sales Order, Payment und Fiskalbeleg werden direkt erzeugt.
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
                   <SubmitButton disabled={!isValid} />
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/10 bg-white/[0.03] px-4 text-base font-semibold text-white transition hover:bg-white/[0.06]"
+                  >
+                    Abbrechen
+                  </button>
                 </div>
               </div>
             </div>

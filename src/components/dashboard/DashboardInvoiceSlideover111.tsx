@@ -46,28 +46,6 @@ function normalizeSearch(value: string) {
     .trim();
 }
 
-
-
-function CustomerPickIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-[18px] w-[18px]"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
-      <circle cx="9.5" cy="7" r="4" />
-      <path d="M19 8v6" />
-      <path d="M16 11h6" />
-    </svg>
-  );
-}
-
 function SubmitButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
   return (
@@ -317,7 +295,7 @@ export default function DashboardInvoiceSlideover({
           </button>
         </div>
 
-        <form action={createDashboardInvoice} className="hide-scrollbar" style={{ padding: 16, overflow: "auto", scrollbarWidth: "none", msOverflowStyle: "none" }}>
+        <form action={createDashboardInvoice} style={{ padding: 16, overflow: "auto" }}>
           <div className="space-y-4">
             <div className="sticky top-0 z-20 -mx-4 -mt-4 mb-4 border-b border-white/10 bg-[linear-gradient(180deg,rgba(16,16,16,0.98),rgba(12,12,12,0.96))] px-4 pb-4 pt-3 backdrop-blur-xl">
               <div className="grid gap-3">
@@ -334,8 +312,16 @@ export default function DashboardInvoiceSlideover({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3">
+
+                <div className="grid grid-cols-2 gap-3">
                   <SubmitButton disabled={!isValid} />
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/10 bg-white/[0.03] px-4 text-base font-semibold text-white transition hover:bg-white/[0.06]"
+                  >
+                    Abbrechen
+                  </button>
                 </div>
               </div>
             </div>
@@ -372,10 +358,9 @@ export default function DashboardInvoiceSlideover({
               <button
                 type="button"
                 onClick={() => setPickerOpen((open) => !open)}
-                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[16px] border border-[var(--primary)]/30 bg-[linear-gradient(180deg,rgba(214,195,163,0.14),rgba(214,195,163,0.08))] px-4 text-base font-semibold text-white shadow-[0_8px_24px_rgba(214,195,163,0.10)] transition hover:border-[var(--primary)]/45 hover:bg-[linear-gradient(180deg,rgba(214,195,163,0.18),rgba(214,195,163,0.10))]"
+                className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/10 bg-white/[0.03] px-4 text-base font-semibold text-white transition hover:bg-white/[0.06]"
               >
-                <CustomerPickIcon />
-                <span>{selectedCustomerId ? "Kundenwahl ändern" : "Kunde auswählen"}</span>
+                {selectedCustomerId ? "Kundenwahl ändern" : "Kunde auswählen"}
               </button>
 
               {selectedCustomerId ? (
@@ -401,7 +386,7 @@ export default function DashboardInvoiceSlideover({
                     className="h-11 w-full rounded-[14px] border border-white/10 bg-black/30 px-4 text-sm text-white placeholder:text-white/30 outline-none"
                   />
 
-                  <div className="hide-scrollbar mt-3 max-h-64 overflow-auto space-y-1">
+                  <div className="mt-3 max-h-64 overflow-auto space-y-1">
                     {customerMatches.length > 0 ? (
                       customerMatches.map((customer) => renderCustomerButton(customer))
                     ) : (
@@ -541,13 +526,6 @@ export default function DashboardInvoiceSlideover({
           </div>
         </form>
       </div>
-
-      <style jsx global>{`
-        .hide-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-      `}</style>
-
     </div>,
     document.body
   );
