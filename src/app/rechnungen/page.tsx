@@ -174,6 +174,7 @@ type AvatarFilterOption = {
   label: string;
   imageUrl: string;
   initials: string;
+  filterKey: string;
 };
 
 
@@ -228,6 +229,16 @@ function avatarRingColor(label: string | null | undefined) {
 function firstNameLabel(label: string | null | undefined, fallback = "Behandler") {
   const value = String(label ?? "").trim() || fallback;
   return value.split(/\s+/)[0] || fallback;
+}
+
+function normalizePractitionerKey(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized) return "";
+  if (normalized.includes("radu")) return "radu";
+  if (normalized.includes("raluca")) return "raluca";
+  if (normalized.includes("alexandra")) return "alexandra";
+  if (normalized.includes("barbara")) return "barbara";
+  return normalized.replace(/\s+/g, "-");
 }
 
 function customerBadgeClass(value: string | null | undefined) {
@@ -632,7 +643,7 @@ function MobileReceiptAvatarMenu({
   currentFilter: string;
 }) {
   const activeOption =
-    avatarOptions.find((option) => String(option.tenantId ?? "all") === practitionerFilter) ??
+    avatarOptions.find((option) => option.filterKey === practitionerFilter) ??
     avatarOptions[0] ??
     null;
 
@@ -680,7 +691,7 @@ function MobileReceiptAvatarMenu({
         </div>
         <div className="grid gap-2">
           {avatarOptions.map((option) => {
-            const selected = String(option.tenantId ?? "all") === practitionerFilter;
+            const selected = option.filterKey === practitionerFilter;
             const ringColor = option.tenantId === "all" ? "rgba(255,255,255,0.55)" : avatarRingColor(option.label);
             return (
               <Link
@@ -688,7 +699,7 @@ function MobileReceiptAvatarMenu({
                 href={buildRechnungenHref({
                   qRaw,
                   filter: currentFilter,
-                  practitioner: String(option.tenantId ?? "all"),
+                  practitioner: option.filterKey,
                 })}
                 className="flex items-center justify-between rounded-2xl border px-3 py-3 text-left"
                 style={{
@@ -793,6 +804,7 @@ export default async function RechnungenPage({
         label: "Alle",
         imageUrl: "",
         initials: "AL",
+        filterKey: "all",
       },
       ...((practitionerRows ?? []) as Array<{
         user_id: string | null;
@@ -813,6 +825,7 @@ export default async function RechnungenPage({
             label,
             imageUrl: `/users/${row.user_id}.png`,
             initials: initialsFromName(label, "BE"),
+            filterKey: normalizePractitionerKey(label),
           } satisfies AvatarFilterOption;
         }),
     ];
@@ -825,6 +838,7 @@ export default async function RechnungenPage({
         label: String(profile?.full_name ?? "Mein Bereich").trim() || "Mein Bereich",
         imageUrl: `/users/${user.id}.png`,
         initials: initialsFromName(String(profile?.full_name ?? "Mein Bereich")),
+        filterKey: normalizePractitionerKey(String(profile?.full_name ?? "Mein Bereich")),
       },
     ];
   }
@@ -955,7 +969,7 @@ export default async function RechnungenPage({
     .order("created_at", { ascending: false })
     .limit(q ? 300 : 150);
 
-  if (effectiveTenantId) receiptsQuery = receiptsQuery.eq("tenant_id", effectiveTenantId);
+  if (!isAdmin && effectiveTenantId) receiptsQuery = receiptsQuery.eq("tenant_id", effectiveTenantId);
     const sanitizedQuery = escapeIlikeValue(qRaw);
   if (sanitizedQuery) {
     const orParts = [
@@ -1011,7 +1025,7 @@ export default async function RechnungenPage({
       .select(`id, fiscal_receipt_id, event_type, event_timestamp, performed_by, notes, reference_data, created_at`)
       .in("fiscal_receipt_id", receiptIds)
       .order("event_timestamp", { ascending: false });
-    if (effectiveTenantId) eventsQuery = eventsQuery.eq("tenant_id", effectiveTenantId);
+    if (!isAdmin && effectiveTenantId) eventsQuery = eventsQuery.eq("tenant_id", effectiveTenantId);
     const { data: eventsRaw } = await eventsQuery;
     events = (eventsRaw ?? []) as FiscalEventRow[];
   }
@@ -1075,7 +1089,9 @@ export default async function RechnungenPage({
         ["tenant_display_name"],
         ["tenant_name"],
         ["tenant", "display_name"],
-      ]) || null;
+      ]) ||
+      tenantNameById.get(String(row.tenant_id ?? "").trim()) ||
+      null;
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -1132,8 +1148,9 @@ export default async function RechnungenPage({
   const filteredItems = items.filter((item) => {
     const issued = item.issuedAt ?? item.createdAt;
     const businessState = getReceiptBusinessState(item);
+    const itemPractitionerKey = normalizePractitionerKey(item.providerName);
 
-    if (practitionerFilter !== "all" && String(item.tenantId ?? "").trim() !== practitionerFilter) {
+    if (practitionerFilter !== "all" && itemPractitionerKey !== practitionerFilter) {
       return false;
     }
 
@@ -1146,7 +1163,9 @@ export default async function RechnungenPage({
   });
 
   const scopedItems = items.filter((item) =>
-    practitionerFilter === "all" ? true : String(item.tenantId ?? "").trim() === practitionerFilter
+    practitionerFilter === "all"
+      ? true
+      : normalizePractitionerKey(item.providerName) === practitionerFilter
   );
 
   const countTotal = filteredItems.length;
@@ -1328,7 +1347,7 @@ export default async function RechnungenPage({
                   <div className="mt-5 overflow-x-auto pb-1">
                     <div className="flex min-w-max flex-nowrap items-start gap-4">
                       {avatarOptions.map((option) => {
-                        const active = String(option.tenantId ?? "all") === practitionerFilter;
+                        const active = option.filterKey === practitionerFilter;
                         const ringColor = option.tenantId === "all" ? "rgba(255,255,255,0.55)" : avatarRingColor(option.label);
                         const chipLabel = option.tenantId === "all" ? "Alle" : firstNameLabel(option.label, "Behandler");
                         return (
@@ -1337,7 +1356,7 @@ export default async function RechnungenPage({
                             href={buildRechnungenHref({
                               qRaw,
                               filter: currentFilter,
-                              practitioner: String(option.tenantId ?? "all"),
+                              practitioner: option.filterKey,
                               appointmentId,
                               salesOrder: salesOrderId,
                               payment: paymentId,
