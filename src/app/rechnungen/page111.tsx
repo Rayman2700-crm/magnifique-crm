@@ -243,44 +243,6 @@ function customerBadgeClass(value: string | null | undefined) {
   return palette[hash % palette.length] ?? palette[0];
 }
 
-
-function providerBadgeMeta(value: string | null | undefined) {
-  const normalized = String(value ?? "").trim().toLowerCase();
-
-  if (normalized.includes("radu")) {
-    return {
-      initials: "RC",
-      className: "border-blue-500/30 bg-blue-500/15 text-blue-100",
-    };
-  }
-
-  if (normalized.includes("raluca")) {
-    return {
-      initials: "RC",
-      className: "border-violet-500/30 bg-violet-500/15 text-violet-100",
-    };
-  }
-
-  if (normalized.includes("alexandra")) {
-    return {
-      initials: "AS",
-      className: "border-emerald-500/30 bg-emerald-500/15 text-emerald-100",
-    };
-  }
-
-  if (normalized.includes("barbara")) {
-    return {
-      initials: "BE",
-      className: "border-amber-500/30 bg-amber-500/15 text-amber-100",
-    };
-  }
-
-  return {
-    initials: initialsFromName(value, "BE"),
-    className: "border-white/15 bg-white/10 text-white/90",
-  };
-}
-
 function eventBadgeTone(value: string | null | undefined, referenceData?: Record<string, unknown> | null) {
   const normalized = String(value ?? "").toUpperCase();
   const auditAction = String(referenceData?.audit_action ?? "").trim().toLowerCase();
@@ -1732,7 +1694,8 @@ export default async function RechnungenPage({
                         const latestEventLabel = formatEventLabel(item.latestEventType, item.events[0]?.referenceData ?? null);
                         const latestEventTone = eventBadgeTone(item.latestEventType, item.events[0]?.referenceData ?? null);
                         const customerName = item.customerName?.trim() || "Unbekannt";
-                        const providerBadge = providerBadgeMeta(item.providerName);
+                        const customerInitials = initialsFromName(customerName, "KU");
+                        const customerBadge = customerBadgeClass(customerName);
                         const detailParams = new URLSearchParams();
                         if (qRaw) detailParams.set("q", qRaw);
                         if (currentFilter !== "all") detailParams.set("filter", currentFilter);
@@ -1745,8 +1708,8 @@ export default async function RechnungenPage({
                             </td>
                             <td className="px-6 py-4 align-middle">
                               <div className="flex items-center gap-4">
-                                <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${providerBadge.className}`}>
-                                  {providerBadge.initials}
+                                <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${customerBadge}`}>
+                                  {customerInitials}
                                 </span>
                                 <span className="truncate font-semibold text-white">{customerName}</span>
                               </div>
