@@ -1345,7 +1345,7 @@ export default async function RechnungenPage({
                   </h1>
 
                   <div className="mt-5 pb-1">
-                    <div className="flex flex-wrap items-start gap-5">
+                    <div className="flex flex-wrap items-start gap-4">
                       {avatarOptions.map((option) => {
                         const active = option.filterKey === practitionerFilter;
                         const ringColor = option.tenantId === "all" ? "rgba(255,255,255,0.55)" : avatarRingColor(option.label);
@@ -1418,7 +1418,7 @@ export default async function RechnungenPage({
                   </div>
                 </div>
 
-                <div className="flex w-full flex-col gap-3 xl:pt-1">
+                <div className="flex w-full max-w-[640px] flex-col gap-3 sm:flex-row flex-col gap-3 xl:pt-1">
                   <div className="flex w-full flex-col gap-3 sm:flex-row">
                     <form action="/rechnungen" method="get" className="flex-1">
                       {currentFilter !== "all" ? <input type="hidden" name="filter" value={currentFilter} /> : null}
