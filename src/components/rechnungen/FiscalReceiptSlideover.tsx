@@ -1,10 +1,11 @@
+
 "use client";
 
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { updateFiscalReceiptDetails } from "@/app/rechnungen/actions";
+import { cancelFiscalReceiptMvp, updateFiscalReceiptDetails } from "@/app/rechnungen/actions";
 
 type SlideoverEvent = {
   id: string;
@@ -57,6 +58,9 @@ type SlideoverReceipt = {
   providerAvatarUrl?: string | null;
   providerInitials?: string | null;
   availableServices?: ServiceOption[];
+  paymentMethodLabel?: string | null;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
 };
 
 type EditableLine = {
@@ -87,10 +91,12 @@ function formatDateTime(value: string | null | undefined) {
 
 function euroFromCents(value: number | null | undefined, currencyCode?: string | null) {
   if (typeof value !== "number" || Number.isNaN(value)) return "—";
-  return new Intl.NumberFormat("de-AT", {
+  const abs = Math.abs(value) / 100;
+  const formatted = new Intl.NumberFormat("de-AT", {
     style: "currency",
     currency: currencyCode || "EUR",
-  }).format(value / 100);
+  }).format(abs);
+  return value < 0 ? `-${formatted}` : formatted;
 }
 
 function moneyInputFromCents(value: number | null | undefined) {
@@ -127,20 +133,47 @@ function readFirstString(source: unknown, candidates: string[][]) {
   return "";
 }
 
-function formatEventLabel(value: string | null | undefined) {
+function formatReceiptStatus(
+  value: string | null | undefined,
+  options?: { isStornoReceipt?: boolean }
+) {
+  if (options?.isStornoReceipt) return "Stornobeleg";
   const normalized = String(value ?? "").toUpperCase();
-
   const labels: Record<string, string> = {
-    RECEIPT_CREATION_STARTED: "Belegerstellung gestartet",
-    STANDARD_RECEIPT_CREATED: "Beleg erstellt",
-    RECEIPT_VERIFICATION_SUCCEEDED: "Verifikation erfolgreich",
-    RECEIPT_CREATION_FAILED: "Belegerstellung fehlgeschlagen",
+    REQUESTED: "Angelegt",
+    CREATED: "Erstellt",
+    ISSUED: "Ausgestellt",
+    FAILED: "Fehlgeschlagen",
+    CANCELLED: "Storniert",
+    REVERSED: "Storniert",
+    VERIFIED: "Verifiziert",
   };
-
   return labels[normalized] ?? (normalized ? normalized.replaceAll("_", " ") : "—");
 }
 
-function badgeClass(value: string | null | undefined, kind: "signature" | "verification" | "event" = "event") {
+function isReceiptCancelled(value: string | null | undefined) {
+  const normalized = String(value ?? "").toUpperCase();
+  return normalized === "CANCELLED" || normalized === "REVERSED";
+}
+
+function isStornoReceiptType(value: string | null | undefined, verificationNotes?: string | null | undefined) {
+  const normalized = String(value ?? "").toUpperCase();
+  if (normalized === "REVERSAL") return true;
+  return String(verificationNotes ?? "").includes("Stornobeleg zu");
+}
+
+function parseStornoInfoFromNotes(value: string | null | undefined) {
+  const text = String(value ?? "").trim();
+  if (!text) return { originalReceiptNumber: "", stornoReceiptNumber: "" };
+  const originalMatch = text.match(/Stornobeleg zu\s+([A-Za-z0-9-]+)/i);
+  const stornoMatch = text.match(/Storniert durch Beleg\s+([A-Za-z0-9-]+)/i);
+  return {
+    originalReceiptNumber: originalMatch?.[1] ?? "",
+    stornoReceiptNumber: stornoMatch?.[1] ?? "",
+  };
+}
+
+function badgeClass(value: string | null | undefined, kind: "signature" | "verification" | "event" | "status" = "event") {
   const normalized = String(value ?? "").toUpperCase();
 
   if (kind === "verification") {
@@ -151,6 +184,13 @@ function badgeClass(value: string | null | undefined, kind: "signature" | "verif
   if (kind === "signature") {
     if (normalized === "SIMULATED" || normalized === "SIGNED") return "border-sky-400/20 bg-sky-400/10 text-sky-200";
     if (normalized === "PENDING") return "border-amber-400/20 bg-amber-400/10 text-amber-200";
+  }
+
+  if (kind === "status") {
+    if (normalized === "REQUESTED") return "border-amber-400/20 bg-amber-400/10 text-amber-100";
+    if (["CREATED", "ISSUED", "VERIFIED", "COMPLETED"].includes(normalized)) return "border-emerald-400/20 bg-emerald-400/10 text-emerald-200";
+    if (["REQUESTED", "PENDING"].includes(normalized)) return "border-amber-400/20 bg-amber-400/10 text-amber-100";
+    if (normalized.includes("FAIL") || normalized.includes("CANCEL") || normalized.includes("REVERSE")) return "border-red-400/20 bg-red-400/10 text-red-200";
   }
 
   if (normalized.includes("FAIL")) return "border-red-400/20 bg-red-400/10 text-red-200";
@@ -179,6 +219,29 @@ function computeLineTotal(quantityRaw: string, unitPriceRaw: string) {
   const unitPrice = parseMoneyInput(unitPriceRaw);
   const safeQuantity = Number.isFinite(quantity) && quantity > 0 ? quantity : 0;
   return safeQuantity * unitPrice;
+}
+
+
+function normalizePhoneForWhatsApp(value: string | null | undefined) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  let normalized = raw.replace(/[^\d+]/g, "");
+  if (normalized.startsWith("00")) normalized = `+${normalized.slice(2)}`;
+  if (normalized.startsWith("0")) normalized = `+43${normalized.slice(1)}`;
+  if (!normalized.startsWith("+")) normalized = `+${normalized}`;
+  return normalized.replace(/[^\d]/g, "");
+}
+
+function buildReceiptMailto(receiptNumber: string, providerName: string, paymentMethodLabel: string) {
+  const subject = encodeURIComponent(`Beleg ${receiptNumber} – ${providerName || "Magnifique CRM"}`);
+  const body = encodeURIComponent(
+    `Hallo,\n\nim Anhang bzw. zur Ansicht dein Beleg ${receiptNumber}.\nZahlungsart: ${paymentMethodLabel || "—"}\n\nLiebe Grüße\n${providerName || "Magnifique CRM"}`
+  );
+  return `?subject=${subject}&body=${body}`;
+}
+
+function buildReceiptWhatsAppText(receiptNumber: string, providerName: string, amountLabel: string) {
+  return `Hallo, hier ist dein Beleg ${receiptNumber}${amountLabel && amountLabel !== "—" ? ` über ${amountLabel}` : ""}.\n\nLiebe Grüße\n${providerName || "Magnifique CRM"}`;
 }
 
 function buildEditableLines(payloadLines: Record<string, unknown>[]) {
@@ -210,7 +273,12 @@ function buildEditableLines(payloadLines: Record<string, unknown>[]) {
     return {
       sourceLineId: String(line.source_line_id ?? "").trim() || null,
       serviceId: String(line.reference_id ?? "").trim() || null,
-      lineType: String(line.line_type ?? (String(line.reference_id ?? "").trim() ? "SERVICE" : "ITEM")).trim().toUpperCase() === "SERVICE" ? "SERVICE" : "ITEM",
+      lineType:
+        String(line.line_type ?? (String(line.reference_id ?? "").trim() ? "SERVICE" : "ITEM"))
+          .trim()
+          .toUpperCase() === "SERVICE"
+          ? "SERVICE"
+          : "ITEM",
       taxRate: Number(line.tax_rate ?? 20) || 20,
       name: String(line.name ?? ""),
       quantity: Number.isFinite(quantity) && quantity > 0 ? String(quantity) : "1",
@@ -221,10 +289,18 @@ function buildEditableLines(payloadLines: Record<string, unknown>[]) {
   });
 }
 
-function InfoCard({ title, children }: { title: string; children: React.ReactNode }) {
+function InfoCard({
+  title,
+  children,
+  printKeepTogether = false,
+}: {
+  title: string;
+  children: React.ReactNode;
+  printKeepTogether?: boolean;
+}) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
-      <div className="text-base font-semibold text-white">{title}</div>
+    <div className={`rounded-3xl border border-white/10 bg-white/[0.03] p-5 receipt-print-card ${printKeepTogether ? "print-keep-together" : ""}`}>
+      <div className="text-base font-semibold text-white print:text-black">{title}</div>
       <div className="mt-4">{children}</div>
     </div>
   );
@@ -235,11 +311,13 @@ function IconButton({
   title,
   children,
   hoverClassName,
+  className,
 }: {
   onClick?: () => void;
   title: string;
   children: React.ReactNode;
   hoverClassName?: string;
+  className?: string;
 }) {
   return (
     <button
@@ -247,9 +325,21 @@ function IconButton({
       onClick={onClick}
       aria-label={title}
       title={title}
-      className={`inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white transition-colors ${hoverClassName ?? "hover:bg-white/10"}`}
+      className={`inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 transition-colors ${hoverClassName ?? "hover:bg-white/10"} ${className ?? ""}`}
     >
       {children}
+    </button>
+  );
+}
+
+function HeaderActionButton({ label, disabled = false }: { label: string; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-white/5"
+    >
+      {label}
     </button>
   );
 }
@@ -342,7 +432,31 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
     ]) ||
     "—";
 
+  const paymentMethodLabel =
+    selected?.paymentMethodLabel?.trim() ||
+    readFirstString(payloadJson, [
+      ["payment_method"],
+      ["payment_method_name"],
+      ["payment", "method_name"],
+      ["payment", "method"],
+      ["payment", "payment_method_name"],
+    ]) || "—";
+
+  const issuedAtLabel = selected ? (selected.issuedAt ? formatDateTime(selected.issuedAt) : formatDateTime(selected.createdAt)) : "—";
   const serviceOptions = selected?.availableServices ?? [];
+  const customerEmail = selected?.customerEmail?.trim() || "";
+  const customerPhone = selected?.customerPhone?.trim() || "";
+  const mailtoHref = customerEmail && selected ? `mailto:${customerEmail}${buildReceiptMailto(selected.receiptNumber, providerName, paymentMethodLabel)}` : "";
+  const whatsappNumber = normalizePhoneForWhatsApp(customerPhone);
+  const whatsappHref = whatsappNumber && selected
+    ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(buildReceiptWhatsAppText(selected.receiptNumber, providerName, euroFromCents(selected.turnoverValueCents, selected.currencyCode))) }`
+    : "";
+  const isStornoReceipt = isStornoReceiptType(selected?.receiptType, selected?.verificationNotes);
+  const isCancelled = isReceiptCancelled(selected?.status) || isStornoReceipt;
+  const stornoInfo = parseStornoInfoFromNotes(selected?.verificationNotes);
+  const statusLabel = formatReceiptStatus(selected?.status, { isStornoReceipt });
+  const receiptTypeLabel = isStornoReceipt ? "STORNOBELEG" : (selected?.receiptType || "—");
+  const paymentMethodDisplayLabel = isStornoReceipt ? "Storno / Gegenbeleg" : paymentMethodLabel;
 
   useEffect(() => {
     if (!selected) return;
@@ -352,7 +466,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
     setIsEditingLines(false);
     setShowProviderImage(true);
     customerSubmitArmedRef.current = false;
-  }, [selected?.id]);
+  }, [selected?.id, customerName, payloadLines]);
 
   const linesForSubmit = useMemo(() => {
     return linesDraft.map((line) => {
@@ -400,400 +514,373 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
   if (!mounted || !visible || !selected || typeof document === "undefined") return null;
 
   return createPortal(
-    <div style={{ position: "fixed", inset: 0, zIndex: 1350, isolation: "isolate" }}>
-      <div
-        onClick={close}
-        style={{
-          position: "absolute",
-          inset: 0,
-          backgroundColor: "rgba(0,0,0,0.60)",
-          backdropFilter: "blur(6px)",
-          opacity: shown ? 1 : 0,
-          transition: "opacity 200ms ease",
-          pointerEvents: shown ? "auto" : "none",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          right: 0,
-          height: "100%",
-          width: "min(860px, calc(100vw - 1rem))",
-          transform: shown ? "translateX(0)" : "translateX(24px)",
-          opacity: shown ? 1 : 0,
-          transition: "transform 220ms ease, opacity 220ms ease",
-          borderLeft: "1px solid rgba(255,255,255,0.08)",
-          background: "rgb(9,9,11)",
-          color: "white",
-          boxShadow: "-12px 0 40px rgba(0,0,0,0.45)",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <div className="border-b border-white/10 p-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="text-sm text-white/55">Rechnungen / Belegdetails</div>
-              <div className="text-2xl font-extrabold text-white">Beleg {selected.receiptNumber}</div>
-              <div className="mt-1 text-sm text-white/55">
-                {formatDateTime(selected.createdAt)} · {euroFromCents(selected.turnoverValueCents, selected.currencyCode)}
+    <>
+      <style jsx global>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 12mm;
+          }
+
+          html,
+          body {
+            background: #ffffff !important;
+            color: #111111 !important;
+            overflow: visible !important;
+          }
+
+          body * {
+            visibility: hidden;
+          }
+
+          .receipt-print-root,
+          .receipt-print-root * {
+            visibility: visible;
+          }
+
+          .receipt-print-root {
+            position: absolute !important;
+            inset: 0 !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            height: auto !important;
+            overflow: visible !important;
+            background: #ffffff !important;
+            color: #111111 !important;
+            box-shadow: none !important;
+            border: 0 !important;
+            transform: none !important;
+          }
+
+          .receipt-print-hide {
+            display: none !important;
+          }
+
+          .receipt-print-scroll {
+            overflow: visible !important;
+            padding: 0 !important;
+            height: auto !important;
+            flex: none !important;
+          }
+
+          .receipt-print-card,
+          .receipt-print-card * {
+            color: #111111 !important;
+          }
+
+          .receipt-print-card {
+            background: #ffffff !important;
+            border: 1px solid #d4d4d8 !important;
+            box-shadow: none !important;
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          .receipt-print-grid-card {
+            background: #ffffff !important;
+            border: 1px solid #d4d4d8 !important;
+          }
+
+          .print-text-muted {
+            color: #52525b !important;
+          }
+
+          .print-table thead {
+            background: #f4f4f5 !important;
+          }
+
+          .print-table th,
+          .print-table td {
+            color: #111111 !important;
+            border-color: #d4d4d8 !important;
+          }
+
+          .print-keep-together {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+        }
+      `}</style>
+
+      <div style={{ position: "fixed", inset: 0, zIndex: 1350, isolation: "isolate" }}>
+        <div
+          onClick={close}
+          className="receipt-print-hide"
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.60)",
+            backdropFilter: "blur(6px)",
+            opacity: shown ? 1 : 0,
+            transition: "opacity 200ms ease",
+            pointerEvents: shown ? "auto" : "none",
+          }}
+        />
+        <div
+          className="receipt-print-root"
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            height: "100%",
+            width: "min(590px, calc(100vw - 1rem))",
+            transform: shown ? "translateX(0)" : "translateX(24px)",
+            opacity: shown ? 1 : 0,
+            transition: "transform 220ms ease, opacity 220ms ease",
+            borderLeft: "1px solid rgba(255,255,255,0.08)",
+            background: "rgb(9,9,11)",
+            color: "white",
+            boxShadow: "-12px 0 40px rgba(0,0,0,0.45)",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <div className="border-b border-white/10 p-5 receipt-print-hide">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="text-sm text-white/55">Rechnungen / Belegdetails</div>
+                <div className="text-2xl font-extrabold text-white">Beleg {selected.receiptNumber}</div>
+                <div className="mt-1 text-sm text-white/55">
+                  {formatDateTime(selected.createdAt)} · {euroFromCents(selected.turnoverValueCents, selected.currencyCode)}
+                </div>
               </div>
 
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                <IconButton onClick={() => window.print()} title="Drucken / PDF" hoverClassName="hover:bg-white/10">
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M6 9V3h12v6" />
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                    <path d="M6 14h12v7H6z" />
+                    <path d="M6 18h12" />
+                  </svg>
+                </IconButton>
 
-            </div>
+                {mailtoHref && !isCancelled ? (
+                  <a href={mailtoHref} aria-label="E-Mail senden" title="E-Mail senden">
+                    <IconButton title="E-Mail senden" hoverClassName="hover:bg-white/10">
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M4 6h16v12H4z" />
+                        <path d="m4 8 8 6 8-6" />
+                      </svg>
+                    </IconButton>
+                  </a>
+                ) : (
+                  <IconButton title={isCancelled ? "Versand bei storniertem Beleg deaktiviert" : "Keine E-Mail hinterlegt"} className="cursor-not-allowed opacity-45" hoverClassName="hover:bg-white/5">
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M4 6h16v12H4z" />
+                      <path d="m4 8 8 6 8-6" />
+                    </svg>
+                  </IconButton>
+                )}
 
-            <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-              {selected.salesOrderId ? (
-                <Link href={`/rechnungen?${new URLSearchParams({ q: selected.salesOrderId }).toString()}`}>
+                {whatsappHref && !isCancelled ? (
+                  <a href={whatsappHref} target="_blank" rel="noreferrer" aria-label="WhatsApp senden" title="WhatsApp senden">
+                    <IconButton title="WhatsApp senden" hoverClassName="hover:bg-white/10">
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="#34d399" aria-hidden="true">
+                        <path d="M20.52 3.48A11.82 11.82 0 0 0 12.07 0C5.5 0 .16 5.34.16 11.92c0 2.1.55 4.15 1.59 5.96L0 24l6.32-1.66a11.86 11.86 0 0 0 5.75 1.47h.01c6.57 0 11.91-5.34 11.91-11.92 0-3.18-1.24-6.17-3.47-8.41Zm-8.45 18.3h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.75.98 1-3.66-.24-.38a9.9 9.9 0 0 1-1.52-5.21c0-5.46 4.45-9.91 9.92-9.91 2.65 0 5.14 1.03 7.01 2.9a9.84 9.84 0 0 1 2.9 7c0 5.47-4.45 9.92-9.92 9.92Zm5.44-7.42c-.3-.15-1.77-.88-2.04-.98-.27-.1-.47-.15-.66.15-.2.3-.76.98-.94 1.18-.17.2-.35.22-.64.08-.3-.15-1.25-.46-2.38-1.47-.88-.79-1.47-1.77-1.64-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.44-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.66-1.59-.91-2.18-.24-.58-.48-.5-.66-.5h-.56c-.2 0-.52.08-.8.37-.27.3-1.05 1.03-1.05 2.5s1.08 2.9 1.23 3.1c.15.2 2.12 3.24 5.14 4.54.72.31 1.28.5 1.72.64.72.23 1.38.2 1.9.12.58-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.12-.27-.2-.56-.35Z" />
+                      </svg>
+                    </IconButton>
+                  </a>
+                ) : (
+                  <IconButton title={isCancelled ? "Versand bei storniertem Beleg deaktiviert" : "Keine Telefonnummer hinterlegt"} className="cursor-not-allowed opacity-45" hoverClassName="hover:bg-white/5">
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="#34d399" aria-hidden="true">
+                      <path d="M20.52 3.48A11.82 11.82 0 0 0 12.07 0C5.5 0 .16 5.34.16 11.92c0 2.1.55 4.15 1.59 5.96L0 24l6.32-1.66a11.86 11.86 0 0 0 5.75 1.47h.01c6.57 0 11.91-5.34 11.91-11.92 0-3.18-1.24-6.17-3.47-8.41Zm-8.45 18.3h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.75.98 1-3.66-.24-.38a9.9 9.9 0 0 1-1.52-5.21c0-5.46 4.45-9.91 9.92-9.91 2.65 0 5.14 1.03 7.01 2.9a9.84 9.84 0 0 1 2.9 7c0 5.47-4.45 9.92-9.92 9.92Zm5.44-7.42c-.3-.15-1.77-.88-2.04-.98-.27-.1-.47-.15-.66.15-.2.3-.76.98-.94 1.18-.17.2-.35.22-.64.08-.3-.15-1.25-.46-2.38-1.47-.88-.79-1.47-1.77-1.64-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.44-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.66-1.59-.91-2.18-.24-.58-.48-.5-.66-.5h-.56c-.2 0-.52.08-.8.37-.27.3-1.05 1.03-1.05 2.5s1.08 2.9 1.23 3.1c.15.2 2.12 3.24 5.14 4.54.72.31 1.28.5 1.72.64.72.23 1.38.2 1.9.12.58-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.12-.27-.2-.56-.35Z" />
+                    </svg>
+                  </IconButton>
+                )}
+
+                <form
+                  action={cancelFiscalReceiptMvp}
+                  onSubmit={(event) => {
+                    if (isCancelled) {
+                      event.preventDefault();
+                      return;
+                    }
+                    const confirmed = window.confirm(`Beleg ${selected.receiptNumber} wirklich stornieren?`);
+                    if (!confirmed) event.preventDefault();
+                  }}
+                >
+                  <input type="hidden" name="receipt_id" value={selected.id} />
+                  <input type="hidden" name="return_query" value={currentQuery} />
                   <button
-                    type="button"
-                    className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                    type="submit"
+                    disabled={isCancelled}
+                    className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-red-500/15 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-white/5 disabled:hover:text-white"
+                    title={isStornoReceipt ? "Ein Stornobeleg kann nicht erneut storniert werden" : isCancelled ? "Beleg ist bereits storniert" : "Beleg stornieren"}
                   >
-                    Sales Order suchen
+                    {isStornoReceipt ? "Stornobeleg" : isCancelled ? "Storniert" : "Storno"}
                   </button>
-                </Link>
-              ) : null}
+                </form>
 
-              <IconButton onClick={() => window.print()} title="Drucken" hoverClassName="transition-colors hover:bg-emerald-400">
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M6 9V3h12v6" />
-                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                  <path d="M6 14h12v7H6z" />
-                  <path d="M6 18h12" />
-                </svg>
-              </IconButton>
-
-              <IconButton onClick={close} title="Schließen" hoverClassName="transition-colors hover:bg-red-600">
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
-                  <path d="M6 6l12 12M18 6L6 18" />
-                </svg>
-              </IconButton>
+                <IconButton onClick={close} title="Schließen" hoverClassName="hover:bg-red-600/90 hover:text-white">
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6L6 18" />
+                  </svg>
+                </IconButton>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex-1 overflow-y-auto p-5">
-          <div className="space-y-5">
-            <InfoCard title="Belegübersicht">
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40">Belegnummer</div>
-                  <div className="mt-2 text-lg font-bold text-white">{selected.receiptNumber}</div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40">Betrag</div>
-                  <div className="mt-2 text-lg font-bold text-white">{euroFromCents(selected.turnoverValueCents, selected.currencyCode)}</div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40">Datum</div>
-                  <div className="mt-2 text-sm font-semibold text-white">{formatDateTime(selected.createdAt)}</div>
-                </div>
-
-              </div>
-
-              <div className="mt-3 rounded-2xl border border-amber-400/15 bg-amber-400/10 px-4 py-3 text-sm text-amber-50/90">
-                Änderungen sind hier möglich. Für den finalen Live-Betrieb wäre es sauberer, Anpassungen vor der Fiskalisierung in der Sales Order zu machen.
-              </div>
-            </InfoCard>
-
-            <InfoCard title="Kunde">
-              <form
-                action={updateFiscalReceiptDetails}
-                className="space-y-4"
-                onSubmit={(event) => {
-                  if (!customerSubmitArmedRef.current) {
-                    event.preventDefault();
-                    return;
-                  }
-                  customerSubmitArmedRef.current = false;
-                }}
-              >
-                <input type="hidden" name="receipt_id" value={selected.id} />
-                <input type="hidden" name="return_query" value={currentQuery} />
-                <input type="hidden" name="provider_name" value={providerName} />
-                <input type="hidden" name="lines_json" value={serializedLines} />
-
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40">Kunde</div>
-                    {isEditingCustomer ? (
-                      <input
-                        autoFocus
-                        name="customer_name"
-                        value={customerDraft}
-                        onChange={(e) => setCustomerDraft(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") e.preventDefault();
-                        }}
-                        className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-base font-semibold text-white outline-none"
-                      />
-                    ) : (
-                      <>
-                        <input type="hidden" name="customer_name" value={customerDraft} />
-                        <div className="mt-2 text-lg font-bold text-white">{customerDraft || "Nicht hinterlegt"}</div>
-                      </>
-                    )}
+          <div className="flex-1 overflow-y-auto p-5 receipt-print-scroll">
+            <div className="mx-auto max-w-[760px] space-y-5">
+              <div className="hidden print:block">
+                <div className="flex items-start justify-between gap-6 border-b border-black/10 pb-4">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/60">Magnifique CRM</div>
+                    <div className="mt-2 text-3xl font-extrabold text-black">Beleg {selected.receiptNumber}</div>
+                    <div className="mt-2 text-sm text-black/65">{issuedAtLabel}</div>
                   </div>
+                  <div className="text-right text-sm text-black/75">
+                    <div className="font-semibold text-black">{providerName}</div>
+                    <div>Kunde: {customerDraft || customerName}</div>
+                    <div>Zahlungsart: {paymentMethodDisplayLabel}</div>
+                  </div>
+                </div>
+              </div>
 
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40">Firma / Behandler</div>
-                    <div className="mt-2 flex items-center justify-between gap-3">
-                      <div className="text-sm font-semibold text-white">{providerName}</div>
-                      <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/10 text-xs font-bold text-white/90">
-                        {selected.providerAvatarUrl && showProviderImage ? (
-                          <img
-                            src={selected.providerAvatarUrl}
-                            alt={providerName}
-                            className="h-full w-full object-cover"
-                            onError={() => setShowProviderImage(false)}
-                          />
-                        ) : (
-                          <span>{providerInitials(providerName, selected.providerInitials)}</span>
-                        )}
+              {isStornoReceipt ? (
+                <div className="rounded-3xl border border-red-500/25 bg-red-500/10 px-5 py-4 text-sm font-semibold text-red-100 print-keep-together">
+                  Dieser Beleg ist ein Stornobeleg{stornoInfo.originalReceiptNumber ? ` zu Beleg ${stornoInfo.originalReceiptNumber}` : ""}.
+                </div>
+              ) : isCancelled ? (
+                <div className="rounded-3xl border border-red-500/25 bg-red-500/10 px-5 py-4 text-sm font-semibold text-red-100 print-keep-together">
+                  Dieser Beleg ist storniert{stornoInfo.stornoReceiptNumber ? ` durch Beleg ${stornoInfo.stornoReceiptNumber}` : ""}.
+                </div>
+              ) : null}
+
+              <InfoCard title="Belegübersicht" printKeepTogether>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4 receipt-print-grid-card">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40 print-text-muted">Belegnummer</div>
+                    <div className="mt-2 text-lg font-bold text-white print:text-black">{selected.receiptNumber}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4 receipt-print-grid-card">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40 print-text-muted">Betrag</div>
+                    <div className="mt-2 text-lg font-bold text-white print:text-black whitespace-nowrap">{euroFromCents(selected.turnoverValueCents, selected.currencyCode)}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4 receipt-print-grid-card">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40 print-text-muted">Status</div>
+                    <div className="mt-2">
+                      <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeClass(selected.status, "status")}`}>
+                        {statusLabel}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4 receipt-print-grid-card">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40 print-text-muted">Zahlungsart</div>
+                    <div className="mt-2 text-sm font-semibold text-white print:text-black">{paymentMethodDisplayLabel}</div>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4 receipt-print-grid-card">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40 print-text-muted">Datum</div>
+                    <div className="mt-2 text-sm font-semibold text-white print:text-black">{issuedAtLabel}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4 receipt-print-grid-card">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40 print-text-muted">Receipt-Typ</div>
+                    <div className="mt-2 text-sm font-semibold text-white print:text-black">{receiptTypeLabel}</div>
+                  </div>
+                </div>
+
+                {selected.salesOrderId ? (
+                  <div className="mt-3 receipt-print-hide">
+                    <Link
+                      href={`/rechnungen?${new URLSearchParams({ q: selected.salesOrderId }).toString()}`}
+                      className="inline-flex h-10 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-3 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                    >
+                      Sales Order suchen
+                    </Link>
+                  </div>
+                ) : null}
+
+              </InfoCard>
+
+              <InfoCard title="Kunde" printKeepTogether>
+                <form
+                  action={updateFiscalReceiptDetails}
+                  className="space-y-4"
+                  onSubmit={(event) => {
+                    if (!customerSubmitArmedRef.current) {
+                      event.preventDefault();
+                      return;
+                    }
+                    customerSubmitArmedRef.current = false;
+                  }}
+                >
+                  <input type="hidden" name="receipt_id" value={selected.id} />
+                  <input type="hidden" name="return_query" value={currentQuery} />
+                  <input type="hidden" name="provider_name" value={providerName} />
+                  <input type="hidden" name="lines_json" value={serializedLines} />
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4 receipt-print-grid-card">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40 print-text-muted">Kunde</div>
+                      {isEditingCustomer ? (
+                        <input
+                          autoFocus
+                          name="customer_name"
+                          value={customerDraft}
+                          onChange={(e) => setCustomerDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.preventDefault();
+                          }}
+                          className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-base font-semibold text-white outline-none receipt-print-hide"
+                        />
+                      ) : null}
+                      <input type="hidden" name="customer_name" value={customerDraft} />
+                      <div className="mt-2 text-lg font-bold text-white print:text-black">{customerDraft || "Nicht hinterlegt"}</div>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4 receipt-print-grid-card">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40 print-text-muted">Firma / Behandler</div>
+                      <div className="mt-2 flex items-center justify-between gap-3">
+                        <div className="text-sm font-semibold text-white print:text-black">{providerName}</div>
+                        <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/10 text-xs font-bold text-white/90 print:border-black/10 print:bg-black/5 print:text-black">
+                          {selected.providerAvatarUrl && showProviderImage ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={selected.providerAvatarUrl}
+                              alt={providerName}
+                              className="h-full w-full object-cover"
+                              onError={() => setShowProviderImage(false)}
+                            />
+                          ) : (
+                            <span>{providerInitials(providerName, selected.providerInitials)}</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {!isEditingCustomer ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        customerSubmitArmedRef.current = false;
-                        setIsEditingCustomer(true);
-                      }}
-                      className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
-                    >
-                      Bearbeiten
-                    </button>
-                  ) : (
-                    <>
+                  <div className="flex flex-wrap gap-2 receipt-print-hide">
+                    {isCancelled ? (
                       <button
-                        type="submit"
-                        onClick={() => {
-                          customerSubmitArmedRef.current = true;
-                        }}
-                        className="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
+                        type="button"
+                        disabled
+                        className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white/55 opacity-45 cursor-not-allowed"
+                        title={isStornoReceipt ? "Bearbeiten bei Stornobeleg deaktiviert" : "Bearbeiten bei storniertem Beleg deaktiviert"}
                       >
-                        Speichern
+                        Bearbeiten
                       </button>
+                    ) : !isEditingCustomer ? (
                       <button
                         type="button"
                         onClick={() => {
                           customerSubmitArmedRef.current = false;
-                          setCustomerDraft(customerName);
-                          setIsEditingCustomer(false);
+                          setIsEditingCustomer(true);
                         }}
                         className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
                       >
-                        Abbrechen
+                        Bearbeiten
                       </button>
-                    </>
-                  )}
-                </div>
-              </form>
-            </InfoCard>
-
-            <InfoCard title="Leistungen">
-              <form action={updateFiscalReceiptDetails} className="space-y-4">
-                <input type="hidden" name="receipt_id" value={selected.id} />
-                <input type="hidden" name="return_query" value={currentQuery} />
-                <input type="hidden" name="provider_name" value={providerName} />
-                <input type="hidden" name="customer_name" value={customerDraft} />
-                <input type="hidden" name="lines_json" value={serializedLines} />
-
-                <div className="overflow-hidden rounded-2xl border border-white/10">
-                  <table className="min-w-full table-fixed text-sm">
-                    <colgroup>
-                      <col className="w-[46%]" />
-                      <col className="w-[11%]" />
-                      <col className="w-[19%]" />
-                      <col className="w-[24%]" />
-                    </colgroup>
-                    <thead className="border-b border-white/10 bg-white/[0.04] text-left text-white/50">
-                      <tr>
-                        <th className="px-4 py-3 font-medium">Leistung</th>
-                        <th className="px-2 py-3 font-medium">Menge</th>
-                        <th className="px-2 py-3 font-medium">Einzelpreis</th>
-                        <th className="px-2 py-3 font-medium">Gesamt</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {linesDraft.length === 0 ? (
-                        <tr>
-                          <td colSpan={4} className="px-4 py-6 text-center text-white/45">
-                            Keine Positionen gefunden.
-                          </td>
-                        </tr>
-                      ) : (
-                        linesDraft.map((line, index) => {
-                          const autoTotal = formatMoneyInput(computeLineTotal(line.quantity, line.unitPriceGross));
-                          const shownTotal = line.manualTotalOverride ? line.lineTotalGross : autoTotal;
-
-                          return (
-                            <tr key={`${selected.id}-payload-line-${index}`} className="border-b border-white/5 last:border-b-0 align-top">
-                              <td className="px-4 py-3 text-white/90">
-                                {isEditingLines ? (
-                                  <div className="space-y-2">
-                                    <select
-                                      value={line.serviceId ?? "__custom__"}
-                                      onChange={(e) => {
-                                        const nextValue = e.target.value;
-                                        if (nextValue === "__custom__") {
-                                          updateLine(index, (current) => ({ ...current, serviceId: null, lineType: 'ITEM' }));
-                                          return;
-                                        }
-                                        const selectedService = serviceOptions.find((service) => service.id === nextValue);
-                                        updateLine(index, (current) => {
-                                          const nextUnitPrice =
-                                            typeof selectedService?.defaultPriceCents === "number"
-                                              ? moneyInputFromCents(selectedService.defaultPriceCents)
-                                              : current.unitPriceGross;
-                                          const recalculatedTotal = formatMoneyInput(computeLineTotal(current.quantity, nextUnitPrice));
-                                          return {
-                                            ...current,
-                                            serviceId: nextValue,
-                                            lineType: 'SERVICE',
-                                            name: selectedService?.name ?? current.name,
-                                            unitPriceGross: nextUnitPrice,
-                                            lineTotalGross: current.manualTotalOverride ? current.lineTotalGross : recalculatedTotal,
-                                          };
-                                        });
-                                      }}
-                                      className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
-                                    >
-                                      <option value="__custom__">Freie Eingabe / manuell</option>
-                                      {serviceOptions.map((service) => (
-                                        <option key={service.id} value={service.id}>
-                                          {service.name}
-                                          {typeof service.defaultPriceCents === "number" ? ` · ${euroFromCents(service.defaultPriceCents, selected.currencyCode || "EUR")}` : ""}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    <input
-                                      value={line.name}
-                                      onChange={(e) => updateLine(index, (current) => ({ ...current, name: e.target.value, serviceId: current.serviceId, lineType: current.serviceId ? 'SERVICE' : 'ITEM' }))}
-                                      className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
-                                      placeholder="Leistungsname"
-                                    />
-                                  </div>
-                                ) : (
-                                  <span>{line.name || "—"}</span>
-                                )}
-                              </td>
-                              <td className="px-2 py-3 text-white/70">
-                                {isEditingLines ? (
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    step="1"
-                                    value={line.quantity}
-                                    onChange={(e) =>
-                                      updateLine(index, (current) => {
-                                        const nextQuantity = e.target.value;
-                                        const recalculatedTotal = formatMoneyInput(computeLineTotal(nextQuantity, current.unitPriceGross));
-                                        return {
-                                          ...current,
-                                          quantity: nextQuantity,
-                                          lineTotalGross: current.manualTotalOverride ? current.lineTotalGross : recalculatedTotal,
-                                        };
-                                      })
-                                    }
-                                    className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-2 text-center text-sm text-white outline-none"
-                                  />
-                                ) : (
-                                  <span>{line.quantity || "—"}</span>
-                                )}
-                              </td>
-                              <td className="px-2 py-3 text-white/85">
-                                {isEditingLines ? (
-                                  <input
-                                    value={line.unitPriceGross}
-                                    onChange={(e) =>
-                                      updateLine(index, (current) => {
-                                        const nextUnitPrice = e.target.value;
-                                        const recalculatedTotal = formatMoneyInput(computeLineTotal(current.quantity, nextUnitPrice));
-                                        return {
-                                          ...current,
-                                          unitPriceGross: nextUnitPrice,
-                                          lineTotalGross: current.manualTotalOverride ? current.lineTotalGross : recalculatedTotal,
-                                        };
-                                      })
-                                    }
-                                    className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
-                                  />
-                                ) : (
-                                  <span>{line.unitPriceGross ? `${line.unitPriceGross} €` : "—"}</span>
-                                )}
-                              </td>
-                              <td className="px-2 py-3 text-white/90">
-                                {isEditingLines ? (
-                                  <div className="space-y-2">
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        value={shownTotal}
-                                        disabled={!line.manualTotalOverride}
-                                        onChange={(e) => updateLine(index, (current) => ({ ...current, lineTotalGross: e.target.value }))}
-                                        className="h-10 min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() => setLinesDraft((current) => current.filter((_, rowIndex) => rowIndex !== index))}
-                                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-red-500/20 bg-red-500/10 text-red-100 hover:bg-red-500/15"
-                                        title="Zeile entfernen"
-                                      >
-                                        −
-                                      </button>
-                                    </div>
-                                    <div className="flex items-center justify-between gap-2 text-[11px] text-white/55">
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          updateLine(index, (current) => ({
-                                            ...current,
-                                            manualTotalOverride: !current.manualTotalOverride,
-                                            lineTotalGross: !current.manualTotalOverride ? current.lineTotalGross : autoTotal,
-                                          }))
-                                        }
-                                        className={`rounded-full border px-2 py-1 font-semibold ${line.manualTotalOverride ? "border-amber-400/25 bg-amber-400/10 text-amber-100" : "border-white/10 bg-white/5 text-white/70"}`}
-                                      >
-                                        {line.manualTotalOverride ? "Manueller Override aktiv" : "Automatik aktiv"}
-                                      </button>
-                                      {!line.manualTotalOverride ? <span>Auto = Menge × Einzelpreis</span> : null}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <span>{shownTotal ? `${shownTotal} €` : "—"}</span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                  <div>
-                    <div className="text-xs uppercase tracking-wide text-white/45">Aktuelle Summe</div>
-                    <div className="mt-1 text-lg font-bold text-white">{euroFromCents(totalDraftCents, selected.currencyCode)}</div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    {isEditingLines ? (
+                    ) : (
                       <>
                         <button
-                          type="button"
-                          onClick={addLine}
-                          className="inline-flex h-11 items-center justify-center rounded-xl border border-sky-300/40 bg-sky-500/10 px-4 text-sm font-semibold text-white transition-colors hover:bg-sky-500/15"
-                        >
-                          + Leistung hinzufügen
-                        </button>
-                        <button
                           type="submit"
+                          onClick={() => {
+                            customerSubmitArmedRef.current = true;
+                          }}
                           className="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
                         >
                           Speichern
@@ -801,31 +888,281 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                         <button
                           type="button"
                           onClick={() => {
-                            setLinesDraft(buildEditableLines(payloadLines));
-                            setIsEditingLines(false);
+                            customerSubmitArmedRef.current = false;
+                            setCustomerDraft(customerName);
+                            setIsEditingCustomer(false);
                           }}
                           className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
                         >
                           Abbrechen
                         </button>
                       </>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setIsEditingLines(true)}
-                        className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
-                      >
-                        Bearbeiten
-                      </button>
                     )}
                   </div>
+                </form>
+              </InfoCard>
+
+              <InfoCard title="Leistungen" printKeepTogether>
+                <form action={updateFiscalReceiptDetails} className="space-y-4">
+                  <input type="hidden" name="receipt_id" value={selected.id} />
+                  <input type="hidden" name="return_query" value={currentQuery} />
+                  <input type="hidden" name="provider_name" value={providerName} />
+                  <input type="hidden" name="customer_name" value={customerDraft} />
+                  <input type="hidden" name="lines_json" value={serializedLines} />
+
+                  <div className="overflow-hidden rounded-2xl border border-white/10 receipt-print-grid-card">
+                    <table className="min-w-full table-fixed text-sm print-table">
+                      <colgroup>
+                        <col className="w-[46%]" />
+                        <col className="w-[11%]" />
+                        <col className="w-[19%]" />
+                        <col className="w-[24%]" />
+                      </colgroup>
+                      <thead className="border-b border-white/10 bg-white/[0.04] text-left text-white/50">
+                        <tr>
+                          <th className="px-4 py-3 font-medium">Leistung</th>
+                          <th className="px-2 py-3 font-medium">Menge</th>
+                          <th className="px-2 py-3 font-medium">Einzelpreis</th>
+                          <th className="px-2 py-3 font-medium">Gesamt</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {linesDraft.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="px-4 py-6 text-center text-white/45 print:text-black/60">
+                              Keine Positionen gefunden.
+                            </td>
+                          </tr>
+                        ) : (
+                          linesDraft.map((line, index) => {
+                            const autoTotal = formatMoneyInput(computeLineTotal(line.quantity, line.unitPriceGross));
+                            const shownTotal = line.manualTotalOverride ? line.lineTotalGross : autoTotal;
+
+                            return (
+                              <tr key={`${selected.id}-payload-line-${index}`} className="border-b border-white/5 last:border-b-0 align-top">
+                                <td className="px-4 py-3 text-white/90 print:text-black">
+                                  {isEditingLines ? (
+                                    <div className="space-y-2 receipt-print-hide">
+                                      <select
+                                        value={line.serviceId ?? "__custom__"}
+                                        onChange={(e) => {
+                                          const nextValue = e.target.value;
+                                          if (nextValue === "__custom__") {
+                                            updateLine(index, (current) => ({ ...current, serviceId: null, lineType: "ITEM" }));
+                                            return;
+                                          }
+                                          const selectedService = serviceOptions.find((service) => service.id === nextValue);
+                                          updateLine(index, (current) => {
+                                            const nextUnitPrice =
+                                              typeof selectedService?.defaultPriceCents === "number"
+                                                ? moneyInputFromCents(selectedService.defaultPriceCents)
+                                                : current.unitPriceGross;
+                                            const recalculatedTotal = formatMoneyInput(computeLineTotal(current.quantity, nextUnitPrice));
+                                            return {
+                                              ...current,
+                                              serviceId: nextValue,
+                                              lineType: "SERVICE",
+                                              name: selectedService?.name ?? current.name,
+                                              unitPriceGross: nextUnitPrice,
+                                              lineTotalGross: current.manualTotalOverride ? current.lineTotalGross : recalculatedTotal,
+                                            };
+                                          });
+                                        }}
+                                        className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
+                                      >
+                                        <option value="__custom__">Freie Eingabe / manuell</option>
+                                        {serviceOptions.map((service) => (
+                                          <option key={service.id} value={service.id}>
+                                            {service.name}
+                                            {typeof service.defaultPriceCents === "number"
+                                              ? ` · ${euroFromCents(service.defaultPriceCents, selected.currencyCode || "EUR")}`
+                                              : ""}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      <input
+                                        value={line.name}
+                                        onChange={(e) =>
+                                          updateLine(index, (current) => ({
+                                            ...current,
+                                            name: e.target.value,
+                                            serviceId: current.serviceId,
+                                            lineType: current.serviceId ? "SERVICE" : "ITEM",
+                                          }))
+                                        }
+                                        className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
+                                        placeholder="Leistungsname"
+                                      />
+                                    </div>
+                                  ) : null}
+                                  <span className={isEditingLines ? "hidden print:inline" : "inline"}>{line.name || "—"}</span>
+                                </td>
+                                <td className="px-2 py-3 text-white/70 print:text-black">
+                                  {isEditingLines ? (
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      step="1"
+                                      value={line.quantity}
+                                      onChange={(e) =>
+                                        updateLine(index, (current) => {
+                                          const nextQuantity = e.target.value;
+                                          const recalculatedTotal = formatMoneyInput(computeLineTotal(nextQuantity, current.unitPriceGross));
+                                          return {
+                                            ...current,
+                                            quantity: nextQuantity,
+                                            lineTotalGross: current.manualTotalOverride ? current.lineTotalGross : recalculatedTotal,
+                                          };
+                                        })
+                                      }
+                                      className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-2 text-center text-sm text-white outline-none receipt-print-hide"
+                                    />
+                                  ) : null}
+                                  <span className={isEditingLines ? "hidden print:inline" : "inline"}>{line.quantity || "—"}</span>
+                                </td>
+                                <td className="px-2 py-3 text-white/85 print:text-black">
+                                  {isEditingLines ? (
+                                    <input
+                                      value={line.unitPriceGross}
+                                      onChange={(e) =>
+                                        updateLine(index, (current) => {
+                                          const nextUnitPrice = e.target.value;
+                                          const recalculatedTotal = formatMoneyInput(computeLineTotal(current.quantity, nextUnitPrice));
+                                          return {
+                                            ...current,
+                                            unitPriceGross: nextUnitPrice,
+                                            lineTotalGross: current.manualTotalOverride ? current.lineTotalGross : recalculatedTotal,
+                                          };
+                                        })
+                                      }
+                                      className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none receipt-print-hide"
+                                    />
+                                  ) : null}
+                                  <span className={isEditingLines ? "hidden print:inline" : "inline"}>{line.unitPriceGross ? `${line.unitPriceGross} €` : "—"}</span>
+                                </td>
+                                <td className="px-2 py-3 text-white/90 print:text-black">
+                                  {isEditingLines ? (
+                                    <div className="space-y-2 receipt-print-hide">
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          value={shownTotal}
+                                          disabled={!line.manualTotalOverride}
+                                          onChange={(e) => updateLine(index, (current) => ({ ...current, lineTotalGross: e.target.value }))}
+                                          className="h-10 min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => setLinesDraft((current) => current.filter((_, rowIndex) => rowIndex !== index))}
+                                          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-red-500/20 bg-red-500/10 text-red-100 hover:bg-red-500/15"
+                                          title="Zeile entfernen"
+                                        >
+                                          −
+                                        </button>
+                                      </div>
+                                      <div className="flex items-center justify-between gap-2 text-[11px] text-white/55">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            updateLine(index, (current) => ({
+                                              ...current,
+                                              manualTotalOverride: !current.manualTotalOverride,
+                                              lineTotalGross: !current.manualTotalOverride ? current.lineTotalGross : autoTotal,
+                                            }))
+                                          }
+                                          className={`rounded-full border px-2 py-1 font-semibold ${
+                                            line.manualTotalOverride ? "border-amber-400/25 bg-amber-400/10 text-amber-100" : "border-white/10 bg-white/5 text-white/70"
+                                          }`}
+                                        >
+                                          {line.manualTotalOverride ? "Manueller Override aktiv" : "Automatik aktiv"}
+                                        </button>
+                                        {!line.manualTotalOverride ? <span>Auto = Menge × Einzelpreis</span> : null}
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  <span className={isEditingLines ? "hidden print:inline" : "inline"}>{shownTotal ? `${shownTotal} €` : "—"}</span>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 receipt-print-grid-card">
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-white/45 print-text-muted">Aktuelle Summe</div>
+                      <div className="mt-1 text-lg font-bold text-white print:text-black">{euroFromCents(totalDraftCents, selected.currencyCode)}</div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 receipt-print-hide">
+                      {isCancelled ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white/55 opacity-45 cursor-not-allowed"
+                          title={isStornoReceipt ? "Bearbeiten bei Stornobeleg deaktiviert" : "Bearbeiten bei storniertem Beleg deaktiviert"}
+                        >
+                          Bearbeiten
+                        </button>
+                      ) : isEditingLines ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={addLine}
+                            className="inline-flex h-11 items-center justify-center rounded-xl border border-sky-300/40 bg-sky-500/10 px-4 text-sm font-semibold text-white transition-colors hover:bg-sky-500/15"
+                          >
+                            + Leistung hinzufügen
+                          </button>
+                          <button
+                            type="submit"
+                            className="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
+                          >
+                            Speichern
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLinesDraft(buildEditableLines(payloadLines));
+                              setIsEditingLines(false);
+                            }}
+                            className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                          >
+                            Abbrechen
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingLines(true)}
+                          className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                        >
+                          Bearbeiten
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </form>
+              </InfoCard>
+
+              <div className="hidden rounded-3xl border border-black/10 bg-white p-5 print:block print-keep-together">
+                {isCancelled ? (
+                  <div className="mb-4 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-center text-base font-extrabold uppercase tracking-[0.16em] text-red-700">
+                    Storniert
+                  </div>
+                ) : null}
+                <div className="flex items-center justify-between gap-4 border-t border-black/10 pt-4 text-sm">
+                  <div className="text-black/70">Zahlungsart: {paymentMethodDisplayLabel}</div>
+                  <div className="font-semibold text-black">
+                    {paymentMethodDisplayLabel !== "—" ? `${paymentMethodDisplayLabel} · ${issuedAtLabel}` : `Belegdatum ${issuedAtLabel}`}
+                  </div>
                 </div>
-              </form>
-            </InfoCard>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>,
+    </>,
     document.body
   );
 }

@@ -135,6 +135,7 @@ function ServiceQuickCreateSlideover({
           right: 10,
           bottom: 10,
           width: 470,
+          minWidth: 0,
           maxWidth: "calc(100vw - 20px)",
           borderRadius: 20,
           border: "1px solid rgba(255,255,255,0.12)",
@@ -313,47 +314,31 @@ export default function DashboardServicesCard({
   return (
     <>
       <Card className="h-full min-w-0 border-[var(--border)] bg-[var(--surface)] transition hover:border-white/20 hover:bg-white/[0.03]">
-        <CardContent className="flex min-h-[0px] flex-col p-4 sm:min-h-[120px] sm:p-5">
-          <div className="hidden items-start justify-between gap-3 md:flex">
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[13px] font-semibold leading-4 text-white/45">
-                Services
+        <CardContent className="flex min-h-[132px] flex-col p-4 sm:min-h-[144px] sm:p-5">
+          <div className="flex h-full flex-col justify-between gap-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium leading-5 text-[var(--text-muted)] sm:text-[15px]">
+                  Services
+                </div>
+                <div className="mt-1 truncate text-xs leading-5 text-white/45 sm:text-[13px]">
+                  {tenantName ?? "Behandler"}
+                </div>
               </div>
-              <div className="mt-1 text-[10px] leading-4 text-white/60">
-                {tenantName ?? "Behandler"}
+
+              <div className="flex shrink-0 items-center gap-2">
+                <button type="button" onClick={() => setOpen(true)} className="shrink-0" aria-label="Neue Dienstleistung">
+                  <ServicesActionPill icon={<PlusCircleIcon />} />
+                </button>
+
+                <Link href="/services" className="shrink-0" aria-label="Services öffnen">
+                  <ServicesActionPill icon={<OpenIcon />} />
+                </Link>
               </div>
             </div>
 
-            <div className="flex items-start gap-2">
-              <div className="pt-0.5 text-[22px] font-bold leading-none tracking-tight text-white sm:text-[36px]">
-                {activeCount}
-              </div>
-
-              <button type="button" onClick={() => setOpen(true)} className="shrink-0">
-                <ServicesActionPill icon={<PlusCircleIcon />} />
-              </button>
-
-              <Link href="/services" className="shrink-0">
-                <ServicesActionPill icon={<OpenIcon />} />
-              </Link>
-            </div>
-          </div>
-
-          <div className="flex h-full flex-col justify-between gap-4 md:hidden">
-            <div className="text-sm font-medium leading-5 text-white/45">Services</div>
-
-            <div className="flex items-center gap-2">
-              <div className="text-[22px] font-bold leading-none tracking-tight text-white">
-                {activeCount}
-              </div>
-
-              <button type="button" onClick={() => setOpen(true)} className="shrink-0">
-                <ServicesActionPill icon={<PlusCircleIcon />} />
-              </button>
-
-              <Link href="/services" className="shrink-0">
-                <ServicesActionPill icon={<OpenIcon />} />
-              </Link>
+            <div className="text-[32px] font-semibold leading-none tracking-tight text-white sm:text-[36px] lg:text-[40px]">
+              {activeCount}
             </div>
           </div>
         </CardContent>

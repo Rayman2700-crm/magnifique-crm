@@ -167,18 +167,16 @@ img {
 
 @media (max-width: 767px) {
   .clientique-shell {
-    overflow-x: visible;
+    overflow-x: hidden;
   }
 
   .clientique-sidebar-rail {
-    display: block;
-    width: 68px !important;
-  }
-
-  .clientique-topbar {
-    display: none !important;
+    display: none;
   }
 }
+
+
+
 @media (max-width: 639px) {
   :root {
     --radius-card: 20px;

@@ -412,7 +412,7 @@ export default async function AppShell({
         googleSetupAlertCount={googleSetupAlertCount}
       />
 
-      <main className="min-h-screen pl-[88px] pt-20 lg:pt-[86px]">
+      <main className="min-h-screen pl-[76px] pt-0 md:pt-[72px] lg:pt-[78px]">
         <Container className="max-w-[1400px]">{children}</Container>
       </main>
 

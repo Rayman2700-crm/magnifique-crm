@@ -99,6 +99,9 @@ type SlideoverReceipt = {
   providerAvatarUrl?: string | null;
   providerInitials?: string | null;
   availableServices?: CheckoutServiceOption[];
+  paymentMethodLabel?: string | null;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
 };
 
 type CheckoutAppointmentRow = {
@@ -180,12 +183,16 @@ type AvatarFilterOption = {
 
 function euroFromCents(value: number | null | undefined, currencyCode?: string | null) {
   if (typeof value !== "number") return "—";
-  return new Intl.NumberFormat("de-AT", { style: "currency", currency: currencyCode || "EUR" }).format(value / 100);
+  const abs = Math.abs(value) / 100;
+  const formatted = new Intl.NumberFormat("de-AT", { style: "currency", currency: currencyCode || "EUR" }).format(abs);
+  return value < 0 ? `-${formatted}` : formatted;
 }
 
 function euroFromGross(value: number | null | undefined, currencyCode?: string | null) {
   if (typeof value !== "number") return "—";
-  return new Intl.NumberFormat("de-AT", { style: "currency", currency: currencyCode || "EUR" }).format(value);
+  const abs = Math.abs(value);
+  const formatted = new Intl.NumberFormat("de-AT", { style: "currency", currency: currencyCode || "EUR" }).format(abs);
+  return value < 0 ? `-${formatted}` : formatted;
 }
 
 function formatDateTime(value: string | null | undefined) {
@@ -468,10 +475,31 @@ function isBetween(dateValue: string | null | undefined, start: Date, end: Date)
   return date >= start && date < end;
 }
 
+
+function parseStornoInfoFromNotes(value: string | null | undefined) {
+  const text = String(value ?? "").trim();
+  if (!text) return { originalReceiptNumber: "", stornoReceiptNumber: "" };
+  const originalMatch = text.match(/Stornobeleg zu\s+([A-Za-z0-9-]+)/i);
+  const stornoMatch = text.match(/Storniert durch Beleg\s+([A-Za-z0-9-]+)/i);
+  return {
+    originalReceiptNumber: originalMatch?.[1] ?? "",
+    stornoReceiptNumber: stornoMatch?.[1] ?? "",
+  };
+}
+
 function getReceiptBusinessState(item: SlideoverReceipt) {
   const verification = String(item.verificationStatus ?? "").toUpperCase();
   const signature = String(item.signatureState ?? "").toUpperCase();
   const status = String(item.status ?? "").toUpperCase();
+
+  const stornoInfo = parseStornoInfoFromNotes(item.verificationNotes);
+  if (stornoInfo.originalReceiptNumber || String(item.receiptType ?? "").toUpperCase() === "REVERSAL") {
+    return { key: "cancelled", label: "Stornobeleg", tone: "amber" as const };
+  }
+
+  if (status === "REVERSED" || status === "CANCELLED") {
+    return { key: "cancelled", label: "Storniert", tone: "red" as const };
+  }
 
   if (verification.includes("INVALID") || signature.includes("FAIL") || status.includes("FAIL")) {
     return { key: "error", label: "Fehler", tone: "red" as const };
@@ -545,6 +573,7 @@ function getQuickFilterLabel(filter: string) {
     week: "Woche",
     month: "Monat",
     open: "Offen",
+    cancelled: "Storniert",
     error: "Fehler",
   };
   return labels[filter] ?? "Alle";
@@ -588,7 +617,7 @@ function MobileReceiptFilterMenu({
   qRaw: string;
   currentFilter: string;
   practitionerFilter: string;
-  counts: { all: number; today: number; week: number; month: number; open: number; error: number };
+  counts: { all: number; today: number; week: number; month: number; open: number; cancelled: number; error: number };
 }) {
   const items = [
     { key: "all", label: "Alle", count: counts.all },
@@ -596,6 +625,7 @@ function MobileReceiptFilterMenu({
     { key: "week", label: "Woche", count: counts.week },
     { key: "month", label: "Monat", count: counts.month },
     { key: "open", label: "Offen", count: counts.open },
+    { key: "cancelled", label: "Storniert", count: counts.cancelled },
     { key: "error", label: "Fehler", count: counts.error },
   ];
   const activeCount = items.find((item) => item.key === currentFilter)?.count ?? counts.all;
@@ -1012,7 +1042,7 @@ export default async function RechnungenPage({
 
     const upperQuery = sanitizedQuery.toUpperCase();
 
-    const allowedReceiptStatus = ["REQUESTED", "ISSUED", "FAILED", "CANCELLED"];
+    const allowedReceiptStatus = ["REQUESTED", "ISSUED", "FAILED", "CANCELLED", "REVERSED"];
     const allowedSignatureState = ["SIMULATED", "PENDING", "SIGNED", "FAILED"];
     const allowedVerificationStatus = ["VALID", "INVALID", "PENDING", "SKIPPED"];
 
@@ -1079,6 +1109,63 @@ export default async function RechnungenPage({
   }
 
 
+  const receiptSalesOrderIds = Array.from(new Set(receipts.map((row) => String(row.sales_order_id ?? "").trim()).filter(Boolean)));
+  const receiptPaymentIds = Array.from(new Set(receipts.map((row) => String(row.payment_id ?? "").trim()).filter(Boolean)));
+
+  const paymentMethodLabelByReceiptId = new Map<string, string>();
+  if (receiptPaymentIds.length > 0) {
+    const { data: receiptPaymentRows } = await admin
+      .from("payments")
+      .select(`
+        id,
+        payment_method:payment_methods ( id, code, name )
+      `)
+      .in("id", receiptPaymentIds);
+
+    for (const row of (receiptPaymentRows ?? []) as Array<{ id: string; payment_method: PaymentMethodJoin }>) {
+      const paymentId = String(row.id ?? "").trim();
+      if (!paymentId) continue;
+      const label = formatPaymentMethod(row.payment_method);
+      for (const receipt of receipts) {
+        if (String(receipt.payment_id ?? "").trim() === paymentId) {
+          paymentMethodLabelByReceiptId.set(receipt.id, label);
+        }
+      }
+    }
+  }
+
+  const salesOrderCustomerIdBySalesOrderId = new Map<string, string>();
+  if (receiptSalesOrderIds.length > 0) {
+    const { data: receiptSalesOrderRows } = await admin
+      .from("sales_orders")
+      .select("id, customer_id")
+      .in("id", receiptSalesOrderIds);
+
+    for (const row of (receiptSalesOrderRows ?? []) as Array<{ id: string; customer_id: string | null }>) {
+      const salesOrderId = String(row.id ?? "").trim();
+      const customerId = String(row.customer_id ?? "").trim();
+      if (salesOrderId && customerId) salesOrderCustomerIdBySalesOrderId.set(salesOrderId, customerId);
+    }
+  }
+
+  const receiptCustomerProfileIds = Array.from(new Set(Array.from(salesOrderCustomerIdBySalesOrderId.values()).filter(Boolean)));
+  const customerProfileById = new Map<string, { customerName: string | null; customerPhone: string | null; customerEmail: string | null }>();
+  if (receiptCustomerProfileIds.length > 0) {
+    const { data: receiptCustomerProfiles } = await admin
+      .from("customer_profiles")
+      .select(`id, person:persons ( full_name, phone, email )`)
+      .in("id", receiptCustomerProfileIds);
+
+    for (const profile of (receiptCustomerProfiles ?? []) as Array<{ id: string; person: { full_name: string | null; phone: string | null; email: string | null } | { full_name: string | null; phone: string | null; email: string | null }[] | null }>) {
+      const personJoin = firstJoin(profile.person);
+      customerProfileById.set(String(profile.id), {
+        customerName: String(personJoin?.full_name ?? "").trim() || null,
+        customerPhone: String(personJoin?.phone ?? "").trim() || null,
+        customerEmail: String(personJoin?.email ?? "").trim() || null,
+      });
+    }
+  }
+
   const receiptTenantIds = Array.from(new Set(receipts.map((row) => String(row.tenant_id ?? '').trim()).filter(Boolean)));
   const servicesByTenant = new Map<string, CheckoutServiceOption[]>();
   if (receiptTenantIds.length > 0) {
@@ -1106,13 +1193,17 @@ export default async function RechnungenPage({
     const receiptEvents = eventsByReceipt.get(row.id) ?? [];
     const latestEvent = receiptEvents[0] ?? null;
     const payload = parsePayload(row.receipt_payload_canonical);
+    const customerProfile =
+      customerProfileById.get(salesOrderCustomerIdBySalesOrderId.get(String(row.sales_order_id ?? "").trim()) ?? "") ?? null;
     const customerName =
       readFirstString(payload, [
         ["customer_name"],
         ["person_name"],
         ["customer", "full_name"],
         ["customer", "name"],
-      ]) || null;
+      ]) ||
+      customerProfile?.customerName ||
+      null;
     const providerName =
       readFirstString(payload, [
         ["provider_name"],
@@ -1160,6 +1251,9 @@ export default async function RechnungenPage({
         avatarOptions.find((option) => String(option.tenantId ?? "").trim() === String(row.tenant_id ?? "").trim())?.initials ??
         initialsFromName(providerName, "BE"),
       availableServices: servicesByTenant.get(String(row.tenant_id ?? '').trim()) ?? [],
+      paymentMethodLabel: paymentMethodLabelByReceiptId.get(row.id) ?? null,
+      customerEmail: customerProfile?.customerEmail ?? null,
+      customerPhone: customerProfile?.customerPhone ?? null,
     };
   });
 
@@ -1191,6 +1285,7 @@ export default async function RechnungenPage({
     if (currentFilter === "week") return isBetween(issued, weekStart, weekEnd);
     if (currentFilter === "month") return isBetween(issued, monthStart, nextMonthStart);
     if (currentFilter === "open") return businessState.key === "open";
+    if (currentFilter === "cancelled") return businessState.key === "cancelled";
     if (currentFilter === "error") return businessState.key === "error";
     return true;
   });
@@ -1201,27 +1296,32 @@ export default async function RechnungenPage({
     week: searchScopedItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, weekStart, weekEnd)).length,
     month: searchScopedItems.filter((item) => isBetween(item.issuedAt ?? item.createdAt, monthStart, nextMonthStart)).length,
     open: searchScopedItems.filter((item) => getReceiptBusinessState(item).key === "open").length,
+    cancelled: searchScopedItems.filter((item) => getReceiptBusinessState(item).key === "cancelled").length,
     error: searchScopedItems.filter((item) => getReceiptBusinessState(item).key === "error").length,
   };
 
   const countTotal = filteredItems.length;
   const openCount = quickFilterCounts.open;
+  const cancelledCount = quickFilterCounts.cancelled;
   const errorCount = quickFilterCounts.error;
   const paidCount = searchScopedItems.filter((item) => getReceiptBusinessState(item).key === "paid").length;
 
   const revenueTodayCents = searchScopedItems.reduce((sum, item) => {
     const issued = item.issuedAt ?? item.createdAt;
-    return isBetween(issued, todayStart, tomorrowStart) ? sum + Number(item.turnoverValueCents ?? 0) : sum;
+    const businessState = getReceiptBusinessState(item);
+    return isBetween(issued, todayStart, tomorrowStart) && businessState.key !== "cancelled" ? sum + Number(item.turnoverValueCents ?? 0) : sum;
   }, 0);
 
   const revenueWeekCents = searchScopedItems.reduce((sum, item) => {
     const issued = item.issuedAt ?? item.createdAt;
-    return isBetween(issued, weekStart, weekEnd) ? sum + Number(item.turnoverValueCents ?? 0) : sum;
+    const businessState = getReceiptBusinessState(item);
+    return isBetween(issued, weekStart, weekEnd) && businessState.key !== "cancelled" ? sum + Number(item.turnoverValueCents ?? 0) : sum;
   }, 0);
 
   const revenueMonthCents = searchScopedItems.reduce((sum, item) => {
     const issued = item.issuedAt ?? item.createdAt;
-    return isBetween(issued, monthStart, nextMonthStart) ? sum + Number(item.turnoverValueCents ?? 0) : sum;
+    const businessState = getReceiptBusinessState(item);
+    return isBetween(issued, monthStart, nextMonthStart) && businessState.key !== "cancelled" ? sum + Number(item.turnoverValueCents ?? 0) : sum;
   }, 0);
 
   const checkoutTenant = firstJoin(checkoutAppointment?.tenant);
@@ -1479,6 +1579,7 @@ export default async function RechnungenPage({
                   ["week", "Woche", quickFilterCounts.week],
                   ["month", "Monat", quickFilterCounts.month],
                   ["open", "Offen", quickFilterCounts.open],
+                  ["cancelled", "Storniert", quickFilterCounts.cancelled],
                   ["error", "Fehler", quickFilterCounts.error],
                 ].map(([key, label, count]) => {
                   const active = currentFilter === key;
@@ -1522,7 +1623,7 @@ export default async function RechnungenPage({
                 <SummaryCard
                   label="Offene Belege"
                   value={openCount}
-                  subtext={`${errorCount} mit Fehler · ${paidCount} bezahlt`}
+                  subtext={`${cancelledCount} storniert · ${errorCount} mit Fehler · ${paidCount} bezahlt`}
                 />
               </div>
             </div>
@@ -1765,7 +1866,7 @@ export default async function RechnungenPage({
             <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3">
               <div className="text-xs uppercase tracking-wide text-white/45">Offene Belege</div>
               <div className="mt-2 text-2xl font-bold text-white">{openCount}</div>
-              <div className="mt-1 text-xs text-white/55">{errorCount} mit Fehler · {paidCount} bezahlt</div>
+              <div className="mt-1 text-xs text-white/55">{cancelledCount} storniert · {errorCount} mit Fehler · {paidCount} bezahlt</div>
             </div>
           </div>
 
@@ -1788,11 +1889,11 @@ export default async function RechnungenPage({
                 <table className="w-full min-w-[820px] table-auto text-sm">
                   <thead className="bg-white/[0.03]">
                     <tr>
-                      <th className="w-[12%] px-6 py-4 font-semibold text-left text-white/60">Beleg</th>
+                      <th className="w-[14%] px-6 py-4 font-semibold text-left text-white/60">Beleg</th>
                       <th className="w-[30%] px-4 py-4 font-semibold text-left text-white/60">Kunde</th>
                       <th className="w-[22%] px-4 py-4 font-semibold text-left text-white/60">Erstellt</th>
                       <th className="w-[14%] px-4 py-4 font-semibold text-left text-white/60">Betrag</th>
-                      <th className="w-[22%] px-6 py-4 font-semibold text-right text-white/60">Aktion</th>
+                      <th className="w-[20%] px-6 py-4 font-semibold text-right text-white/60">Aktion</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1816,7 +1917,52 @@ export default async function RechnungenPage({
                         return (
                           <tr key={item.id} className="border-t border-white/8 transition hover:bg-white/[0.025]">
                             <td className="px-6 py-4 align-middle">
-                              <div className="font-semibold text-white">{item.receiptNumber}</div>
+                              <div className="flex items-center gap-3">
+                                <Link
+                                  href={`/rechnungen?${detailParams.toString()}`}
+                                  title="Details öffnen"
+                                  aria-label="Details öffnen"
+                                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-white transition hover:bg-white/15"
+                                >
+                                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                  </svg>
+                                </Link>
+
+                                <div className="flex min-h-[52px] flex-col justify-center">
+                                  <div className="font-semibold leading-none text-white">{item.receiptNumber}</div>
+                                  {(() => {
+                                    const stornoInfo = parseStornoInfoFromNotes(item.verificationNotes);
+                                    const isStornoReceipt = Boolean(stornoInfo.originalReceiptNumber) || String(item.receiptType ?? "").toUpperCase() === "REVERSAL";
+                                    if (isStornoReceipt) {
+                                      return (
+                                        <div className="mt-1.5 space-y-1">
+                                          <span className="inline-flex h-6 items-center rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-100">
+                                            Stornobeleg
+                                          </span>
+                                          {stornoInfo.originalReceiptNumber ? (
+                                            <div className="text-[11px] text-white/50">zu {stornoInfo.originalReceiptNumber}</div>
+                                          ) : null}
+                                        </div>
+                                      );
+                                    }
+                                    if (businessState.key === "cancelled") {
+                                      return (
+                                        <div className="mt-1.5 space-y-1">
+                                          <span className="inline-flex h-6 items-center rounded-full border border-red-400/25 bg-red-500/10 px-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-red-200">
+                                            Storniert
+                                          </span>
+                                          {stornoInfo.stornoReceiptNumber ? (
+                                            <div className="text-[11px] text-white/50">durch {stornoInfo.stornoReceiptNumber}</div>
+                                          ) : null}
+                                        </div>
+                                      );
+                                    }
+                                    return null;
+                                  })()}
+                                </div>
+                              </div>
                             </td>
                             <td className="px-6 py-4 align-middle">
                               <div className="flex items-center gap-4">
@@ -1846,7 +1992,6 @@ export default async function RechnungenPage({
                                     </svg>
                                   </Badge>
                                 </span>
-                                <Link href={`/rechnungen?${detailParams.toString()}`} className="inline-flex h-10 items-center rounded-xl border border-white/10 bg-white/10 px-4 text-sm font-medium text-white hover:bg-white/15">Details</Link>
                               </div>
                             </td>
                           </tr>

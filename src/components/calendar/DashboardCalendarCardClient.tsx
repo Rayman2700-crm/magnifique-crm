@@ -625,7 +625,7 @@ function ViewSwitch({
   };
 
   return (
-    <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
       {btn("day", "Tag")}
       {btn("week", "Woche")}
       {btn("month", "Monat")}
@@ -943,8 +943,8 @@ export default function DashboardCalendarCardClient({
 
   return (
     <Card className="border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
-      <CardContent className="p-6 md:p-8">
-        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+      <CardContent className="p-4 sm:p-5 lg:p-8">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex min-w-0 flex-col gap-4 lg:gap-6">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -972,14 +972,14 @@ export default function DashboardCalendarCardClient({
             </div>
 
             {currentLegendUser && !isAdmin ? (
-              <div className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/80 md:inline-flex md:w-fit">
+              <div className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/80 lg:inline-flex lg:w-fit">
                 {currentLegendUser.fullName ?? currentLegendUser.tenantDisplayName}
               </div>
             ) : null}
           </div>
 
           {isAdmin ? (
-            <div className="hidden md:block">
+            <div className="hidden xl:block">
               <TenantLegendClient
                 users={legendUsers}
                 activeTenantId={selectedTenantId}
@@ -989,7 +989,7 @@ export default function DashboardCalendarCardClient({
           ) : null}
         </div>
 
-        <div className="mt-7">
+        <div className="mt-5 lg:mt-7">
           {errorText ? (
             <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
               <div className="font-semibold text-white">Fehler</div>
@@ -1007,8 +1007,8 @@ export default function DashboardCalendarCardClient({
                 </div>
               )}
 
-              <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-                <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex flex-wrap items-center gap-2 min-w-0">
                   <Button
                     type="button"
                     variant="secondary"
@@ -1058,7 +1058,7 @@ export default function DashboardCalendarCardClient({
 
                   </Button>
 
-                  <div className="ml-2 text-xl font-bold text-white">
+                  <div className="min-w-0 text-base font-bold text-white sm:text-lg lg:text-xl">
                     {headerText.left}
                     {headerText.right ? (
                       <span className="ml-2 text-sm font-semibold text-white/55">{headerText.right}</span>
@@ -1066,7 +1066,7 @@ export default function DashboardCalendarCardClient({
                   </div>
                 </div>
 
-                <div className="hidden md:block"><ViewSwitch value={view} onChange={handleChangeView} /></div>
+                <div className="hidden xl:block"><ViewSwitch value={view} onChange={handleChangeView} /></div>
               </div>
 
               <DashboardWeekGridClient

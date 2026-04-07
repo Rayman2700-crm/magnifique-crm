@@ -195,18 +195,47 @@ async function resolvePaymentMethodId(admin: any, tenantId: string, requestedCod
   throw new Error(`Keine aktive Zahlungsart für ${requestedCode} gefunden.`);
 }
 
+function isLegacyCashRegister(row: CashRegisterRow | null | undefined) {
+  const registerCode = String(row?.register_code ?? "").trim().toUpperCase();
+  const name = String(row?.name ?? "").trim().toUpperCase();
+  const tenantId = String(row?.tenant_id ?? "").trim().toUpperCase();
+  return registerCode.startsWith("LEGACY") || name.includes("LEGACY") || tenantId.startsWith("LEGACY");
+}
+
 async function resolveCashRegister(admin: any, tenantId: string) {
   const { data, error } = await admin
     .from("cash_registers")
     .select("id, tenant_id, register_code, name, status, created_at")
     .eq("tenant_id", tenantId)
-    .order("created_at", { ascending: true })
-    .limit(1);
+    .order("created_at", { ascending: true });
 
   if (error) throw new Error(error.message ?? "Kassa konnte nicht geladen werden.");
-  const row = ((data ?? [])[0] ?? null) as CashRegisterRow | null;
-  if (!row?.id) throw new Error("Für diesen Tenant wurde keine Kassa gefunden.");
-  return row;
+
+  const rows = ((data ?? []) as CashRegisterRow[])
+    .filter((row) => row?.id)
+    .filter((row) => !isLegacyCashRegister(row));
+
+  if (rows.length === 0) {
+    throw new Error("Für diesen Tenant wurde keine aktive Kassa gefunden.");
+  }
+
+  const activeRows = rows.filter((row) => {
+    const status = String(row.status ?? "").trim().toUpperCase();
+    return status !== "INACTIVE" && status !== "ARCHIVED";
+  });
+
+  const usableRows = activeRows.length > 0 ? activeRows : rows;
+  const preferred =
+    usableRows.find((row) => String(row.status ?? "").trim().toUpperCase() === "ACTIVE") ??
+    usableRows.find((row) => String(row.status ?? "").trim().toUpperCase() === "DRAFT") ??
+    usableRows[0] ??
+    null;
+
+  if (!preferred?.id) {
+    throw new Error("Für diesen Tenant wurde keine verwendbare Kassa gefunden.");
+  }
+
+  return preferred;
 }
 
 async function resolveSalesOrder(admin: any, salesOrderId: string) {
@@ -217,6 +246,25 @@ async function resolveSalesOrder(admin: any, salesOrderId: string) {
     .maybeSingle();
   if (error || !data) throw new Error("Sales Order konnte nicht geladen werden.");
   return data as SalesOrderContextRow;
+}
+
+function assertCashRegisterConsistency(input: {
+  salesOrderCashRegisterId?: string | null;
+  paymentCashRegisterId?: string | null;
+  resolvedCashRegisterId?: string | null;
+}) {
+  const values = [
+    String(input.salesOrderCashRegisterId ?? "").trim(),
+    String(input.paymentCashRegisterId ?? "").trim(),
+    String(input.resolvedCashRegisterId ?? "").trim(),
+  ].filter(Boolean);
+
+  const unique = Array.from(new Set(values));
+  if (unique.length > 1) {
+    throw new Error("Kassen-Zuordnung ist inkonsistent. Sales Order, Payment und Receipt müssen dieselbe Kassa verwenden.");
+  }
+
+  return unique[0] ?? "";
 }
 
 function roundTaxPortionFromGross(totalCents: number, taxRate: number) {
@@ -266,6 +314,31 @@ async function insertFiscalEventSafe(admin: any, input: FiscalEventInsert) {
   return { ok: !error, error };
 }
 
+
+function normalizeReceiptStatus(value: string | null | undefined) {
+  return String(value ?? "").trim().toUpperCase();
+}
+
+function buildVerificationNoteForCancellation(existing: string | null | undefined, cancelledAt: string) {
+  const base = String(existing ?? "").trim();
+  const suffix = `MVP-Storno am ${cancelledAt}`;
+  if (!base) return suffix;
+  if (base.includes(suffix)) return base;
+  return `${base} | ${suffix}`;
+}
+
+function buildVerificationNoteForRealCancellation(existing: string | null | undefined, stornoReceiptNumber: string, cancelledAt: string) {
+  const base = String(existing ?? "").trim();
+  const suffix = `Storniert durch Beleg ${stornoReceiptNumber} am ${cancelledAt}`;
+  if (!base) return suffix;
+  if (base.includes(suffix)) return base;
+  return `${base} | ${suffix}`;
+}
+
+function buildVerificationNoteForStornoReceipt(originalReceiptNumber: string, cancelledAt: string) {
+  return `Stornobeleg zu ${originalReceiptNumber} am ${cancelledAt}`;
+}
+
 async function insertFiscalFailureSafe(
   admin: any,
   input: {
@@ -291,6 +364,346 @@ async function insertFiscalFailureSafe(
     error_detail: input.errorDetail ?? null,
     created_by: input.createdBy ?? null,
   });
+}
+
+
+
+export async function cancelFiscalReceiptMvp(formData: FormData) {
+  const receiptId = String(formData.get("receipt_id") ?? "").trim();
+  const returnQuery = String(formData.get("return_query") ?? "").trim();
+
+  if (!receiptId) {
+    redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { error: "Beleg konnte nicht zugeordnet werden." }));
+  }
+
+  const { admin, user, effectiveTenantId } = await requireContext();
+
+  const { data: receiptRaw, error: receiptError } = await admin
+    .from("fiscal_receipts")
+    .select(`
+      id,
+      tenant_id,
+      sales_order_id,
+      payment_id,
+      cash_register_id,
+      receipt_number,
+      receipt_type,
+      status,
+      issued_at,
+      currency_code,
+      turnover_value_cents,
+      sum_tax_set_normal,
+      sum_tax_set_reduced1,
+      sum_tax_set_reduced2,
+      sum_tax_set_zero,
+      chain_previous_receipt_id,
+      chain_previous_hash,
+      receipt_payload_hash,
+      receipt_payload_canonical,
+      signature_algorithm,
+      verification_notes
+    `)
+    .eq("id", receiptId)
+    .maybeSingle();
+
+  if (receiptError || !receiptRaw) {
+    redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: "Fiscal Receipt konnte nicht geladen werden." }));
+  }
+
+  const receipt = receiptRaw as {
+    id: string;
+    tenant_id: string | null;
+    sales_order_id: string | null;
+    payment_id: string | null;
+    cash_register_id: string | null;
+    receipt_number: string | null;
+    receipt_type: string | null;
+    status: string | null;
+    issued_at: string | null;
+    currency_code: string | null;
+    turnover_value_cents: number | null;
+    sum_tax_set_normal: number | null;
+    sum_tax_set_reduced1: number | null;
+    sum_tax_set_reduced2: number | null;
+    sum_tax_set_zero: number | null;
+    chain_previous_receipt_id: string | null;
+    chain_previous_hash: string | null;
+    receipt_payload_hash: string | null;
+    receipt_payload_canonical: string | null;
+    signature_algorithm: string | null;
+    verification_notes: string | null;
+  };
+
+  const tenantId = String(receipt.tenant_id ?? "").trim();
+  const salesOrderId = String(receipt.sales_order_id ?? "").trim() || null;
+  const paymentId = String(receipt.payment_id ?? "").trim() || null;
+  const currentStatus = normalizeReceiptStatus(receipt.status);
+  const receiptType = String(receipt.receipt_type ?? "").trim().toUpperCase();
+
+  if (!tenantId) {
+    redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: "Beleg hat keinen Tenant." }));
+  }
+
+  if (effectiveTenantId && effectiveTenantId !== tenantId) {
+    redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: "Dieser Beleg gehört nicht zum aktiven Tenant." }));
+  }
+
+  if (currentStatus === "REVERSED" || currentStatus === "CANCELLED") {
+    redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, success: "Beleg war bereits storniert." }));
+  }
+
+  if (String(receipt.verification_notes ?? "").includes("Stornobeleg zu") || receiptType === "REVERSAL") {
+    redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: "Ein Stornobeleg kann nicht nochmals storniert werden." }));
+  }
+
+  const { data: existingStornoRows } = await admin
+    .from("fiscal_events")
+    .select("id, reference_data")
+    .eq("fiscal_receipt_id", receiptId)
+    .eq("event_type", "RECEIPT_CANCELLED")
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  const existingStornoRef = String((((existingStornoRows ?? [])[0] as any)?.reference_data ?? {})?.storno_receipt_id ?? "").trim();
+  if (existingStornoRef) {
+    redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId: existingStornoRef, success: "Stornobeleg war bereits vorhanden." }));
+  }
+
+  const { data: receiptLineRowsRaw, error: receiptLinesError } = await admin
+    .from("fiscal_receipt_lines")
+    .select("source_line_id, name, quantity, unit_price_gross, tax_rate, line_total_gross")
+    .eq("fiscal_receipt_id", receiptId)
+    .order("created_at", { ascending: true });
+
+  if (receiptLinesError) {
+    redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: receiptLinesError.message ?? "Receipt-Zeilen konnten nicht geladen werden." }));
+  }
+
+  const receiptLines = (receiptLineRowsRaw ?? []) as Array<{
+    source_line_id: string | null;
+    name: string | null;
+    quantity: number | null;
+    unit_price_gross: number | null;
+    tax_rate: number | null;
+    line_total_gross: number | null;
+  }>;
+
+  if (receiptLines.length === 0) {
+    redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: "Für den Beleg wurden keine Receipt-Zeilen gefunden." }));
+  }
+
+  const cancelledAt = new Date().toISOString();
+  const stornoReceiptNumber = await nextReceiptNumber(admin, String(receipt.cash_register_id ?? "").trim());
+
+  const payloadBefore = parsePayload(receipt.receipt_payload_canonical);
+  const customerName =
+    readFirstString(payloadBefore, [
+      ["customer_name"],
+      ["person_name"],
+      ["customer", "full_name"],
+      ["customer", "name"],
+    ]) || null;
+  const providerName =
+    readFirstString(payloadBefore, [
+      ["provider_name"],
+      ["tenant_display_name"],
+      ["tenant_name"],
+      ["tenant", "display_name"],
+    ]) || null;
+
+  const stornoPayloadLines = receiptLines.map((line) => ({
+    source_line_id: line.source_line_id,
+    name: line.name ?? "Position",
+    quantity: Number(line.quantity ?? 0) || 0,
+    unit_price_gross: -Math.abs(Math.round(Number(line.unit_price_gross ?? 0) * 100)),
+    tax_rate: Number(line.tax_rate ?? 0) || 0,
+    line_total_gross: -Math.abs(Math.round(Number(line.line_total_gross ?? 0) * 100)),
+  }));
+
+  const stornoPayload = {
+    receipt_id: null,
+    cash_register_id: receipt.cash_register_id,
+    sales_order_id: receipt.sales_order_id,
+    payment_id: null,
+    receipt_number: stornoReceiptNumber,
+    receipt_type: "STANDARD",
+    issued_at: cancelledAt,
+    currency_code: receipt.currency_code || "EUR",
+    customer_name: customerName,
+    provider_name: providerName,
+    turnover_value_cents: -Math.abs(Number(receipt.turnover_value_cents ?? 0) || 0),
+    original_receipt_id: receipt.id,
+    original_receipt_number: receipt.receipt_number,
+    lines: stornoPayloadLines,
+  };
+  const stornoPayloadCanonical = JSON.stringify(stornoPayload);
+  const stornoPayloadHash = createHash("sha256").update(stornoPayloadCanonical).digest("hex");
+
+  const { data: stornoInsert, error: stornoInsertError } = await admin
+    .from("fiscal_receipts")
+    .insert({
+      tenant_id: tenantId,
+      cash_register_id: receipt.cash_register_id,
+      sales_order_id: receipt.sales_order_id,
+      payment_id: null,
+      receipt_number: stornoReceiptNumber,
+      receipt_type: "STANDARD",
+      status: "REQUESTED",
+      issued_at: cancelledAt,
+      currency_code: receipt.currency_code || "EUR",
+      sum_tax_set_normal: -Math.abs(Number(receipt.sum_tax_set_normal ?? 0) || 0),
+      sum_tax_set_reduced1: -Math.abs(Number(receipt.sum_tax_set_reduced1 ?? 0) || 0),
+      sum_tax_set_reduced2: -Math.abs(Number(receipt.sum_tax_set_reduced2 ?? 0) || 0),
+      sum_tax_set_zero: -Math.abs(Number(receipt.sum_tax_set_zero ?? 0) || 0),
+      turnover_value_cents: -Math.abs(Number(receipt.turnover_value_cents ?? 0) || 0),
+      created_by: user.id,
+      chain_previous_receipt_id: receipt.id,
+      chain_previous_hash: receipt.receipt_payload_hash,
+      receipt_payload_canonical: stornoPayloadCanonical,
+      receipt_payload_hash: stornoPayloadHash,
+      signature_algorithm: receipt.signature_algorithm || "SIMULATED_SHA256",
+      signature_created_at: cancelledAt,
+      signature_state: "SIMULATED",
+      verification_status: "VALID",
+      verification_checked_at: cancelledAt,
+      verification_notes: buildVerificationNoteForStornoReceipt(String(receipt.receipt_number ?? ""), cancelledAt),
+    })
+    .select("id")
+    .single();
+
+  if (stornoInsertError || !stornoInsert?.id) {
+    await insertFiscalFailureSafe(admin, {
+      tenantId,
+      cashRegisterId: receipt.cash_register_id,
+      salesOrderId,
+      paymentId,
+      fiscalReceiptId: receiptId,
+      failedStep: "storno_receipt_insert",
+      errorMessage: stornoInsertError?.message ?? "Stornobeleg konnte nicht erstellt werden.",
+      createdBy: user.id,
+      errorDetail: stornoInsertError ? { code: stornoInsertError.code, details: stornoInsertError.details, hint: stornoInsertError.hint } : null,
+    });
+    redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: stornoInsertError?.message ?? "Stornobeleg konnte nicht erstellt werden." }));
+  }
+
+  const stornoReceiptId = String(stornoInsert.id);
+
+  const stornoReceiptLinesPayload = receiptLines.map((line) => ({
+    fiscal_receipt_id: stornoReceiptId,
+    source_line_id: line.source_line_id,
+    name: line.name ?? "Position",
+    quantity: Number(line.quantity ?? 0) || 0,
+    unit_price_gross: -Math.abs(Number(line.unit_price_gross ?? 0) || 0),
+    tax_rate: Number(line.tax_rate ?? 0) || 0,
+    line_total_gross: -Math.abs(Number(line.line_total_gross ?? 0) || 0),
+  }));
+
+  const { error: stornoLinesInsertError } = await admin
+    .from("fiscal_receipt_lines")
+    .insert(stornoReceiptLinesPayload);
+
+  if (stornoLinesInsertError) {
+    await insertFiscalFailureSafe(admin, {
+      tenantId,
+      cashRegisterId: receipt.cash_register_id,
+      salesOrderId,
+      paymentId,
+      fiscalReceiptId: stornoReceiptId,
+      failedStep: "storno_receipt_lines_insert",
+      errorMessage: stornoLinesInsertError.message ?? "Storno-Receipt-Zeilen konnten nicht erstellt werden.",
+      createdBy: user.id,
+      errorDetail: stornoLinesInsertError ? { code: stornoLinesInsertError.code, details: stornoLinesInsertError.details, hint: stornoLinesInsertError.hint } : null,
+    });
+    redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: stornoLinesInsertError.message ?? "Storno-Receipt-Zeilen konnten nicht erstellt werden." }));
+  }
+
+  const { error: updateOriginalError } = await admin
+    .from("fiscal_receipts")
+    .update({
+      status: "REVERSED",
+      verification_notes: buildVerificationNoteForRealCancellation(receipt.verification_notes, stornoReceiptNumber, cancelledAt),
+      updated_at: cancelledAt,
+    })
+    .eq("id", receiptId);
+
+  if (updateOriginalError) {
+    await insertFiscalFailureSafe(admin, {
+      tenantId,
+      cashRegisterId: receipt.cash_register_id,
+      salesOrderId,
+      paymentId,
+      fiscalReceiptId: receiptId,
+      failedStep: "original_receipt_mark_reversed",
+      errorMessage: updateOriginalError.message ?? "Originalbeleg konnte nicht auf storniert gesetzt werden.",
+      createdBy: user.id,
+      errorDetail: updateOriginalError ? { code: updateOriginalError.code, details: updateOriginalError.details, hint: updateOriginalError.hint } : null,
+    });
+    redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: updateOriginalError.message ?? "Originalbeleg konnte nicht auf storniert gesetzt werden." }));
+  }
+
+  await insertFiscalEventSafe(admin, {
+    tenantId,
+    cashRegisterId: receipt.cash_register_id,
+    fiscalReceiptId: receiptId,
+    performedBy: user.id,
+    eventType: "RECEIPT_CANCELLED",
+    notes: "Originalbeleg storniert. Echter Stornobeleg erstellt.",
+    referenceData: {
+      receipt_id: receiptId,
+      receipt_number: receipt.receipt_number,
+      sales_order_id: salesOrderId,
+      payment_id: paymentId,
+      cancelled_at: cancelledAt,
+      previous_status: receipt.status,
+      cancellation_mode: "REAL_STORNO_RECEIPT",
+      storno_receipt_id: stornoReceiptId,
+      storno_receipt_number: stornoReceiptNumber,
+    },
+  });
+
+  await insertFiscalEventSafe(admin, {
+    tenantId,
+    cashRegisterId: receipt.cash_register_id,
+    fiscalReceiptId: stornoReceiptId,
+    performedBy: user.id,
+    eventType: "STANDARD_RECEIPT_CREATED",
+    notes: "Stornobeleg erfolgreich erzeugt.",
+    referenceData: {
+      receipt_id: stornoReceiptId,
+      receipt_number: stornoReceiptNumber,
+      receipt_type: "STANDARD",
+      receipt_kind: "STORNO",
+      original_receipt_id: receiptId,
+      original_receipt_number: receipt.receipt_number,
+      sales_order_id: salesOrderId,
+      payment_id: paymentId,
+      storno_payment_id: null,
+      cancelled_at: cancelledAt,
+      turnover_value_cents: -Math.abs(Number(receipt.turnover_value_cents ?? 0) || 0),
+    },
+  });
+
+  await insertFiscalEventSafe(admin, {
+    tenantId,
+    cashRegisterId: receipt.cash_register_id,
+    fiscalReceiptId: stornoReceiptId,
+    performedBy: user.id,
+    eventType: "RECEIPT_VERIFICATION_SUCCEEDED",
+    notes: "Simulierte Verifikation für Stornobeleg erfolgreich abgeschlossen.",
+    referenceData: {
+      receipt_id: stornoReceiptId,
+      receipt_number: stornoReceiptNumber,
+      receipt_type: "STANDARD",
+      receipt_kind: "STORNO",
+      verification_status: "VALID",
+      signature_state: "SIMULATED",
+      checked_at: cancelledAt,
+      original_receipt_id: receiptId,
+    },
+  });
+
+  revalidatePath("/rechnungen");
+  redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId: stornoReceiptId, success: `Stornobeleg ${stornoReceiptNumber} erstellt ✅` }));
 }
 
 export async function createSalesOrderFromAppointment(formData: FormData) {
@@ -467,7 +880,12 @@ export async function createPaymentForSalesOrder(formData: FormData) {
   const paymentMethodId = await resolvePaymentMethodId(admin, tenantId, paymentMethodCode);
   const paymentNotes = String(formData.get("payment_notes") ?? "").trim();
   const paidAt = new Date().toISOString();
-  const cashRegister = salesOrder.cash_register_id ? { id: salesOrder.cash_register_id } : await resolveCashRegister(admin, tenantId);
+  const resolvedCashRegister = await resolveCashRegister(admin, tenantId);
+  const cashRegisterId = assertCashRegisterConsistency({
+    salesOrderCashRegisterId: salesOrder.cash_register_id,
+    resolvedCashRegisterId: resolvedCashRegister.id,
+  }) || resolvedCashRegister.id;
+  const cashRegister = { id: cashRegisterId };
 
   const { data: paymentInsert, error: paymentError } = await admin
     .from("payments")
@@ -531,7 +949,13 @@ export async function createFiscalReceiptForPayment(formData: FormData) {
     redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, receiptId: existingReceiptId, success: "Fiscal Receipt bereits vorhanden ✅" }));
   }
 
-  const cashRegister = payment.cash_register_id ? { id: payment.cash_register_id } : await resolveCashRegister(admin, tenantId);
+  const resolvedCashRegister = await resolveCashRegister(admin, tenantId);
+  const cashRegisterId = assertCashRegisterConsistency({
+    salesOrderCashRegisterId: salesOrder.cash_register_id,
+    paymentCashRegisterId: payment.cash_register_id,
+    resolvedCashRegisterId: resolvedCashRegister.id,
+  }) || resolvedCashRegister.id;
+  const cashRegister = { id: cashRegisterId };
 
   const appointmentLookupId = String(salesOrder.appointment_id ?? appointmentId ?? "").trim();
   let appointmentDetails: AppointmentDetailLookupRow | null = null;
@@ -1723,7 +2147,12 @@ export async function createPaymentForSalesOrderInline(formData: FormData): Prom
     const paymentMethodId = await resolvePaymentMethodId(admin, tenantId, paymentMethodCode);
     const paymentNotes = String(formData.get("payment_notes") ?? "").trim();
     const paidAt = new Date().toISOString();
-    const cashRegister = salesOrder.cash_register_id ? { id: salesOrder.cash_register_id } : await resolveCashRegister(admin, tenantId);
+    const resolvedCashRegister = await resolveCashRegister(admin, tenantId);
+    const cashRegisterId = assertCashRegisterConsistency({
+      salesOrderCashRegisterId: salesOrder.cash_register_id,
+      resolvedCashRegisterId: resolvedCashRegister.id,
+    }) || resolvedCashRegister.id;
+    const cashRegister = { id: cashRegisterId };
 
     const { data: paymentInsert, error: paymentError } = await admin
       .from("payments")
@@ -1821,7 +2250,13 @@ export async function createFiscalReceiptForPaymentInline(formData: FormData): P
       };
     }
 
-    const cashRegister = payment.cash_register_id ? { id: payment.cash_register_id } : await resolveCashRegister(admin, tenantId);
+    const resolvedCashRegister = await resolveCashRegister(admin, tenantId);
+    const cashRegisterId = assertCashRegisterConsistency({
+      salesOrderCashRegisterId: salesOrder.cash_register_id,
+      paymentCashRegisterId: payment.cash_register_id,
+      resolvedCashRegisterId: resolvedCashRegister.id,
+    }) || resolvedCashRegister.id;
+    const cashRegister = { id: cashRegisterId };
 
     const appointmentLookupId = String(salesOrder.appointment_id ?? appointmentId ?? "").trim();
     let appointmentDetails: AppointmentDetailLookupRow | null = null;

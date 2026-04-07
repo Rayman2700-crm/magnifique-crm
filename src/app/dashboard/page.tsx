@@ -3,8 +3,6 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getEffectiveTenantId } from "@/lib/effectiveTenant";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/Badge";
 import DashboardCalendarCardClient from "@/components/calendar/DashboardCalendarCardClient";
 import OpenSlotsSlideover from "@/components/dashboard/OpenSlotsSlideover";
 import WaitlistSlideover from "@/components/dashboard/WaitlistSlideover";
@@ -24,35 +22,11 @@ type LegendUser = {
   tenantDisplayName: string;
 };
 
-type TodayAppointmentRow = {
-  id: string;
-  start_at: string;
-  end_at: string;
-  notes_internal: string | null;
-  tenant?: { display_name: string | null } | { display_name: string | null }[] | null;
-  person?:
-    | { full_name: string | null; phone: string | null }
-    | { full_name: string | null; phone: string | null }[]
-    | null;
-};
-
 type ReminderCountRow = {
   id: string;
   reminder_at: string | null;
   reminder_sent_at: string | null;
   notes_internal: string | null;
-};
-
-type RecentCustomerRow = {
-  id: string;
-  created_at: string;
-  display_name: string | null;
-  person_id: string;
-  person?:
-    | { full_name: string | null; phone: string | null }
-    | { full_name: string | null; phone: string | null }[]
-    | null;
-  tenant?: { display_name: string | null } | { display_name: string | null }[] | null;
 };
 
 type OpenSlotRow = {
@@ -110,7 +84,6 @@ type CalendarServiceRow = {
   is_active: boolean | null;
 };
 
-
 type DashboardCustomerOption = {
   id: string;
   tenantId: string;
@@ -163,18 +136,6 @@ function firstJoin<T>(x: T | T[] | null | undefined): T | null {
   return Array.isArray(x) ? (x[0] ?? null) : x;
 }
 
-function parseTitle(notes: string | null) {
-  if (!notes) return "Termin";
-
-  const lines = notes
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  const titleLine = lines.find((line) => line.toLowerCase().startsWith("titel:"));
-  return titleLine ? titleLine.replace(/^titel:\s*/i, "").trim() || "Termin" : "Termin";
-}
-
 function parseStatus(notes: string | null) {
   if (!notes) return "scheduled";
 
@@ -208,13 +169,6 @@ function formatCurrentTime(date: Date) {
   }).format(date);
 }
 
-function formatTime(dateString: string) {
-  return new Intl.DateTimeFormat("de-AT", {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(dateString));
-}
-
 function immediateCandidateScore(row: {
   short_notice_ok?: boolean | null;
   reachable_today?: boolean | null;
@@ -242,17 +196,6 @@ function immediateCandidateScore(row: {
   }
 
   return score;
-}
-
-function getInitials(name: string) {
-  return (
-    name
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase() ?? "")
-      .join("") || "K"
-  );
 }
 
 function tenantTheme(tenantName: string): ThemeLike {
@@ -337,7 +280,7 @@ function DashboardActionPill({
   return (
     <span
       className={`inline-flex items-center justify-center rounded-[16px] border ${
-        compact ? "h-10 w-10 px-0" : "h-9 px-3 text-[10px] sm:h-10 sm:px-4 sm:text-[11px]"
+        compact ? "h-9 w-9 px-0 sm:h-10 sm:w-10" : "h-9 px-3 text-[10px] sm:h-10 sm:px-4 sm:text-[11px]"
       } font-semibold uppercase tracking-[0.12em]`}
       style={{
         color: accentColor ?? "var(--primary)",
@@ -363,46 +306,30 @@ function DashboardStatCard({
   href?: string;
   accentColor?: string;
 }) {
-  const content = (
+  const card = (
     <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-      <CardContent className="flex min-h-[108px] flex-col p-4 sm:min-h-[120px] sm:p-5">
-        <div className="hidden items-start justify-between gap-3 md:flex">
-          <div className="min-w-0 flex-1">
-            <div className="text-xs font-medium text-[var(--text-muted)] sm:text-sm">{label}</div>
-            {subtext ? <div className="mt-1 text-[11px] text-white/45 sm:text-xs">{subtext}</div> : null}
-          </div>
-
-          <div className="flex items-start gap-2">
-            <div
-              className="pt-0.5 text-[22px] font-semibold leading-none tracking-tight sm:text-[36px]"
-              style={{ color: accentColor ?? "var(--text)" }}
-            >
-              {value}
+      <CardContent className="flex min-h-[132px] flex-col p-4 sm:min-h-[144px] sm:p-5">
+        <div className="flex h-full flex-col justify-between gap-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium leading-5 text-[var(--text-muted)] sm:text-[15px]">{label}</div>
+              {subtext ? <div className="mt-1 text-xs leading-5 text-white/45 sm:text-[13px]">{subtext}</div> : null}
             </div>
-
             {href ? <DashboardActionPill icon={<OpenIcon />} compact accentColor={accentColor} /> : null}
           </div>
-        </div>
 
-        <div className="flex h-full flex-col justify-between gap-4 md:hidden">
-          <div className="text-sm font-medium leading-5 text-[var(--text-muted)]">{label}</div>
-
-          <div className="flex items-center gap-2">
-            <div
-              className="text-[22px] font-semibold leading-none tracking-tight"
-              style={{ color: accentColor ?? "var(--text)" }}
-            >
-              {value}
-            </div>
-
-            {href ? <DashboardActionPill icon={<OpenIcon />} compact accentColor={accentColor} /> : null}
+          <div
+            className="text-[32px] font-semibold leading-none tracking-tight sm:text-[36px] lg:text-[40px]"
+            style={{ color: accentColor ?? "var(--text)" }}
+          >
+            {value}
           </div>
         </div>
       </CardContent>
     </Card>
   );
 
-  return href ? <Link href={href}>{content}</Link> : content;
+  return href ? <Link href={href}>{card}</Link> : card;
 }
 
 function InvoiceCreateCard({
@@ -428,13 +355,13 @@ function InvoiceCreateCard({
   };
 
   return (
-    <Card className="h-full border-[var(--border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-      <CardContent className="flex min-h-[108px] flex-col p-4 sm:min-h-[120px] sm:p-5">
+    <Card className="h-full border-[var(--border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035] lg:col-span-2 xl:col-span-2 2xl:col-span-2">
+      <CardContent className="flex min-h-[132px] flex-col p-4 sm:min-h-[144px] sm:p-5">
         <div className="flex h-full flex-col gap-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div className="text-xs font-medium text-[var(--text-muted)] sm:text-sm">Rechnungen</div>
-              <div className="mt-1 hidden text-[11px] text-white/45 sm:text-xs md:block">
+              <div className="text-sm font-medium text-[var(--text-muted)] sm:text-[15px]">Rechnungen</div>
+              <div className="mt-1 text-xs leading-5 text-white/45 sm:text-[13px]">
                 Abrechnen, prüfen und direkt weitermachen
               </div>
             </div>
@@ -444,27 +371,27 @@ function InvoiceCreateCard({
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 sm:gap-3 md:grid-cols-3">
-            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-2.5">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Heute</div>
               <div className="mt-1 text-sm font-semibold text-white">{formatMoney(todayRevenueCents)}</div>
-              <div className="mt-0.5 text-[10px] text-white/40">{todayReceiptCount} Belege</div>
+              <div className="mt-0.5 text-[11px] text-white/40">{todayReceiptCount} Belege</div>
             </div>
 
-            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-2.5">
+            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Offen</div>
               <div className="mt-1 text-sm font-semibold text-white">{openReceiptCount}</div>
-              <div className="mt-0.5 hidden text-[10px] text-white/40 md:block">noch prüfen</div>
+              <div className="mt-0.5 text-[11px] text-white/40">noch prüfen</div>
             </div>
 
-            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-2.5">
+            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Woche</div>
               <div className="mt-1 text-sm font-semibold text-white">{formatMoney(weekRevenueCents)}</div>
-              <div className="mt-0.5 hidden text-[10px] text-white/40 md:block">laufender Stand</div>
+              <div className="mt-0.5 text-[11px] text-white/40">laufender Stand</div>
             </div>
           </div>
 
-          <div className="mt-auto flex flex-col gap-2">
+          <div className="mt-auto grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             <Link
               href="/dashboard?invoice=1"
               className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] bg-[var(--primary)] px-3 text-sm font-medium text-[var(--primary-foreground)] shadow-[0_4px_20px_rgba(214,195,163,0.18)] transition hover:opacity-90"
@@ -483,7 +410,7 @@ function InvoiceCreateCard({
 
             <Link
               href="/rechnungen"
-              className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-white/10 bg-transparent px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
+              className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-white/10 bg-transparent px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10 sm:col-span-2 xl:col-span-1"
             >
               {hasRecentReceipt ? "Belege öffnen" : "Belege"}
             </Link>
@@ -643,25 +570,6 @@ export default async function DashboardPage() {
           .eq("tenant_id", servicesCardTenantId ?? effectiveCustomerTenantId ?? "")
           .eq("is_active", true);
 
-  let todayAppointmentsQuery = supabase
-    .from("appointments")
-    .select(`
-      id,
-      start_at,
-      end_at,
-      notes_internal,
-      tenant:tenants ( display_name ),
-      person:persons ( full_name, phone )
-    `)
-    .gte("start_at", startOfToday.toISOString())
-    .lt("start_at", endOfToday.toISOString());
-
-  if (!isAdmin && effectiveReminderTenantId) {
-    todayAppointmentsQuery = todayAppointmentsQuery.eq("tenant_id", effectiveReminderTenantId);
-  }
-
-  todayAppointmentsQuery = todayAppointmentsQuery.order("start_at", { ascending: true }).limit(6);
-
   let reminderCountQuery = admin
     .from("appointments")
     .select(`
@@ -677,24 +585,6 @@ export default async function DashboardPage() {
   if (!isAdmin && effectiveReminderTenantId) {
     reminderCountQuery = reminderCountQuery.eq("tenant_id", effectiveReminderTenantId);
   }
-
-  const recentCustomersBaseQuery = admin
-    .from("customer_profiles")
-    .select(`
-      id,
-      created_at,
-      display_name,
-      person_id,
-      person:persons ( full_name, phone ),
-      tenant:tenants ( display_name )
-    `)
-    .order("created_at", { ascending: false })
-    .limit(5);
-
-  const recentCustomersQuery =
-    isAdmin || !effectiveCustomerTenantId
-      ? recentCustomersBaseQuery
-      : recentCustomersBaseQuery.eq("tenant_id", effectiveCustomerTenantId);
 
   const slotsWindowEnd = new Date(startOfToday);
   slotsWindowEnd.setDate(slotsWindowEnd.getDate() + 90);
@@ -778,9 +668,7 @@ export default async function DashboardPage() {
     weekCountResult,
     customersCountResult,
     activeServicesCountResult,
-    todayAppointmentsResult,
     reminderCountResult,
-    recentCustomersResult,
     openSlotsResult,
     activeWaitlistResult,
     calendarServicesResult,
@@ -791,9 +679,7 @@ export default async function DashboardPage() {
     weekCountQuery,
     customersCountQuery,
     activeServicesCountQuery,
-    todayAppointmentsQuery,
     reminderCountQuery,
-    recentCustomersQuery,
     openSlotsQuery,
     activeWaitlistQuery,
     calendarServicesQuery,
@@ -801,8 +687,6 @@ export default async function DashboardPage() {
     receiptsQuery,
   ]);
 
-  const todayAppointments = (todayAppointmentsResult.data ?? []) as TodayAppointmentRow[];
-  const recentCustomers = (recentCustomersResult.data ?? []) as RecentCustomerRow[];
   const openSlots = (openSlotsResult.data ?? []) as OpenSlotRow[];
   const activeWaitlistRows = ((activeWaitlistResult.data ?? []) as {
     id: string;
@@ -1044,15 +928,15 @@ export default async function DashboardPage() {
   const profileTheme = tenantTheme(tenantDisplayName ?? displayName);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 lg:space-y-8">
       <section>
         <Card className="overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
-          <CardContent className="p-6 md:p-8">
-            <div className="hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 md:block md:p-7">
-              <div className="hidden flex-col gap-6 md:flex md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-5">
+          <CardContent className="p-4 sm:p-5 md:p-7 xl:p-8">
+            <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 sm:p-5 md:p-7">
+              <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+                <div className="flex min-w-0 items-center gap-4 sm:gap-5">
                   <div
-                    className="flex h-[88px] w-[88px] items-center justify-center overflow-hidden rounded-[24px] border-[4px] shadow-[0_0_0_2px_rgba(11,11,12,0.9)]"
+                    className="flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-[22px] border-[4px] shadow-[0_0_0_2px_rgba(11,11,12,0.9)] sm:h-[80px] sm:w-[80px] md:h-[88px] md:w-[88px]"
                     style={{ borderColor: profileTheme.border, background: profileTheme.bg }}
                   >
                     <img
@@ -1066,24 +950,24 @@ export default async function DashboardPage() {
                     <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">
                       Clientique Dashboard
                     </div>
-                    <div className="mt-2 truncate text-[30px] font-semibold leading-none tracking-tight text-[var(--text)]">
+                    <div className="mt-2 break-words text-[28px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[32px] md:text-[36px] xl:text-[42px]">
                       {displayName}
                     </div>
-                    <div className="mt-2 text-sm text-[var(--text-muted)]">
+                    <div className="mt-2 text-sm text-[var(--text-muted)] sm:text-base">
                       {tenantDisplayName ?? "Studioansicht"}
                     </div>
                   </div>
                 </div>
 
-                <div className="rounded-[24px] border border-white/10 bg-black/20 px-5 py-4 sm:min-w-[210px]">
+                <div className="w-full rounded-[22px] border border-white/10 bg-black/20 px-5 py-4 sm:w-auto sm:min-w-[220px]">
                   <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Heute</div>
-                  <div className="mt-2 text-base font-medium text-[var(--text)]">{currentDateLabel}</div>
-                  <div className="mt-1 text-sm text-[var(--primary)]">{currentTimeLabel} Uhr</div>
+                  <div className="mt-2 text-base font-medium text-[var(--text)] sm:text-lg">{currentDateLabel}</div>
+                  <div className="mt-1 text-sm text-[var(--primary)] sm:text-base">{currentTimeLabel} Uhr</div>
                 </div>
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-4 min-[480px]:grid-cols-2 sm:gap-5 md:mt-7 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8">
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:mt-6 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4">
               <DashboardStatCard label="Termine heute" value={String(todayCount)} subtext="Heute im Plan" />
               <DashboardStatCard label="Termine Woche" value={String(weekCount)} subtext="Diese Woche" />
               <DashboardStatCard label="Kunden gesamt" value={String(customersCount)} subtext="Gespeicherte Profile" />
