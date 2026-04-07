@@ -371,13 +371,11 @@ export default function WaitlistSlideover({ items }: { items: WaitlistItem[] }) 
   const [showAdd, setShowAdd] = useState(false);
 
   const open = searchParams?.get("openWaitlist") === "1";
-  const openAddForm = searchParams?.get("waitlistAdd") === "1";
 
   const close = useMemo(() => {
     return () => {
       const params = new URLSearchParams(searchParams?.toString() ?? "");
       params.delete("openWaitlist");
-      params.delete("waitlistAdd");
       const qs = params.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     };
@@ -407,14 +405,6 @@ export default function WaitlistSlideover({ items }: { items: WaitlistItem[] }) 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, close]);
-
-  useEffect(() => {
-    if (!open) {
-      setShowAdd(false);
-      return;
-    }
-    setShowAdd(openAddForm);
-  }, [open, openAddForm]);
 
   if (!mounted || !visible || typeof document === "undefined") return null;
 

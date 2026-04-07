@@ -102,6 +102,44 @@ type SlideoverReceipt = {
   paymentMethodLabel?: string | null;
   customerEmail?: string | null;
   customerPhone?: string | null;
+  deliveries?: SlideoverDelivery[];
+};
+
+type ReceiptDeliveryRow = {
+  id: string;
+  tenant_id: string | null;
+  fiscal_receipt_id: string | null;
+  channel: string | null;
+  status: string | null;
+  recipient: string | null;
+  subject: string | null;
+  message_preview: string | null;
+  provider: string | null;
+  provider_message_id: string | null;
+  sent_by: string | null;
+  sent_at: string | null;
+  failed_at: string | null;
+  error_message: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+type SlideoverDelivery = {
+  id: string;
+  channel: string | null;
+  status: string | null;
+  recipient: string | null;
+  subject: string | null;
+  messagePreview: string | null;
+  provider: string | null;
+  providerMessageId: string | null;
+  sentBy: string | null;
+  sentByLabel: string | null;
+  sentAt: string | null;
+  failedAt: string | null;
+  errorMessage: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
 };
 
 type CheckoutAppointmentRow = {
@@ -1166,6 +1204,57 @@ export default async function RechnungenPage({
     }
   }
 
+  const receiptDeliveryByReceiptId = new Map<string, SlideoverDelivery[]>();
+  if (receiptIds.length > 0) {
+    const { data: deliveryRows } = await admin
+      .from("receipt_deliveries")
+      .select("id, tenant_id, fiscal_receipt_id, channel, status, recipient, subject, message_preview, provider, provider_message_id, sent_by, sent_at, failed_at, error_message, created_at, updated_at")
+      .in("fiscal_receipt_id", receiptIds)
+      .order("created_at", { ascending: false });
+
+    const deliveries = (deliveryRows ?? []) as ReceiptDeliveryRow[];
+    const senderIds = Array.from(new Set(deliveries.map((row) => String(row.sent_by ?? "").trim()).filter(Boolean)));
+    const senderLabelById = new Map<string, string>();
+
+    if (senderIds.length > 0) {
+      const { data: senderRows } = await admin
+        .from("user_profiles")
+        .select("user_id, full_name")
+        .in("user_id", senderIds);
+
+      for (const row of (senderRows ?? []) as Array<{ user_id: string | null; full_name: string | null }>) {
+        const userId = String(row.user_id ?? "").trim();
+        if (!userId) continue;
+        senderLabelById.set(userId, String(row.full_name ?? "").trim() || userId);
+      }
+    }
+
+    for (const row of deliveries) {
+      const receiptIdKey = String(row.fiscal_receipt_id ?? "").trim();
+      if (!receiptIdKey) continue;
+      const bucket = receiptDeliveryByReceiptId.get(receiptIdKey) ?? [];
+      const sentBy = String(row.sent_by ?? "").trim() || null;
+      bucket.push({
+        id: row.id,
+        channel: row.channel,
+        status: row.status,
+        recipient: row.recipient,
+        subject: row.subject,
+        messagePreview: row.message_preview,
+        provider: row.provider,
+        providerMessageId: row.provider_message_id,
+        sentBy,
+        sentByLabel: sentBy ? (senderLabelById.get(sentBy) ?? sentBy) : null,
+        sentAt: row.sent_at,
+        failedAt: row.failed_at,
+        errorMessage: row.error_message,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      });
+      receiptDeliveryByReceiptId.set(receiptIdKey, bucket);
+    }
+  }
+
   const receiptTenantIds = Array.from(new Set(receipts.map((row) => String(row.tenant_id ?? '').trim()).filter(Boolean)));
   const servicesByTenant = new Map<string, CheckoutServiceOption[]>();
   if (receiptTenantIds.length > 0) {
@@ -1254,6 +1343,7 @@ export default async function RechnungenPage({
       paymentMethodLabel: paymentMethodLabelByReceiptId.get(row.id) ?? null,
       customerEmail: customerProfile?.customerEmail ?? null,
       customerPhone: customerProfile?.customerPhone ?? null,
+      deliveries: receiptDeliveryByReceiptId.get(row.id) ?? [],
     };
   });
 

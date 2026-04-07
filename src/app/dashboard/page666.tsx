@@ -1054,14 +1054,6 @@ export default async function DashboardPage() {
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:mt-6 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4">
-              <InvoiceCreateCard
-                todayRevenueCents={todayRevenueCents}
-                todayReceiptCount={todayReceiptCount}
-                openReceiptCount={openReceiptCount}
-                weekRevenueCents={weekRevenueCents}
-                hasRecentReceipt={hasRecentReceipt}
-              />
-
               <AppointmentsOverviewCard todayCount={String(todayCount)} weekCount={String(weekCount)} />
               <CustomerOverviewCard value={String(customersCount)} subtext="Gespeicherte Profile" />
 
@@ -1076,35 +1068,13 @@ export default async function DashboardPage() {
                 }))}
               />
 
-              <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-                <CardContent className="flex min-h-[132px] flex-col p-4 sm:min-h-[144px] sm:p-5">
-                  <div className="flex h-full flex-col justify-between gap-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium leading-5 text-[var(--text-muted)] sm:text-[15px]">Aktive Warteliste</div>
-                        <div className="mt-1 text-xs leading-5 text-white/45 sm:text-[13px]">Kunden warten</div>
-                      </div>
-
-                      <div className="flex shrink-0 items-center gap-2">
-                        <Link href="/dashboard?openWaitlist=1&waitlistAdd=1" className="shrink-0" aria-label="Kunden zur Warteliste hinzufügen">
-                          <DashboardActionPill icon={<PlusCircleIcon />} compact accentColor="#a855f7" />
-                        </Link>
-
-                        <Link href="/dashboard?openWaitlist=1" className="shrink-0" aria-label="Warteliste öffnen">
-                          <DashboardActionPill icon={<OpenIcon />} compact accentColor="#a855f7" />
-                        </Link>
-                      </div>
-                    </div>
-
-                    <div
-                      className="text-[32px] font-semibold leading-none tracking-tight sm:text-[36px] lg:text-[40px]"
-                      style={{ color: waitlistItems.length === 0 ? "#34d399" : "#a855f7" }}
-                    >
-                      {String(waitlistItems.length)}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <InvoiceCreateCard
+                todayRevenueCents={todayRevenueCents}
+                todayReceiptCount={todayReceiptCount}
+                openReceiptCount={openReceiptCount}
+                weekRevenueCents={weekRevenueCents}
+                hasRecentReceipt={hasRecentReceipt}
+              />
 
               <DashboardStatCard
                 label="Freie Termine"
@@ -1112,6 +1082,13 @@ export default async function DashboardPage() {
                 subtext="Kurzfristig frei"
                 href="/dashboard?openSlots=1"
                 accentColor={openSlots.length === 0 ? "#34d399" : "#fb923c"}
+              />
+              <DashboardStatCard
+                label="Aktive Warteliste"
+                value={String(waitlistItems.length)}
+                subtext="Kunden warten"
+                href="/dashboard?openWaitlist=1"
+                accentColor={waitlistItems.length === 0 ? "#34d399" : "#a855f7"}
               />
               <DashboardStatCard
                 label="Reminder"

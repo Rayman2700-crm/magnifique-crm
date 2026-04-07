@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { cancelFiscalReceiptMvp, openFiscalReceiptWhatsApp, sendFiscalReceiptEmail, updateFiscalReceiptDetails } from "@/app/rechnungen/actions";
+import { cancelFiscalReceiptMvp, sendFiscalReceiptEmail, updateFiscalReceiptDetails } from "@/app/rechnungen/actions";
 
 type SlideoverEvent = {
   id: string;
@@ -723,20 +723,13 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                 )}
 
                 {whatsappHref && !isCancelled ? (
-                  <form action={openFiscalReceiptWhatsApp}>
-                    <input type="hidden" name="receipt_id" value={selected.id} />
-                    <input type="hidden" name="return_query" value={currentQuery} />
-                    <button
-                      type="submit"
-                      aria-label="WhatsApp senden"
-                      title="WhatsApp senden"
-                      className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 transition-colors hover:bg-white/10"
-                    >
+                  <a href={whatsappHref} target="_blank" rel="noreferrer" aria-label="WhatsApp senden" title="WhatsApp senden">
+                    <IconButton title="WhatsApp senden" hoverClassName="hover:bg-white/10">
                       <svg viewBox="0 0 24 24" className="h-5 w-5" fill="#34d399" aria-hidden="true">
                         <path d="M20.52 3.48A11.82 11.82 0 0 0 12.07 0C5.5 0 .16 5.34.16 11.92c0 2.1.55 4.15 1.59 5.96L0 24l6.32-1.66a11.86 11.86 0 0 0 5.75 1.47h.01c6.57 0 11.91-5.34 11.91-11.92 0-3.18-1.24-6.17-3.47-8.41Zm-8.45 18.3h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.75.98 1-3.66-.24-.38a9.9 9.9 0 0 1-1.52-5.21c0-5.46 4.45-9.91 9.92-9.91 2.65 0 5.14 1.03 7.01 2.9a9.84 9.84 0 0 1 2.9 7c0 5.47-4.45 9.92-9.92 9.92Zm5.44-7.42c-.3-.15-1.77-.88-2.04-.98-.27-.1-.47-.15-.66.15-.2.3-.76.98-.94 1.18-.17.2-.35.22-.64.08-.3-.15-1.25-.46-2.38-1.47-.88-.79-1.47-1.77-1.64-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.44-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.66-1.59-.91-2.18-.24-.58-.48-.5-.66-.5h-.56c-.2 0-.52.08-.8.37-.27.3-1.05 1.03-1.05 2.5s1.08 2.9 1.23 3.1c.15.2 2.12 3.24 5.14 4.54.72.31 1.28.5 1.72.64.72.23 1.38.2 1.9.12.58-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.12-.27-.2-.56-.35Z" />
                       </svg>
-                    </button>
-                  </form>
+                    </IconButton>
+                  </a>
                 ) : (
                   <IconButton title={isCancelled ? "Versand bei storniertem Beleg deaktiviert" : "Keine Telefonnummer hinterlegt"} className="cursor-not-allowed opacity-45" hoverClassName="hover:bg-white/5">
                     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="#34d399" aria-hidden="true">
@@ -1236,16 +1229,14 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                   )}
 
                   {whatsappHref && !isCancelled ? (
-                    <form action={openFiscalReceiptWhatsApp}>
-                      <input type="hidden" name="receipt_id" value={selected.id} />
-                      <input type="hidden" name="return_query" value={currentQuery} />
-                      <button
-                        type="submit"
-                        className="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-500/15"
-                      >
-                        WhatsApp öffnen
-                      </button>
-                    </form>
+                    <a
+                      href={whatsappHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-500/15"
+                    >
+                      WhatsApp öffnen
+                    </a>
                   ) : (
                     <button
                       type="button"

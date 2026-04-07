@@ -235,19 +235,7 @@ function SettingsMenuPopover({ open, shown, onClose, onOpenGoogleSetup, googleSe
     <div style={{ position: "fixed", inset: 0, zIndex: 1190, isolation: "isolate" }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "transparent" }} />
       <div style={{ position: "absolute", top: 14, right: 68, width: 248, maxWidth: "calc(100vw - 24px)", borderRadius: 22, border: "1px solid rgba(255,255,255,0.10)", background: "linear-gradient(180deg, rgba(28,28,31,0.98) 0%, rgba(18,19,22,0.98) 100%)", boxShadow: "0 24px 70px rgba(0,0,0,0.44)", overflow: "hidden", transform: shown ? "translateY(0) scale(1)" : "translateY(-6px) scale(0.98)", opacity: shown ? 1 : 0, transformOrigin: "top right", transition: "transform 180ms ease, opacity 180ms ease", backdropFilter: "blur(18px)" }}>
-        <div style={{ padding: 8, display: "grid", gap: 8 }}>
-          <Link href="/einstellungen/mail" onClick={onClose} className="block w-full rounded-xl border border-white/10 bg-white/[0.04] text-left transition hover:bg-white/[0.07]">
-            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: 12 }}>
-              <div style={{ width: 26, height: 26, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.92)" }}>
-                <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.96)", lineHeight: 1.2 }}>Mail-Absender</div>
-                <div style={{ marginTop: 4, fontSize: 12, color: "rgba(247,247,245,0.58)", lineHeight: 1.2 }}>Absenderdaten pro Behandler pflegen</div>
-              </div>
-            </div>
-          </Link>
-
+        <div style={{ padding: 8 }}>
           <button type="button" onClick={onOpenGoogleSetup} className="block w-full rounded-xl border border-white/10 bg-white/[0.04] text-left transition hover:bg-white/[0.07]">
             <div style={{ display: "flex", alignItems: "center", gap: 12, padding: 8 }}>
               <GoogleCalendarMark day={day} />

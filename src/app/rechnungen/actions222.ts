@@ -7,7 +7,6 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getEffectiveTenantId } from "@/lib/effectiveTenant";
 import { sendMail } from "@/lib/mail/sendMail";
-import { sendGoogleMail } from "@/lib/mail/sendGoogleMail";
 
 type UserProfileRow = {
   role: string | null;
@@ -660,26 +659,14 @@ export async function sendFiscalReceiptEmail(formData: FormData) {
   let redirectUrl = "";
 
   try {
-    const deliveryMode = String(tenantMailSettings?.mail_delivery_mode ?? "").trim().toLowerCase();
-
-    const mailResult =
-      deliveryMode === "oauth_user"
-        ? await sendGoogleMail({
-            to: customerEmail,
-            subject,
-            text,
-            replyTo: replyToEmail || undefined,
-            senderName: senderName || undefined,
-            senderEmail: senderEmail || undefined,
-          })
-        : await sendMail({
-            to: customerEmail,
-            subject,
-            text,
-            replyTo: replyToEmail || undefined,
-            senderName: senderName || undefined,
-            senderEmail: senderEmail || undefined,
-          });
+    const mailResult = await sendMail({
+      to: customerEmail,
+      subject,
+      text,
+      replyTo: replyToEmail || undefined,
+      senderName: senderName || undefined,
+      senderEmail: senderEmail || undefined,
+    });
 
     const sentAt = new Date().toISOString();
     const { error: deliveryUpdateError } = await admin

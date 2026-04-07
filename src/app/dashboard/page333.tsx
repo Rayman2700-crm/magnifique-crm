@@ -8,7 +8,6 @@ import OpenSlotsSlideover from "@/components/dashboard/OpenSlotsSlideover";
 import WaitlistSlideover from "@/components/dashboard/WaitlistSlideover";
 import DashboardServicesCard from "@/components/dashboard/DashboardServicesCard";
 import DashboardInvoiceSlideover from "@/components/dashboard/DashboardInvoiceSlideover";
-import OpenCreateAppointmentButton from "@/components/dashboard/OpenCreateAppointmentButton";
 
 type TenantRow = {
   id: string;
@@ -332,86 +331,6 @@ function DashboardStatCard({
   return href ? <Link href={href}>{card}</Link> : card;
 }
 
-
-
-function AppointmentsOverviewCard({
-  todayCount,
-  weekCount,
-}: {
-  todayCount: string;
-  weekCount: string;
-}) {
-  return (
-    <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-      <CardContent className="flex min-h-[132px] flex-col p-4 sm:min-h-[144px] sm:p-5">
-        <div className="flex h-full flex-col justify-between gap-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium leading-5 text-[var(--text-muted)] sm:text-[15px]">Termine</div>
-              <div className="mt-1 text-xs leading-5 text-white/45 sm:text-[13px]">Heute im Plan und diese Woche</div>
-            </div>
-
-            <OpenCreateAppointmentButton accentColor="#d6c3a3" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Heute</div>
-              <div className="mt-1 text-[32px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[36px]">
-                {todayCount}
-              </div>
-            </div>
-
-            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Woche</div>
-              <div className="mt-1 text-[32px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[36px]">
-                {weekCount}
-              </div>
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function CustomerOverviewCard({
-  value,
-  subtext,
-}: {
-  value: string;
-  subtext?: string;
-}) {
-  return (
-    <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-      <CardContent className="flex min-h-[132px] flex-col p-4 sm:min-h-[144px] sm:p-5">
-        <div className="flex h-full flex-col justify-between gap-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium leading-5 text-[var(--text-muted)] sm:text-[15px]">Kunden gesamt</div>
-              {subtext ? <div className="mt-1 text-xs leading-5 text-white/45 sm:text-[13px]">{subtext}</div> : null}
-            </div>
-
-            <div className="flex shrink-0 items-center gap-2">
-              <Link href="/customers/new" className="shrink-0" aria-label="Neuer Kunde">
-                <DashboardActionPill icon={<PlusCircleIcon />} compact accentColor="#d6c3a3" />
-              </Link>
-
-              <Link href="/customers" className="shrink-0" aria-label="Kunden öffnen">
-                <DashboardActionPill icon={<OpenIcon />} compact accentColor="#d6c3a3" />
-              </Link>
-            </div>
-          </div>
-
-          <div className="text-[32px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[36px] lg:text-[40px]">
-            {value}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 function InvoiceCreateCard({
   todayRevenueCents,
   todayReceiptCount,
@@ -446,15 +365,9 @@ function InvoiceCreateCard({
               </div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2">
-              <Link href="/dashboard?invoice=1" className="shrink-0" aria-label="Neue Rechnung">
-                <DashboardActionPill icon={<PlusCircleIcon />} compact accentColor="#d6c3a3" />
-              </Link>
-
-              <Link href="/rechnungen" className="shrink-0" aria-label="Belege öffnen">
-                <DashboardActionPill icon={<OpenIcon />} compact accentColor="#d6c3a3" />
-              </Link>
-            </div>
+            <Link href="/dashboard?invoice=1" className="shrink-0" aria-label="Neue Rechnung">
+              <DashboardActionPill icon={<PlusCircleIcon />} compact accentColor="#d6c3a3" />
+            </Link>
           </div>
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
@@ -1054,16 +967,9 @@ export default async function DashboardPage() {
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:mt-6 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4">
-              <InvoiceCreateCard
-                todayRevenueCents={todayRevenueCents}
-                todayReceiptCount={todayReceiptCount}
-                openReceiptCount={openReceiptCount}
-                weekRevenueCents={weekRevenueCents}
-                hasRecentReceipt={hasRecentReceipt}
-              />
-
-              <AppointmentsOverviewCard todayCount={String(todayCount)} weekCount={String(weekCount)} />
-              <CustomerOverviewCard value={String(customersCount)} subtext="Gespeicherte Profile" />
+              <DashboardStatCard label="Termine heute" value={String(todayCount)} subtext="Heute im Plan" />
+              <DashboardStatCard label="Termine Woche" value={String(weekCount)} subtext="Diese Woche" />
+              <DashboardStatCard label="Kunden gesamt" value={String(customersCount)} subtext="Gespeicherte Profile" />
 
               <DashboardServicesCard
                 activeCount={activeServicesCountResult?.count ?? 0}
@@ -1076,35 +982,13 @@ export default async function DashboardPage() {
                 }))}
               />
 
-              <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-                <CardContent className="flex min-h-[132px] flex-col p-4 sm:min-h-[144px] sm:p-5">
-                  <div className="flex h-full flex-col justify-between gap-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium leading-5 text-[var(--text-muted)] sm:text-[15px]">Aktive Warteliste</div>
-                        <div className="mt-1 text-xs leading-5 text-white/45 sm:text-[13px]">Kunden warten</div>
-                      </div>
-
-                      <div className="flex shrink-0 items-center gap-2">
-                        <Link href="/dashboard?openWaitlist=1&waitlistAdd=1" className="shrink-0" aria-label="Kunden zur Warteliste hinzufügen">
-                          <DashboardActionPill icon={<PlusCircleIcon />} compact accentColor="#a855f7" />
-                        </Link>
-
-                        <Link href="/dashboard?openWaitlist=1" className="shrink-0" aria-label="Warteliste öffnen">
-                          <DashboardActionPill icon={<OpenIcon />} compact accentColor="#a855f7" />
-                        </Link>
-                      </div>
-                    </div>
-
-                    <div
-                      className="text-[32px] font-semibold leading-none tracking-tight sm:text-[36px] lg:text-[40px]"
-                      style={{ color: waitlistItems.length === 0 ? "#34d399" : "#a855f7" }}
-                    >
-                      {String(waitlistItems.length)}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <InvoiceCreateCard
+                todayRevenueCents={todayRevenueCents}
+                todayReceiptCount={todayReceiptCount}
+                openReceiptCount={openReceiptCount}
+                weekRevenueCents={weekRevenueCents}
+                hasRecentReceipt={hasRecentReceipt}
+              />
 
               <DashboardStatCard
                 label="Freie Termine"
@@ -1112,6 +996,13 @@ export default async function DashboardPage() {
                 subtext="Kurzfristig frei"
                 href="/dashboard?openSlots=1"
                 accentColor={openSlots.length === 0 ? "#34d399" : "#fb923c"}
+              />
+              <DashboardStatCard
+                label="Aktive Warteliste"
+                value={String(waitlistItems.length)}
+                subtext="Kunden warten"
+                href="/dashboard?openWaitlist=1"
+                accentColor={waitlistItems.length === 0 ? "#34d399" : "#a855f7"}
               />
               <DashboardStatCard
                 label="Reminder"

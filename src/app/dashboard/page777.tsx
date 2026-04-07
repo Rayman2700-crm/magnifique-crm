@@ -1054,14 +1054,6 @@ export default async function DashboardPage() {
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:mt-6 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4">
-              <InvoiceCreateCard
-                todayRevenueCents={todayRevenueCents}
-                todayReceiptCount={todayReceiptCount}
-                openReceiptCount={openReceiptCount}
-                weekRevenueCents={weekRevenueCents}
-                hasRecentReceipt={hasRecentReceipt}
-              />
-
               <AppointmentsOverviewCard todayCount={String(todayCount)} weekCount={String(weekCount)} />
               <CustomerOverviewCard value={String(customersCount)} subtext="Gespeicherte Profile" />
 
@@ -1076,6 +1068,21 @@ export default async function DashboardPage() {
                 }))}
               />
 
+              <InvoiceCreateCard
+                todayRevenueCents={todayRevenueCents}
+                todayReceiptCount={todayReceiptCount}
+                openReceiptCount={openReceiptCount}
+                weekRevenueCents={weekRevenueCents}
+                hasRecentReceipt={hasRecentReceipt}
+              />
+
+              <DashboardStatCard
+                label="Freie Termine"
+                value={String(openSlots.length)}
+                subtext="Kurzfristig frei"
+                href="/dashboard?openSlots=1"
+                accentColor={openSlots.length === 0 ? "#34d399" : "#fb923c"}
+              />
               <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
                 <CardContent className="flex min-h-[132px] flex-col p-4 sm:min-h-[144px] sm:p-5">
                   <div className="flex h-full flex-col justify-between gap-4">
@@ -1105,14 +1112,6 @@ export default async function DashboardPage() {
                   </div>
                 </CardContent>
               </Card>
-
-              <DashboardStatCard
-                label="Freie Termine"
-                value={String(openSlots.length)}
-                subtext="Kurzfristig frei"
-                href="/dashboard?openSlots=1"
-                accentColor={openSlots.length === 0 ? "#34d399" : "#fb923c"}
-              />
               <DashboardStatCard
                 label="Reminder"
                 value={String(reminderCount)}

@@ -8,23 +8,25 @@ export async function GET(req: Request) {
   const state = url.searchParams.get("state");
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-  const redirectTo = url.searchParams.get("redirect_to") || `${baseUrl}/calendar/google`;
+  const redirectTo = url.searchParams.get("redirect_to") || `${baseUrl}/dashboard`;
 
   const cookieStore = await cookies();
   const expectedState = cookieStore.get("gcal_oauth_state")?.value;
 
   if (!code || !state || !expectedState || state !== expectedState) {
     return NextResponse.redirect(
-      new URL(`/calendar/google?error=${encodeURIComponent("OAuth state mismatch")}`, baseUrl)
+      new URL(`/dashboard?error=${encodeURIComponent("OAuth state mismatch")}`, baseUrl)
     );
   }
 
+  // one-time cookie löschen
   cookieStore.set("gcal_oauth_state", "", { path: "/", maxAge: 0 });
 
   const clientId = process.env.GOOGLE_CLIENT_ID!;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET!;
   const redirectUri = process.env.GOOGLE_REDIRECT_URI!;
 
+  // Token exchange
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -43,7 +45,7 @@ export async function GET(req: Request) {
   if (!tokenRes.ok) {
     return NextResponse.redirect(
       new URL(
-        `/calendar/google?error=${encodeURIComponent(
+        `/dashboard?error=${encodeURIComponent(
           "Google Token Fehler: " +
             (tokenJson.error_description ?? tokenJson.error ?? "unknown")
         )}`,
@@ -52,6 +54,7 @@ export async function GET(req: Request) {
     );
   }
 
+  // ✅ eingeloggten User holen
   const supabase = await supabaseServer();
   const { data } = await supabase.auth.getUser();
   const user = data.user;
@@ -61,7 +64,7 @@ export async function GET(req: Request) {
   }
 
   const accessToken: string | undefined = tokenJson.access_token;
-  const refreshToken: string | undefined = tokenJson.refresh_token;
+  const refreshToken: string | undefined = tokenJson.refresh_token; // kommt oft nur beim ersten Consent
   const tokenType: string | undefined = tokenJson.token_type;
   const expiresIn: number | undefined = tokenJson.expires_in;
   const scope: string | undefined = tokenJson.scope;
@@ -72,6 +75,7 @@ export async function GET(req: Request) {
       ? new Date(Date.now() + expiresIn * 1000).toISOString()
       : null;
 
+  // vorhandenen Eintrag laden, um refresh_token nicht zu verlieren
   const { data: existing } = await supabase
     .from("google_oauth_tokens")
     .select("refresh_token")
@@ -83,14 +87,15 @@ export async function GET(req: Request) {
   if (!finalRefreshToken) {
     return NextResponse.redirect(
       new URL(
-        `/calendar/google?error=${encodeURIComponent(
-          "Kein refresh_token erhalten. Bitte Google Verbindung entfernen und neu verbinden."
+        `/dashboard?error=${encodeURIComponent(
+          "Kein refresh_token erhalten. Bitte Google Verbindung entfernen und neu verbinden (prompt=consent)."
         )}`,
         baseUrl
       )
     );
   }
 
+  // ✅ Upsert Tokens
   const { error: upErr } = await supabase.from("google_oauth_tokens").upsert({
     user_id: user.id,
     provider: "google",
@@ -106,7 +111,7 @@ export async function GET(req: Request) {
   if (upErr) {
     return NextResponse.redirect(
       new URL(
-        `/calendar/google?error=${encodeURIComponent("DB Save Fehler: " + upErr.message)}`,
+        `/dashboard?error=${encodeURIComponent("DB Save Fehler: " + upErr.message)}`,
         baseUrl
       )
     );

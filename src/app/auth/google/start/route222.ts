@@ -15,6 +15,7 @@ export async function GET() {
   const redirectUri = process.env.GOOGLE_REDIRECT_URI!;
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL!;
 
+  // state schützt gegen CSRF + erlaubt redirect zurück
   const state = crypto.randomUUID();
   (await cookies()).set("gcal_oauth_state", state, {
     httpOnly: true,
@@ -27,7 +28,6 @@ export async function GET() {
   const scopes = [
     "https://www.googleapis.com/auth/calendar",
     "https://www.googleapis.com/auth/calendar.events",
-    "https://www.googleapis.com/auth/gmail.send",
   ];
 
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
@@ -35,11 +35,13 @@ export async function GET() {
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", scopes.join(" "));
-  url.searchParams.set("access_type", "offline");
-  url.searchParams.set("prompt", "consent");
+  url.searchParams.set("access_type", "offline");        // refresh_token!
+  url.searchParams.set("prompt", "consent");             // refresh_token erzwingen
   url.searchParams.set("include_granted_scopes", "true");
   url.searchParams.set("state", state);
-  url.searchParams.set("redirect_to", `${baseUrl}/calendar/google?success=${encodeURIComponent("Google inkl. Gmail-Senden verbunden ✅")}`);
+
+  // optional: wohin danach zurück
+  url.searchParams.set("redirect_to", `${baseUrl}/dashboard`);
 
   return NextResponse.redirect(url);
 }
