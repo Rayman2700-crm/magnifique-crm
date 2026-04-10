@@ -8,6 +8,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getEffectiveTenantId } from "@/lib/effectiveTenant";
 import { sendMail } from "@/lib/mail/sendMail";
 import { sendGoogleMail } from "@/lib/mail/sendGoogleMail";
+import { buildFiscalReceiptPdf } from "@/lib/receipts/buildFiscalReceiptPdf";
+import { stripe } from "@/lib/stripe/server";
 
 type UserProfileRow = {
   role: string | null;
@@ -269,6 +271,55 @@ function assertCashRegisterConsistency(input: {
   return unique[0] ?? "";
 }
 
+function isCardPaymentMethodCode(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  return normalized === "CARD" || normalized === "KARTE" || normalized === "CARD_PRESENT";
+}
+
+function isTransferPaymentMethodCode(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  return normalized === "TRANSFER" || normalized === "UEBERWEISUNG" || normalized === "ÜBERWEISUNG" || normalized === "BANK_TRANSFER";
+}
+
+
+
+async function createStripeTerminalIntentForPayment(input: {
+  amountCents: number;
+  currencyCode?: string | null;
+  paymentId: string;
+  salesOrderId: string;
+  tenantId: string;
+}) {
+  const intent = await stripe.paymentIntents.create({
+    amount: input.amountCents,
+    currency: String(input.currencyCode ?? "EUR").trim().toLowerCase() || "eur",
+    payment_method_types: ["card_present"],
+    capture_method: "automatic",
+    metadata: {
+      payment_id: input.paymentId,
+      sales_order_id: input.salesOrderId,
+      tenant_id: input.tenantId,
+    },
+  });
+
+  return intent;
+}
+
+async function loadPaymentMethodCodeById(admin: any, paymentMethodId: string | null | undefined) {
+  const id = String(paymentMethodId ?? "").trim();
+  if (!id) return "";
+
+  const { data, error } = await admin
+    .from("payment_methods")
+    .select("code, name")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message ?? "Zahlungsart konnte nicht geladen werden.");
+
+  return String((data as { code?: string | null } | null)?.code ?? "").trim().toUpperCase();
+}
+
 function roundTaxPortionFromGross(totalCents: number, taxRate: number) {
   if (!Number.isFinite(taxRate) || taxRate <= 0) return 0;
   return Math.round(totalCents * (taxRate / (100 + taxRate)));
@@ -435,6 +486,33 @@ function buildReceiptEmailText(input: {
   ].join("\n");
 }
 
+
+function renderMailTemplate(
+  template: string,
+  variables: Record<string, string>
+) {
+  return template.replace(/\{([a-zA-Z0-9_]+)\}/g, (_match, key) => {
+    const value = variables[key];
+    return typeof value === "string" ? value : "";
+  });
+}
+
+function buildReceiptEmailTemplateVariables(input: {
+  customerName?: string | null;
+  receiptNumber: string;
+  providerName?: string | null;
+  paymentMethodLabel?: string | null;
+  amountLabel?: string | null;
+}) {
+  return {
+    customer_name: String(input.customerName ?? "").trim() || "Kundin",
+    receipt_number: String(input.receiptNumber ?? "").trim(),
+    provider_name: String(input.providerName ?? "").trim() || "Magnifique CRM",
+    payment_method: String(input.paymentMethodLabel ?? "").trim() || "—",
+    amount: String(input.amountLabel ?? "").trim() || "—",
+  };
+}
+
 function normalizePhoneForWhatsApp(value: string | null | undefined) {
   const raw = String(value ?? "").trim();
   if (!raw) return "";
@@ -463,6 +541,19 @@ function formatGrossAmountLabel(value: number | null | undefined, currencyCode?:
     style: "currency",
     currency: currencyCode || "EUR",
   }).format(value);
+}
+
+function formatReceiptDateTimeLabel(value: string | null | undefined) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("de-AT", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 async function loadReceiptDeliveryRows(admin: any, fiscalReceiptId: string) {
@@ -571,7 +662,7 @@ export async function sendFiscalReceiptEmail(formData: FormData) {
 
   const { data: tenantMailSettingsRaw } = await admin
     .from("tenants")
-    .select("display_name, email, mail_sender_name, mail_reply_to_email, mail_delivery_mode, mail_is_active")
+    .select("display_name, email, mail_sender_name, mail_reply_to_email, mail_subject_template, mail_body_template, mail_delivery_mode, mail_is_active")
     .eq("id", tenantId)
     .maybeSingle();
 
@@ -580,6 +671,8 @@ export async function sendFiscalReceiptEmail(formData: FormData) {
     email?: string | null;
     mail_sender_name?: string | null;
     mail_reply_to_email?: string | null;
+    mail_subject_template?: string | null;
+    mail_body_template?: string | null;
     mail_delivery_mode?: string | null;
     mail_is_active?: boolean | null;
   } | null;
@@ -626,14 +719,67 @@ export async function sendFiscalReceiptEmail(formData: FormData) {
     receipt.currency_code || "EUR"
   );
 
-  const subject = buildReceiptEmailSubject(receiptNumber, providerName);
-  const text = buildReceiptEmailText({
+  const templateVariables = buildReceiptEmailTemplateVariables({
     customerName,
     receiptNumber,
     providerName,
     paymentMethodLabel,
     amountLabel,
   });
+
+  const subjectTemplate =
+    String(tenantMailSettings?.mail_subject_template ?? "").trim() ||
+    "Beleg {receipt_number} – {provider_name}";
+  const bodyTemplate =
+    String(tenantMailSettings?.mail_body_template ?? "").trim() ||
+    "Hallo {customer_name},\n\nanbei bzw. zur Ansicht dein Beleg {receipt_number}.\nBetrag: {amount}\nZahlungsart: {payment_method}\n\nVielen Dank für deinen Besuch.\n\nLiebe Grüße\n{provider_name}";
+
+  const subject = renderMailTemplate(subjectTemplate, templateVariables).trim() || buildReceiptEmailSubject(receiptNumber, providerName);
+  const text = renderMailTemplate(bodyTemplate, templateVariables).trim() || buildReceiptEmailText({
+    customerName,
+    receiptNumber,
+    providerName,
+    paymentMethodLabel,
+    amountLabel,
+  });
+
+  const { data: receiptLineRowsRaw, error: receiptLinesError } = await admin
+    .from("fiscal_receipt_lines")
+    .select("name, quantity, unit_price_gross, line_total_gross")
+    .eq("fiscal_receipt_id", receiptId)
+    .order("created_at", { ascending: true });
+
+  if (receiptLinesError) {
+    redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: receiptLinesError.message ?? "Belegpositionen konnten nicht geladen werden." }));
+  }
+
+  const receiptLineRows = ((receiptLineRowsRaw ?? []) as Array<{
+    name?: string | null;
+    quantity?: number | null;
+    unit_price_gross?: number | null;
+    line_total_gross?: number | null;
+  }>).map((line) => ({
+    name: String(line.name ?? "Position").trim() || "Position",
+    quantity: Number(line.quantity ?? 0) || 0,
+    unitPriceGross: Number(line.unit_price_gross ?? 0) || 0,
+    lineTotalGross: Number(line.line_total_gross ?? 0) || 0,
+  }));
+
+  const pdfAttachment = await buildFiscalReceiptPdf({
+    receiptNumber,
+    issuedAtLabel: formatReceiptDateTimeLabel(readFirstString(payload, [["issued_at"]]) || null) !== "—"
+      ? formatReceiptDateTimeLabel(readFirstString(payload, [["issued_at"]]) || null)
+      : formatReceiptDateTimeLabel((receipt as { issued_at?: string | null }).issued_at ?? null),
+    providerName: providerName || "Magnifique CRM",
+    customerName: customerName || "—",
+    paymentMethodLabel,
+    amountLabel,
+    currencyCode: receipt.currency_code || "EUR",
+    lines: receiptLineRows,
+    note: isCancelled ? "Dieser Beleg ist storniert." : null,
+  });
+
+  const pdfFilename = `Beleg-${receiptNumber}.pdf`;
 
   const deliveryInsert = {
     tenant_id: tenantId,
@@ -671,6 +817,13 @@ export async function sendFiscalReceiptEmail(formData: FormData) {
             replyTo: replyToEmail || undefined,
             senderName: senderName || undefined,
             senderEmail: senderEmail || undefined,
+            attachments: [
+              {
+                filename: pdfFilename,
+                content: pdfAttachment,
+                contentType: "application/pdf",
+              },
+            ],
           })
         : await sendMail({
             to: customerEmail,
@@ -1486,13 +1639,30 @@ export async function createPaymentForSalesOrder(formData: FormData) {
   const paymentMethodCode = String(formData.get("payment_method") ?? "CASH").trim().toUpperCase();
   const paymentMethodId = await resolvePaymentMethodId(admin, tenantId, paymentMethodCode);
   const paymentNotes = String(formData.get("payment_notes") ?? "").trim();
-  const paidAt = new Date().toISOString();
+  const createdAt = new Date().toISOString();
   const resolvedCashRegister = await resolveCashRegister(admin, tenantId);
   const cashRegisterId = assertCashRegisterConsistency({
     salesOrderCashRegisterId: salesOrder.cash_register_id,
     resolvedCashRegisterId: resolvedCashRegister.id,
   }) || resolvedCashRegister.id;
   const cashRegister = { id: cashRegisterId };
+
+  const isCard = isCardPaymentMethodCode(paymentMethodCode);
+  const isTransfer = isTransferPaymentMethodCode(paymentMethodCode);
+  const paymentStatus = isCard ? "PENDING" : "COMPLETED";
+  const provider = isCard ? "STRIPE_TERMINAL" : "MANUAL";
+  const paidAt = isCard ? null : createdAt;
+  const providerResponse = isCard
+    ? {
+        phase: "payment_intent_pending",
+        method: "card",
+        created_at: createdAt,
+      }
+    : {
+        phase: "completed",
+        method: isTransfer ? "transfer" : "cash",
+        completed_at: createdAt,
+      };
 
   const { data: paymentInsert, error: paymentError } = await admin
     .from("payments")
@@ -1504,10 +1674,14 @@ export async function createPaymentForSalesOrder(formData: FormData) {
       amount: toGrossNumber(paidAmountCents),
       currency_code: salesOrder.currency_code || "EUR",
       direction: "INBOUND",
-      status: "COMPLETED",
+      status: paymentStatus,
       paid_at: paidAt,
       external_reference: paymentNotes || null,
       recorded_by: user.id,
+      provider,
+      provider_transaction_id: null,
+      provider_response_json: providerResponse,
+      failure_reason: null,
     })
     .select("id")
     .single();
@@ -1517,10 +1691,328 @@ export async function createPaymentForSalesOrder(formData: FormData) {
   }
 
   const paymentId = String(paymentInsert.id);
-  await admin.from("sales_orders").update({ status: "COMPLETED", completed_at: paidAt, cash_register_id: cashRegister.id }).eq("id", salesOrderId);
+
+  if (isCard) {
+    try {
+      const intent = await createStripeTerminalIntentForPayment({
+        amountCents: paidAmountCents,
+        currencyCode: salesOrder.currency_code || "EUR",
+        paymentId,
+        salesOrderId,
+        tenantId,
+      });
+
+      await admin
+        .from("payments")
+        .update({
+          provider: "STRIPE_TERMINAL",
+          provider_transaction_id: intent.id,
+          provider_response_json: {
+            phase: "payment_intent_created",
+            created_at: createdAt,
+            stripe_payment_intent_id: intent.id,
+            stripe_status: intent.status,
+            has_client_secret: Boolean(intent.client_secret),
+          },
+          failure_reason: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", paymentId);
+    } catch (stripeError: any) {
+      const message =
+        String(stripeError?.message ?? "Stripe PaymentIntent konnte nicht erstellt werden.").trim() ||
+        "Stripe PaymentIntent konnte nicht erstellt werden.";
+
+      await admin
+        .from("payments")
+        .update({
+          status: "FAILED",
+          provider: "STRIPE_TERMINAL",
+          provider_response_json: {
+            phase: "payment_intent_failed",
+            failed_at: new Date().toISOString(),
+            error_message: message,
+          },
+          failure_reason: message,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", paymentId);
+
+      redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: message }));
+    }
+  } else {
+    await admin
+      .from("sales_orders")
+      .update({ status: "COMPLETED", completed_at: createdAt, cash_register_id: cashRegister.id })
+      .eq("id", salesOrderId);
+  }
 
   revalidatePath("/rechnungen");
-  redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, success: "Payment erfasst ✅" }));
+  revalidatePath("/calendar");
+  revalidatePath("/dashboard");
+
+  const successMessage = isCard ? "Kartenzahlung mit Stripe vorbereitet ✅" : "Payment erfasst ✅";
+  redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, success: successMessage }));
+}
+
+export async function startCardPaymentForCheckout(formData: FormData) {
+  const paymentId = String(formData.get("payment_id") ?? "").trim();
+  const salesOrderId = String(formData.get("sales_order_id") ?? "").trim();
+  const appointmentId = String(formData.get("appointment_id") ?? "").trim();
+  if (!paymentId || !salesOrderId) {
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Payment konnte nicht zugeordnet werden." }));
+  }
+
+  const { admin, effectiveTenantId } = await requireContext();
+  const salesOrder = await resolveSalesOrder(admin, salesOrderId);
+  const tenantId = String(salesOrder.tenant_id ?? "").trim();
+  if (!tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Sales Order hat keinen Tenant." }));
+  if (effectiveTenantId && effectiveTenantId !== tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Diese Sales Order gehört nicht zum aktiven Tenant." }));
+
+  const { data: paymentRaw, error: paymentError } = await admin
+    .from("payments")
+    .select("id, tenant_id, sales_order_id, payment_method_id, status, external_reference")
+    .eq("id", paymentId)
+    .maybeSingle();
+  if (paymentError || !paymentRaw) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Payment konnte nicht geladen werden." }));
+
+  const payment = paymentRaw as { id: string; tenant_id: string | null; sales_order_id: string | null; payment_method_id: string | null; status: string | null; external_reference: string | null };
+  if (String(payment.tenant_id ?? "").trim() !== tenantId || String(payment.sales_order_id ?? "").trim() !== salesOrderId) {
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Payment gehört nicht zur aktuellen Sales Order." }));
+  }
+
+  const methodCode = await loadPaymentMethodCodeById(admin, payment.payment_method_id);
+  if (!isCardPaymentMethodCode(methodCode)) {
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Nur Kartenzahlungen können gestartet werden." }));
+  }
+
+  const status = String(payment.status ?? "").trim().toUpperCase();
+  if (status !== "PENDING") {
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Kartenzahlung ist nicht mehr startbar." }));
+  }
+
+  const providerReference = String(payment.external_reference ?? "").trim() || `SIM-${Date.now()}`;
+  const startedAt = new Date().toISOString();
+
+  const { error: updateError } = await admin
+    .from("payments")
+    .update({
+      status: "PROCESSING",
+      external_reference: providerReference,
+      provider: "STRIPE_TERMINAL",
+      provider_response_json: {
+        phase: "processing",
+        started_at: startedAt,
+        provider_reference: providerReference,
+      },
+      failure_reason: null,
+      updated_at: startedAt,
+    })
+    .eq("id", paymentId);
+
+  if (updateError) {
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: updateError.message ?? "Kartenzahlung konnte nicht gestartet werden." }));
+  }
+
+  revalidatePath("/rechnungen");
+  revalidatePath("/calendar");
+  revalidatePath("/dashboard");
+  redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, success: "Kartenzahlung gestartet ✅" }));
+}
+
+export async function completeCardPaymentForCheckout(formData: FormData) {
+  const paymentId = String(formData.get("payment_id") ?? "").trim();
+  const salesOrderId = String(formData.get("sales_order_id") ?? "").trim();
+  const appointmentId = String(formData.get("appointment_id") ?? "").trim();
+  if (!paymentId || !salesOrderId) {
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Payment konnte nicht zugeordnet werden." }));
+  }
+
+  const { admin, effectiveTenantId } = await requireContext();
+  const salesOrder = await resolveSalesOrder(admin, salesOrderId);
+  const tenantId = String(salesOrder.tenant_id ?? "").trim();
+  if (!tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Sales Order hat keinen Tenant." }));
+  if (effectiveTenantId && effectiveTenantId !== tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Diese Sales Order gehört nicht zum aktiven Tenant." }));
+
+  const { data: paymentRaw, error: paymentError } = await admin
+    .from("payments")
+    .select("id, tenant_id, sales_order_id, payment_method_id, status, provider_transaction_id")
+    .eq("id", paymentId)
+    .maybeSingle();
+  if (paymentError || !paymentRaw) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Payment konnte nicht geladen werden." }));
+
+  const payment = paymentRaw as { id: string; tenant_id: string | null; sales_order_id: string | null; payment_method_id: string | null; status: string | null; provider_transaction_id: string | null };
+  if (String(payment.tenant_id ?? "").trim() !== tenantId || String(payment.sales_order_id ?? "").trim() !== salesOrderId) {
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Payment gehört nicht zur aktuellen Sales Order." }));
+  }
+
+  const methodCode = await loadPaymentMethodCodeById(admin, payment.payment_method_id);
+  if (!isCardPaymentMethodCode(methodCode)) {
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Nur Kartenzahlungen können abgeschlossen werden." }));
+  }
+
+  const status = String(payment.status ?? "").trim().toUpperCase();
+  if (!["PENDING", "PROCESSING"].includes(status)) {
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Kartenzahlung ist nicht in einem abschließbaren Zustand." }));
+  }
+
+  const completedAt = new Date().toISOString();
+  const providerTransactionId = String(payment.provider_transaction_id ?? "").trim() || `SIM-TX-${Date.now()}`;
+
+  const { error: updatePaymentError } = await admin
+    .from("payments")
+    .update({
+      status: "COMPLETED",
+      paid_at: completedAt,
+      provider: "STRIPE_TERMINAL",
+      provider_transaction_id: providerTransactionId,
+      provider_response_json: {
+        phase: "completed",
+        completed_at: completedAt,
+        provider_transaction_id: providerTransactionId,
+      },
+      failure_reason: null,
+      updated_at: completedAt,
+    })
+    .eq("id", paymentId);
+
+  if (updatePaymentError) {
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: updatePaymentError.message ?? "Kartenzahlung konnte nicht abgeschlossen werden." }));
+  }
+
+  await admin
+    .from("sales_orders")
+    .update({ status: "COMPLETED", completed_at: completedAt })
+    .eq("id", salesOrderId);
+
+  revalidatePath("/rechnungen");
+  revalidatePath("/calendar");
+  revalidatePath("/dashboard");
+  redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, success: "Kartenzahlung abgeschlossen ✅" }));
+}
+
+export async function failCardPaymentForCheckout(formData: FormData) {
+  const paymentId = String(formData.get("payment_id") ?? "").trim();
+  const salesOrderId = String(formData.get("sales_order_id") ?? "").trim();
+  const appointmentId = String(formData.get("appointment_id") ?? "").trim();
+  const reason = String(formData.get("reason") ?? "Terminalzahlung fehlgeschlagen").trim() || "Terminalzahlung fehlgeschlagen";
+  if (!paymentId || !salesOrderId) {
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Payment konnte nicht zugeordnet werden." }));
+  }
+
+  const { admin, effectiveTenantId } = await requireContext();
+  const salesOrder = await resolveSalesOrder(admin, salesOrderId);
+  const tenantId = String(salesOrder.tenant_id ?? "").trim();
+  if (!tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Sales Order hat keinen Tenant." }));
+  if (effectiveTenantId && effectiveTenantId !== tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Diese Sales Order gehört nicht zum aktiven Tenant." }));
+
+  const { data: paymentRaw, error: paymentError } = await admin
+    .from("payments")
+    .select("id, tenant_id, sales_order_id, payment_method_id, status")
+    .eq("id", paymentId)
+    .maybeSingle();
+  if (paymentError || !paymentRaw) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Payment konnte nicht geladen werden." }));
+
+  const payment = paymentRaw as { id: string; tenant_id: string | null; sales_order_id: string | null; payment_method_id: string | null; status: string | null };
+  if (String(payment.tenant_id ?? "").trim() !== tenantId || String(payment.sales_order_id ?? "").trim() !== salesOrderId) {
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Payment gehört nicht zur aktuellen Sales Order." }));
+  }
+
+  const methodCode = await loadPaymentMethodCodeById(admin, payment.payment_method_id);
+  if (!isCardPaymentMethodCode(methodCode)) {
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Nur Kartenzahlungen können fehlschlagen." }));
+  }
+
+  const status = String(payment.status ?? "").trim().toUpperCase();
+  if (!["PENDING", "PROCESSING"].includes(status)) {
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Kartenzahlung ist nicht in einem fehlerschreibbaren Zustand." }));
+  }
+
+  const failedAt = new Date().toISOString();
+  const { error: updateError } = await admin
+    .from("payments")
+    .update({
+      status: "FAILED",
+      provider: "STRIPE_TERMINAL",
+      provider_response_json: {
+        phase: "failed",
+        failed_at: failedAt,
+        reason,
+      },
+      failure_reason: reason,
+      updated_at: failedAt,
+    })
+    .eq("id", paymentId);
+
+  if (updateError) {
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: updateError.message ?? "Kartenzahlung konnte nicht als fehlgeschlagen markiert werden." }));
+  }
+
+  revalidatePath("/rechnungen");
+  revalidatePath("/calendar");
+  revalidatePath("/dashboard");
+  redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, success: "Kartenzahlung als fehlgeschlagen markiert ⚠️" }));
+}
+
+export async function cancelCardPaymentForCheckout(formData: FormData) {
+  const paymentId = String(formData.get("payment_id") ?? "").trim();
+  const salesOrderId = String(formData.get("sales_order_id") ?? "").trim();
+  const appointmentId = String(formData.get("appointment_id") ?? "").trim();
+  if (!paymentId || !salesOrderId) {
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Payment konnte nicht zugeordnet werden." }));
+  }
+
+  const { admin, effectiveTenantId } = await requireContext();
+  const salesOrder = await resolveSalesOrder(admin, salesOrderId);
+  const tenantId = String(salesOrder.tenant_id ?? "").trim();
+  if (!tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Sales Order hat keinen Tenant." }));
+  if (effectiveTenantId && effectiveTenantId !== tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Diese Sales Order gehört nicht zum aktiven Tenant." }));
+
+  const { data: paymentRaw, error: paymentError } = await admin
+    .from("payments")
+    .select("id, tenant_id, sales_order_id, payment_method_id, status")
+    .eq("id", paymentId)
+    .maybeSingle();
+  if (paymentError || !paymentRaw) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Payment konnte nicht geladen werden." }));
+
+  const payment = paymentRaw as { id: string; tenant_id: string | null; sales_order_id: string | null; payment_method_id: string | null; status: string | null };
+  if (String(payment.tenant_id ?? "").trim() !== tenantId || String(payment.sales_order_id ?? "").trim() !== salesOrderId) {
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Payment gehört nicht zur aktuellen Sales Order." }));
+  }
+
+  const methodCode = await loadPaymentMethodCodeById(admin, payment.payment_method_id);
+  if (!isCardPaymentMethodCode(methodCode)) {
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Nur Kartenzahlungen können abgebrochen werden." }));
+  }
+
+  const status = String(payment.status ?? "").trim().toUpperCase();
+  if (!["PENDING", "PROCESSING"].includes(status)) {
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Kartenzahlung ist nicht in einem abbrechbaren Zustand." }));
+  }
+
+  const cancelledAt = new Date().toISOString();
+  const { error: updateError } = await admin
+    .from("payments")
+    .update({
+      status: "CANCELLED",
+      provider: "STRIPE_TERMINAL",
+      provider_response_json: {
+        phase: "cancelled",
+        cancelled_at: cancelledAt,
+      },
+      failure_reason: null,
+      updated_at: cancelledAt,
+    })
+    .eq("id", paymentId);
+
+  if (updateError) {
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: updateError.message ?? "Kartenzahlung konnte nicht abgebrochen werden." }));
+  }
+
+  revalidatePath("/rechnungen");
+  revalidatePath("/calendar");
+  revalidatePath("/dashboard");
+  redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, success: "Kartenzahlung abgebrochen." }));
 }
 
 export async function createFiscalReceiptForPayment(formData: FormData) {
@@ -1544,6 +2036,10 @@ export async function createFiscalReceiptForPayment(formData: FormData) {
     .maybeSingle();
   if (paymentError || !paymentRaw) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Payment konnte für Fiscal nicht geladen werden." }));
   const payment = paymentRaw as PaymentContextRow;
+
+  if (String(payment.status ?? "").trim().toUpperCase() !== "COMPLETED") {
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Fiscal darf erst nach erfolgreichem Payment erzeugt werden." }));
+  }
 
   const { data: existingReceiptRows } = await admin
     .from("fiscal_receipts")
@@ -2530,7 +3026,7 @@ type InlineActionResult = {
     currencyCode: string;
     methodCode: string;
     status: string;
-    paidAt: string;
+    paidAt: string | null;
   };
   receipt?: {
     id: string;
@@ -2753,13 +3249,30 @@ export async function createPaymentForSalesOrderInline(formData: FormData): Prom
     const paymentMethodCode = String(formData.get("payment_method") ?? "CASH").trim().toUpperCase();
     const paymentMethodId = await resolvePaymentMethodId(admin, tenantId, paymentMethodCode);
     const paymentNotes = String(formData.get("payment_notes") ?? "").trim();
-    const paidAt = new Date().toISOString();
+    const createdAt = new Date().toISOString();
     const resolvedCashRegister = await resolveCashRegister(admin, tenantId);
     const cashRegisterId = assertCashRegisterConsistency({
       salesOrderCashRegisterId: salesOrder.cash_register_id,
       resolvedCashRegisterId: resolvedCashRegister.id,
     }) || resolvedCashRegister.id;
     const cashRegister = { id: cashRegisterId };
+
+    const isCard = isCardPaymentMethodCode(paymentMethodCode);
+    const isTransfer = isTransferPaymentMethodCode(paymentMethodCode);
+    const paymentStatus = isCard ? "PENDING" : "COMPLETED";
+    const provider = isCard ? "STRIPE_TERMINAL" : "MANUAL";
+    const paidAt = isCard ? null : createdAt;
+    const providerResponse = isCard
+      ? {
+          phase: "payment_intent_pending",
+          method: "card",
+          created_at: createdAt,
+        }
+      : {
+          phase: "completed",
+          method: isTransfer ? "transfer" : "cash",
+          completed_at: createdAt,
+        };
 
     const { data: paymentInsert, error: paymentError } = await admin
       .from("payments")
@@ -2771,18 +3284,75 @@ export async function createPaymentForSalesOrderInline(formData: FormData): Prom
         amount: toGrossNumber(paidAmountCents),
         currency_code: salesOrder.currency_code || "EUR",
         direction: "INBOUND",
-        status: "COMPLETED",
+        status: paymentStatus,
         paid_at: paidAt,
         external_reference: paymentNotes || null,
         recorded_by: user.id,
+        provider,
+        provider_transaction_id: null,
+        provider_response_json: providerResponse,
+        failure_reason: null,
       })
       .select("id")
       .single();
 
-    if (paymentError || !paymentInsert?.id) throw new Error(paymentError?.message ?? "Payment konnte nicht erstellt werden.");
+    if (paymentError || !paymentInsert?.id) {
+      throw new Error(paymentError?.message ?? "Payment konnte nicht erstellt werden.");
+    }
 
     const paymentId = String(paymentInsert.id);
-    await admin.from("sales_orders").update({ status: "COMPLETED", completed_at: paidAt, cash_register_id: cashRegister.id }).eq("id", salesOrderId);
+
+    if (isCard) {
+      try {
+        const intent = await createStripeTerminalIntentForPayment({
+          amountCents: paidAmountCents,
+          currencyCode: salesOrder.currency_code || "EUR",
+          paymentId,
+          salesOrderId,
+          tenantId,
+        });
+
+        await admin
+          .from("payments")
+          .update({
+            provider: "STRIPE_TERMINAL",
+            provider_transaction_id: intent.id,
+            provider_response_json: {
+              phase: "payment_intent_created",
+              created_at: createdAt,
+              stripe_payment_intent_id: intent.id,
+              stripe_status: intent.status,
+              has_client_secret: Boolean(intent.client_secret),
+            },
+            failure_reason: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", paymentId);
+      } catch (stripeError: any) {
+        const message =
+          String(stripeError?.message ?? "Stripe PaymentIntent konnte nicht erstellt werden.").trim() ||
+          "Stripe PaymentIntent konnte nicht erstellt werden.";
+
+        await admin
+          .from("payments")
+          .update({
+            status: "FAILED",
+            provider: "STRIPE_TERMINAL",
+            provider_response_json: {
+              phase: "payment_intent_failed",
+              failed_at: new Date().toISOString(),
+              error_message: message,
+            },
+            failure_reason: message,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", paymentId);
+
+        throw new Error(message);
+      }
+    } else {
+      await admin.from("sales_orders").update({ status: "COMPLETED", completed_at: createdAt, cash_register_id: cashRegister.id }).eq("id", salesOrderId);
+    }
 
     revalidatePath("/rechnungen");
     revalidatePath("/calendar");
@@ -2790,7 +3360,7 @@ export async function createPaymentForSalesOrderInline(formData: FormData): Prom
 
     return {
       ok: true,
-      success: "Payment erfasst ✅",
+      success: isCard ? "Kartenzahlung mit Stripe vorbereitet ✅" : "Payment erfasst ✅",
       appointmentId,
       salesOrderId,
       paymentId,
@@ -2799,8 +3369,8 @@ export async function createPaymentForSalesOrderInline(formData: FormData): Prom
         amountGross: toGrossNumber(paidAmountCents),
         currencyCode: salesOrder.currency_code || "EUR",
         methodCode: paymentMethodCode,
-        status: "COMPLETED",
-        paidAt,
+        status: paymentStatus,
+        paidAt: paidAt ?? null,
       },
     };
   } catch (error: any) {
@@ -2828,6 +3398,10 @@ export async function createFiscalReceiptForPaymentInline(formData: FormData): P
       .maybeSingle();
     if (paymentError || !paymentRaw) throw new Error("Payment konnte für Fiscal nicht geladen werden.");
     const payment = paymentRaw as PaymentContextRow;
+
+    if (String(payment.status ?? "").trim().toUpperCase() !== "COMPLETED") {
+      throw new Error("Fiscal darf erst nach erfolgreichem Payment erzeugt werden.");
+    }
 
     const { data: existingReceiptRows } = await admin
       .from("fiscal_receipts")

@@ -357,14 +357,14 @@ function AppointmentsOverviewCard({
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Heute</div>
-              <div className="mt-1 text-[32px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[36px]">
+              <div className="mt-1 text-[20px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[36px]">
                 {todayCount}
               </div>
             </div>
 
             <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Woche</div>
-              <div className="mt-1 text-[32px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[36px]">
+              <div className="mt-1 text-[20px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[36px]">
                 {weekCount}
               </div>
             </div>
@@ -409,6 +409,50 @@ function CustomerOverviewCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function FollowUpCustomersCard({
+  totalWithoutFollowUp,
+  recentWithoutFollowUp,
+  staleWithoutFollowUp,
+}: {
+  totalWithoutFollowUp: number;
+  recentWithoutFollowUp: number;
+  staleWithoutFollowUp: number;
+}) {
+  return (
+    <Link href="/customers?only=no-followup" className="block">
+      <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
+        <CardContent className="flex min-h-[132px] flex-col p-4 sm:min-h-[144px] sm:p-5">
+          <div className="flex h-full flex-col justify-between gap-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium leading-5 text-[var(--text-muted)] sm:text-[15px]">Ohne Folgetermin</div>
+                <div className="mt-1 text-xs leading-5 text-white/45 sm:text-[13px]">Bereits gekommen, kein Folgetermin</div>
+              </div>
+
+              <DashboardActionPill icon={<OpenIcon />} compact accentColor="#d6c3a3" />
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
+                <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Gesamt</div>
+                <div className="mt-1 text-[20px] font-semibold leading-none tracking-tight text-[#f59e0b] sm:text-[32px]">{totalWithoutFollowUp}</div>
+              </div>
+              <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
+                <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">30 d</div>
+                <div className="mt-1 text-[20px] font-semibold leading-none tracking-tight text-white sm:text-[32px]">{recentWithoutFollowUp}</div>
+              </div>
+              <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
+                <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">60+ d</div>
+                <div className="mt-1 text-[20px] font-semibold leading-none tracking-tight text-white sm:text-[32px]">{staleWithoutFollowUp}</div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
   );
 }
 
@@ -749,6 +793,15 @@ export default async function DashboardPage() {
       ? dashboardCustomersBaseQuery
       : dashboardCustomersBaseQuery.eq("tenant_id", effectiveCustomerTenantId);
 
+  let dashboardAppointmentsQuery = admin
+    .from("appointments")
+    .select("id, person_id, start_at, notes_internal, tenant_id")
+    .limit(5000);
+
+  if (effectiveCustomerTenantId) {
+    dashboardAppointmentsQuery = dashboardAppointmentsQuery.eq("tenant_id", effectiveCustomerTenantId);
+  }
+
   const [
     todayCountResult,
     weekCountResult,
@@ -759,6 +812,7 @@ export default async function DashboardPage() {
     activeWaitlistResult,
     calendarServicesResult,
     dashboardCustomersResult,
+    dashboardAppointmentsResult,
     receiptsResult,
   ] = await Promise.all([
     todayCountQuery,
@@ -770,6 +824,7 @@ export default async function DashboardPage() {
     activeWaitlistQuery,
     calendarServicesQuery,
     dashboardCustomersQuery,
+    dashboardAppointmentsQuery,
     receiptsQuery,
   ]);
 
@@ -812,6 +867,70 @@ export default async function DashboardPage() {
       } satisfies DashboardCustomerOption;
     })
     .filter(Boolean) as DashboardCustomerOption[];
+
+  const dashboardAppointments = (dashboardAppointmentsResult.data ?? []) as {
+    id: string;
+    person_id: string | null;
+    start_at: string | null;
+    notes_internal: string | null;
+    tenant_id: string | null;
+  }[];
+
+  const customerPersonIds = new Set(
+    dashboardCustomerRows.map((row) => String(row.person_id ?? "").trim()).filter(Boolean)
+  );
+  const lastVisitByPersonId = new Map<string, string>();
+  const nextAppointmentByPersonId = new Map<string, string>();
+  const completedVisitCountByPersonId = new Map<string, number>();
+
+  for (const appointment of dashboardAppointments) {
+    const personId = String(appointment.person_id ?? "").trim();
+    const startAt = appointment.start_at ?? null;
+    if (!personId || !customerPersonIds.has(personId) || !startAt) continue;
+    const startDate = new Date(startAt);
+    if (Number.isNaN(startDate.getTime())) continue;
+    const status = parseStatus(appointment.notes_internal);
+    const isPast = startDate < now;
+
+    if (isPast) {
+      const isCompleted = status === "completed" || status === "scheduled";
+      if (status === "cancelled" || status === "no_show") continue;
+      if (isCompleted) {
+        completedVisitCountByPersonId.set(personId, (completedVisitCountByPersonId.get(personId) ?? 0) + 1);
+        const currentLastVisit = lastVisitByPersonId.get(personId);
+        if (!currentLastVisit || new Date(currentLastVisit) < startDate) {
+          lastVisitByPersonId.set(personId, startAt);
+        }
+      }
+    } else {
+      if (status === "cancelled") continue;
+      const currentNextAppointment = nextAppointmentByPersonId.get(personId);
+      if (!currentNextAppointment || new Date(currentNextAppointment) > startDate) {
+        nextAppointmentByPersonId.set(personId, startAt);
+      }
+    }
+  }
+
+  let customersWithoutFollowUp = 0;
+  let customersWithoutFollowUp30Days = 0;
+  let customersWithoutFollowUp60Days = 0;
+
+  for (const row of dashboardCustomerRows) {
+    const personId = String(row.person_id ?? "").trim();
+    if (!personId) continue;
+    const visitCount = completedVisitCountByPersonId.get(personId) ?? 0;
+    const lastVisitAt = lastVisitByPersonId.get(personId) ?? null;
+    const nextAppointmentAt = nextAppointmentByPersonId.get(personId) ?? null;
+    if (visitCount === 0 || !lastVisitAt || nextAppointmentAt) continue;
+
+    customersWithoutFollowUp += 1;
+    const lastVisitDate = new Date(lastVisitAt);
+    if (!Number.isNaN(lastVisitDate.getTime())) {
+      const diffDays = Math.floor((now.getTime() - lastVisitDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays <= 30) customersWithoutFollowUp30Days += 1;
+      if (diffDays >= 60) customersWithoutFollowUp60Days += 1;
+    }
+  }
 
   const fiscalReceipts = (receiptsResult.data ?? []) as FiscalReceiptRow[];
 
@@ -1056,6 +1175,11 @@ export default async function DashboardPage() {
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:mt-6 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4">
               <AppointmentsOverviewCard todayCount={String(todayCount)} weekCount={String(weekCount)} />
               <CustomerOverviewCard value={String(customersCount)} subtext="Gespeicherte Profile" />
+              <FollowUpCustomersCard
+                totalWithoutFollowUp={customersWithoutFollowUp}
+                recentWithoutFollowUp={customersWithoutFollowUp30Days}
+                staleWithoutFollowUp={customersWithoutFollowUp60Days}
+              />
 
               <DashboardServicesCard
                 activeCount={activeServicesCountResult?.count ?? 0}
@@ -1083,13 +1207,35 @@ export default async function DashboardPage() {
                 href="/dashboard?openSlots=1"
                 accentColor={openSlots.length === 0 ? "#34d399" : "#fb923c"}
               />
-              <DashboardStatCard
-                label="Aktive Warteliste"
-                value={String(waitlistItems.length)}
-                subtext="Kunden warten"
-                href="/dashboard?openWaitlist=1"
-                accentColor={waitlistItems.length === 0 ? "#34d399" : "#a855f7"}
-              />
+              <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
+                <CardContent className="flex min-h-[132px] flex-col p-4 sm:min-h-[144px] sm:p-5">
+                  <div className="flex h-full flex-col justify-between gap-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium leading-5 text-[var(--text-muted)] sm:text-[15px]">Aktive Warteliste</div>
+                        <div className="mt-1 text-xs leading-5 text-white/45 sm:text-[13px]">Kunden warten</div>
+                      </div>
+
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Link href="/dashboard?openWaitlist=1&waitlistAdd=1" className="shrink-0" aria-label="Kunden zur Warteliste hinzufügen">
+                          <DashboardActionPill icon={<PlusCircleIcon />} compact accentColor="#a855f7" />
+                        </Link>
+
+                        <Link href="/dashboard?openWaitlist=1" className="shrink-0" aria-label="Warteliste öffnen">
+                          <DashboardActionPill icon={<OpenIcon />} compact accentColor="#a855f7" />
+                        </Link>
+                      </div>
+                    </div>
+
+                    <div
+                      className="text-[20px] font-semibold leading-none tracking-tight sm:text-[36px] lg:text-[40px]"
+                      style={{ color: waitlistItems.length === 0 ? "#34d399" : "#a855f7" }}
+                    >
+                      {String(waitlistItems.length)}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
               <DashboardStatCard
                 label="Reminder"
                 value={String(reminderCount)}

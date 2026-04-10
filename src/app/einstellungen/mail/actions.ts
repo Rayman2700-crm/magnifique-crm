@@ -59,6 +59,8 @@ export async function saveTenantMailSettings(formData: FormData) {
   const senderName = String(formData.get("mail_sender_name") ?? "").trim();
   const replyToEmail = String(formData.get("mail_reply_to_email") ?? "").trim();
   const isActive = String(formData.get("mail_is_active") ?? "off") === "on";
+  const subjectTemplate = String(formData.get("mail_subject_template") ?? "").trim();
+  const bodyTemplate = String(formData.get("mail_body_template") ?? "").trim();
 
   if (!tenantId) {
     redirect(buildSettingsUrl({ error: "Kein aktiver Behandler gewählt." }));
@@ -74,8 +76,9 @@ export async function saveTenantMailSettings(formData: FormData) {
       email: senderEmail,
       mail_sender_name: senderName || null,
       mail_reply_to_email: replyToEmail || null,
+      mail_subject_template: subjectTemplate || null,
+      mail_body_template: bodyTemplate || null,
       mail_is_active: isActive,
-      updated_at: new Date().toISOString(),
     })
     .eq("id", tenantId);
 
@@ -85,5 +88,5 @@ export async function saveTenantMailSettings(formData: FormData) {
 
   revalidatePath("/einstellungen/mail");
   revalidatePath("/rechnungen");
-  redirect(buildSettingsUrl({ success: "Mail-Absender gespeichert ✅" }));
+  redirect(buildSettingsUrl({ success: "Mail-Absender & Vorlagen gespeichert ✅" }));
 }

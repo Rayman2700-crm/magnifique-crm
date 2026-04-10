@@ -728,6 +728,12 @@ export default function AppointmentDetailSlideover({
     !!selected?.customerProfileId &&
     !!String(selected?.serviceName ?? selected?.title ?? "").trim();
 
+  const checkoutPaymentMethodCode = String(checkoutState.payment?.methodCode ?? "").trim().toUpperCase();
+  const checkoutPaymentStatus = String(checkoutState.payment?.status ?? "").trim().toUpperCase();
+  const isCardCheckout = checkoutPaymentMethodCode === "CARD" || paymentMethod === "CARD";
+  const isCheckoutPaymentCompleted = checkoutPaymentStatus === "COMPLETED";
+  const canCreateFiscalReceipt = !!checkoutState.payment && (!isCardCheckout || isCheckoutPaymentCompleted) && !checkoutState.receipt;
+
   const reminderPermissionHint = permissionsLoaded && !canManageForThisAppointment;
   const statusPermissionHint = permissionsLoaded && !canManageForThisAppointment;
 
@@ -895,12 +901,34 @@ export default function AppointmentDetailSlideover({
         salesOrder,
         payment: paymentResult.payment ?? null,
       }));
-      setCheckoutSuccess("Rechnung und Zahlung wurden erfasst.");
+
+      const paymentMethodCode = String(paymentResult.payment?.methodCode ?? paymentMethod).trim().toUpperCase();
+      const paymentStatus = String(paymentResult.payment?.status ?? "").trim().toUpperCase();
+
+      if (paymentMethodCode === "CARD") {
+        if (paymentStatus === "COMPLETED") {
+          setCheckoutSuccess("Kartenzahlung ist abgeschlossen. Fiskalbeleg kann jetzt erzeugt werden.");
+        } else {
+          setCheckoutSuccess(`Kartenzahlung angelegt: ${paymentStatus || "PENDING"}. Fiskalbeleg bleibt gesperrt, bis Stripe die Zahlung als COMPLETED zurückmeldet.`);
+        }
+      } else {
+        setCheckoutSuccess("Rechnung und Zahlung wurden erfasst.");
+      }
     });
   };
 
   const handleCreateReceipt = () => {
     if (!selected || !checkoutState.salesOrder?.id || !checkoutState.payment?.id) return;
+
+    const paymentMethodCode = String(checkoutState.payment?.methodCode ?? "").trim().toUpperCase();
+    const paymentStatus = String(checkoutState.payment?.status ?? "").trim().toUpperCase();
+
+    if (paymentMethodCode === "CARD" && paymentStatus !== "COMPLETED") {
+      setCheckoutError("Kartenzahlung ist noch nicht abgeschlossen. Fiskalbeleg bleibt gesperrt, bis Stripe COMPLETED zurückmeldet.");
+      setCheckoutSuccess(null);
+      return;
+    }
+
     setCheckoutError(null);
     setCheckoutSuccess(null);
 
@@ -1125,16 +1153,29 @@ export default function AppointmentDetailSlideover({
                   onClick={handleCreateSalesOrder}
                   className={clientiqueButtonClass("success", true) + " disabled:cursor-not-allowed disabled:opacity-60"}
                 >
-                  {checkoutState.payment ? "Rechnung erfasst" : "1. Rechnung erfassen"}
+                  {checkoutState.payment ? "1. Rechnung erfasst" : "1. Rechnung erfassen"}
                 </button>
                 <button
                   type="button"
-                  disabled={isCheckoutPending || !checkoutState.payment || !!checkoutState.receipt}
+                  disabled={isCheckoutPending || !canCreateFiscalReceipt}
                   className={clientiqueButtonClass("primary", true) + " disabled:cursor-not-allowed disabled:opacity-60"}
                   onClick={handleCreateReceipt}
                 >
                   {checkoutState.receipt ? "Beleg bereits fiskalisiert" : "2. Fiskalbeleg erzeugen"}
                 </button>
+
+                {checkoutState.payment && isCardCheckout && !checkoutState.receipt ? (
+                  <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-3 text-sm text-amber-100">
+                    <div className="font-semibold">Kartenzahlung</div>
+                    <div className="mt-1">Status: {checkoutPaymentStatus || "PENDING"}</div>
+                    {isCheckoutPaymentCompleted ? (
+                      <div className="mt-1">Stripe hat die Zahlung bestätigt. Jetzt darf der Fiskalbeleg erzeugt werden.</div>
+                    ) : (
+                      <div className="mt-1">Fiskalbeleg bleibt gesperrt, bis Stripe die Zahlung wirklich als COMPLETED zurückmeldet.</div>
+                    )}
+                  </div>
+                ) : null}
+
                 {checkoutState.receipt ? (
                   <>
                     <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-white">
@@ -1378,7 +1419,13 @@ export default function AppointmentDetailSlideover({
                       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
                         <div>
                           <div className="text-sm text-white/65">{checkoutState.salesOrder ? "Rechnungssumme" : "Aktuelle Entwurfssumme"}</div>
-                          {checkoutState.payment ? <div className="mt-1 text-xs text-emerald-200">Rechnung und Zahlung bereits erfasst</div> : null}
+                          {checkoutState.payment ? (
+                            <div className={`mt-1 text-xs ${isCardCheckout && !isCheckoutPaymentCompleted ? "text-amber-200" : "text-emerald-200"}`}>
+                              {isCardCheckout
+                                ? `Kartenzahlung: ${checkoutPaymentStatus || "PENDING"}`
+                                : "Rechnung und Zahlung bereits erfasst"}
+                            </div>
+                          ) : null}
                         </div>
                         <div className="text-2xl font-black text-white">
                           {checkoutState.salesOrder

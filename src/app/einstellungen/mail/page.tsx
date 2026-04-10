@@ -51,7 +51,7 @@ export default async function MailSettingsPage({
 
   const { data: tenantRaw } = await supabase
     .from("tenants")
-    .select("id, display_name, email, phone, mail_sender_name, mail_reply_to_email, mail_is_active")
+    .select("id, display_name, email, phone, mail_sender_name, mail_reply_to_email, mail_subject_template, mail_body_template, mail_is_active")
     .eq("id", effectiveTenantId)
     .maybeSingle();
 
@@ -62,6 +62,8 @@ export default async function MailSettingsPage({
     phone?: string | null;
     mail_sender_name?: string | null;
     mail_reply_to_email?: string | null;
+    mail_subject_template?: string | null;
+    mail_body_template?: string | null;
     mail_is_active?: boolean | null;
   } | null;
 
@@ -130,6 +132,41 @@ export default async function MailSettingsPage({
               />
             </label>
 
+            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4">
+              <div className="text-sm font-semibold text-white">Verfügbare Platzhalter</div>
+              <div className="mt-2 flex flex-wrap gap-2 text-xs text-white/70">
+                {["{customer_name}", "{receipt_number}", "{amount}", "{payment_method}", "{provider_name}"].map((token) => (
+                  <span key={token} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                    {token}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <label className="grid gap-2">
+              <span className="text-sm font-semibold text-white">Betreff-Vorlage</span>
+              <input
+                name="mail_subject_template"
+                defaultValue={tenant?.mail_subject_template ?? "Beleg {receipt_number} – {provider_name}"}
+                placeholder="z. B. Beleg {receipt_number} – {provider_name}"
+                className="h-12 rounded-2xl border border-white/10 bg-black/20 px-4 text-white outline-none placeholder:text-white/30"
+              />
+            </label>
+
+            <label className="grid gap-2">
+              <span className="text-sm font-semibold text-white">Text-Vorlage</span>
+              <textarea
+                name="mail_body_template"
+                defaultValue={
+                  tenant?.mail_body_template ??
+                  "Hallo {customer_name},\n\nanbei bzw. zur Ansicht dein Beleg {receipt_number}.\nBetrag: {amount}\nZahlungsart: {payment_method}\n\nVielen Dank für deinen Besuch.\n\nLiebe Grüße\n{provider_name}"
+                }
+                placeholder="Mailtext mit Platzhaltern"
+                rows={10}
+                className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none placeholder:text-white/30"
+              />
+            </label>
+
             <label className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
               <div>
                 <div className="text-sm font-semibold text-white">E-Mail-Versand aktiv</div>
@@ -173,6 +210,17 @@ export default async function MailSettingsPage({
               <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
                 <div className="text-white/45">Reply-To</div>
                 <div className="mt-1 font-semibold text-white">{tenant?.mail_reply_to_email || tenant?.email || "—"}</div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                <div className="text-white/45">Betreff-Vorlage</div>
+                <div className="mt-1 font-semibold text-white">{tenant?.mail_subject_template || "Beleg {receipt_number} – {provider_name}"}</div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                <div className="text-white/45">Text-Vorlage</div>
+                <div className="mt-1 whitespace-pre-wrap font-semibold text-white/85">
+                  {tenant?.mail_body_template || "Hallo {customer_name},\n\nanbei bzw. zur Ansicht dein Beleg {receipt_number}.\nBetrag: {amount}\nZahlungsart: {payment_method}\n\nVielen Dank für deinen Besuch.\n\nLiebe Grüße\n{provider_name}"}
+                </div>
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
                 <div className="text-white/45">Versandstatus</div>

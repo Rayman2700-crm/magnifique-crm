@@ -14,9 +14,11 @@
     "@supabase/supabase-js": "^2.98.0",
     "next": "16.1.6",
     "pdf-lib": "^1.17.1",
+    "qrcode.react": "^4.2.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-signature-canvas": "^1.1.0-alpha.2",
+    "stripe": "^22.0.0",
     "web-push": "^3.6.7"
   },
   "devDependencies": {

@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getEffectiveTenantId } from "@/lib/effectiveTenant";
 import { Card, CardContent } from "@/components/ui/card";
 import FiscalReceiptSlideover from "@/components/rechnungen/FiscalReceiptSlideover";
-import { createFiscalReceiptForPayment, createPaymentForSalesOrder, createSalesOrderFromAppointment } from "./actions";
+import { cancelCardPaymentForCheckout, completeCardPaymentForCheckout, createFiscalReceiptForPayment, createPaymentForSalesOrder, createSalesOrderFromAppointment, failCardPaymentForCheckout, startCardPaymentForCheckout } from "./actions";
 
 type FiscalReceiptRow = {
   id: string;
@@ -100,6 +100,7 @@ type SlideoverReceipt = {
   providerInitials?: string | null;
   availableServices?: CheckoutServiceOption[];
   paymentMethodLabel?: string | null;
+  paymentStatus?: string | null;
   customerEmail?: string | null;
   customerPhone?: string | null;
   deliveries?: SlideoverDelivery[];
@@ -207,6 +208,22 @@ type PaymentRow = {
   paid_at: string | null;
   created_at: string | null;
   payment_method: PaymentMethodJoin;
+};
+
+
+type PendingPaymentListItem = {
+  id: string;
+  tenantId: string | null;
+  salesOrderId: string | null;
+  customerName: string | null;
+  providerName: string | null;
+  amount: number | null;
+  currencyCode: string | null;
+  status: string | null;
+  paymentMethodLabel: string | null;
+  provider: string | null;
+  providerTransactionId: string | null;
+  createdAt: string | null;
 };
 
 type AvatarFilterOption = {
@@ -490,6 +507,27 @@ function formatPaymentMethod(value: string | PaymentMethodJoin | null | undefine
   return normalized || "—";
 }
 
+function formatPaymentStatus(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  if (normalized === "PENDING") return "Ausstehend";
+  if (normalized === "PROCESSING") return "Wird verarbeitet";
+  if (normalized === "COMPLETED") return "Bezahlt";
+  if (normalized === "FAILED") return "Fehlgeschlagen";
+  if (normalized === "CANCELLED") return "Abgebrochen";
+  if (normalized === "REFUNDED") return "Rückerstattet";
+  return normalized || "—";
+}
+
+function toneForPaymentStatus(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  if (normalized === "COMPLETED") return "green" as const;
+  if (normalized === "PENDING" || normalized === "PROCESSING") return "amber" as const;
+  if (normalized === "FAILED" || normalized === "CANCELLED") return "red" as const;
+  if (normalized === "REFUNDED") return "blue" as const;
+  return "neutral" as const;
+}
+
+
 function startOfDay(date: Date) {
   const copy = new Date(date);
   copy.setHours(0, 0, 0, 0);
@@ -573,6 +611,7 @@ function getReceiptSearchHaystack(item: SlideoverReceipt) {
     item.customerName,
     item.providerName,
     item.status,
+    item.paymentStatus,
     item.signatureState,
     item.verificationStatus,
     latestEventLabel,
@@ -1019,6 +1058,15 @@ export default async function RechnungenPage({
   }
 
 
+  const createdPaymentMethodCode = String(firstJoin(createdPayment?.payment_method)?.code ?? "").trim().toUpperCase();
+  const createdPaymentStatus = String(createdPayment?.status ?? "").trim().toUpperCase();
+  const isCreatedCardPayment = createdPaymentMethodCode === "CARD";
+  const isCreatedCompletedPayment = createdPaymentStatus === "COMPLETED";
+  const isCreatedPendingPayment = createdPaymentStatus === "PENDING";
+  const isCreatedProcessingPayment = createdPaymentStatus === "PROCESSING";
+  const isCreatedFailedPayment = createdPaymentStatus === "FAILED";
+  const isCreatedCancelledPayment = createdPaymentStatus === "CANCELLED";
+
   let createdReceipt: FiscalReceiptRow | null = null;
   if (receiptId) {
     const { data: receiptRaw } = await admin
@@ -1113,7 +1161,36 @@ export default async function RechnungenPage({
     );
   }
 
+
   const receipts = (receiptsRaw ?? []) as FiscalReceiptRow[];
+
+  const pendingStatusCodes = ["PENDING", "PROCESSING", "FAILED", "CANCELLED"];
+  let pendingPaymentsQuery = admin
+    .from("payments")
+    .select(`
+      id, tenant_id, sales_order_id, payment_method_id, amount, currency_code,
+      status, paid_at, created_at, provider, provider_transaction_id,
+      payment_method:payment_methods ( id, code, name )
+    `)
+    .in("status", pendingStatusCodes)
+    .order("created_at", { ascending: false })
+    .limit(q ? 300 : 120);
+
+  if (!isAdmin && effectiveTenantId) pendingPaymentsQuery = pendingPaymentsQuery.eq("tenant_id", effectiveTenantId);
+  if (sanitizedQuery) {
+    const pendingOrParts = [
+      `id.ilike.%${sanitizedQuery}%`,
+      `sales_order_id.ilike.%${sanitizedQuery}%`,
+      `provider_transaction_id.ilike.%${sanitizedQuery}%`,
+    ];
+    const upperQuery = sanitizedQuery.toUpperCase();
+    if (pendingStatusCodes.includes(upperQuery)) {
+      pendingOrParts.push(`status.eq.${upperQuery}`);
+    }
+    pendingPaymentsQuery = pendingPaymentsQuery.or(pendingOrParts.join(","));
+  }
+
+  const { data: pendingPaymentsRaw } = await pendingPaymentsQuery;
 
   const receiptIds = receipts.map((row) => row.id).filter(Boolean);
   let events: FiscalEventRow[] = [];
@@ -1151,22 +1228,26 @@ export default async function RechnungenPage({
   const receiptPaymentIds = Array.from(new Set(receipts.map((row) => String(row.payment_id ?? "").trim()).filter(Boolean)));
 
   const paymentMethodLabelByReceiptId = new Map<string, string>();
+  const paymentStatusByReceiptId = new Map<string, string>();
   if (receiptPaymentIds.length > 0) {
     const { data: receiptPaymentRows } = await admin
       .from("payments")
       .select(`
         id,
+        status,
         payment_method:payment_methods ( id, code, name )
       `)
       .in("id", receiptPaymentIds);
 
-    for (const row of (receiptPaymentRows ?? []) as Array<{ id: string; payment_method: PaymentMethodJoin }>) {
+    for (const row of (receiptPaymentRows ?? []) as Array<{ id: string; status: string | null; payment_method: PaymentMethodJoin }>) {
       const paymentId = String(row.id ?? "").trim();
       if (!paymentId) continue;
       const label = formatPaymentMethod(row.payment_method);
+      const paymentStatus = String(row.status ?? "").trim() || null;
       for (const receipt of receipts) {
         if (String(receipt.payment_id ?? "").trim() === paymentId) {
           paymentMethodLabelByReceiptId.set(receipt.id, label);
+          if (paymentStatus) paymentStatusByReceiptId.set(receipt.id, paymentStatus);
         }
       }
     }
@@ -1204,6 +1285,99 @@ export default async function RechnungenPage({
     }
   }
 
+
+  const pendingPaymentRows = (pendingPaymentsRaw ?? []) as Array<
+    PaymentRow & { provider?: string | null; provider_transaction_id?: string | null }
+  >;
+  const pendingPaymentIds = pendingPaymentRows.map((row) => String(row.id ?? "").trim()).filter(Boolean);
+  const pendingPaymentReceiptIds = new Set<string>();
+  if (pendingPaymentIds.length > 0) {
+    const { data: pendingReceiptRows } = await admin
+      .from("fiscal_receipts")
+      .select("payment_id")
+      .in("payment_id", pendingPaymentIds);
+
+    for (const row of (pendingReceiptRows ?? []) as Array<{ payment_id: string | null }>) {
+      const pid = String(row.payment_id ?? "").trim();
+      if (pid) pendingPaymentReceiptIds.add(pid);
+    }
+  }
+
+  const visiblePendingPaymentRows = pendingPaymentRows.filter((row) => !pendingPaymentReceiptIds.has(String(row.id ?? "").trim()));
+
+  const pendingSalesOrderIds = Array.from(
+    new Set(visiblePendingPaymentRows.map((row) => String(row.sales_order_id ?? "").trim()).filter(Boolean))
+  );
+  const pendingSalesOrderCustomerIdBySalesOrderId = new Map<string, string>();
+  const pendingTenantIdBySalesOrderId = new Map<string, string>();
+
+  if (pendingSalesOrderIds.length > 0) {
+    const { data: pendingSalesOrderRows } = await admin
+      .from("sales_orders")
+      .select("id, customer_id, tenant_id")
+      .in("id", pendingSalesOrderIds);
+
+    for (const row of (pendingSalesOrderRows ?? []) as Array<{ id: string; customer_id: string | null; tenant_id: string | null }>) {
+      const soId = String(row.id ?? "").trim();
+      if (!soId) continue;
+      const customerId = String(row.customer_id ?? "").trim();
+      const tenantId = String(row.tenant_id ?? "").trim();
+      if (customerId) pendingSalesOrderCustomerIdBySalesOrderId.set(soId, customerId);
+      if (tenantId) pendingTenantIdBySalesOrderId.set(soId, tenantId);
+    }
+  }
+
+  const pendingCustomerProfileIds = Array.from(
+    new Set(Array.from(pendingSalesOrderCustomerIdBySalesOrderId.values()).filter(Boolean))
+  );
+  const pendingCustomerProfileById = new Map<string, { customerName: string | null; customerPhone: string | null; customerEmail: string | null }>();
+
+  if (pendingCustomerProfileIds.length > 0) {
+    const { data: pendingCustomerProfiles } = await admin
+      .from("customer_profiles")
+      .select(`id, person:persons ( full_name, phone, email )`)
+      .in("id", pendingCustomerProfileIds);
+
+    for (const profile of (pendingCustomerProfiles ?? []) as Array<{ id: string; person: { full_name: string | null; phone: string | null; email: string | null } | { full_name: string | null; phone: string | null; email: string | null }[] | null }>) {
+      const personJoin = firstJoin(profile.person);
+      pendingCustomerProfileById.set(String(profile.id), {
+        customerName: String(personJoin?.full_name ?? "").trim() || null,
+        customerPhone: String(personJoin?.phone ?? "").trim() || null,
+        customerEmail: String(personJoin?.email ?? "").trim() || null,
+      });
+    }
+  }
+
+  const pendingPaymentItems: PendingPaymentListItem[] = visiblePendingPaymentRows
+    .map((row) => {
+      const salesOrderId = String(row.sales_order_id ?? "").trim() || null;
+      const customerProfileId = salesOrderId ? pendingSalesOrderCustomerIdBySalesOrderId.get(salesOrderId) ?? null : null;
+      const tenantId = String(row.tenant_id ?? "").trim() || pendingTenantIdBySalesOrderId.get(salesOrderId ?? "") || null;
+      const providerName =
+        tenantNameById.get(String(tenantId ?? "").trim()) ||
+        avatarOptions.find((option) => String(option.tenantId ?? "").trim() === String(tenantId ?? "").trim())?.label ||
+        null;
+      const customerProfile = customerProfileId ? pendingCustomerProfileById.get(customerProfileId) ?? null : null;
+      return {
+        id: String(row.id),
+        tenantId: tenantId ? String(tenantId) : null,
+        salesOrderId,
+        customerName: customerProfile?.customerName ?? null,
+        providerName,
+        amount: row.amount,
+        currencyCode: row.currency_code,
+        status: row.status,
+        paymentMethodLabel: formatPaymentMethod(row.payment_method),
+        provider: String((row as any).provider ?? "").trim() || null,
+        providerTransactionId: String((row as any).provider_transaction_id ?? "").trim() || null,
+        createdAt: row.created_at,
+      } satisfies PendingPaymentListItem;
+    })
+    .filter((item) =>
+      practitionerFilter === "all"
+        ? true
+        : normalizePractitionerKey(item.providerName) === practitionerFilter
+    );
   const receiptDeliveryByReceiptId = new Map<string, SlideoverDelivery[]>();
   if (receiptIds.length > 0) {
     const { data: deliveryRows } = await admin
@@ -1341,6 +1515,7 @@ export default async function RechnungenPage({
         initialsFromName(providerName, "BE"),
       availableServices: servicesByTenant.get(String(row.tenant_id ?? '').trim()) ?? [],
       paymentMethodLabel: paymentMethodLabelByReceiptId.get(row.id) ?? null,
+      paymentStatus: paymentStatusByReceiptId.get(row.id) ?? null,
       customerEmail: customerProfile?.customerEmail ?? null,
       customerPhone: customerProfile?.customerPhone ?? null,
       deliveries: receiptDeliveryByReceiptId.get(row.id) ?? [],
@@ -1395,6 +1570,9 @@ export default async function RechnungenPage({
   const cancelledCount = quickFilterCounts.cancelled;
   const errorCount = quickFilterCounts.error;
   const paidCount = searchScopedItems.filter((item) => getReceiptBusinessState(item).key === "paid").length;
+
+  const pendingStripeCount = pendingPaymentItems.filter((item) => String(item.status ?? "").trim().toUpperCase() === "PENDING").length;
+  const processingStripeCount = pendingPaymentItems.filter((item) => String(item.status ?? "").trim().toUpperCase() === "PROCESSING").length;
 
   const revenueTodayCents = searchScopedItems.reduce((sum, item) => {
     const issued = item.issuedAt ?? item.createdAt;
@@ -1713,7 +1891,7 @@ export default async function RechnungenPage({
                 <SummaryCard
                   label="Offene Belege"
                   value={openCount}
-                  subtext={`${cancelledCount} storniert · ${errorCount} mit Fehler · ${paidCount} bezahlt`}
+                  subtext={`${cancelledCount} storniert · ${errorCount} mit Fehler · ${paidCount} bezahlt · ${pendingStripeCount} pending`}
                 />
               </div>
             </div>
@@ -1866,7 +2044,7 @@ export default async function RechnungenPage({
                     <div className="md:col-span-2"><label className="text-sm font-medium text-white">Interne Notiz</label><input name="payment_notes" placeholder="z. B. komplett kassiert an der Rezeption" className="mt-1 h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none placeholder:text-white/35" /></div>
                   </div>
                   <div className="space-y-4">
-                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/75"><div className="text-xs uppercase tracking-wide text-white/45">Was jetzt passiert</div><div className="mt-2 font-semibold text-white">Payment wird an Sales Order gehängt</div><div className="mt-2 text-white/65">Danach ist der Vorgang kassierseitig vollständig vorbereitet. Fiscal kommt erst im nächsten Schritt.</div><div className="mt-3 flex flex-wrap gap-2 text-xs"><span className="rounded-full border border-white/10 px-2.5 py-1">Sales Order: {shortId(createdSalesOrder.id)}</span><span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-emerald-100">Offen: {euroFromGross(salesOrderDisplayTotal, createdSalesOrder.currency_code || "EUR")}</span></div></div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/75"><div className="text-xs uppercase tracking-wide text-white/45">Was jetzt passiert</div><div className="mt-2 font-semibold text-white">Payment wird an Sales Order gehängt</div><div className="mt-2 text-white/65">Bar und Überweisung bleiben vorerst Sofort-Flow. Karte läuft jetzt über PENDING → PROCESSING → COMPLETED.</div><div className="mt-3 flex flex-wrap gap-2 text-xs"><span className="rounded-full border border-white/10 px-2.5 py-1">Sales Order: {shortId(createdSalesOrder.id)}</span><span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-emerald-100">Offen: {euroFromGross(salesOrderDisplayTotal, createdSalesOrder.currency_code || "EUR")}</span></div></div>
                     <button type="submit" className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-500">Zahlung erfassen</button>
                   </div>
                 </form>
@@ -1881,28 +2059,109 @@ export default async function RechnungenPage({
                     <span className="rounded-full border border-white/10 px-2.5 py-1">Status: {createdPayment.status ?? "COMPLETED"}</span>
                     <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-emerald-100">Betrag: {euroFromGross(createdPayment.amount, createdPayment.currency_code || "EUR")}</span>
                   </div>
-                  <div className="mt-3 text-sm text-white/70">Zahlung wurde erfolgreich an die Sales Order gebunden. Damit ist der Checkout bis zum Payment sauber getrennt aufgebaut.</div>
+                  <div className="mt-3 text-sm text-white/70">
+                    {isCreatedCardPayment
+                      ? "Kartenzahlung ist jetzt als eigener Checkout-Flow angeschlossen. Erst nach erfolgreichem Abschluss darf Fiscal erzeugt werden."
+                      : "Zahlung wurde erfolgreich an die Sales Order gebunden. Damit ist der Checkout bis zum Payment sauber getrennt aufgebaut."}
+                  </div>
                 </div>
 
                 {!createdReceipt ? (
-                  <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
-                    <div className="text-xs uppercase tracking-wide text-amber-200/80">Nächster Schritt</div>
-                    <div className="mt-2 text-lg font-semibold text-white">Fiscal Receipt erzeugen</div>
-                    <div className="mt-2 text-sm text-white/70">Jetzt wird aus Sales Order + Payment der Fiscal-Beleg erzeugt. Erst danach ist der Checkout fachlich komplett abgeschlossen.</div>
-                    <form action={createFiscalReceiptForPayment} className="mt-4 space-y-4">
-                      <input type="hidden" name="appointment_id" value={appointmentId} />
-                      <input type="hidden" name="sales_order_id" value={createdSalesOrder.id} />
-                      <input type="hidden" name="payment_id" value={createdPayment.id} />
-                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/75">
-                        <div className="text-xs uppercase tracking-wide text-white/45">Was jetzt passiert</div>
-                        <div className="mt-2 font-semibold text-white">Fiscal Receipt + Receipt-Zeilen</div>
-                        <div className="mt-2 text-white/65">Der Beleg wird für die aktuelle Kassa erzeugt und die Zeilen aus der Sales Order übernommen.</div>
+                  isCreatedCardPayment ? (
+                    <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 space-y-4">
+                      <div>
+                        <div className="text-xs uppercase tracking-wide text-amber-200/80">Kartenzahlung</div>
+                        <div className="mt-2 text-lg font-semibold text-white">Terminal-Flow simuliert</div>
+                        <div className="mt-2 text-sm text-white/70">Bar und Überweisung bleiben direkt bezahlt. Karte läuft hier jetzt bewusst in mehreren Zuständen, bevor Fiscal erzeugt werden darf.</div>
                       </div>
-                      <button type="submit" className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500 px-4 text-sm font-semibold text-white hover:bg-amber-400">
-                        Fiscal Receipt erzeugen
-                      </button>
-                    </form>
-                  </div>
+
+                      {isCreatedPendingPayment ? (
+                        <form action={startCardPaymentForCheckout} className="space-y-4">
+                          <input type="hidden" name="appointment_id" value={appointmentId} />
+                          <input type="hidden" name="sales_order_id" value={createdSalesOrder.id} />
+                          <input type="hidden" name="payment_id" value={createdPayment.id} />
+                          <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/75">
+                            <div className="text-xs uppercase tracking-wide text-white/45">Status</div>
+                            <div className="mt-2 font-semibold text-white">Warte auf Start</div>
+                            <div className="mt-2 text-white/65">Die Kartenzahlung wurde angelegt, aber noch nicht gestartet.</div>
+                          </div>
+                          <button type="submit" className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500 px-4 text-sm font-semibold text-white hover:bg-amber-400">Kartenzahlung starten</button>
+                        </form>
+                      ) : null}
+
+                      {isCreatedProcessingPayment ? (
+                        <div className="space-y-4">
+                          <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/75">
+                            <div className="text-xs uppercase tracking-wide text-white/45">Status</div>
+                            <div className="mt-2 font-semibold text-white">Terminal läuft</div>
+                            <div className="mt-2 text-white/65">Jetzt kannst du den simulierten Terminal-Ausgang wählen: erfolgreich, fehlgeschlagen oder abgebrochen.</div>
+                          </div>
+                          <div className="grid gap-3">
+                            <form action={completeCardPaymentForCheckout}>
+                              <input type="hidden" name="appointment_id" value={appointmentId} />
+                              <input type="hidden" name="sales_order_id" value={createdSalesOrder.id} />
+                              <input type="hidden" name="payment_id" value={createdPayment.id} />
+                              <button type="submit" className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-500">Kartenzahlung erfolgreich abschließen</button>
+                            </form>
+                            <form action={failCardPaymentForCheckout}>
+                              <input type="hidden" name="appointment_id" value={appointmentId} />
+                              <input type="hidden" name="sales_order_id" value={createdSalesOrder.id} />
+                              <input type="hidden" name="payment_id" value={createdPayment.id} />
+                              <input type="hidden" name="reason" value="Terminalzahlung fehlgeschlagen" />
+                              <button type="submit" className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-red-500/30 bg-red-600 px-4 text-sm font-semibold text-white hover:bg-red-500">Als fehlgeschlagen markieren</button>
+                            </form>
+                            <form action={cancelCardPaymentForCheckout}>
+                              <input type="hidden" name="appointment_id" value={appointmentId} />
+                              <input type="hidden" name="sales_order_id" value={createdSalesOrder.id} />
+                              <input type="hidden" name="payment_id" value={createdPayment.id} />
+                              <button type="submit" className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-white/15 bg-white/10 px-4 text-sm font-semibold text-white hover:bg-white/15">Kartenzahlung abbrechen</button>
+                            </form>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {isCreatedFailedPayment ? (
+                        <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">Kartenzahlung ist fehlgeschlagen. Fiscal bleibt gesperrt.</div>
+                      ) : null}
+
+                      {isCreatedCancelledPayment ? (
+                        <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/75">Kartenzahlung wurde abgebrochen. Fiscal bleibt gesperrt.</div>
+                      ) : null}
+
+                      {isCreatedCompletedPayment ? (
+                        <form action={createFiscalReceiptForPayment} className="space-y-4">
+                          <input type="hidden" name="appointment_id" value={appointmentId} />
+                          <input type="hidden" name="sales_order_id" value={createdSalesOrder.id} />
+                          <input type="hidden" name="payment_id" value={createdPayment.id} />
+                          <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/75">
+                            <div className="text-xs uppercase tracking-wide text-white/45">Nächster Schritt</div>
+                            <div className="mt-2 font-semibold text-white">Fiscal Receipt erzeugen</div>
+                            <div className="mt-2 text-white/65">Die Kartenzahlung ist erfolgreich abgeschlossen. Erst jetzt darf der Fiscal-Beleg erzeugt werden.</div>
+                          </div>
+                          <button type="submit" className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500 px-4 text-sm font-semibold text-white hover:bg-amber-400">Fiscal Receipt erzeugen</button>
+                        </form>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
+                      <div className="text-xs uppercase tracking-wide text-amber-200/80">Nächster Schritt</div>
+                      <div className="mt-2 text-lg font-semibold text-white">Fiscal Receipt erzeugen</div>
+                      <div className="mt-2 text-sm text-white/70">Jetzt wird aus Sales Order + Payment der Fiscal-Beleg erzeugt. Erst danach ist der Checkout fachlich komplett abgeschlossen.</div>
+                      <form action={createFiscalReceiptForPayment} className="mt-4 space-y-4">
+                        <input type="hidden" name="appointment_id" value={appointmentId} />
+                        <input type="hidden" name="sales_order_id" value={createdSalesOrder.id} />
+                        <input type="hidden" name="payment_id" value={createdPayment.id} />
+                        <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/75">
+                          <div className="text-xs uppercase tracking-wide text-white/45">Was jetzt passiert</div>
+                          <div className="mt-2 font-semibold text-white">Fiscal Receipt + Receipt-Zeilen</div>
+                          <div className="mt-2 text-white/65">Der Beleg wird für die aktuelle Kassa erzeugt und die Zeilen aus der Sales Order übernommen.</div>
+                        </div>
+                        <button type="submit" className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500 px-4 text-sm font-semibold text-white hover:bg-amber-400">
+                          Fiscal Receipt erzeugen
+                        </button>
+                      </form>
+                    </div>
+                  )
                 ) : (
                   <div className="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4">
                     <div className="text-xs uppercase tracking-wide text-sky-200/80">Fiscal Receipt erzeugt</div>
@@ -1931,6 +2190,112 @@ export default async function RechnungenPage({
                 )}
               </div>
             )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+
+      {!isCheckoutFlow && pendingPaymentItems.length > 0 ? (
+        <Card className="mt-6 overflow-hidden border-amber-400/20 bg-amber-500/10">
+          <CardContent className="p-0">
+            <div className="border-b border-white/8 px-5 py-4 md:px-6">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="text-lg font-semibold text-white">Offene Kartenzahlungen</div>
+                  <div className="mt-1 text-sm text-white/65">
+                    Stripe-Payments ohne Fiscal-Beleg. Pending: {pendingStripeCount} · Verarbeitung: {processingStripeCount}
+                  </div>
+                </div>
+                <div className="text-xs text-white/55">
+                  Diese Liste ist bewusst getrennt von der Belegliste.
+                </div>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1040px] table-auto text-sm">
+                <thead className="bg-white/[0.03]">
+                  <tr>
+                    <th className="w-[18%] px-6 py-4 font-semibold text-left text-white/60">Payment</th>
+                    <th className="w-[26%] px-4 py-4 font-semibold text-left text-white/60">Kunde</th>
+                    <th className="w-[18%] px-4 py-4 font-semibold text-left text-white/60">Erstellt</th>
+                    <th className="w-[12%] px-4 py-4 font-semibold text-left text-white/60">Betrag</th>
+                    <th className="w-[26%] px-6 py-4 font-semibold text-right text-white/60">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingPaymentItems.map((item) => {
+                    const providerBadge = providerBadgeMeta(item.providerName);
+                    const detailHref = buildRechnungenHref({
+                      qRaw,
+                      filter: currentFilter,
+                      practitioner: practitionerFilter,
+                      salesOrder: item.salesOrderId ?? undefined,
+                      payment: item.id,
+                    });
+
+                    return (
+                      <tr key={`pending-${item.id}`} className="border-t border-white/8 transition hover:bg-white/[0.025]">
+                        <td className="px-6 py-4 align-middle">
+                          <div className="flex items-center gap-3">
+                            <Link
+                              href={detailHref}
+                              title="Payment öffnen"
+                              aria-label="Payment öffnen"
+                              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-white transition hover:bg-white/15"
+                            >
+                              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z" />
+                                <circle cx="12" cy="12" r="3" />
+                              </svg>
+                            </Link>
+                            <div className="min-h-[52px]">
+                              <div className="font-semibold leading-none text-white">{shortId(item.id)}</div>
+                              <div className="mt-1.5 text-[11px] text-white/50">
+                                {item.providerTransactionId ? `Stripe ${shortId(item.providerTransactionId)}` : "Stripe-Referenz folgt"}
+                              </div>
+                              {item.salesOrderId ? (
+                                <div className="mt-1 text-[11px] text-white/45">Sales Order {shortId(item.salesOrderId)}</div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 align-middle">
+                          <div className="flex items-center gap-4">
+                            <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${providerBadge.className}`}>
+                              {providerBadge.initials}
+                            </span>
+                            <div className="min-w-0">
+                              <div className="truncate font-semibold text-white">{item.customerName || "Kunde offen"}</div>
+                              <div className="mt-1 truncate text-xs text-white/50">{item.providerName || "Behandler"}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 align-middle text-white/75">{formatDateTime(item.createdAt)}</td>
+                        <td className="px-6 py-4 align-middle font-medium text-white">{euroFromGross(item.amount, item.currencyCode)}</td>
+                        <td className="px-6 py-4 text-right align-middle">
+                          <div className="flex items-center justify-end gap-2">
+                            <Badge tone={toneForPaymentStatus(item.status)}>
+                              <svg viewBox="0 0 20 20" className="mr-1 h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <rect x="3.5" y="5.5" width="13" height="9" rx="2" />
+                                <path d="M3.5 8.5h13" />
+                              </svg>
+                              {formatPaymentStatus(item.status)}
+                            </Badge>
+                            <Badge tone="blue">
+                              <svg viewBox="0 0 20 20" className="mr-1 h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M10 5v5l3 2" />
+                                <circle cx="10" cy="10" r="7" />
+                              </svg>
+                              {item.paymentMethodLabel || "Karte"}
+                            </Badge>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </CardContent>
         </Card>
       ) : null}
@@ -1976,14 +2341,14 @@ export default async function RechnungenPage({
                 <div className="mt-1 text-sm text-[var(--text-muted)]">{filteredItems.length} Ergebnis(se)</div>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[820px] table-auto text-sm">
+                <table className="w-full min-w-[1040px] table-auto text-sm">
                   <thead className="bg-white/[0.03]">
                     <tr>
                       <th className="w-[14%] px-6 py-4 font-semibold text-left text-white/60">Beleg</th>
                       <th className="w-[30%] px-4 py-4 font-semibold text-left text-white/60">Kunde</th>
                       <th className="w-[22%] px-4 py-4 font-semibold text-left text-white/60">Erstellt</th>
                       <th className="w-[14%] px-4 py-4 font-semibold text-left text-white/60">Betrag</th>
-                      <th className="w-[20%] px-6 py-4 font-semibold text-right text-white/60">Aktion</th>
+                      <th className="w-[28%] px-6 py-4 font-semibold text-right text-white/60">Aktion</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2068,18 +2433,29 @@ export default async function RechnungenPage({
                               <div className="flex items-center justify-end gap-2">
                                 <span title={businessState.label}>
                                   <Badge tone={businessState.tone}>
-                                    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <svg viewBox="0 0 20 20" className="mr-1 h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                       <circle cx="10" cy="10" r="7" />
                                       <path d="m7.5 10 1.6 1.6 3.4-3.7" />
                                     </svg>
+                                    {businessState.label}
+                                  </Badge>
+                                </span>
+                                <span title={`Zahlung: ${formatPaymentStatus(item.paymentStatus)}`}>
+                                  <Badge tone={toneForPaymentStatus(item.paymentStatus)}>
+                                    <svg viewBox="0 0 20 20" className="mr-1 h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                      <rect x="3.5" y="5.5" width="13" height="9" rx="2" />
+                                      <path d="M3.5 8.5h13" />
+                                    </svg>
+                                    {formatPaymentStatus(item.paymentStatus)}
                                   </Badge>
                                 </span>
                                 <span title={latestEventLabel}>
                                   <Badge tone={latestEventTone}>
-                                    <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <svg viewBox="0 0 20 20" className="mr-1 h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                       <path d="M10 5v5l3 2" />
                                       <circle cx="10" cy="10" r="7" />
                                     </svg>
+                                    {latestEventLabel}
                                   </Badge>
                                 </span>
                               </div>

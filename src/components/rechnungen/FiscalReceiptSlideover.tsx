@@ -59,6 +59,7 @@ type SlideoverReceipt = {
   providerInitials?: string | null;
   availableServices?: ServiceOption[];
   paymentMethodLabel?: string | null;
+  paymentStatus?: string | null;
   customerEmail?: string | null;
   customerPhone?: string | null;
   deliveries?: SlideoverDelivery[];
@@ -169,6 +170,76 @@ function formatReceiptStatus(
   };
   return labels[normalized] ?? (normalized ? normalized.replaceAll("_", " ") : "—");
 }
+
+function formatPaymentStatus(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  const labels: Record<string, string> = {
+    PENDING: "Ausstehend",
+    PROCESSING: "Wird verarbeitet",
+    COMPLETED: "Bezahlt",
+    FAILED: "Fehlgeschlagen",
+    CANCELLED: "Abgebrochen",
+    REFUNDED: "Rückerstattet",
+  };
+  return labels[normalized] ?? (normalized ? normalized.replaceAll("_", " ") : "—");
+}
+
+function paymentStatusBadgeClass(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  if (normalized === "COMPLETED") return "border-emerald-400/20 bg-emerald-400/10 text-emerald-200";
+  if (normalized === "PENDING" || normalized === "PROCESSING") return "border-amber-400/20 bg-amber-400/10 text-amber-100";
+  if (normalized === "FAILED" || normalized === "CANCELLED") return "border-red-400/20 bg-red-400/10 text-red-200";
+  if (normalized === "REFUNDED") return "border-sky-400/20 bg-sky-400/10 text-sky-200";
+  return "border-white/10 bg-white/5 text-white/80";
+}
+
+
+function paymentStatusHint(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toUpperCase();
+
+  if (normalized === "PENDING") {
+    return {
+      className: "border-amber-400/20 bg-amber-400/10 text-amber-100",
+      title: "Kartenzahlung wartet auf Stripe",
+      text: "Die Zahlung ist angelegt, aber noch nicht bestätigt. Erst nach Stripe-COMPLETED gilt sie wirklich als bezahlt.",
+    };
+  }
+
+  if (normalized === "PROCESSING") {
+    return {
+      className: "border-amber-400/20 bg-amber-400/10 text-amber-100",
+      title: "Kartenzahlung wird verarbeitet",
+      text: "Stripe verarbeitet die Zahlung gerade. Bitte noch keinen finalen Bezahlt-Stand annehmen, bis COMPLETED zurückkommt.",
+    };
+  }
+
+  if (normalized === "FAILED") {
+    return {
+      className: "border-red-400/20 bg-red-400/10 text-red-200",
+      title: "Kartenzahlung fehlgeschlagen",
+      text: "Diese Zahlung ist nicht erfolgreich abgeschlossen. Prüfe den Terminal-/Stripe-Flow, bevor du weiterarbeitest.",
+    };
+  }
+
+  if (normalized === "CANCELLED") {
+    return {
+      className: "border-red-400/20 bg-red-400/10 text-red-200",
+      title: "Kartenzahlung abgebrochen",
+      text: "Der Bezahlvorgang wurde abgebrochen. Es liegt keine erfolgreiche Kartenzahlung vor.",
+    };
+  }
+
+  if (normalized === "REFUNDED") {
+    return {
+      className: "border-sky-400/20 bg-sky-400/10 text-sky-200",
+      title: "Zahlung rückerstattet",
+      text: "Diese Zahlung wurde bereits rückerstattet.",
+    };
+  }
+
+  return null;
+}
+
 
 function formatDeliveryChannel(value: string | null | undefined) {
   const normalized = String(value ?? "").trim().toUpperCase();
@@ -499,6 +570,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
   const statusLabel = formatReceiptStatus(selected?.status, { isStornoReceipt });
   const receiptTypeLabel = isStornoReceipt ? "STORNOBELEG" : (selected?.receiptType || "—");
   const paymentMethodDisplayLabel = isStornoReceipt ? "Storno / Gegenbeleg" : paymentMethodLabel;
+  const paymentStatusLabel = formatPaymentStatus(selected?.paymentStatus);
 
   useEffect(() => {
     if (!selected) return;
@@ -790,6 +862,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                     <div className="font-semibold text-black">{providerName}</div>
                     <div>Kunde: {customerDraft || customerName}</div>
                     <div>Zahlungsart: {paymentMethodDisplayLabel}</div>
+                    <div>Zahlungsstatus: {paymentStatusLabel}</div>
                   </div>
                 </div>
               </div>
@@ -804,8 +877,15 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                 </div>
               ) : null}
 
+              {paymentStatusHint(selected.paymentStatus) ? (
+                <div className={`rounded-3xl border px-5 py-4 text-sm print-keep-together ${paymentStatusHint(selected.paymentStatus)?.className}`}>
+                  <div className="font-semibold">{paymentStatusHint(selected.paymentStatus)?.title}</div>
+                  <div className="mt-1">{paymentStatusHint(selected.paymentStatus)?.text}</div>
+                </div>
+              ) : null}
+
               <InfoCard title="Belegübersicht" printKeepTogether>
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4 receipt-print-grid-card">
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40 print-text-muted">Belegnummer</div>
                     <div className="mt-2 text-lg font-bold text-white print:text-black">{selected.receiptNumber}</div>
@@ -815,7 +895,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                     <div className="mt-2 text-lg font-bold text-white print:text-black whitespace-nowrap">{euroFromCents(selected.turnoverValueCents, selected.currencyCode)}</div>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4 receipt-print-grid-card">
-                    <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40 print-text-muted">Status</div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40 print-text-muted">Belegstatus</div>
                     <div className="mt-2">
                       <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${badgeClass(selected.status, "status")}`}>
                         {statusLabel}
@@ -825,6 +905,14 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4 receipt-print-grid-card">
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40 print-text-muted">Zahlungsart</div>
                     <div className="mt-2 text-sm font-semibold text-white print:text-black">{paymentMethodDisplayLabel}</div>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4 receipt-print-grid-card">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40 print-text-muted">Zahlungsstatus</div>
+                    <div className="mt-2">
+                      <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${paymentStatusBadgeClass(selected.paymentStatus)}`}>
+                        {paymentStatusLabel}
+                      </span>
+                    </div>
                   </div>
                 </div>
 

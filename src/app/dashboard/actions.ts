@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getEffectiveTenantId } from "@/lib/effectiveTenant";
+import { stripe } from "@/lib/stripe/server";
 
 type UserProfileRow = {
   role: string | null;
@@ -89,9 +90,7 @@ async function resolveCustomerProfileByName(admin: any, tenantId: string, reques
 
   for (const row of rows) {
     const person = Array.isArray(row.person) ? row.person[0] ?? null : row.person ?? null;
-    const candidates = [
-      String(person?.full_name ?? "").trim(),
-    ].filter(Boolean);
+    const candidates = [String(person?.full_name ?? "").trim()].filter(Boolean);
 
     for (const candidate of candidates) {
       const normalizedCandidate = normalizeLooseName(candidate);
@@ -102,10 +101,7 @@ async function resolveCustomerProfileByName(admin: any, tenantId: string, reques
           customerDisplayName: candidate,
         } satisfies ResolvedCustomerProfile;
       }
-      if (!bestMatch && (
-        normalizedCandidate.includes(normalizedRequested) ||
-        normalizedRequested.includes(normalizedCandidate)
-      )) {
+      if (!bestMatch && (normalizedCandidate.includes(normalizedRequested) || normalizedRequested.includes(normalizedCandidate))) {
         bestMatch = { id: String(row.id), label: candidate };
       }
     }
@@ -123,7 +119,6 @@ async function resolveCustomerProfileByName(admin: any, tenantId: string, reques
     customerDisplayName: requestedDisplay,
   } satisfies ResolvedCustomerProfile;
 }
-
 
 async function resolveCustomerProfileById(admin: any, tenantId: string, customerProfileId: string) {
   const cleanId = String(customerProfileId ?? "").trim();
@@ -147,9 +142,7 @@ async function resolveCustomerProfileById(admin: any, tenantId: string, customer
 
   if (!data?.id) return null;
   const person = Array.isArray(data.person) ? data.person[0] ?? null : data.person ?? null;
-  const displayName =
-    String(person?.full_name ?? "").trim() ||
-    "Kunde";
+  const displayName = String(person?.full_name ?? "").trim() || "Kunde";
 
   return {
     customerProfileId: String(data.id),
@@ -316,6 +309,36 @@ async function insertFiscalEventSafe(admin: any, input: FiscalEventInsert) {
   await admin.from("fiscal_events").insert(payload);
 }
 
+function isCardPaymentMethodCode(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  return normalized === "CARD" || normalized === "KARTE" || normalized === "CARD_PRESENT";
+}
+
+function isTransferPaymentMethodCode(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  return normalized === "TRANSFER" || normalized === "UEBERWEISUNG" || normalized === "ÜBERWEISUNG" || normalized === "BANK_TRANSFER";
+}
+
+async function createStripeTerminalIntentForPayment(input: {
+  amountCents: number;
+  currencyCode?: string | null;
+  paymentId: string;
+  salesOrderId: string;
+  tenantId: string;
+}) {
+  return stripe.paymentIntents.create({
+    amount: input.amountCents,
+    currency: String(input.currencyCode ?? "EUR").trim().toLowerCase() || "eur",
+    payment_method_types: ["card_present"],
+    capture_method: "automatic",
+    metadata: {
+      payment_id: input.paymentId,
+      sales_order_id: input.salesOrderId,
+      tenant_id: input.tenantId,
+    },
+  });
+}
+
 export async function createDashboardInvoice(formData: FormData) {
   try {
     const customerName = String(formData.get("customer_name") ?? "").trim();
@@ -374,7 +397,9 @@ export async function createDashboardInvoice(formData: FormData) {
     const providerName = String(tenantRow.display_name ?? "Behandler").trim() || "Behandler";
     const totalCents = Math.max(0, quantity * priceCents);
     const taxTotalCents = roundTaxPortionFromGross(totalCents, taxRate);
-    const paidAt = new Date().toISOString();
+    const createdAt = new Date().toISOString();
+    const isCard = isCardPaymentMethodCode(paymentMethodCode);
+    const isTransfer = isTransferPaymentMethodCode(paymentMethodCode);
 
     const line: DashboardInvoiceLine = {
       serviceId: finalServiceId,
@@ -434,6 +459,21 @@ export async function createDashboardInvoice(formData: FormData) {
       .eq("id", salesOrderId);
     if (totalsError) throw new Error(totalsError.message ?? "Sales-Order-Summen konnten nicht aktualisiert werden.");
 
+    const paymentStatus = isCard ? "PENDING" : "COMPLETED";
+    const paidAt = isCard ? null : createdAt;
+    const provider = isCard ? "STRIPE_TERMINAL" : "MANUAL";
+    const providerResponse = isCard
+      ? {
+          phase: "payment_intent_pending",
+          method: "card",
+          created_at: createdAt,
+        }
+      : {
+          phase: "completed",
+          method: isTransfer ? "transfer" : "cash",
+          completed_at: createdAt,
+        };
+
     const { data: paymentInsert, error: paymentError } = await admin
       .from("payments")
       .insert({
@@ -444,10 +484,14 @@ export async function createDashboardInvoice(formData: FormData) {
         amount: toGrossNumber(totalCents),
         currency_code: "EUR",
         direction: "INBOUND",
-        status: "COMPLETED",
+        status: paymentStatus,
         paid_at: paidAt,
         external_reference: paymentNotes || null,
         recorded_by: user.id,
+        provider,
+        provider_transaction_id: null,
+        provider_response_json: providerResponse,
+        failure_reason: null,
       })
       .select("id")
       .single();
@@ -457,9 +501,66 @@ export async function createDashboardInvoice(formData: FormData) {
     }
 
     const paymentId = String(paymentInsert.id);
+
+    if (isCard) {
+      try {
+        const intent = await createStripeTerminalIntentForPayment({
+          amountCents: totalCents,
+          currencyCode: "EUR",
+          paymentId,
+          salesOrderId,
+          tenantId: tenantIdRaw,
+        });
+
+        await admin
+          .from("payments")
+          .update({
+            provider: "STRIPE_TERMINAL",
+            provider_transaction_id: intent.id,
+            provider_response_json: {
+              phase: "payment_intent_created",
+              created_at: createdAt,
+              stripe_payment_intent_id: intent.id,
+              stripe_status: intent.status,
+              has_client_secret: Boolean(intent.client_secret),
+            },
+            failure_reason: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", paymentId);
+      } catch (stripeError: any) {
+        const message =
+          String(stripeError?.message ?? "Stripe PaymentIntent konnte nicht erstellt werden.").trim() ||
+          "Stripe PaymentIntent konnte nicht erstellt werden.";
+
+        await admin
+          .from("payments")
+          .update({
+            status: "FAILED",
+            provider: "STRIPE_TERMINAL",
+            provider_response_json: {
+              phase: "payment_intent_failed",
+              failed_at: new Date().toISOString(),
+              error_message: message,
+            },
+            failure_reason: message,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", paymentId);
+
+        throw new Error(message);
+      }
+
+      revalidatePath("/rechnungen");
+      revalidatePath("/dashboard");
+      redirect(buildDashboardInvoiceUrl({
+        success: `Dashboard-Kartenzahlung vorbereitet ✅`,
+      }));
+    }
+
     await admin
       .from("sales_orders")
-      .update({ status: "COMPLETED", completed_at: paidAt, cash_register_id: cashRegister.id })
+      .update({ status: "COMPLETED", completed_at: createdAt, cash_register_id: cashRegister.id })
       .eq("id", salesOrderId);
 
     const receiptNumber = await nextReceiptNumber(admin, cashRegister.id);

@@ -2,6 +2,12 @@ import { Buffer } from "node:buffer";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getValidGoogleAccessToken } from "@/lib/google/getValidGoogleAccessToken";
 
+export type SendGoogleMailAttachment = {
+  filename: string;
+  content: Buffer | Uint8Array | string;
+  contentType?: string;
+};
+
 export type SendGoogleMailInput = {
   to: string;
   subject: string;
@@ -9,6 +15,7 @@ export type SendGoogleMailInput = {
   replyTo?: string;
   senderName?: string;
   senderEmail?: string;
+  attachments?: SendGoogleMailAttachment[];
 };
 
 export type SendGoogleMailResult = {
@@ -19,12 +26,27 @@ export type SendGoogleMailResult = {
 
 function hasGmailSendScope(scope: string | null | undefined) {
   const scopes = String(scope ?? "").split(/\s+/).filter(Boolean);
-  return scopes.includes("https://www.googleapis.com/auth/gmail.send")
-    || scopes.includes("https://mail.google.com/");
+  return (
+    scopes.includes("https://www.googleapis.com/auth/gmail.send") ||
+    scopes.includes("https://mail.google.com/")
+  );
 }
 
 function escapeHeader(value: string) {
   return value.replace(/[\r\n]+/g, " ").trim();
+}
+
+function encodeMimeWordUtf8(value: string) {
+  const safe = escapeHeader(value);
+  if (!safe) return "";
+  return `=?UTF-8?B?${Buffer.from(safe, "utf8").toString("base64")}?=`;
+}
+
+function formatAddressHeader(name: string, email: string) {
+  const cleanEmail = escapeHeader(email);
+  const cleanName = escapeHeader(name);
+  if (!cleanName) return cleanEmail;
+  return `${encodeMimeWordUtf8(cleanName)} <${cleanEmail}>`;
 }
 
 function base64UrlEncode(input: string) {
@@ -35,7 +57,78 @@ function base64UrlEncode(input: string) {
     .replace(/=+$/g, "");
 }
 
-export async function sendGoogleMail(input: SendGoogleMailInput): Promise<SendGoogleMailResult> {
+function normalizeAttachmentContent(content: Buffer | Uint8Array | string) {
+  if (Buffer.isBuffer(content)) return content;
+  if (typeof content === "string") return Buffer.from(content, "utf8");
+  return Buffer.from(content);
+}
+
+function buildMimeMessage(input: {
+  fromHeader: string;
+  to: string;
+  subjectHeader: string;
+  text: string;
+  replyTo?: string;
+  attachments?: SendGoogleMailAttachment[];
+}) {
+  const attachments = (input.attachments ?? []).filter((item) => {
+    const filename = String(item?.filename ?? "").trim();
+    return Boolean(filename);
+  });
+
+  if (attachments.length === 0) {
+    return [
+      `From: ${input.fromHeader}`,
+      `To: ${input.to}`,
+      `Subject: ${input.subjectHeader}`,
+      "MIME-Version: 1.0",
+      'Content-Type: text/plain; charset="UTF-8"',
+      "Content-Transfer-Encoding: 8bit",
+      ...(input.replyTo ? [`Reply-To: ${escapeHeader(input.replyTo)}`] : []),
+      "",
+      input.text,
+    ].join("\r\n");
+  }
+
+  const boundary = `mixed_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const lines: string[] = [
+    `From: ${input.fromHeader}`,
+    `To: ${input.to}`,
+    `Subject: ${input.subjectHeader}`,
+    "MIME-Version: 1.0",
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    ...(input.replyTo ? [`Reply-To: ${escapeHeader(input.replyTo)}`] : []),
+    "",
+    `--${boundary}`,
+    'Content-Type: text/plain; charset="UTF-8"',
+    "Content-Transfer-Encoding: 8bit",
+    "",
+    input.text,
+  ];
+
+  for (const attachment of attachments) {
+    const filename = escapeHeader(String(attachment.filename ?? "Anhang").trim());
+    const contentType = escapeHeader(String(attachment.contentType ?? "application/octet-stream").trim());
+    const contentBuffer = normalizeAttachmentContent(attachment.content);
+    const base64 = contentBuffer.toString("base64").replace(/(.{76})/g, "$1\r\n");
+
+    lines.push(
+      `--${boundary}`,
+      `Content-Type: ${contentType}; name="${filename}"`,
+      `Content-Disposition: attachment; filename="${filename}"`,
+      "Content-Transfer-Encoding: base64",
+      "",
+      base64,
+    );
+  }
+
+  lines.push(`--${boundary}--`, "");
+  return lines.join("\r\n");
+}
+
+export async function sendGoogleMail(
+  input: SendGoogleMailInput,
+): Promise<SendGoogleMailResult> {
   const supabase = await supabaseServer();
   const {
     data: { user },
@@ -75,7 +168,7 @@ export async function sendGoogleMail(input: SendGoogleMailInput): Promise<SendGo
   const to = escapeHeader(String(input.to ?? "").trim());
   const subject = escapeHeader(String(input.subject ?? "").trim());
   const text = String(input.text ?? "").replace(/\r\n/g, "\n");
-  const senderName = escapeHeader(String(input.senderName ?? "").trim());
+  const senderName = String(input.senderName ?? "").trim();
   const senderEmail = escapeHeader(String(input.senderEmail ?? "").trim());
   const replyTo = escapeHeader(String(input.replyTo ?? "").trim());
 
@@ -83,21 +176,18 @@ export async function sendGoogleMail(input: SendGoogleMailInput): Promise<SendGo
   if (!subject) throw new Error("Betreff fehlt.");
   if (!text.trim()) throw new Error("Nachrichtentext fehlt.");
 
-  const fromHeader = senderName ? `${senderName} <${senderEmail}>` : senderEmail;
-
-  const mimeLines = [
-    `From: ${fromHeader}`,
-    `To: ${to}`,
-    `Subject: ${subject}`,
-    "MIME-Version: 1.0",
-    'Content-Type: text/plain; charset="UTF-8"',
-    "Content-Transfer-Encoding: 8bit",
-    ...(replyTo ? [`Reply-To: ${replyTo}`] : []),
-    "",
+  const fromHeader = formatAddressHeader(senderName, senderEmail);
+  const subjectHeader = encodeMimeWordUtf8(subject);
+  const mime = buildMimeMessage({
+    fromHeader,
+    to,
+    subjectHeader,
     text,
-  ];
+    replyTo: replyTo || undefined,
+    attachments: input.attachments,
+  });
 
-  const raw = base64UrlEncode(mimeLines.join("\r\n"));
+  const raw = base64UrlEncode(mime);
 
   const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
     method: "POST",
@@ -109,7 +199,10 @@ export async function sendGoogleMail(input: SendGoogleMailInput): Promise<SendGo
     cache: "no-store",
   });
 
-  const payload = (await response.json().catch(() => null)) as { id?: string; error?: { message?: string } } | null;
+  const payload = (await response.json().catch(() => null)) as {
+    id?: string;
+    error?: { message?: string };
+  } | null;
 
   if (!response.ok) {
     throw new Error(payload?.error?.message || `Gmail-Versand fehlgeschlagen (${response.status}).`);
