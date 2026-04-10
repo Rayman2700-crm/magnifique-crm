@@ -6,10 +6,7 @@ import { getEffectiveTenantId } from "@/lib/effectiveTenant";
 import { Card, CardContent } from "@/components/ui/card";
 import FiscalReceiptSlideover from "@/components/rechnungen/FiscalReceiptSlideover";
 import PendingReaderPaymentsCard from "./PendingReaderPaymentsCard";
-import { backfillReadyFiscalReceipts, cancelCardPaymentForCheckout, completeCardPaymentForCheckout, createFiscalReceiptForPayment, createPaymentForSalesOrder, createSalesOrderFromAppointment, failCardPaymentForCheckout, startCardPaymentForCheckout } from "./actions";
-
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+import { cancelCardPaymentForCheckout, completeCardPaymentForCheckout, createFiscalReceiptForPayment, createPaymentForSalesOrder, createSalesOrderFromAppointment, failCardPaymentForCheckout, startCardPaymentForCheckout } from "./actions";
 
 type FiscalReceiptRow = {
   id: string;
@@ -219,7 +216,6 @@ type PendingPaymentListItem = {
   id: string;
   tenantId: string | null;
   salesOrderId: string | null;
-  appointmentId: string | null;
   customerName: string | null;
   providerName: string | null;
   amount: number | null;
@@ -255,14 +251,11 @@ function euroFromGross(value: number | null | undefined, currencyCode?: string |
   return value < 0 ? `-${formatted}` : formatted;
 }
 
-const BUSINESS_TIME_ZONE = "Europe/Vienna";
-
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat("de-AT", {
-    timeZone: BUSINESS_TIME_ZONE,
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -899,13 +892,6 @@ export default async function RechnungenPage({
   const receiptId = String(sp?.receipt ?? "").trim();
   const successMessage = String(sp?.success ?? "").trim();
   const errorMessage = String(sp?.error ?? "").trim();
-  const readyForFiscalReturnQuery = (() => {
-    const params = new URLSearchParams();
-    if (qRaw) params.set("q", qRaw);
-    if (currentFilter && currentFilter !== "all") params.set("filter", currentFilter);
-    if (practitionerFilter && practitionerFilter !== "all") params.set("practitioner", practitionerFilter);
-    return params.toString();
-  })();
 
   const supabase = await supabaseServer();
   const admin = supabaseAdmin();
@@ -1179,7 +1165,7 @@ export default async function RechnungenPage({
 
   const receipts = (receiptsRaw ?? []) as FiscalReceiptRow[];
 
-  const pendingStatusCodes = ["PENDING", "PROCESSING", "FAILED", "CANCELLED", "COMPLETED"];
+  const pendingStatusCodes = ["PENDING", "PROCESSING", "FAILED", "CANCELLED"];
   let pendingPaymentsQuery = admin
     .from("payments")
     .select(`
@@ -1325,23 +1311,20 @@ export default async function RechnungenPage({
   );
   const pendingSalesOrderCustomerIdBySalesOrderId = new Map<string, string>();
   const pendingTenantIdBySalesOrderId = new Map<string, string>();
-  const pendingAppointmentIdBySalesOrderId = new Map<string, string>();
 
   if (pendingSalesOrderIds.length > 0) {
     const { data: pendingSalesOrderRows } = await admin
       .from("sales_orders")
-      .select("id, customer_id, tenant_id, appointment_id")
+      .select("id, customer_id, tenant_id")
       .in("id", pendingSalesOrderIds);
 
-    for (const row of (pendingSalesOrderRows ?? []) as Array<{ id: string; customer_id: string | null; tenant_id: string | null; appointment_id: string | null }>) {
+    for (const row of (pendingSalesOrderRows ?? []) as Array<{ id: string; customer_id: string | null; tenant_id: string | null }>) {
       const soId = String(row.id ?? "").trim();
       if (!soId) continue;
       const customerId = String(row.customer_id ?? "").trim();
       const tenantId = String(row.tenant_id ?? "").trim();
-      const appointmentId = String(row.appointment_id ?? "").trim();
       if (customerId) pendingSalesOrderCustomerIdBySalesOrderId.set(soId, customerId);
       if (tenantId) pendingTenantIdBySalesOrderId.set(soId, tenantId);
-      if (appointmentId) pendingAppointmentIdBySalesOrderId.set(soId, appointmentId);
     }
   }
 
@@ -1380,7 +1363,6 @@ export default async function RechnungenPage({
         id: String(row.id),
         tenantId: tenantId ? String(tenantId) : null,
         salesOrderId,
-        appointmentId: salesOrderId ? pendingAppointmentIdBySalesOrderId.get(salesOrderId) ?? null : null,
         customerName: customerProfile?.customerName ?? null,
         providerName,
         amount: row.amount,
@@ -1397,16 +1379,6 @@ export default async function RechnungenPage({
         ? true
         : normalizePractitionerKey(item.providerName) === practitionerFilter
     );
-
-  const readerPendingPaymentItems = pendingPaymentItems.filter((item) => {
-    const normalizedStatus = String(item.status ?? "").trim().toUpperCase();
-    return normalizedStatus === "PENDING" || normalizedStatus === "PROCESSING" || normalizedStatus === "FAILED" || normalizedStatus === "CANCELLED";
-  });
-
-  const readyForFiscalPaymentItems = pendingPaymentItems.filter((item) => {
-    const normalizedStatus = String(item.status ?? "").trim().toUpperCase();
-    return normalizedStatus === "COMPLETED";
-  });
   const receiptDeliveryByReceiptId = new Map<string, SlideoverDelivery[]>();
   if (receiptIds.length > 0) {
     const { data: deliveryRows } = await admin
@@ -1600,9 +1572,8 @@ export default async function RechnungenPage({
   const errorCount = quickFilterCounts.error;
   const paidCount = searchScopedItems.filter((item) => getReceiptBusinessState(item).key === "paid").length;
 
-  const pendingStripeCount = readerPendingPaymentItems.filter((item) => String(item.status ?? "").trim().toUpperCase() === "PENDING").length;
-  const processingStripeCount = readerPendingPaymentItems.filter((item) => String(item.status ?? "").trim().toUpperCase() === "PROCESSING").length;
-  const readyForFiscalCount = readyForFiscalPaymentItems.length;
+  const pendingStripeCount = pendingPaymentItems.filter((item) => String(item.status ?? "").trim().toUpperCase() === "PENDING").length;
+  const processingStripeCount = pendingPaymentItems.filter((item) => String(item.status ?? "").trim().toUpperCase() === "PROCESSING").length;
 
   const revenueTodayCents = searchScopedItems.reduce((sum, item) => {
     const issued = item.issuedAt ?? item.createdAt;
@@ -1921,7 +1892,7 @@ export default async function RechnungenPage({
                 <SummaryCard
                   label="Offene Belege"
                   value={openCount}
-                  subtext={`${cancelledCount} storniert · ${errorCount} mit Fehler · ${paidCount} bezahlt · ${pendingStripeCount} pending · ${readyForFiscalCount} bereit für Fiscal`}
+                  subtext={`${cancelledCount} storniert · ${errorCount} mit Fehler · ${paidCount} bezahlt · ${pendingStripeCount} pending`}
                 />
               </div>
             </div>
@@ -2225,130 +2196,9 @@ export default async function RechnungenPage({
       ) : null}
 
 
-      {!isCheckoutFlow && readyForFiscalPaymentItems.length > 0 ? (
-        <Card className="mt-6 overflow-hidden border-emerald-400/20 bg-emerald-500/10">
-          <CardContent className="p-0">
-            <div className="border-b border-white/8 px-5 py-4 md:px-6">
-              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <div className="text-lg font-semibold text-white">Bereit für Fiscal</div>
-                  <div className="mt-1 text-sm text-white/65">
-                    Erfolgreiche Stripe-Kartenzahlungen ohne Fiscal-Beleg. Diese Fälle dürfen nicht verschwinden, bevor der Beleg wirklich erstellt wurde.
-                  </div>
-                </div>
-                <div className="flex flex-col items-start gap-2 md:items-end">
-                  <div className="text-xs text-white/55">
-                    Erfolgreich bezahlt in Stripe, aber noch kein Eintrag in fiscal_receipts.
-                  </div>
-                  {readyForFiscalPaymentItems.length > 1 ? (
-                    <form action={backfillReadyFiscalReceipts}>
-                      <input type="hidden" name="return_query" value={readyForFiscalReturnQuery} />
-                      <button
-                        type="submit"
-                        className="inline-flex h-10 items-center rounded-xl border border-emerald-500/30 bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-500"
-                      >
-                        Alle automatisch nachziehen
-                      </button>
-                    </form>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1080px] table-auto text-sm">
-                <thead className="bg-white/[0.03]">
-                  <tr>
-                    <th className="w-[16%] px-6 py-4 text-left font-semibold text-white/60">Payment</th>
-                    <th className="w-[20%] px-4 py-4 text-left font-semibold text-white/60">Kunde</th>
-                    <th className="w-[14%] px-4 py-4 text-left font-semibold text-white/60">Erstellt</th>
-                    <th className="w-[12%] px-4 py-4 text-left font-semibold text-white/60">Betrag</th>
-                    <th className="w-[14%] px-4 py-4 text-left font-semibold text-white/60">Status</th>
-                    <th className="w-[24%] px-6 py-4 text-left font-semibold text-white/60">Aktion</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {readyForFiscalPaymentItems.map((item) => {
-                    const detailHref = buildRechnungenHref({
-                      qRaw,
-                      filter: currentFilter,
-                      practitioner: practitionerFilter,
-                      appointmentId: item.appointmentId ?? undefined,
-                      salesOrder: item.salesOrderId ?? undefined,
-                      payment: item.id,
-                    });
-
-                    return (
-                      <tr key={`ready-fiscal-${item.id}`} className="border-t border-white/8 transition hover:bg-white/[0.025]">
-                        <td className="px-6 py-4 align-middle">
-                          <div className="flex items-center gap-3">
-                            <Link
-                              href={detailHref}
-                              title="Payment öffnen"
-                              aria-label="Payment öffnen"
-                              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-white transition hover:bg-white/15"
-                            >
-                              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z" />
-                                <circle cx="12" cy="12" r="3" />
-                              </svg>
-                            </Link>
-                            <div className="min-h-[52px]">
-                              <div className="font-semibold leading-none text-white">{shortId(item.id)}</div>
-                              <div className="mt-1.5 text-[11px] text-white/50">
-                                {item.provider ? item.provider : "Stripe"}
-                              </div>
-                              <div className="mt-1 text-[11px] text-white/40">
-                                {item.providerTransactionId ? shortId(item.providerTransactionId) : "ohne Stripe-ID"}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 align-middle">
-                          <div className="min-h-[52px]">
-                            <div className="font-semibold text-white">{item.customerName || "Unbekannter Kunde"}</div>
-                            <div className="mt-1 text-xs text-white/55">{item.providerName || "Behandler"}</div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 align-middle text-white/75">{formatDateTime(item.createdAt)}</td>
-                        <td className="px-4 py-4 align-middle font-semibold text-white">{euroFromGross(item.amount, item.currencyCode || "EUR")}</td>
-                        <td className="px-4 py-4 align-middle">
-                          <Badge tone={toneForPaymentStatus(item.status)}>{formatPaymentStatus(item.status)}</Badge>
-                          <div className="mt-2 text-xs text-emerald-200/80">Stripe bezahlt · Fiscal fehlt noch</div>
-                        </td>
-                        <td className="px-6 py-4 align-middle">
-                          <form action={createFiscalReceiptForPayment} className="flex flex-wrap items-center gap-2">
-                            <input type="hidden" name="appointment_id" value={item.appointmentId ?? ""} />
-                            <input type="hidden" name="sales_order_id" value={item.salesOrderId ?? ""} />
-                            <input type="hidden" name="payment_id" value={item.id} />
-                            <input type="hidden" name="return_query" value={readyForFiscalReturnQuery} />
-                            <button
-                              type="submit"
-                              className="inline-flex h-10 items-center rounded-xl border border-emerald-500/30 bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-500"
-                            >
-                              Fiscal-Beleg erzeugen
-                            </button>
-                            <Link
-                              href={detailHref}
-                              className="inline-flex h-10 items-center rounded-xl border border-white/10 bg-white/10 px-4 text-sm font-semibold text-white hover:bg-white/15"
-                            >
-                              Payment öffnen
-                            </Link>
-                          </form>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {!isCheckoutFlow && readerPendingPaymentItems.length > 0 ? (
+      {!isCheckoutFlow && pendingPaymentItems.length > 0 ? (
         <PendingReaderPaymentsCard
-          items={readerPendingPaymentItems}
+          items={pendingPaymentItems}
           qRaw={qRaw}
           currentFilter={currentFilter}
           practitionerFilter={practitionerFilter}
@@ -2408,7 +2258,7 @@ export default async function RechnungenPage({
                       <th className="w-[28%] px-6 py-4 font-semibold text-right text-white/60">Aktion</th>
                     </tr>
                   </thead>
-                  <tbody suppressHydrationWarning={true}>
+                  <tbody>
                     {filteredItems.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="px-6 py-10 text-center text-white/45">Keine Fiscal-Receipts gefunden.</td>

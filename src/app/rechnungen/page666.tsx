@@ -2408,7 +2408,7 @@ export default async function RechnungenPage({
                       <th className="w-[28%] px-6 py-4 font-semibold text-right text-white/60">Aktion</th>
                     </tr>
                   </thead>
-                  <tbody suppressHydrationWarning={true}>
+                  <tbody>
                     {filteredItems.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="px-6 py-10 text-center text-white/45">Keine Fiscal-Receipts gefunden.</td>

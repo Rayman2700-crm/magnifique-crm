@@ -6,10 +6,7 @@ import { getEffectiveTenantId } from "@/lib/effectiveTenant";
 import { Card, CardContent } from "@/components/ui/card";
 import FiscalReceiptSlideover from "@/components/rechnungen/FiscalReceiptSlideover";
 import PendingReaderPaymentsCard from "./PendingReaderPaymentsCard";
-import { backfillReadyFiscalReceipts, cancelCardPaymentForCheckout, completeCardPaymentForCheckout, createFiscalReceiptForPayment, createPaymentForSalesOrder, createSalesOrderFromAppointment, failCardPaymentForCheckout, startCardPaymentForCheckout } from "./actions";
-
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+import { cancelCardPaymentForCheckout, completeCardPaymentForCheckout, createFiscalReceiptForPayment, createPaymentForSalesOrder, createSalesOrderFromAppointment, failCardPaymentForCheckout, startCardPaymentForCheckout } from "./actions";
 
 type FiscalReceiptRow = {
   id: string;
@@ -255,14 +252,11 @@ function euroFromGross(value: number | null | undefined, currencyCode?: string |
   return value < 0 ? `-${formatted}` : formatted;
 }
 
-const BUSINESS_TIME_ZONE = "Europe/Vienna";
-
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat("de-AT", {
-    timeZone: BUSINESS_TIME_ZONE,
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -2236,21 +2230,8 @@ export default async function RechnungenPage({
                     Erfolgreiche Stripe-Kartenzahlungen ohne Fiscal-Beleg. Diese Fälle dürfen nicht verschwinden, bevor der Beleg wirklich erstellt wurde.
                   </div>
                 </div>
-                <div className="flex flex-col items-start gap-2 md:items-end">
-                  <div className="text-xs text-white/55">
-                    Erfolgreich bezahlt in Stripe, aber noch kein Eintrag in fiscal_receipts.
-                  </div>
-                  {readyForFiscalPaymentItems.length > 1 ? (
-                    <form action={backfillReadyFiscalReceipts}>
-                      <input type="hidden" name="return_query" value={readyForFiscalReturnQuery} />
-                      <button
-                        type="submit"
-                        className="inline-flex h-10 items-center rounded-xl border border-emerald-500/30 bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-500"
-                      >
-                        Alle automatisch nachziehen
-                      </button>
-                    </form>
-                  ) : null}
+                <div className="text-xs text-white/55">
+                  Erfolgreich bezahlt in Stripe, aber noch kein Eintrag in fiscal_receipts.
                 </div>
               </div>
             </div>
@@ -2408,7 +2389,7 @@ export default async function RechnungenPage({
                       <th className="w-[28%] px-6 py-4 font-semibold text-right text-white/60">Aktion</th>
                     </tr>
                   </thead>
-                  <tbody suppressHydrationWarning={true}>
+                  <tbody>
                     {filteredItems.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="px-6 py-10 text-center text-white/45">Keine Fiscal-Receipts gefunden.</td>

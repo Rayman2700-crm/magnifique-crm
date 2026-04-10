@@ -329,16 +329,15 @@ async function nextReceiptNumber(admin: any, cashRegisterId: string) {
   const { data, error } = await admin
     .from("fiscal_receipts")
     .select("receipt_number")
-    .eq("cash_register_id", cashRegisterId);
-
+    .eq("cash_register_id", cashRegisterId)
+    .order("created_at", { ascending: false })
+    .limit(200);
   if (error) throw new Error(error.message ?? "Receipt-Nummer konnte nicht berechnet werden.");
-
   const maxNo = (data ?? []).reduce((max: number, row: any) => {
     const digits = String(row?.receipt_number ?? "").replace(/\D/g, "");
     const n = Number(digits || "0");
     return Number.isFinite(n) && n > max ? n : max;
   }, 0);
-
   return String(maxNo + 1).padStart(6, "0");
 }
 

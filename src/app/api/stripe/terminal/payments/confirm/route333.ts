@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
 import { createHash } from "node:crypto";
 import { stripe } from "@/lib/stripe/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
+
+type SalesOrderRow = {
+  id: string;
+  tenant_id: string | null;
+  customer_id: string | null;
+  appointment_id: string | null;
+  cash_register_id: string | null;
+  status: string | null;
+  currency_code: string | null;
+  grand_total: number | null;
+};
 
 type PaymentRow = {
   id: string;
@@ -18,17 +28,6 @@ type PaymentRow = {
   paid_at: string | null;
   provider_transaction_id: string | null;
   provider_response_json: Record<string, unknown> | null;
-};
-
-type SalesOrderRow = {
-  id: string;
-  tenant_id: string | null;
-  customer_id: string | null;
-  appointment_id: string | null;
-  cash_register_id: string | null;
-  status: string | null;
-  currency_code: string | null;
-  grand_total: number | null;
 };
 
 type CashRegisterRow = {
@@ -59,14 +58,18 @@ type AppointmentDetailLookupRow = {
   person?: { full_name: string | null } | { full_name: string | null }[] | null;
 };
 
-function getWebhookSecret() {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
-  if (!secret) throw new Error("STRIPE_WEBHOOK_SECRET fehlt.");
-  return secret;
+function normalizePaymentStatus(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  if (normalized === "PENDING") return "Ausstehend";
+  if (normalized === "PROCESSING") return "Wird verarbeitet";
+  if (normalized === "COMPLETED") return "Bezahlt";
+  if (normalized === "FAILED") return "Fehlgeschlagen";
+  if (normalized === "CANCELLED") return "Abgebrochen";
+  return normalized || "—";
 }
 
-function normalizePaymentStatus(intent: Stripe.PaymentIntent): "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED" {
-  switch (intent.status) {
+function mapStripeStatus(intentStatus: string) {
+  switch (intentStatus) {
     case "requires_payment_method":
     case "requires_confirmation":
     case "requires_capture":
@@ -80,12 +83,6 @@ function normalizePaymentStatus(intent: Stripe.PaymentIntent): "PENDING" | "PROC
     default:
       return "FAILED";
   }
-}
-
-function extractFailureReason(intent: Stripe.PaymentIntent): string | null {
-  const lastErrorMessage = intent.last_payment_error?.message?.trim();
-  if (lastErrorMessage) return lastErrorMessage;
-  return null;
 }
 
 function firstJoin<T>(value: T | T[] | null | undefined): T | null {
@@ -113,7 +110,9 @@ async function resolveCashRegister(admin: any, tenantId: string) {
     .filter((row) => row?.id)
     .filter((row) => !isLegacyCashRegister(row));
 
-  if (rows.length === 0) throw new Error("Für diesen Tenant wurde keine aktive Kassa gefunden.");
+  if (rows.length === 0) {
+    throw new Error("Für diesen Tenant wurde keine aktive Kassa gefunden.");
+  }
 
   const activeRows = rows.filter((row) => {
     const status = String(row.status ?? "").trim().toUpperCase();
@@ -127,7 +126,10 @@ async function resolveCashRegister(admin: any, tenantId: string) {
     usableRows[0] ??
     null;
 
-  if (!preferred?.id) throw new Error("Für diesen Tenant wurde keine verwendbare Kassa gefunden.");
+  if (!preferred?.id) {
+    throw new Error("Für diesen Tenant wurde keine verwendbare Kassa gefunden.");
+  }
+
   return preferred;
 }
 
@@ -157,15 +159,12 @@ async function nextReceiptNumber(admin: any, cashRegisterId: string) {
     .eq("cash_register_id", cashRegisterId)
     .order("created_at", { ascending: false })
     .limit(200);
-
   if (error) throw new Error(error.message ?? "Receipt-Nummer konnte nicht berechnet werden.");
-
   const maxNo = (data ?? []).reduce((max: number, row: any) => {
     const digits = String(row?.receipt_number ?? "").replace(/\D/g, "");
     const n = Number(digits || "0");
     return Number.isFinite(n) && n > max ? n : max;
   }, 0);
-
   return String(maxNo + 1).padStart(6, "0");
 }
 
@@ -190,31 +189,6 @@ async function insertFiscalEventSafe(
     notes: input.notes ?? null,
     reference_data: input.referenceData ?? null,
   });
-}
-
-async function loadPaymentByMetadataOrIntent(intent: Stripe.PaymentIntent) {
-  const admin = supabaseAdmin();
-  const metadataPaymentId = String(intent.metadata?.payment_id ?? "").trim();
-
-  if (metadataPaymentId) {
-    const { data, error } = await admin
-      .from("payments")
-      .select("id, tenant_id, sales_order_id, cash_register_id, payment_method_id, amount, currency_code, status, paid_at, provider_transaction_id, provider_response_json")
-      .eq("id", metadataPaymentId)
-      .maybeSingle();
-
-    if (error) throw new Error(error.message ?? "Payment konnte nicht geladen werden.");
-    if (data?.id) return data as PaymentRow;
-  }
-
-  const { data, error } = await admin
-    .from("payments")
-    .select("id, tenant_id, sales_order_id, cash_register_id, payment_method_id, amount, currency_code, status, paid_at, provider_transaction_id, provider_response_json")
-    .eq("provider_transaction_id", intent.id)
-    .maybeSingle();
-
-  if (error) throw new Error(error.message ?? "Payment konnte nicht über provider_transaction_id geladen werden.");
-  return (data ?? null) as PaymentRow | null;
 }
 
 async function createFiscalReceiptIfMissing(input: {
@@ -333,7 +307,7 @@ async function createFiscalReceiptIfMissing(input: {
     tenantId,
     cashRegisterId,
     eventType: "RECEIPT_CREATION_STARTED",
-    notes: "Automatische Fiscal-Receipt-Erstellung im Stripe-Webhook gestartet.",
+    notes: "Automatische Fiscal-Receipt-Erstellung nach erfolgreicher Stripe-Terminal-Zahlung gestartet.",
     referenceData: {
       sales_order_id: salesOrderId,
       payment_id: paymentId,
@@ -341,7 +315,7 @@ async function createFiscalReceiptIfMissing(input: {
       line_count: salesOrderLines.length,
       customer_name: customerName,
       provider_name: providerName,
-      source: "stripe_webhook_route",
+      source: "stripe_terminal_confirm_route",
     },
   });
 
@@ -397,7 +371,7 @@ async function createFiscalReceiptIfMissing(input: {
       signature_state: "SIMULATED",
       verification_status: "VALID",
       verification_checked_at: issuedAt,
-      verification_notes: "Automatisch nach erfolgreicher Stripe-Terminal-Zahlung im Webhook erzeugt.",
+      verification_notes: "Automatisch nach erfolgreicher Stripe-Terminal-Zahlung erzeugt.",
     })
     .select("id")
     .single();
@@ -413,7 +387,7 @@ async function createFiscalReceiptIfMissing(input: {
         sales_order_id: salesOrderId,
         payment_id: paymentId,
         receipt_number: receiptNumber,
-        source: "stripe_webhook_route",
+        source: "stripe_terminal_confirm_route",
       },
     });
     throw new Error(failureMessage);
@@ -444,7 +418,7 @@ async function createFiscalReceiptIfMissing(input: {
         sales_order_id: salesOrderId,
         payment_id: paymentId,
         receipt_id: receiptId,
-        source: "stripe_webhook_route",
+        source: "stripe_terminal_confirm_route",
       },
     });
     throw new Error(failureMessage);
@@ -458,7 +432,7 @@ async function createFiscalReceiptIfMissing(input: {
     cashRegisterId,
     fiscalReceiptId: receiptId,
     eventType: "STANDARD_RECEIPT_CREATED",
-    notes: "Fiscal-Receipt automatisch im Stripe-Webhook erzeugt.",
+    notes: "Fiscal-Receipt automatisch nach erfolgreicher Stripe-Terminal-Zahlung erzeugt.",
     referenceData: {
       sales_order_id: salesOrderId,
       payment_id: paymentId,
@@ -468,7 +442,7 @@ async function createFiscalReceiptIfMissing(input: {
       line_count: receiptLinePayload.length,
       customer_name: customerName,
       provider_name: providerName,
-      source: "stripe_webhook_route",
+      source: "stripe_terminal_confirm_route",
     },
   });
 
@@ -477,13 +451,13 @@ async function createFiscalReceiptIfMissing(input: {
     cashRegisterId,
     fiscalReceiptId: receiptId,
     eventType: "RECEIPT_VERIFICATION_SUCCEEDED",
-    notes: "Simulierte Verifikation automatisch im Webhook abgeschlossen.",
+    notes: "Simulierte Verifikation automatisch abgeschlossen.",
     referenceData: {
       receipt_id: receiptId,
       verification_status: "VALID",
       signature_state: "SIMULATED",
       checked_at: issuedAt,
-      source: "stripe_webhook_route",
+      source: "stripe_terminal_confirm_route",
     },
   });
 
@@ -500,139 +474,135 @@ async function createFiscalReceiptIfMissing(input: {
   };
 }
 
-async function updateInternalPayment(intent: Stripe.PaymentIntent) {
-  const admin = supabaseAdmin();
-  const payment = await loadPaymentByMetadataOrIntent(intent);
-
-  if (!payment?.id) {
-    return {
-      ok: false,
-      reason: "payment_not_found",
-      stripe_intent_id: intent.id,
-    };
-  }
-
-  const mappedStatus = normalizePaymentStatus(intent);
-  const failureReason = extractFailureReason(intent);
-
-  const updatePayload: Record<string, unknown> = {
-    status: mappedStatus,
-    provider: "STRIPE_TERMINAL",
-    provider_transaction_id: intent.id,
-    provider_response_json: intent as unknown as Record<string, unknown>,
-    failure_reason: failureReason,
-    updated_at: new Date().toISOString(),
-  };
-
-  if (mappedStatus === "COMPLETED") {
-    updatePayload.paid_at = new Date().toISOString();
-  }
-
-  const { error: updatePaymentError } = await admin
-    .from("payments")
-    .update(updatePayload)
-    .eq("id", payment.id);
-
-  if (updatePaymentError) {
-    throw new Error(updatePaymentError.message ?? "Payment konnte nicht aktualisiert werden.");
-  }
-
-  let salesOrder: SalesOrderRow | null = null;
-  if (payment.sales_order_id) {
-    const { data: salesOrderRaw, error: salesOrderLoadError } = await admin
-      .from("sales_orders")
-      .select("id, tenant_id, customer_id, appointment_id, cash_register_id, status, currency_code, grand_total")
-      .eq("id", payment.sales_order_id)
-      .maybeSingle();
-
-    if (salesOrderLoadError) {
-      throw new Error(salesOrderLoadError.message ?? "Sales Order konnte nicht geladen werden.");
+export async function GET(req: NextRequest) {
+  try {
+    const paymentId = String(req.nextUrl.searchParams.get("payment_id") ?? "").trim();
+    if (!paymentId) {
+      return NextResponse.json({ error: "payment_id fehlt." }, { status: 400 });
     }
 
-    salesOrder = (salesOrderRaw ?? null) as SalesOrderRow | null;
+    const admin = supabaseAdmin();
+    const { data: paymentRaw, error } = await admin
+      .from("payments")
+      .select("id, tenant_id, sales_order_id, cash_register_id, payment_method_id, amount, currency_code, status, paid_at, provider_transaction_id, provider_response_json")
+      .eq("id", paymentId)
+      .maybeSingle();
 
-    const salesOrderStatus = mappedStatus === "COMPLETED" ? "COMPLETED" : "OPEN";
-    const salesOrderPayload: Record<string, unknown> = {
-      status: salesOrderStatus,
+    if (error) {
+      return NextResponse.json({ error: error.message ?? "Payment konnte nicht geladen werden." }, { status: 500 });
+    }
+
+    if (!paymentRaw?.id) {
+      return NextResponse.json({ error: "Payment wurde nicht gefunden." }, { status: 404 });
+    }
+
+    const payment = paymentRaw as PaymentRow;
+    const salesOrderId = String(payment.sales_order_id ?? "").trim();
+
+    let salesOrder: SalesOrderRow | null = null;
+    if (salesOrderId) {
+      const { data: salesOrderRaw, error: salesOrderError } = await admin
+        .from("sales_orders")
+        .select("id, tenant_id, customer_id, appointment_id, cash_register_id, status, currency_code, grand_total")
+        .eq("id", salesOrderId)
+        .maybeSingle();
+
+      if (salesOrderError) {
+        return NextResponse.json({ error: salesOrderError.message ?? "Sales Order konnte nicht geladen werden." }, { status: 500 });
+      }
+
+      salesOrder = (salesOrderRaw ?? null) as SalesOrderRow | null;
+    }
+
+    const intentId = String(payment.provider_transaction_id ?? "").trim();
+    if (!intentId) {
+      return NextResponse.json({
+        ok: true,
+        payment: {
+          id: payment.id,
+          status: payment.status ?? null,
+          status_label: normalizePaymentStatus(payment.status),
+          paid_at: payment.paid_at ?? null,
+        },
+        stripe: null,
+        receipt: null,
+      });
+    }
+
+    const intent = await stripe.paymentIntents.retrieve(intentId);
+    const mappedStatus = mapStripeStatus(intent.status);
+
+    const updatePayload: Record<string, unknown> = {
+      status: mappedStatus,
+      provider: "STRIPE_TERMINAL",
+      provider_transaction_id: intent.id,
+      provider_response_json: intent as unknown as Record<string, unknown>,
+      failure_reason: intent.last_payment_error?.message?.trim() || null,
       updated_at: new Date().toISOString(),
     };
 
     if (mappedStatus === "COMPLETED") {
-      salesOrderPayload.completed_at = new Date().toISOString();
+      updatePayload.paid_at = new Date().toISOString();
     }
 
-    const { error: salesOrderError } = await admin
-      .from("sales_orders")
-      .update(salesOrderPayload)
-      .eq("id", payment.sales_order_id);
+    await admin.from("payments").update(updatePayload).eq("id", paymentId);
 
-    if (salesOrderError) {
-      throw new Error(salesOrderError.message ?? "Sales Order konnte nicht aktualisiert werden.");
-    }
-  }
-
-  let receipt: any = null;
-  if (mappedStatus === "COMPLETED" && salesOrder?.id) {
-    receipt = await createFiscalReceiptIfMissing({
-      admin,
-      payment: {
-        ...payment,
-        status: mappedStatus,
-        paid_at: String(updatePayload.paid_at ?? payment.paid_at ?? null),
-        provider_transaction_id: intent.id,
-      },
-      salesOrder,
-    });
-  }
-
-  return {
-    ok: true,
-    payment_id: payment.id,
-    sales_order_id: payment.sales_order_id ?? null,
-    mapped_status: mappedStatus,
-    stripe_intent_id: intent.id,
-    receipt_id: receipt?.id ?? null,
-    receipt_number: receipt?.receiptNumber ?? null,
-  };
-}
-
-export async function POST(req: NextRequest) {
-  try {
-    const signature = req.headers.get("stripe-signature");
-    if (!signature) {
-      return NextResponse.json({ error: "Stripe-Signatur fehlt." }, { status: 400 });
+    if (salesOrder?.id) {
+      await admin
+        .from("sales_orders")
+        .update({
+          status: mappedStatus === "COMPLETED" ? "COMPLETED" : "OPEN",
+          ...(mappedStatus === "COMPLETED" ? { completed_at: new Date().toISOString() } : {}),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", salesOrder.id);
     }
 
-    const payload = await req.text();
-    const event = stripe.webhooks.constructEvent(payload, signature, getWebhookSecret());
-
-    if (
-      event.type === "payment_intent.processing" ||
-      event.type === "payment_intent.succeeded" ||
-      event.type === "payment_intent.payment_failed" ||
-      event.type === "payment_intent.canceled"
-    ) {
-      const intent = event.data.object as Stripe.PaymentIntent;
-      const result = await updateInternalPayment(intent);
-
-      return NextResponse.json({
-        received: true,
-        event_type: event.type,
-        result,
+    let receipt: any = null;
+    if (mappedStatus === "COMPLETED" && salesOrder?.id) {
+      receipt = await createFiscalReceiptIfMissing({
+        admin,
+        payment: {
+          ...payment,
+          status: mappedStatus,
+          paid_at: String(updatePayload.paid_at ?? payment.paid_at ?? null),
+          provider_transaction_id: intent.id,
+        },
+        salesOrder,
       });
     }
 
     return NextResponse.json({
-      received: true,
-      ignored: true,
-      event_type: event.type,
+      ok: true,
+      payment: {
+        id: payment.id,
+        status: mappedStatus,
+        status_label: normalizePaymentStatus(mappedStatus),
+      },
+      stripe: {
+        id: intent.id,
+        status: intent.status,
+        amount: intent.amount,
+        reader_action: intent.next_action?.type ?? null,
+      },
+      receipt: receipt
+        ? {
+            id: receipt.id,
+            receipt_number: receipt.receiptNumber,
+            status: receipt.status,
+            verification_status: receipt.verificationStatus,
+            issued_at: receipt.issuedAt,
+            turnover_value_cents: receipt.turnoverValueCents,
+            currency_code: receipt.currencyCode,
+            line_count: receipt.lineCount,
+            already_existed: receipt.alreadyExisted,
+          }
+        : null,
     });
   } catch (error: any) {
     return NextResponse.json(
-      {
-        error: error?.message ?? "Stripe-Webhook konnte nicht verarbeitet werden.",
-      },
-      { status: 400 }
+      { error: error?.message ?? "Payment-Status konnte nicht geprüft werden." },
+      { status: 500 }
     );
   }
 }

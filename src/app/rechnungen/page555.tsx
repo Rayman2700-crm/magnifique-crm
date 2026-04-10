@@ -8,9 +8,6 @@ import FiscalReceiptSlideover from "@/components/rechnungen/FiscalReceiptSlideov
 import PendingReaderPaymentsCard from "./PendingReaderPaymentsCard";
 import { backfillReadyFiscalReceipts, cancelCardPaymentForCheckout, completeCardPaymentForCheckout, createFiscalReceiptForPayment, createPaymentForSalesOrder, createSalesOrderFromAppointment, failCardPaymentForCheckout, startCardPaymentForCheckout } from "./actions";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
 type FiscalReceiptRow = {
   id: string;
   tenant_id: string | null;
@@ -255,14 +252,11 @@ function euroFromGross(value: number | null | undefined, currencyCode?: string |
   return value < 0 ? `-${formatted}` : formatted;
 }
 
-const BUSINESS_TIME_ZONE = "Europe/Vienna";
-
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat("de-AT", {
-    timeZone: BUSINESS_TIME_ZONE,
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -2408,7 +2402,7 @@ export default async function RechnungenPage({
                       <th className="w-[28%] px-6 py-4 font-semibold text-right text-white/60">Aktion</th>
                     </tr>
                   </thead>
-                  <tbody suppressHydrationWarning={true}>
+                  <tbody>
                     {filteredItems.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="px-6 py-10 text-center text-white/45">Keine Fiscal-Receipts gefunden.</td>

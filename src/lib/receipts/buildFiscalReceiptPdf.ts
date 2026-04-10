@@ -1,20 +1,12 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import {
-  PDFDocument,
-  StandardFonts,
-  rgb,
-  type PDFPage,
-  type PDFFont,
-  type PDFImage,
-} from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, type PDFPage, type PDFFont, type PDFImage } from "pdf-lib";
 
 export type FiscalReceiptPdfLine = {
   name: string;
   quantity: number;
   unitPriceGross: number;
   lineTotalGross: number;
-  description?: string | null;
 };
 
 export type BuildFiscalReceiptPdfInput = {
@@ -27,52 +19,30 @@ export type BuildFiscalReceiptPdfInput = {
   currencyCode?: string | null;
   lines: FiscalReceiptPdfLine[];
   note?: string | null;
-
-  providerBlock?: string[] | null;
-  customerBlock?: string[] | null;
-  providerPhone?: string | null;
-  providerEmail?: string | null;
-  providerWebsite?: string | null;
-  paymentTermsText?: string | null;
-
-  bankName?: string | null;
-  bankBic?: string | null;
-  bankIban?: string | null;
-  bankAccountHolder?: string | null;
-  paymentReference?: string | null;
-
-  qrCodePngBytes?: Uint8Array | Buffer | null;
 };
 
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
-const MARGIN_LEFT = 50;
-const MARGIN_RIGHT = 50;
-const RIGHT_X = 345;
-
+const MARGIN_X = 40;
+const TOP = PAGE_HEIGHT - 42;
 const TEXT = rgb(0.12, 0.12, 0.13);
 const MUTED = rgb(0.38, 0.38, 0.42);
 const LIGHT = rgb(0.72, 0.72, 0.76);
 const GRID = rgb(0.84, 0.84, 0.87);
-const ACCENT = rgb(0.6588, 0.4863, 0.2353);
+const HEAD_BG = rgb(0.965, 0.965, 0.972);
+const ACCENT = rgb(0.73, 0.60, 0.20);
 
 function euro(value: number, currencyCode?: string | null) {
   return new Intl.NumberFormat("de-AT", {
     style: "currency",
     currency: currencyCode || "EUR",
-  }).format(Number(value || 0));
+  }).format(value);
 }
 
 function drawText(
   page: PDFPage,
   text: string,
-  options: {
-    x: number;
-    y: number;
-    font: PDFFont;
-    size: number;
-    color?: ReturnType<typeof rgb>;
-  },
+  options: { x: number; y: number; font: PDFFont; size: number; color?: ReturnType<typeof rgb> },
 ) {
   page.drawText(String(text ?? ""), {
     x: options.x,
@@ -83,12 +53,7 @@ function drawText(
   });
 }
 
-function wrapTextByWidth(
-  text: string,
-  font: PDFFont,
-  size: number,
-  maxWidth: number,
-) {
+function wrapTextByWidth(text: string, font: PDFFont, size: number, maxWidth: number) {
   const words = String(text ?? "").split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let current = "";
@@ -107,83 +72,11 @@ function wrapTextByWidth(
   return lines.length ? lines : [""];
 }
 
-function normalizeLines(value: string[] | null | undefined) {
-  return (value ?? [])
-    .map((entry) => String(entry ?? "").trim())
-    .filter(Boolean);
-}
-
-function normalizeQuantity(value: number) {
-  if (Number.isInteger(value)) return String(value);
-  return Number(value).toFixed(2).replace(".", ",");
-}
-
-function parseAmountLabelToNumber(amountLabel: string | null | undefined) {
-  if (!amountLabel) return 0;
-  const normalized = String(amountLabel)
-    .replace(/\s/g, "")
-    .replace(/\./g, "")
-    .replace(",", ".")
-    .replace(/[^\d.-]/g, "");
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function defaultFooterText() {
-  return "Vielen Dank für Ihren Besuch bei Magnifique Beauty Institut. Wir freuen uns, Sie bald wieder verwöhnen zu dürfen.";
-}
-
-function defaultKleinunternehmerText() {
-  return "Gemäß § 6 Abs. 1 Z 27 UStG wird keine Umsatzsteuer berechnet.";
-}
-
-function defaultPaymentTerms(paymentMethodLabel: string, amountLabel: string) {
-  const normalized = String(paymentMethodLabel ?? "").trim().toLowerCase();
-
-  if (normalized.includes("bar") || normalized.includes("cash")) {
-    return `${amountLabel} dankend in Bar kassiert`;
-  }
-
-  if (normalized.includes("karte") || normalized.includes("card")) {
-    return `${amountLabel} mit Karte bezahlt`;
-  }
-
-  if (
-    normalized.includes("überweisung") ||
-    normalized.includes("ueberweisung") ||
-    normalized.includes("transfer")
-  ) {
-    return "Prompt netto Kassa bei Erhalt der Faktura";
-  }
-
-  return paymentMethodLabel || "—";
-}
-
-function extractProviderBlock(
-  providerBlock: string[] | null | undefined,
-  providerName: string,
-) {
-  const lines = normalizeLines(providerBlock);
-  if (lines.length > 0) return lines;
-
-  return [providerName || "Magnifique Beauty Institut"];
-}
-
-function extractCustomerBlock(
-  customerBlock: string[] | null | undefined,
-  customerName: string,
-) {
-  const lines = normalizeLines(customerBlock);
-  if (lines.length > 0) return lines;
-
-  return [customerName || "—"];
-}
-
 async function tryLoadLogo(pdfDoc: PDFDocument): Promise<PDFImage | null> {
   const candidates = [
     path.join(process.cwd(), "public", "branding", "magnifique-logo-gold.png"),
     path.join(process.cwd(), "public", "branding", "magnifique-logo-gold.jpg"),
-    path.join(process.cwd(), "public", "public", "branding", "magnifique-logo-gold.png"),
+    path.join(process.cwd(), "public", "magnifique-logo-gold.png"),
     path.join(process.cwd(), "public", "logo.png"),
   ];
 
@@ -197,491 +90,254 @@ async function tryLoadLogo(pdfDoc: PDFDocument): Promise<PDFImage | null> {
       // continue
     }
   }
-
   return null;
 }
 
-async function tryLoadQrCode(
+
+async function tryLoadProviderLogo(
   pdfDoc: PDFDocument,
   bytes?: Uint8Array | Buffer | null,
 ): Promise<PDFImage | null> {
-  if (!bytes || bytes.length === 0) return null;
-
-  try {
-    return await pdfDoc.embedPng(bytes);
-  } catch {
+  if (bytes && bytes.length > 0) {
     try {
-      return await pdfDoc.embedJpg(bytes);
+      return await pdfDoc.embedPng(bytes);
     } catch {
-      return null;
+      try {
+        return await pdfDoc.embedJpg(bytes);
+      } catch {
+        // fall through to default logo
+      }
     }
   }
+
+  return await tryLoadLogo(pdfDoc);
 }
 
 export async function buildFiscalReceiptPdf(input: BuildFiscalReceiptPdfInput) {
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
   const logo = await tryLoadLogo(pdfDoc);
-  const qrImage = await tryLoadQrCode(pdfDoc, input.qrCodePngBytes ?? null);
 
   const lines = input.lines ?? [];
-  const totalGross =
-    lines.length > 0
-      ? lines.reduce((sum, line) => sum + Number(line.lineTotalGross || 0), 0)
-      : parseAmountLabelToNumber(input.amountLabel);
+  const totalGross = lines.reduce((sum, line) => sum + Number(line.lineTotalGross || 0), 0);
+  const vatAmount = totalGross * (20 / 120);
+  const netAmount = totalGross - vatAmount;
 
-  const providerBlock = extractProviderBlock(input.providerBlock, input.providerName);
-  const customerBlock = extractCustomerBlock(input.customerBlock, input.customerName);
+  let y = TOP;
 
-  const providerPrimary = providerBlock[0] || input.providerName || "Magnifique Beauty Institut";
-  const providerRest = providerBlock.slice(1);
-
-  const customerPrimary = customerBlock[0] || input.customerName || "—";
-  const customerRest = customerBlock.slice(1);
-
-  const contentWidth = PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT;
-
-  page.drawRectangle({
-    x: 0,
-    y: 0,
-    width: PAGE_WIDTH,
-    height: PAGE_HEIGHT,
-    color: rgb(1, 1, 1),
-  });
-
-  // Optional small logo top left
+  // Branding row
   if (logo) {
-    const maxW = 120;
-    const maxH = 42;
+    const maxW = 170;
+    const maxH = 88;
     const scale = Math.min(maxW / logo.width, maxH / logo.height);
     const w = logo.width * scale;
     const h = logo.height * scale;
-
     page.drawImage(logo, {
-      x: MARGIN_LEFT,
-      y: PAGE_HEIGHT - 70,
+      x: MARGIN_X,
+      y: y - h + 6,
       width: w,
       height: h,
     });
+  } else {
+    drawText(page, "MAGNIFIQUE BEAUTY INSTITUT", { x: MARGIN_X, y: y - 12, font: bold, size: 18 });
   }
 
-  // Right header
-  drawText(page, "RECHNUNG", {
-    x: RIGHT_X,
-    y: PAGE_HEIGHT - 60,
-    font: bold,
-    size: 22,
-    color: TEXT,
-  });
-
-  drawText(page, `Rechnungsnummer: ${input.receiptNumber || "—"}`, {
-    x: RIGHT_X,
-    y: PAGE_HEIGHT - 95,
-    font,
-    size: 10,
-    color: TEXT,
-  });
-
-  drawText(page, `Rechnungsdatum: ${input.issuedAtLabel || "—"}`, {
-    x: RIGHT_X,
-    y: PAGE_HEIGHT - 110,
-    font,
-    size: 10,
-    color: TEXT,
-  });
-
-  drawText(page, `Zahlungsart: ${input.paymentMethodLabel || "—"}`, {
-    x: RIGHT_X,
-    y: PAGE_HEIGHT - 125,
-    font,
-    size: 10,
-    color: TEXT,
-  });
-
-  const paidAtLabel =
-    String(input.paymentTermsText ?? "").trim() ||
-    defaultPaymentTerms(input.paymentMethodLabel, input.amountLabel);
-
-  drawText(page, `Bezahlt am: ${input.issuedAtLabel || "—"}`, {
-    x: RIGHT_X,
-    y: PAGE_HEIGHT - 140,
-    font,
-    size: 10,
-    color: TEXT,
-  });
-
-  // Provider block right
-  const providerStartY = PAGE_HEIGHT - 185;
-
-  drawText(page, providerPrimary, {
-    x: RIGHT_X,
-    y: providerStartY,
-    font: bold,
-    size: 16,
-    color: TEXT,
-  });
-
-  let providerY = providerStartY - 20;
-
-  for (const row of providerRest) {
-    drawText(page, row, {
-      x: RIGHT_X,
-      y: providerY,
-      font,
-      size: 10,
-      color: MUTED,
-    });
-    providerY -= 15;
-  }
-
-  if (String(input.providerPhone ?? "").trim()) {
-    if (providerRest.length > 0) providerY -= 5;
-    drawText(page, `Tel: ${String(input.providerPhone).trim()}`, {
-      x: RIGHT_X,
-      y: providerY,
-      font,
-      size: 10,
-      color: MUTED,
-    });
-    providerY -= 15;
-  }
-
-  if (String(input.providerEmail ?? "").trim()) {
-    drawText(page, `E-Mail: ${String(input.providerEmail).trim()}`, {
-      x: RIGHT_X,
-      y: providerY,
-      font,
-      size: 10,
-      color: MUTED,
-    });
-  }
-
-  // Customer block left aligned to provider block
-  let customerY = providerStartY;
-
-  drawText(page, "Rechnung an", {
-    x: MARGIN_LEFT,
-    y: customerY,
+  drawText(page, input.providerName || "Magnifique Beauty Institut", {
+    x: PAGE_WIDTH - 190,
+    y: y - 8,
     font: bold,
     size: 11,
     color: TEXT,
   });
+  drawText(page, "E-Mail / Kontakt laut Behandlerprofil", {
+    x: PAGE_WIDTH - 190,
+    y: y - 24,
+    font,
+    size: 9,
+    color: MUTED,
+  });
+  drawText(page, "Digitale Rechnung aus Magnifique CRM", {
+    x: PAGE_WIDTH - 190,
+    y: y - 38,
+    font,
+    size: 9,
+    color: MUTED,
+  });
 
-  customerY -= 22;
+  y -= 102;
+  page.drawLine({ start: { x: MARGIN_X, y }, end: { x: PAGE_WIDTH - MARGIN_X, y }, thickness: 1, color: LIGHT });
 
-  drawText(page, customerPrimary, {
-    x: MARGIN_LEFT,
-    y: customerY,
+  // Address / intro strip
+  y -= 20;
+  drawText(page, input.providerName || "Magnifique Beauty Institut", {
+    x: MARGIN_X,
+    y,
+    font,
+    size: 8.8,
+    color: MUTED,
+  });
+  page.drawLine({ start: { x: MARGIN_X, y: y - 4 }, end: { x: MARGIN_X + 175, y: y - 4 }, thickness: 0.7, color: LIGHT });
+
+  // Main title section
+  y -= 34;
+  drawText(page, `Rechnung Nr.: ${input.receiptNumber}`, {
+    x: MARGIN_X,
+    y,
+    font: bold,
+    size: 18,
+    color: TEXT,
+  });
+
+  // Customer block on right like reference
+  const customerBlockX = PAGE_WIDTH - 205;
+  drawText(page, input.customerName || "—", {
+    x: customerBlockX,
+    y: y + 2,
     font: bold,
     size: 11,
     color: TEXT,
   });
+  drawText(page, "Kunde / Empfänger", {
+    x: customerBlockX,
+    y: y - 14,
+    font,
+    size: 9,
+    color: MUTED,
+  });
 
-  customerY -= 16;
+  y -= 34;
 
-  for (const row of customerRest) {
-    drawText(page, row, {
-      x: MARGIN_LEFT,
-      y: customerY,
-      font,
-      size: 10,
-      color: MUTED,
-    });
-    customerY -= 14;
-  }
+  // Meta rows
+  const metaLeftX = MARGIN_X;
+  const metaRightLabelX = PAGE_WIDTH - 190;
+  const metaRightValueX = PAGE_WIDTH - 88;
+
+  const metaRows: Array<[string, string]> = [
+    ["Belegdatum:", input.issuedAtLabel || "—"],
+    ["Zahlungskondition:", "prompt"],
+    ["Ihr Kontakt:", input.providerName || "—"],
+    ["Zahlungsart:", input.paymentMethodLabel || "—"],
+  ];
+
+  metaRows.forEach(([label, value], index) => {
+    const rowY = y - index * 15;
+    drawText(page, label, { x: metaRightLabelX, y: rowY, font, size: 9, color: MUTED });
+    drawText(page, value, { x: metaRightValueX, y: rowY, font: index === 2 ? bold : font, size: 9.5, color: TEXT });
+  });
+
+  drawText(page, "Wir erlauben uns zu verrechnen:", {
+    x: metaLeftX,
+    y,
+    font,
+    size: 10,
+    color: TEXT,
+  });
+  y -= 72;
 
   // Table
-  const tableTop = 470;
-  const tableX = MARGIN_LEFT;
-  const tableW = PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT;
+  const tableX = MARGIN_X;
+  const tableW = PAGE_WIDTH - MARGIN_X * 2;
+  const posW = 28;
+  const descW = 255;
+  const qtyW = 52;
+  const unitW = 85;
+  const totalW = tableW - posW - descW - qtyW - unitW;
 
-  const descW = 305;
-  const qtyW = 55;
-  const unitW = 70;
-  const totalW = tableW - descW - qtyW - unitW;
+  page.drawRectangle({ x: tableX, y: y - 18, width: tableW, height: 22, color: HEAD_BG, borderColor: GRID, borderWidth: 0.8 });
+  drawText(page, "Pos.", { x: tableX + 6, y: y - 10, font: bold, size: 9.2 });
+  drawText(page, "Produktbezeichnung", { x: tableX + posW + 6, y: y - 10, font: bold, size: 9.2 });
+  drawText(page, "Menge", { x: tableX + posW + descW + 6, y: y - 10, font: bold, size: 9.2 });
+  drawText(page, "Einzelpreis", { x: tableX + posW + descW + qtyW + 6, y: y - 10, font: bold, size: 9.2 });
+  drawText(page, "Gesamtpreis", { x: tableX + posW + descW + qtyW + unitW + 6, y: y - 10, font: bold, size: 9.2 });
+  y -= 24;
 
-  const colDescX = tableX;
-  const colQtyX = tableX + descW + 8;
-  const colUnitX = tableX + descW + qtyW + 8;
-  const colTotalX = tableX + descW + qtyW + unitW + 8;
+  lines.forEach((line, idx) => {
+    const wrapped = wrapTextByWidth(line.name, font, 9.8, descW - 10);
+    const rowH = Math.max(22, 12 + wrapped.length * 11);
 
-  page.drawLine({
-    start: { x: MARGIN_LEFT, y: tableTop + 18 },
-    end: { x: PAGE_WIDTH - MARGIN_RIGHT, y: tableTop + 18 },
-    thickness: 1,
-    color: GRID,
-  });
+    page.drawRectangle({ x: tableX, y: y - rowH + 4, width: tableW, height: rowH, borderColor: GRID, borderWidth: 0.7 });
+    drawText(page, String(idx + 1), { x: tableX + 7, y: y - 9, font, size: 9.5, color: MUTED });
 
-  drawText(page, "Leistung", {
-    x: colDescX,
-    y: tableTop,
-    font: bold,
-    size: 10,
-    color: TEXT,
-  });
-
-  drawText(page, "Menge", {
-    x: colQtyX,
-    y: tableTop,
-    font: bold,
-    size: 10,
-    color: TEXT,
-  });
-
-  drawText(page, "Einzelpreis", {
-    x: colUnitX,
-    y: tableTop,
-    font: bold,
-    size: 10,
-    color: TEXT,
-  });
-
-  drawText(page, "Gesamt", {
-    x: colTotalX,
-    y: tableTop,
-    font: bold,
-    size: 10,
-    color: TEXT,
-  });
-
-  let rowY = tableTop - 28;
-
-  for (const line of lines) {
-    const titleLines = wrapTextByWidth(
-      String(line.name ?? "").trim(),
-      font,
-      10,
-      descW - 8,
-    );
-
-    const descriptionLines = wrapTextByWidth(
-      String(line.description ?? "").trim(),
-      font,
-      8.5,
-      descW - 20,
-    ).filter((row) => row.trim().length > 0);
-
-    const combinedLineCount = titleLines.length + descriptionLines.length;
-    const rowHeight = Math.max(24, combinedLineCount * 11 + 4);
-
-    let textY = rowY;
-
-    titleLines.forEach((textLine, index) => {
-      drawText(page, textLine, {
-        x: colDescX,
-        y: textY - index * 11,
-        font,
-        size: 10,
-        color: TEXT,
-      });
+    let textY = y - 9;
+    wrapped.forEach((row, rowIndex) => {
+      drawText(page, row, { x: tableX + posW + 6, y: textY - rowIndex * 10.5, font: rowIndex === 0 ? bold : font, size: 9.6 });
     });
 
-    if (descriptionLines.length > 0) {
-      const descStartY = textY - titleLines.length * 11;
-      descriptionLines.forEach((textLine, index) => {
-        drawText(page, textLine, {
-          x: colDescX + 10,
-          y: descStartY - index * 10,
-          font,
-          size: 8.5,
-          color: MUTED,
-        });
-      });
-    }
+    drawText(page, String(line.quantity), { x: tableX + posW + descW + 8, y: y - 9, font, size: 9.5 });
+    drawText(page, euro(line.unitPriceGross, input.currencyCode), { x: tableX + posW + descW + qtyW + 6, y: y - 9, font, size: 9.5 });
+    drawText(page, euro(line.lineTotalGross, input.currencyCode), { x: tableX + posW + descW + qtyW + unitW + 6, y: y - 9, font: bold, size: 9.5 });
 
-    drawText(page, normalizeQuantity(line.quantity), {
-      x: colQtyX,
-      y: rowY,
-      font,
-      size: 10,
-      color: TEXT,
-    });
-
-    drawText(page, euro(line.unitPriceGross, input.currencyCode), {
-      x: colUnitX,
-      y: rowY,
-      font,
-      size: 10,
-      color: TEXT,
-    });
-
-    drawText(page, euro(line.lineTotalGross, input.currencyCode), {
-      x: colTotalX,
-      y: rowY,
-      font,
-      size: 10,
-      color: TEXT,
-    });
-
-    rowY -= rowHeight;
-  }
-
-  page.drawLine({
-    start: { x: MARGIN_LEFT, y: rowY + 8 },
-    end: { x: PAGE_WIDTH - MARGIN_RIGHT, y: rowY + 8 },
-    thickness: 1,
-    color: GRID,
+    y -= rowH + 4;
   });
 
-  const totalY = rowY - 24;
-  const hintY = totalY - 35;
-  const paidHintY = hintY - 18;
-  const bankTitleY = paidHintY - 95;
-  const bankRowsStartY = bankTitleY - 16;
-  const footerLineY = bankRowsStartY - 45;
-  const footerTextY = footerLineY - 18;
+  y -= 12;
 
-  drawText(page, "Gesamtbetrag", {
-    x: 385,
-    y: totalY,
-    font: bold,
-    size: 11,
-    color: TEXT,
-  });
+  // Summary aligned like reference
+  const labelX = PAGE_WIDTH - 195;
+  const valueX = PAGE_WIDTH - 88;
+  const grossLabel = euro(totalGross, input.currencyCode);
+  const vatLabel = euro(vatAmount, input.currencyCode);
+  const netLabel = euro(netAmount, input.currencyCode);
 
-  drawText(page, euro(totalGross, input.currencyCode), {
-    x: colTotalX,
-    y: totalY,
-    font: bold,
-    size: 11,
-    color: TEXT,
-  });
+  drawText(page, "Betrag: netto", { x: labelX, y, font, size: 10, color: TEXT });
+  drawText(page, netLabel, { x: valueX, y, font, size: 10, color: TEXT });
+  y -= 16;
 
-  drawText(page, defaultKleinunternehmerText(), {
-    x: MARGIN_LEFT,
-    y: hintY,
+  drawText(page, "20,00 % MwSt:", { x: labelX, y, font, size: 10, color: TEXT });
+  drawText(page, vatLabel, { x: valueX, y, font, size: 10, color: TEXT });
+  y -= 16;
+
+  drawText(page, "Gesamtsumme:", { x: labelX, y, font: bold, size: 11, color: TEXT });
+  drawText(page, grossLabel, { x: valueX, y, font: bold, size: 11, color: TEXT });
+  y -= 26;
+
+  page.drawLine({ start: { x: MARGIN_X, y }, end: { x: PAGE_WIDTH - MARGIN_X, y }, thickness: 0.8, color: GRID });
+  y -= 18;
+
+  drawText(page, `Zahlungsmodalitäten: ${grossLabel} ohne Abzug prompt bei Rechnungserhalt.`, {
+    x: MARGIN_X,
+    y,
     font,
-    size: 9,
-    color: MUTED,
+    size: 9.5,
+    color: TEXT,
   });
-
-  drawText(page, `Zahlungsstatus: ${paidAtLabel}`, {
-    x: MARGIN_LEFT,
-    y: paidHintY,
+  y -= 14;
+  drawText(page, "Wir bitten Sie, bei Überweisungen die Rechnungsnummer als Verwendungszweck zu hinterlegen.", {
+    x: MARGIN_X,
+    y,
     font,
-    size: 9,
-    color: MUTED,
-  });
-
-  // Bank section
-  drawText(page, "Bankverbindung", {
-    x: MARGIN_LEFT,
-    y: bankTitleY,
-    font: bold,
-    size: 10,
+    size: 9.2,
     color: TEXT,
   });
 
-  let bankY = bankRowsStartY;
-
-  if (String(input.bankName ?? "").trim()) {
-    drawText(page, `Bank: ${String(input.bankName).trim()}`, {
-      x: MARGIN_LEFT,
-      y: bankY,
-      font,
-      size: 9,
-      color: TEXT,
-    });
-    bankY -= 14;
-  }
-
-  if (String(input.bankIban ?? "").trim()) {
-    drawText(page, `IBAN: ${String(input.bankIban).trim()}`, {
-      x: MARGIN_LEFT,
-      y: bankY,
-      font,
-      size: 9,
-      color: TEXT,
-    });
-    bankY -= 14;
-  }
-
-  if (String(input.bankBic ?? "").trim()) {
-    drawText(page, `BIC: ${String(input.bankBic).trim()}`, {
-      x: MARGIN_LEFT,
-      y: bankY,
-      font,
-      size: 9,
-      color: TEXT,
-    });
-    bankY -= 14;
-  }
-
-  if (String(input.bankAccountHolder ?? "").trim()) {
-    drawText(page, `Kontoinhaber: ${String(input.bankAccountHolder).trim()}`, {
-      x: MARGIN_LEFT,
-      y: bankY,
-      font,
-      size: 9,
-      color: TEXT,
-    });
-  }
-
-  // Optional QR
-  if (qrImage) {
-    const qrSize = 70;
-    const qrX = PAGE_WIDTH - MARGIN_RIGHT - qrSize;
-    const qrY = bankTitleY - 50;
-
-    page.drawImage(qrImage, {
-      x: qrX,
-      y: qrY,
-      width: qrSize,
-      height: qrSize,
-    });
-  }
-
-  // Optional note
-  if (String(input.note ?? "").trim()) {
-    let noteY = footerLineY + 18;
-    const noteLines = wrapTextByWidth(
-      String(input.note).trim(),
-      font,
-      9,
-      contentWidth,
-    );
-
-    noteLines.forEach((line) => {
-      drawText(page, line, {
-        x: MARGIN_LEFT,
-        y: noteY,
-        font,
-        size: 9,
-        color: MUTED,
-      });
-      noteY -= 11;
+  if (input.note) {
+    y -= 22;
+    drawText(page, "Hinweis:", { x: MARGIN_X, y, font: bold, size: 9.2, color: MUTED });
+    y -= 14;
+    wrapTextByWidth(input.note, font, 9, PAGE_WIDTH - MARGIN_X * 2).forEach((row) => {
+      drawText(page, row, { x: MARGIN_X, y, font, size: 9, color: TEXT });
+      y -= 11;
     });
   }
 
   // Footer
-  page.drawLine({
-    start: { x: MARGIN_LEFT, y: footerLineY },
-    end: { x: PAGE_WIDTH - MARGIN_RIGHT, y: footerLineY },
-    thickness: 1,
-    color: GRID,
-  });
-
-  drawText(page, defaultFooterText(), {
-    x: MARGIN_LEFT,
-    y: footerTextY,
+  page.drawLine({ start: { x: MARGIN_X, y: 92 }, end: { x: PAGE_WIDTH - MARGIN_X, y: 92 }, thickness: 0.8, color: GRID });
+  drawText(page, "Magnifique Beauty Institut · digitale Rechnungserstellung über Magnifique CRM", {
+    x: MARGIN_X,
+    y: 72,
     font,
-    size: 9,
+    size: 8.4,
     color: MUTED,
   });
-
-  if (String(input.providerWebsite ?? "").trim()) {
-    drawText(page, String(input.providerWebsite).trim(), {
-      x: PAGE_WIDTH - 155,
-      y: footerTextY,
-      font: bold,
-      size: 10.5,
-      color: ACCENT,
-    });
-  }
+  drawText(page, "Vielen Dank für deinen Besuch.", {
+    x: MARGIN_X,
+    y: 58,
+    font: bold,
+    size: 8.8,
+    color: ACCENT,
+  });
 
   return Buffer.from(await pdfDoc.save());
 }

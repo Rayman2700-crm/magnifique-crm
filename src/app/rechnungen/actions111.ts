@@ -329,16 +329,15 @@ async function nextReceiptNumber(admin: any, cashRegisterId: string) {
   const { data, error } = await admin
     .from("fiscal_receipts")
     .select("receipt_number")
-    .eq("cash_register_id", cashRegisterId);
-
+    .eq("cash_register_id", cashRegisterId)
+    .order("created_at", { ascending: false })
+    .limit(200);
   if (error) throw new Error(error.message ?? "Receipt-Nummer konnte nicht berechnet werden.");
-
   const maxNo = (data ?? []).reduce((max: number, row: any) => {
     const digits = String(row?.receipt_number ?? "").replace(/\D/g, "");
     const n = Number(digits || "0");
     return Number.isFinite(n) && n > max ? n : max;
   }, 0);
-
   return String(maxNo + 1).padStart(6, "0");
 }
 
@@ -2016,46 +2015,30 @@ export async function cancelCardPaymentForCheckout(formData: FormData) {
   redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, success: "Kartenzahlung abgebrochen." }));
 }
 
-
-
-async function createFiscalReceiptForPaymentInternal(input: {
-  admin: any;
-  userId: string;
-  effectiveTenantId: string | null;
-  appointmentId?: string | null;
-  salesOrderId: string;
-  paymentId: string;
-}) {
-  const { admin, userId, effectiveTenantId } = input;
-  const appointmentId = String(input.appointmentId ?? "").trim();
-  const salesOrderId = String(input.salesOrderId ?? "").trim();
-  const paymentId = String(input.paymentId ?? "").trim();
-
+export async function createFiscalReceiptForPayment(formData: FormData) {
+  const salesOrderId = String(formData.get("sales_order_id") ?? "").trim();
+  const paymentId = String(formData.get("payment_id") ?? "").trim();
+  const appointmentId = String(formData.get("appointment_id") ?? "").trim();
   if (!salesOrderId || !paymentId) {
-    throw new Error("Sales Order oder Payment fehlt für Fiscal.");
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Sales Order oder Payment fehlt für Fiscal." }));
   }
 
+  const { admin, user, effectiveTenantId } = await requireContext();
   const salesOrder = await resolveSalesOrder(admin, salesOrderId);
   const tenantId = String(salesOrder.tenant_id ?? "").trim();
-  if (!tenantId) throw new Error("Sales Order hat keinen Tenant.");
-  if (effectiveTenantId && effectiveTenantId !== tenantId) {
-    throw new Error("Diese Sales Order gehört nicht zum aktiven Tenant.");
-  }
+  if (!tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Sales Order hat keinen Tenant." }));
+  if (effectiveTenantId && effectiveTenantId !== tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Diese Sales Order gehört nicht zum aktiven Tenant." }));
 
   const { data: paymentRaw, error: paymentError } = await admin
     .from("payments")
     .select("id, tenant_id, sales_order_id, cash_register_id, payment_method_id, amount, currency_code, status, paid_at, created_at")
     .eq("id", paymentId)
     .maybeSingle();
-
-  if (paymentError || !paymentRaw) {
-    throw new Error("Payment konnte für Fiscal nicht geladen werden.");
-  }
-
+  if (paymentError || !paymentRaw) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Payment konnte für Fiscal nicht geladen werden." }));
   const payment = paymentRaw as PaymentContextRow;
 
   if (String(payment.status ?? "").trim().toUpperCase() !== "COMPLETED") {
-    throw new Error("Fiscal darf erst nach erfolgreichem Payment erzeugt werden.");
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Fiscal darf erst nach erfolgreichem Payment erzeugt werden." }));
   }
 
   const { data: existingReceiptRows } = await admin
@@ -2064,35 +2047,38 @@ async function createFiscalReceiptForPaymentInternal(input: {
     .eq("payment_id", paymentId)
     .order("created_at", { ascending: false })
     .limit(1);
-
   const existingReceiptId = String(((existingReceiptRows ?? [])[0] as any)?.id ?? "").trim();
   if (existingReceiptId) {
-    return {
-      receiptId: existingReceiptId,
-      alreadyExisted: true,
-    };
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, receiptId: existingReceiptId, success: "Fiscal Receipt bereits vorhanden ✅" }));
   }
 
-  const salesOrderCashRegisterId = String(salesOrder.cash_register_id ?? "").trim();
-  const paymentCashRegisterId = String(payment.cash_register_id ?? "").trim();
+const salesOrderCashRegisterId = String(salesOrder.cash_register_id ?? "").trim();
+const paymentCashRegisterId = String(payment.cash_register_id ?? "").trim();
 
-  let cashRegisterId =
-    assertCashRegisterConsistency({
-      salesOrderCashRegisterId,
-      paymentCashRegisterId,
-      resolvedCashRegisterId: null,
-    }) || salesOrderCashRegisterId || paymentCashRegisterId;
+let cashRegisterId =
+  assertCashRegisterConsistency({
+    salesOrderCashRegisterId,
+    paymentCashRegisterId,
+    resolvedCashRegisterId: null,
+  }) || salesOrderCashRegisterId || paymentCashRegisterId;
 
-  if (!cashRegisterId) {
-    const resolvedCashRegister = await resolveCashRegister(admin, tenantId);
-    cashRegisterId = resolvedCashRegister.id;
-  }
+if (!cashRegisterId) {
+  const resolvedCashRegister = await resolveCashRegister(admin, tenantId);
+  cashRegisterId = resolvedCashRegister.id;
+}
 
-  if (!cashRegisterId) {
-    throw new Error("Für diese Zahlung ist keine Kassa zugeordnet.");
-  }
+if (!cashRegisterId) {
+  redirect(
+    buildRechnungenUrl({
+      appointmentId,
+      salesOrderId,
+      paymentId,
+      error: "Für diese Zahlung ist keine Kassa zugeordnet.",
+    })
+  );
+}
 
-  const cashRegister = { id: cashRegisterId };
+const cashRegister = { id: cashRegisterId };
 
   const appointmentLookupId = String(salesOrder.appointment_id ?? appointmentId ?? "").trim();
   let appointmentDetails: AppointmentDetailLookupRow | null = null;
@@ -2120,11 +2106,9 @@ async function createFiscalReceiptForPaymentInternal(input: {
     .eq("sales_order_id", salesOrderId)
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
-
-  if (linesError) throw new Error("Sales-Order-Zeilen konnten nicht geladen werden.");
-
+  if (linesError) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Sales-Order-Zeilen konnten nicht geladen werden." }));
   const salesOrderLines = (lineRows ?? []) as SalesOrderLineRow[];
-  if (salesOrderLines.length === 0) throw new Error("Für die Sales Order gibt es keine Positionen.");
+  if (salesOrderLines.length === 0) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Für die Sales Order gibt es keine Positionen." }));
 
   const totalCents = salesOrderLines.reduce((sum, line) => sum + Math.round(Number(line.line_total_gross ?? 0) * 100), 0);
   let normalCents = 0;
@@ -2157,7 +2141,7 @@ async function createFiscalReceiptForPaymentInternal(input: {
   await insertFiscalEventSafe(admin, {
     tenantId,
     cashRegisterId: cashRegister.id,
-    performedBy: userId,
+    performedBy: user.id,
     eventType: "RECEIPT_CREATION_STARTED",
     notes: "Fiscal-Receipt-Erstellung aus Sales Order + Payment gestartet.",
     referenceData: {
@@ -2168,7 +2152,6 @@ async function createFiscalReceiptForPaymentInternal(input: {
       line_count: salesOrderLines.length,
       customer_name: customerName,
       provider_name: providerName,
-      source: "manual_or_batch_repair",
     },
   });
 
@@ -2178,11 +2161,7 @@ async function createFiscalReceiptForPaymentInternal(input: {
     .eq("cash_register_id", cashRegister.id)
     .order("created_at", { ascending: false })
     .limit(1);
-
-  const previousReceipt = ((previousReceiptRows ?? [])[0] ?? null) as {
-    id?: string | null;
-    receipt_payload_hash?: string | null;
-  } | null;
+  const previousReceipt = ((previousReceiptRows ?? [])[0] ?? null) as { id?: string | null; receipt_payload_hash?: string | null } | null;
 
   const payload = {
     receipt_id: null,
@@ -2197,7 +2176,6 @@ async function createFiscalReceiptForPaymentInternal(input: {
     turnover_value_cents: totalCents,
     lines: payloadLines,
   };
-
   const payloadCanonical = JSON.stringify(payload);
   const payloadHash = createHash("sha256").update(payloadCanonical).digest("hex");
 
@@ -2216,7 +2194,7 @@ async function createFiscalReceiptForPaymentInternal(input: {
       sum_tax_set_reduced2: reduced2Cents,
       sum_tax_set_zero: zeroCents,
       turnover_value_cents: totalCents,
-      created_by: userId,
+      created_by: user.id,
       chain_previous_receipt_id: previousReceipt?.id ?? null,
       chain_previous_hash: previousReceipt?.receipt_payload_hash ?? null,
       receipt_payload_canonical: payloadCanonical,
@@ -2236,7 +2214,7 @@ async function createFiscalReceiptForPaymentInternal(input: {
     await insertFiscalEventSafe(admin, {
       tenantId,
       cashRegisterId: cashRegister.id,
-      performedBy: userId,
+      performedBy: user.id,
       eventType: "RECEIPT_CREATION_FAILED",
       notes: failureMessage,
       referenceData: {
@@ -2244,7 +2222,6 @@ async function createFiscalReceiptForPaymentInternal(input: {
         sales_order_id: salesOrderId,
         payment_id: paymentId,
         receipt_number: receiptNumber,
-        source: "manual_or_batch_repair",
       },
     });
     await insertFiscalFailureSafe(admin, {
@@ -2254,10 +2231,10 @@ async function createFiscalReceiptForPaymentInternal(input: {
       paymentId,
       failedStep: "receipt_insert",
       errorMessage: failureMessage,
-      createdBy: userId,
+      createdBy: user.id,
       errorDetail: receiptError ? { code: receiptError.code, details: receiptError.details, hint: receiptError.hint } : null,
     });
-    throw new Error(failureMessage);
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: failureMessage }));
   }
 
   const receiptId = String(receiptInsert.id);
@@ -2279,7 +2256,7 @@ async function createFiscalReceiptForPaymentInternal(input: {
       tenantId,
       cashRegisterId: cashRegister.id,
       fiscalReceiptId: receiptId,
-      performedBy: userId,
+      performedBy: user.id,
       eventType: "RECEIPT_CREATION_FAILED",
       notes: failureMessage,
       referenceData: {
@@ -2287,7 +2264,6 @@ async function createFiscalReceiptForPaymentInternal(input: {
         sales_order_id: salesOrderId,
         payment_id: paymentId,
         receipt_id: receiptId,
-        source: "manual_or_batch_repair",
       },
     });
     await insertFiscalFailureSafe(admin, {
@@ -2298,10 +2274,10 @@ async function createFiscalReceiptForPaymentInternal(input: {
       fiscalReceiptId: receiptId,
       failedStep: "receipt_lines_insert",
       errorMessage: failureMessage,
-      createdBy: userId,
+      createdBy: user.id,
       errorDetail: receiptLinesError ? { code: receiptLinesError.code, details: receiptLinesError.details, hint: receiptLinesError.hint } : null,
     });
-    throw new Error(failureMessage);
+    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, receiptId, error: failureMessage }));
   }
 
   await admin.from("payments").update({ cash_register_id: cashRegister.id }).eq("id", paymentId);
@@ -2311,7 +2287,7 @@ async function createFiscalReceiptForPaymentInternal(input: {
     tenantId,
     cashRegisterId: cashRegister.id,
     fiscalReceiptId: receiptId,
-    performedBy: userId,
+    performedBy: user.id,
     eventType: "STANDARD_RECEIPT_CREATED",
     notes: "Fiscal-Receipt und Receipt-Zeilen erfolgreich erzeugt.",
     referenceData: {
@@ -2324,7 +2300,6 @@ async function createFiscalReceiptForPaymentInternal(input: {
       line_count: receiptLinePayload.length,
       customer_name: customerName,
       provider_name: providerName,
-      source: "manual_or_batch_repair",
     },
   });
 
@@ -2332,7 +2307,7 @@ async function createFiscalReceiptForPaymentInternal(input: {
     tenantId,
     cashRegisterId: cashRegister.id,
     fiscalReceiptId: receiptId,
-    performedBy: userId,
+    performedBy: user.id,
     eventType: "RECEIPT_VERIFICATION_SUCCEEDED",
     notes: "Simulierte Verifikation erfolgreich abgeschlossen.",
     referenceData: {
@@ -2340,157 +2315,11 @@ async function createFiscalReceiptForPaymentInternal(input: {
       verification_status: "VALID",
       signature_state: "SIMULATED",
       checked_at: issuedAt,
-      source: "manual_or_batch_repair",
     },
   });
 
-  return {
-    receiptId,
-    alreadyExisted: false,
-  };
-}
-
-
-export async function createFiscalReceiptForPayment(formData: FormData) {
-  const salesOrderId = String(formData.get("sales_order_id") ?? "").trim();
-  const paymentId = String(formData.get("payment_id") ?? "").trim();
-  const appointmentId = String(formData.get("appointment_id") ?? "").trim();
-  const returnQuery = String(formData.get("return_query") ?? "").trim();
-
-  if (!salesOrderId || !paymentId) {
-    if (returnQuery) {
-      redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { error: "Sales Order oder Payment fehlt für Fiscal." }));
-    }
-    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Sales Order oder Payment fehlt für Fiscal." }));
-  }
-
-  const { admin, user, effectiveTenantId } = await requireContext();
-
-  try {
-    const result = await createFiscalReceiptForPaymentInternal({
-      admin,
-      userId: user.id,
-      effectiveTenantId,
-      appointmentId,
-      salesOrderId,
-      paymentId,
-    });
-
-    revalidatePath("/rechnungen");
-
-    if (returnQuery) {
-      redirect(
-        buildRechnungenUrlFromReturnQuery(returnQuery, {
-          receiptId: result.receiptId,
-          success: result.alreadyExisted ? "Fiscal Receipt bereits vorhanden ✅" : "Fiscal Receipt erzeugt ✅",
-        })
-      );
-    }
-
-    redirect(
-      buildRechnungenUrl({
-        appointmentId,
-        salesOrderId,
-        paymentId,
-        receiptId: result.receiptId,
-        success: result.alreadyExisted ? "Fiscal Receipt bereits vorhanden ✅" : "Fiscal Receipt erzeugt ✅",
-      })
-    );
-  } catch (error: any) {
-    const message = String(error?.message ?? "Fiscal Receipt konnte nicht erzeugt werden.").trim();
-
-    if (returnQuery) {
-      redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { error: message }));
-    }
-
-    redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: message }));
-  }
-}
-
-export async function backfillReadyFiscalReceipts(formData: FormData) {
-  const returnQuery = String(formData.get("return_query") ?? "").trim();
-  const { admin, user, effectiveTenantId } = await requireContext();
-
-  let query = admin
-    .from("payments")
-    .select("id, tenant_id, sales_order_id")
-    .eq("status", "COMPLETED")
-    .order("created_at", { ascending: false })
-    .limit(200);
-
-  if (effectiveTenantId) {
-    query = query.eq("tenant_id", effectiveTenantId);
-  }
-
-  const { data: paymentRows, error: paymentError } = await query;
-
-  if (paymentError) {
-    redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { error: paymentError.message ?? "Payments konnten nicht geladen werden." }));
-  }
-
-  const payments = (paymentRows ?? []) as Array<{
-    id: string;
-    tenant_id: string | null;
-    sales_order_id: string | null;
-  }>;
-
-  const paymentIds = payments.map((p) => String(p.id ?? "").trim()).filter(Boolean);
-
-  if (paymentIds.length === 0) {
-    redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { success: "Keine offenen Fiscal-Fälle gefunden ✅" }));
-  }
-
-  const { data: existingReceiptRows, error: existingReceiptError } = await admin
-    .from("fiscal_receipts")
-    .select("payment_id")
-    .in("payment_id", paymentIds);
-
-  if (existingReceiptError) {
-    redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { error: existingReceiptError.message ?? "Vorhandene Fiscal-Belege konnten nicht geprüft werden." }));
-  }
-
-  const existingPaymentIds = new Set(
-    ((existingReceiptRows ?? []) as Array<{ payment_id: string | null }>)
-      .map((row) => String(row.payment_id ?? "").trim())
-      .filter(Boolean)
-  );
-
-  const missing = payments.filter((payment) => {
-    const paymentId = String(payment.id ?? "").trim();
-    const salesOrderId = String(payment.sales_order_id ?? "").trim();
-    return paymentId && salesOrderId && !existingPaymentIds.has(paymentId);
-  });
-
-  if (missing.length === 0) {
-    redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { success: "Alle erfolgreichen Zahlungen haben bereits Fiscal-Belege ✅" }));
-  }
-
-  let repaired = 0;
-  let failed = 0;
-
-  for (const payment of missing) {
-    const paymentId = String(payment.id ?? "").trim();
-    const salesOrderId = String(payment.sales_order_id ?? "").trim();
-
-    try {
-      await createFiscalReceiptForPaymentInternal({
-        admin,
-        userId: user.id,
-        effectiveTenantId,
-        appointmentId: null,
-        salesOrderId,
-        paymentId,
-      });
-      repaired += 1;
-    } catch {
-      failed += 1;
-    }
-  }
-
   revalidatePath("/rechnungen");
-
-  const message = `Auto-Nachzug fertig: ${repaired} erstellt, ${failed} fehlgeschlagen.`;
-  redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { success: message }));
+  redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, receiptId, success: "Fiscal Receipt erzeugt ✅" }));
 }
 
 

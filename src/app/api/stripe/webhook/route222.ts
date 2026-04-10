@@ -253,20 +253,12 @@ async function createFiscalReceiptIfMissing(input: {
     };
   }
 
-  const salesOrderCashRegisterId = String(salesOrder.cash_register_id ?? "").trim();
-  const paymentCashRegisterId = String(payment.cash_register_id ?? "").trim();
-
-  let cashRegisterId =
-    assertCashRegisterConsistency({
-      salesOrderCashRegisterId,
-      paymentCashRegisterId,
-      resolvedCashRegisterId: null,
-    }) || salesOrderCashRegisterId || paymentCashRegisterId;
-
-  if (!cashRegisterId) {
-    const resolvedCashRegister = await resolveCashRegister(admin, tenantId);
-    cashRegisterId = resolvedCashRegister.id;
-  }
+  const resolvedCashRegister = await resolveCashRegister(admin, tenantId);
+  const cashRegisterId = assertCashRegisterConsistency({
+    salesOrderCashRegisterId: salesOrder.cash_register_id,
+    paymentCashRegisterId: payment.cash_register_id,
+    resolvedCashRegisterId: resolvedCashRegister.id,
+  }) || resolvedCashRegister.id;
 
   const appointmentLookupId = String(salesOrder.appointment_id ?? "").trim();
   let appointmentDetails: AppointmentDetailLookupRow | null = null;

@@ -481,26 +481,10 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
     return () => {
       const params = new URLSearchParams(searchParams?.toString() ?? "");
       params.delete("receipt");
-      params.delete("appointmentId");
-      params.delete("salesOrder");
-      params.delete("payment");
-      const q = String(params.get("q") ?? "").trim();
-      const filter = String(params.get("filter") ?? "").trim();
-      const practitioner = String(params.get("practitioner") ?? "").trim();
-      const success = String(params.get("success") ?? "").trim();
-      const error = String(params.get("error") ?? "").trim();
-
-      const clean = new URLSearchParams();
-      if (q) clean.set("q", q);
-      if (filter && filter !== "all") clean.set("filter", filter);
-      if (practitioner && practitioner !== "all") clean.set("practitioner", practitioner);
-      if (success) clean.set("success", success);
-      if (error) clean.set("error", error);
-
-      const qs = clean.toString();
-      router.replace(qs ? `/rechnungen?${qs}` : "/rechnungen", { scroll: false });
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     };
-  }, [router, searchParams]);
+  }, [router, pathname, searchParams]);
 
   useEffect(() => setMounted(true), []);
 

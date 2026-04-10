@@ -19,3 +19,13 @@ export function requireStripeTerminalLocationId() {
 
   return locationId;
 }
+
+export async function listStripeTerminalReaders() {
+  const locationId = requireStripeTerminalLocationId();
+  const readers = await stripe.terminal.readers.list({
+    location: locationId,
+    limit: 100,
+  });
+
+  return readers.data;
+}
