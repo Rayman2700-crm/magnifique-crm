@@ -110,6 +110,7 @@ type SlideoverReceipt = {
   paymentStatus?: string | null;
   customerEmail?: string | null;
   customerPhone?: string | null;
+  customerAddress?: string | null;
   deliveries?: SlideoverDelivery[];
 };
 
@@ -871,20 +872,26 @@ function getReceiptBusinessState(item: SlideoverReceipt) {
 
 
 
-function getReceiptSearchHaystack(item: SlideoverReceipt) {
+function getReceiptSearchNameHaystack(item: SlideoverReceipt) {
+  return [item.customerName]
+    .map((entry) => String(entry ?? "").trim().toLowerCase())
+    .filter(Boolean)
+    .join(" ");
+}
+
+function getReceiptSearchGeneralHaystack(item: SlideoverReceipt) {
   const latestEventLabel = formatEventLabel(item.latestEventType, item.events[0]?.referenceData ?? null);
 
   return [
     item.receiptNumber,
-    item.id,
-    item.salesOrderId,
-    item.paymentId,
-    item.cashRegisterId,
     item.customerName,
-    item.providerName,
-    item.status,
+    item.customerEmail,
+    item.customerPhone,
+    item.customerAddress,
+    item.paymentId,
+    item.paymentMethodLabel,
     item.paymentStatus,
-    item.signatureState,
+    item.status,
     item.verificationStatus,
     latestEventLabel,
     item.latestEventType,
@@ -897,7 +904,19 @@ function getReceiptSearchHaystack(item: SlideoverReceipt) {
 function matchesReceiptSearch(item: SlideoverReceipt, query: string) {
   const normalized = String(query ?? "").trim().toLowerCase();
   if (!normalized) return true;
-  return getReceiptSearchHaystack(item).includes(normalized);
+
+  const terms = normalized.split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return true;
+
+  const looksLikeCustomerNameSearch = /^[\p{L}\s'-]+$/u.test(normalized);
+
+  if (looksLikeCustomerNameSearch) {
+    const nameHaystack = getReceiptSearchNameHaystack(item);
+    return terms.every((term) => nameHaystack.includes(term));
+  }
+
+  const haystack = getReceiptSearchGeneralHaystack(item);
+  return terms.every((term) => haystack.includes(term));
 }
 
 function statusLinkClass(isActive: boolean) {
@@ -1235,7 +1254,7 @@ function CompactClosingCard({
   controlLabel,
 }: {
   eyebrow: string;
-  title: string;
+  title?: string;
   periodLabel: string;
   totalLabel: string;
   receiptCount: number;
@@ -1249,9 +1268,9 @@ function CompactClosingCard({
     <div className="h-full rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 sm:p-5">
       <div className="flex h-full flex-col gap-4">
         <div className="min-w-0">
-          <div className="text-[16px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">{eyebrow}</div>
-
-          <div className="mt-2 text-sm text-[var(--text-muted)]">{periodLabel}</div>
+          <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">{eyebrow}</div>
+          {title ? <div className="mt-2 text-[22px] font-semibold leading-tight tracking-tight text-[var(--text)] sm:text-[24px]">{title}</div> : null}
+          <div className={`${title ? "mt-2" : "mt-3"} text-sm text-[var(--text-muted)]`}>{periodLabel}</div>
         </div>
 
         <div className="flex-1">
@@ -1265,19 +1284,19 @@ function CompactClosingCard({
           )}
 
           <div className="grid grid-cols-3 gap-2 sm:gap-3">
-            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
-              <div className="text-[11px] uppercase tracking-[0.12em] text-white/45 sm:text-[11px]">Gesamt</div>
-              <div className="mt-1 text-[12px] font-semibold leading-tight text-white sm:text-[12px]">{totalLabel}</div>
+            <div className="rounded-[18px] border border-white/10 bg-black/20 px-2.5 py-3 sm:px-3">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Gesamt</div>
+              <div className="mt-1 text-[11px] font-semibold leading-tight text-white sm:text-[12px]">{totalLabel}</div>
             </div>
 
-            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
-              <div className="text-[11px] uppercase tracking-[0.12em] text-white/45 sm:text-[11px]">Belege</div>
-              <div className="mt-1 text-[11px] font-semibold leading-tight text-white sm:text-[11px]">{receiptCount}</div>
+            <div className="rounded-[18px] border border-white/10 bg-black/20 px-2.5 py-3 sm:px-3">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Belege</div>
+              <div className="mt-1 text-[11px] font-semibold leading-tight text-white sm:text-[12px]">{receiptCount}</div>
             </div>
 
-            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
-              <div className="text-[11px] uppercase tracking-[0.12em] text-white/45 sm:text-[11px]">Stornos</div>
-              <div className="mt-1 text-[11px] font-semibold leading-tight text-white sm:text-[11px]">{stornoCount}</div>
+            <div className="rounded-[18px] border border-white/10 bg-black/20 px-2.5 py-3 sm:px-3">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Stornos</div>
+              <div className="mt-1 text-[11px] font-semibold leading-tight text-white sm:text-[12px]">{stornoCount}</div>
             </div>
           </div>
         </div>
@@ -1629,39 +1648,12 @@ export default async function RechnungenPage({
       verification_notes, created_at
     `)
     .order("created_at", { ascending: false })
-    .limit(q ? 300 : 150);
+    .limit(q ? 600 : 150);
 
   if (!isAdmin && effectiveTenantId) receiptsQuery = receiptsQuery.eq("tenant_id", effectiveTenantId);
     const sanitizedQuery = escapeIlikeValue(qRaw);
-  if (sanitizedQuery) {
-    const orParts = [
-      `receipt_number.ilike.%${sanitizedQuery}%`,
-      `sales_order_id.ilike.%${sanitizedQuery}%`,
-      `payment_id.ilike.%${sanitizedQuery}%`,
-      `cash_register_id.ilike.%${sanitizedQuery}%`,
-      `id.ilike.%${sanitizedQuery}%`,
-    ];
-
-    const upperQuery = sanitizedQuery.toUpperCase();
-
-    const allowedReceiptStatus = ["REQUESTED", "ISSUED", "FAILED", "CANCELLED", "REVERSED"];
-    const allowedSignatureState = ["SIMULATED", "PENDING", "SIGNED", "FAILED"];
-    const allowedVerificationStatus = ["VALID", "INVALID", "PENDING", "SKIPPED"];
-
-    if (allowedReceiptStatus.includes(upperQuery)) {
-      orParts.push(`status.eq.${upperQuery}`);
-    }
-
-    if (allowedSignatureState.includes(upperQuery)) {
-      orParts.push(`signature_state.eq.${upperQuery}`);
-    }
-
-    if (allowedVerificationStatus.includes(upperQuery)) {
-      orParts.push(`verification_status.eq.${upperQuery}`);
-    }
-
-    receiptsQuery = receiptsQuery.or(orParts.join(","));
-  }
+  // Suche wird bewusst erst nach dem Enrichment im Speicher gemacht,
+  // damit auch Kunde/Behandler-Namen wie "Radu Craus" Treffer liefern.
   const { data: receiptsRaw, error: receiptsError } = await receiptsQuery;
 
   if (receiptsError) {
@@ -1784,7 +1776,7 @@ export default async function RechnungenPage({
   }
 
   const receiptCustomerProfileIds = Array.from(new Set(Array.from(salesOrderCustomerIdBySalesOrderId.values()).filter(Boolean)));
-  const customerProfileById = new Map<string, { customerName: string | null; customerPhone: string | null; customerEmail: string | null }>();
+  const customerProfileById = new Map<string, { customerName: string | null; customerPhone: string | null; customerEmail: string | null; customerAddress: string | null }>();
   if (receiptCustomerProfileIds.length > 0) {
     const { data: receiptCustomerProfiles } = await admin
       .from("customer_profiles")
@@ -1797,6 +1789,7 @@ export default async function RechnungenPage({
         customerName: String(personJoin?.full_name ?? "").trim() || null,
         customerPhone: String(personJoin?.phone ?? "").trim() || null,
         customerEmail: String(personJoin?.email ?? "").trim() || null,
+        customerAddress: null,
       });
     }
   }
@@ -1849,7 +1842,7 @@ export default async function RechnungenPage({
   const pendingCustomerProfileIds = Array.from(
     new Set(Array.from(pendingSalesOrderCustomerIdBySalesOrderId.values()).filter(Boolean))
   );
-  const pendingCustomerProfileById = new Map<string, { customerName: string | null; customerPhone: string | null; customerEmail: string | null }>();
+  const pendingCustomerProfileById = new Map<string, { customerName: string | null; customerPhone: string | null; customerEmail: string | null; customerAddress: string | null }>();
 
   if (pendingCustomerProfileIds.length > 0) {
     const { data: pendingCustomerProfiles } = await admin
@@ -1863,6 +1856,7 @@ export default async function RechnungenPage({
         customerName: String(personJoin?.full_name ?? "").trim() || null,
         customerPhone: String(personJoin?.phone ?? "").trim() || null,
         customerEmail: String(personJoin?.email ?? "").trim() || null,
+        customerAddress: null,
       });
     }
   }
@@ -2006,6 +2000,17 @@ export default async function RechnungenPage({
       ]) ||
       tenantNameById.get(String(row.tenant_id ?? "").trim()) ||
       null;
+    const customerAddress =
+      readFirstString(payload, [
+        ["customer_address"],
+        ["address"],
+        ["customer", "address"],
+        ["customer", "street"],
+        ["customer", "full_address"],
+        ["billing_address"],
+      ]) ||
+      customerProfile?.customerAddress ||
+      null;
     return {
       id: row.id,
       tenantId: row.tenant_id,
@@ -2048,6 +2053,7 @@ export default async function RechnungenPage({
       paymentStatus: paymentStatusByReceiptId.get(row.id) ?? null,
       customerEmail: customerProfile?.customerEmail ?? null,
       customerPhone: customerProfile?.customerPhone ?? null,
+      customerAddress,
       deliveries: receiptDeliveryByReceiptId.get(row.id) ?? [],
     };
   });
@@ -2211,6 +2217,8 @@ export default async function RechnungenPage({
     !createdReceipt
   );
 
+  const desktopSearchHasActiveQuery = !isCheckoutFlow && Boolean(qRaw);
+  const desktopSearchPreviewItems = filteredItems.slice(0, 6);
 
   return (
     <main className="mx-auto max-w-7xl p-4 md:p-6 xl:p-8 text-white">
@@ -2300,9 +2308,25 @@ export default async function RechnungenPage({
                           type="text"
                           name="q"
                           defaultValue={qRaw}
-                          placeholder="Belegnr., Kunde, Sales Order, Payment oder Status"
+                          placeholder="Belegnummer, Kundenname, Kundenmail, Kundentelefonnummer, Kundenadresse, Payment oder Status"
                           className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/35"
                         />
+                        {qRaw ? (
+                          <Link
+                            href={buildRechnungenHref({
+                              filter: currentFilter,
+                              practitioner: practitionerFilter,
+                              closingDate,
+                            })}
+                            aria-label="Suche löschen"
+                            className="ml-3 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/55 transition hover:bg-white/[0.08] hover:text-white"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                              <path d="M6 6l12 12" />
+                              <path d="M18 6 6 18" />
+                            </svg>
+                          </Link>
+                        ) : null}
                       </div>
                     </form>
                   </div>
@@ -2311,7 +2335,169 @@ export default async function RechnungenPage({
             </div>
 
             <div className="hidden md:block">
-              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,640px)] xl:items-start">
+              <div id="desktop-rechnungen-header" className="relative pr-[160px]">
+                <div className="absolute right-0 top-0 z-30 flex items-start justify-end gap-3">
+                  <div id="desktop-rechnungen-search-wrap" className="relative">
+                    <button
+                      id="desktop-rechnungen-search-toggle"
+                      type="button"
+                      aria-label="Suche öffnen"
+                      title="Suche"
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/85 shadow-[0_10px_28px_rgba(0,0,0,0.28)] transition hover:bg-white/[0.08]"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-[18px] w-[18px]">
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="m20 20-3.5-3.5" />
+                      </svg>
+                    </button>
+
+                    <div
+                      id="desktop-rechnungen-search-stack"
+                      className={`${desktopSearchHasActiveQuery ? "pointer-events-auto opacity-100 translate-y-0 scale-100" : "pointer-events-none opacity-0 translate-y-1 scale-95"} absolute right-0 top-[calc(100%+28px)] z-20 transition duration-200`}
+                      style={{ width: "420px", maxWidth: "620px" }}
+                      aria-hidden={desktopSearchHasActiveQuery ? "false" : "true"}
+                    >
+                      <div
+                        id="desktop-rechnungen-search-panel"
+                        className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.985)_0%,rgba(12,13,16,0.985)_100%)] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-xl"
+                      >
+                        <form id="desktop-rechnungen-search-form" action="/rechnungen" method="get" className="w-full">
+                          {currentFilter !== "all" ? <input type="hidden" name="filter" value={currentFilter} /> : null}
+                          {practitionerFilter !== "all" ? <input type="hidden" name="practitioner" value={practitionerFilter} /> : null}
+                          {closingDate ? <input type="hidden" name="closingDate" value={closingDate} /> : null}
+                          <div className="flex h-12 items-center rounded-[18px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
+                            <span className="mr-3 inline-flex h-4 w-4 shrink-0 items-center justify-center text-white/35">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                                <circle cx="11" cy="11" r="7" />
+                                <path d="m20 20-3.5-3.5" />
+                              </svg>
+                            </span>
+                            <input
+                              id="desktop-rechnungen-search-input"
+                              type="text"
+                              name="q"
+                              defaultValue={qRaw}
+                              placeholder="Belegnummer, Kundenname, Kundenmail, Kundentelefonnummer, Kundenadresse, Payment oder Status"
+                              autoComplete="off"
+                              className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/35"
+                            />
+                            <button
+                              id="desktop-rechnungen-search-clear"
+                              type="button"
+                              aria-label="Suche löschen"
+                              title="Suche löschen"
+                              className="ml-3 inline-flex h-8 w-8 min-h-8 min-w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] p-0 text-white/55 transition hover:bg-white/[0.08] hover:text-white"
+                              style={{ opacity: qRaw ? 1 : 0, pointerEvents: qRaw ? "auto" : "none" }}
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                                <path d="M6 6l12 12" />
+                                <path d="M18 6 6 18" />
+                              </svg>
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+
+                      {desktopSearchHasActiveQuery ? (
+                        <div
+                          id="desktop-rechnungen-search-preview"
+                          className="mt-3 overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.985)_0%,rgba(12,13,16,0.985)_100%)] shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-xl"
+                        >
+                          <div className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-3">
+                            <div className="min-w-0">
+                              <div className="text-sm text-white/75">
+                                Suche aktiv für <span className="font-semibold text-white">„{qRaw}“</span>
+                              </div>
+                              <div className="mt-1 text-xs text-white/50">{countTotal} Treffer</div>
+                            </div>
+                            <Link
+                              href="/rechnungen"
+                              className="inline-flex h-8 items-center rounded-full border border-white/10 bg-white/10 px-3 text-xs font-medium text-white hover:bg-white/15"
+                            >
+                              Zurücksetzen
+                            </Link>
+                          </div>
+
+                          {desktopSearchPreviewItems.length > 0 ? (
+                            <div className="max-h-[320px] overflow-y-auto">
+                              {desktopSearchPreviewItems.map((item) => {
+                                const detailParams = new URLSearchParams();
+                                if (qRaw) detailParams.set("q", qRaw);
+                                if (currentFilter !== "all") detailParams.set("filter", currentFilter);
+                                if (practitionerFilter !== "all") detailParams.set("practitioner", practitionerFilter);
+                                detailParams.set("receipt", item.id);
+
+                                return (
+                                  <Link
+                                    key={`desktop-search-preview-${item.id}`}
+                                    href={`/rechnungen?${detailParams.toString()}`}
+                                    className="flex items-center justify-between gap-4 border-b border-white/6 px-4 py-3 transition last:border-b-0 hover:bg-white/[0.04]"
+                                  >
+                                    <div className="min-w-0">
+                                      <div className="truncate text-sm font-semibold text-white">
+                                        {item.customerName?.trim() || "Unbekannter Kunde"}
+                                      </div>
+                                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/50">
+                                        <span>{item.receiptNumber}</span>
+                                        <span>•</span>
+                                        <span>{formatDateTime(item.createdAt)}</span>
+                                      </div>
+                                    </div>
+                                    <div className="shrink-0 text-right">
+                                      <div className="text-sm font-semibold text-white">
+                                        {euroFromCents(item.turnoverValueCents, item.currencyCode)}
+                                      </div>
+                                      <div className="mt-1 text-xs text-white/50">
+                                        {formatPaymentStatus(item.paymentStatus)}
+                                      </div>
+                                    </div>
+                                  </Link>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="px-4 py-5 text-sm text-white/60">
+                              Keine Treffer für diese Suche.
+                            </div>
+                          )}
+
+                          {countTotal > desktopSearchPreviewItems.length ? (
+                            <div className="border-t border-white/8 px-4 py-3 text-xs text-white/50">
+                              Weitere Treffer findest du direkt in der Belegliste unten.
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <Link
+                    href={buildInvoiceSlideoverHref({
+                      qRaw,
+                      filter: currentFilter,
+                      practitioner: practitionerFilter,
+                      closingDate,
+                    })}
+                    aria-label="Rechnung erstellen"
+                    title="Rechnung erstellen"
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--primary)] bg-[var(--primary)] text-black shadow-[0_12px_26px_rgba(214,195,163,0.18)] transition hover:opacity-90"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-[18px] w-[18px]"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 5v14" />
+                      <path d="M5 12h14" />
+                    </svg>
+                  </Link>
+                </div>
+
                 <div className="min-w-0">
                   <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">
                     Clientique Backoffice
@@ -2394,40 +2580,7 @@ export default async function RechnungenPage({
                     </div>
                   </div>
                 </div>
-
-                <div className="flex w-full max-w-[640px] flex-col gap-3 sm:flex-row">
-                  <div className="flex w-full max-w-[640px] flex-col gap-3 sm:flex-row">
-                    <form action="/rechnungen" method="get" className="flex-1">
-                      {currentFilter !== "all" ? <input type="hidden" name="filter" value={currentFilter} /> : null}
-                      {practitionerFilter !== "all" ? <input type="hidden" name="practitioner" value={practitionerFilter} /> : null}
-                      <div className="flex h-11 items-center rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
-                        <input
-                          type="text"
-                          name="q"
-                          defaultValue={qRaw}
-                          placeholder="Belegnr., Kunde, Sales Order, Payment oder Status"
-                          className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/35"
-                        />
-                      </div>
-                    </form>
-
-                    <Link
-                      href={buildInvoiceSlideoverHref({
-                        qRaw,
-                        filter: currentFilter,
-                        practitioner: practitionerFilter,
-                        closingDate,
-                      })}
-                      className="sm:shrink-0"
-                    >
-                      <div className="inline-flex h-11 w-full items-center justify-center rounded-[16px] border border-[var(--primary)] bg-[var(--primary)] px-5 text-sm font-semibold text-black shadow-[0_12px_26px_rgba(214,195,163,0.18)] sm:w-auto whitespace-nowrap">
-                        + Rechnung
-                      </div>
-                    </Link>
-                  </div>
-                </div>
               </div>
-
               <div className="mt-6 flex items-center gap-2 md:flex-wrap">
                 {[
                   ["all", "Alle", quickFilterCounts.all],
@@ -2488,7 +2641,7 @@ export default async function RechnungenPage({
             <div className="mt-6 grid gap-4 lg:grid-cols-3">
               <CompactClosingCard
                 eyebrow="Tagesabschluss"
-                title="Tagesübersicht"
+                title=""
                 periodLabel={closingDate}
                 totalLabel={euroFromCents(dailyClosingTotals.totalCents, "EUR")}
                 receiptCount={dailyClosingTotals.receiptCount}
@@ -2513,7 +2666,7 @@ export default async function RechnungenPage({
 
               <CompactClosingCard
                 eyebrow="Monatsabschluss"
-                title="Monatsübersicht"
+                title=""
                 periodLabel={formatMonthLabel(closingMonth)}
                 totalLabel={euroFromCents(monthlyClosingTotals.totalCents, "EUR")}
                 receiptCount={monthlyClosingTotals.receiptCount}
@@ -2541,7 +2694,7 @@ export default async function RechnungenPage({
 
               <CompactClosingCard
                 eyebrow="Jahresabschluss"
-                title="Jahresübersicht"
+                title=""
                 periodLabel={closingYear}
                 totalLabel={euroFromCents(yearlyClosingTotals.totalCents, "EUR")}
                 receiptCount={yearlyClosingTotals.receiptCount}
@@ -3212,6 +3365,120 @@ export default async function RechnungenPage({
       />
 
       <FiscalReceiptSlideover items={items} />
+
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+            (() => {
+              const wrap = document.getElementById("desktop-rechnungen-search-wrap");
+              const toggle = document.getElementById("desktop-rechnungen-search-toggle");
+              const stack = document.getElementById("desktop-rechnungen-search-stack");
+              const input = document.getElementById("desktop-rechnungen-search-input");
+              const clearButton = document.getElementById("desktop-rechnungen-search-clear");
+              const form = document.getElementById("desktop-rechnungen-search-form");
+              const header = document.getElementById("desktop-rechnungen-header");
+              if (!wrap || !toggle || !stack || !input || !form || !header || !clearButton) return;
+
+              let submitTimer = null;
+              const shouldStartOpen = ${desktopSearchHasActiveQuery ? "true" : "false"};
+
+              const updateClearButton = () => {
+                const hasValue = String(input.value || "").trim().length > 0;
+                clearButton.style.opacity = hasValue ? "1" : "0";
+                clearButton.style.pointerEvents = hasValue ? "auto" : "none";
+              };
+
+              const setPanelWidth = () => {
+                const wrapRect = wrap.getBoundingClientRect();
+                const headerRect = header.getBoundingClientRect();
+                const innerGap = 8;
+                const minWidth = 280;
+                const maxWidth = 620;
+                const availableWidth = Math.floor(wrapRect.right - headerRect.left - innerGap);
+                const targetWidth = Math.max(minWidth, Math.min(maxWidth, availableWidth));
+                stack.style.width = targetWidth + "px";
+              };
+
+              const openPanel = (focusInput = true) => {
+                setPanelWidth();
+                stack.classList.remove("pointer-events-none", "opacity-0", "translate-y-1", "scale-95");
+                stack.classList.add("pointer-events-auto", "opacity-100", "translate-y-0", "scale-100");
+                stack.setAttribute("aria-hidden", "false");
+                if (focusInput) {
+                  window.requestAnimationFrame(() => {
+                    input.focus();
+                    const length = input.value.length;
+                    input.setSelectionRange(length, length);
+                    updateClearButton();
+                  });
+                } else {
+                  updateClearButton();
+                }
+              };
+
+              const closePanel = () => {
+                stack.classList.add("pointer-events-none", "opacity-0", "translate-y-1", "scale-95");
+                stack.classList.remove("pointer-events-auto", "opacity-100", "translate-y-0", "scale-100");
+                stack.setAttribute("aria-hidden", "true");
+              };
+
+              const isOpen = () => stack.getAttribute("aria-hidden") === "false";
+
+              toggle.addEventListener("click", (event) => {
+                event.preventDefault();
+                if (isOpen()) {
+                  closePanel();
+                } else {
+                  openPanel();
+                }
+              });
+
+              input.addEventListener("input", () => {
+                updateClearButton();
+                if (!isOpen()) openPanel(false);
+                if (submitTimer) window.clearTimeout(submitTimer);
+                submitTimer = window.setTimeout(() => {
+                  form.requestSubmit();
+                }, 260);
+              });
+
+              clearButton.addEventListener("click", (event) => {
+                event.preventDefault();
+                input.value = "";
+                updateClearButton();
+                input.focus();
+                if (submitTimer) window.clearTimeout(submitTimer);
+                form.requestSubmit();
+              });
+
+              input.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  closePanel();
+                  toggle.focus();
+                }
+              });
+
+              document.addEventListener("click", (event) => {
+                if (!isOpen()) return;
+                if (wrap.contains(event.target)) return;
+                closePanel();
+              });
+
+              window.addEventListener("resize", () => {
+                if (isOpen()) setPanelWidth();
+              });
+
+              updateClearButton();
+              if (shouldStartOpen) {
+                openPanel(false);
+              } else {
+                closePanel();
+              }
+            })();
+          `,
+        }}
+      />
     </main>
   );
 }

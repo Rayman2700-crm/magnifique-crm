@@ -2784,6 +2784,8 @@ async function insertReceiptEditedEventSafe(
 export async function updateFiscalReceiptDetails(formData: FormData) {
   const receiptId = String(formData.get('receipt_id') ?? '').trim();
   const customerName = String(formData.get('customer_name') ?? '').trim();
+  const customerEmail = String(formData.get('customer_email') ?? '').trim();
+  const customerPhone = String(formData.get('customer_phone') ?? '').trim();
   const providerName = String(formData.get('provider_name') ?? '').trim();
   const returnQuery = String(formData.get('return_query') ?? '').trim();
   const linesRaw = String(formData.get('lines_json') ?? '[]');
@@ -2902,8 +2904,18 @@ lines: payloadBeforeLines.map((line) => {
   const keptIds = new Set(editableLines.map((line) => line.sourceLineId).filter(Boolean) as string[]);
   const removedIds = existingSalesLines.map((line) => line.id).filter((id) => !keptIds.has(id));
 
-  if (customerName && personId) {
-    const { error: personError } = await admin.from('persons').update({ full_name: customerName }).eq('id', personId);
+  if (personId) {
+    const personUpdatePayload = {
+      full_name: customerName || null,
+      email: customerEmail || null,
+      phone: customerPhone || null,
+    };
+
+    const { error: personError } = await admin
+      .from('persons')
+      .update(personUpdatePayload)
+      .eq('id', personId);
+
     if (personError) {
       await insertFiscalFailureSafe(admin, {
         tenantId,
@@ -2912,10 +2924,10 @@ lines: payloadBeforeLines.map((line) => {
         paymentId,
         fiscalReceiptId: receiptId,
         failedStep: 'person_update',
-        errorMessage: personError.message ?? 'Kundenname konnte nicht gespeichert werden.',
+        errorMessage: personError.message ?? 'Kundendaten konnten nicht gespeichert werden.',
         createdBy: user.id,
       });
-      redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: personError.message ?? 'Kundenname konnte nicht gespeichert werden.' }));
+      redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: personError.message ?? 'Kundendaten konnten nicht gespeichert werden.' }));
     }
   }
 
@@ -3084,6 +3096,9 @@ lines: payloadBeforeLines.map((line) => {
     issued_at: new Date().toISOString(),
     currency_code: receipt.currency_code || salesOrder.currency_code || 'EUR',
     customer_name: customerName || beforeSnapshot.customerName || null,
+    customer_email: customerEmail || null,
+    customer_phone: customerPhone || null,
+    payment_method: readFirstString(payloadBefore, [['payment_method'], ['payment_method_name'], ['payment', 'method_name'], ['payment', 'method'], ['payment', 'payment_method_name']]) || null,
     provider_name: providerName || beforeSnapshot.providerName || null,
     turnover_value_cents: totalCents,
     lines: payloadLines,

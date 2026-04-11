@@ -811,7 +811,29 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
 
                 <button
                   type="button"
-                  onClick={() => window.open(`/rechnungen/thermal-print?receipt=${encodeURIComponent(selected.id)}`, "_blank", "noopener,noreferrer")}
+                  onClick={() => {
+                    const iframe = document.createElement("iframe");
+                    iframe.style.position = "fixed";
+                    iframe.style.right = "0";
+                    iframe.style.bottom = "0";
+                    iframe.style.width = "0";
+                    iframe.style.height = "0";
+                    iframe.style.border = "0";
+                    iframe.style.opacity = "0";
+                    iframe.style.pointerEvents = "none";
+                    iframe.setAttribute("aria-hidden", "true");
+                    iframe.src = `/rechnungen/thermal-print?receipt=${encodeURIComponent(selected.id)}`;
+
+                    const cleanup = () => {
+                      window.removeEventListener("afterprint", cleanup);
+                      setTimeout(() => {
+                        iframe.remove();
+                      }, 300);
+                    };
+
+                    window.addEventListener("afterprint", cleanup, { once: true });
+                    document.body.appendChild(iframe);
+                  }}
                   aria-label="Thermal drucken"
                   title="Thermal drucken"
                   className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/15 bg-white/5 text-white transition-colors hover:bg-white/10"
@@ -1042,7 +1064,6 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                           {isEditingCustomer ? (
                             <input
                               autoFocus
-                              name="customer_name"
                               value={customerDraft}
                               onChange={(e) => setCustomerDraft(e.target.value)}
                               onKeyDown={(e) => {
@@ -1087,7 +1108,6 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                       <div className="text-xs uppercase tracking-wide text-white/45 print-text-muted">E-Mail</div>
                       {isEditingCustomer ? (
                         <input
-                          name="customer_email"
                           value={customerEmailDraft}
                           onChange={(e) => setCustomerEmailDraft(e.target.value)}
                           onKeyDown={(e) => {
@@ -1105,7 +1125,6 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                       <div className="text-xs uppercase tracking-wide text-white/45 print-text-muted">Telefon / WhatsApp</div>
                       {isEditingCustomer ? (
                         <input
-                          name="customer_phone"
                           value={customerPhoneDraft}
                           onChange={(e) => setCustomerPhoneDraft(e.target.value)}
                           onKeyDown={(e) => {
