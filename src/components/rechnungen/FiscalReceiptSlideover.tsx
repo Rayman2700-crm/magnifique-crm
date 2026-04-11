@@ -901,7 +901,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
               ) : null}
 
               <InfoCard title="Belegübersicht" printKeepTogether>
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4 receipt-print-grid-card">
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40 print-text-muted">Belegnummer</div>
                     <div className="mt-2 text-lg font-bold text-white print:text-black">{selected.receiptNumber}</div>
