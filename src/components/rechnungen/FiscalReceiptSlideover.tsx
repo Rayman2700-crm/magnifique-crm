@@ -655,6 +655,8 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
 
   if (!mounted || !visible || !selected || typeof document === "undefined") return null;
 
+  const receipt = selected;
+
   return createPortal(
     <>
       <style jsx global>{`
@@ -793,11 +795,11 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
             <div className="p-4 pb-3">
               <div
                 className="grid gap-3"
-                style={{ gridTemplateColumns: selected.salesOrderId ? "repeat(6, minmax(0, 1fr))" : "repeat(5, minmax(0, 1fr))" }}
+                style={{ gridTemplateColumns: receipt.salesOrderId ? "repeat(6, minmax(0, 1fr))" : "repeat(5, minmax(0, 1fr))" }}
               >
-                {selected.salesOrderId ? (
+                {receipt.salesOrderId ? (
                   <Link
-                    href={`/rechnungen?${new URLSearchParams({ q: selected.salesOrderId }).toString()}`}
+                    href={`/rechnungen?${new URLSearchParams({ q: receipt.salesOrderId }).toString()}`}
                     aria-label="Sales Order suchen"
                     title="Sales Order suchen"
                     className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/15 bg-white/5 text-white transition-colors hover:bg-white/10"
@@ -822,7 +824,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                     iframe.style.opacity = "0";
                     iframe.style.pointerEvents = "none";
                     iframe.setAttribute("aria-hidden", "true");
-                    iframe.src = `/rechnungen/thermal-print?receipt=${encodeURIComponent(selected.id)}`;
+                    iframe.src = `/rechnungen/thermal-print?receipt=${encodeURIComponent(receipt.id)}`;
 
                     const cleanup = () => {
                       window.removeEventListener("afterprint", cleanup);
@@ -848,7 +850,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
 
                 {customerEmail && !isCancelled ? (
                   <form action={sendFiscalReceiptEmail} className="contents">
-                    <input type="hidden" name="receipt_id" value={selected.id} />
+                    <input type="hidden" name="receipt_id" value={receipt.id} />
                     <input type="hidden" name="return_query" value={currentQuery} />
                     <button
                       type="submit"
@@ -889,7 +891,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
 
                 {whatsappHref && !isCancelled ? (
                   <form action={openFiscalReceiptWhatsApp} className="contents">
-                    <input type="hidden" name="receipt_id" value={selected.id} />
+                    <input type="hidden" name="receipt_id" value={receipt.id} />
                     <input type="hidden" name="return_query" value={currentQuery} />
                     <button
                       type="submit"
@@ -934,11 +936,11 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                       event.preventDefault();
                       return;
                     }
-                    const confirmed = window.confirm(`Beleg ${selected.receiptNumber} wirklich stornieren?`);
+                    const confirmed = window.confirm(`Beleg ${receipt.receiptNumber} wirklich stornieren?`);
                     if (!confirmed) event.preventDefault();
                   }}
                 >
-                  <input type="hidden" name="receipt_id" value={selected.id} />
+                  <input type="hidden" name="receipt_id" value={receipt.id} />
                   <input type="hidden" name="return_query" value={currentQuery} />
                   <button
                     type="submit"
@@ -970,35 +972,35 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <div className="text-xs text-white/58">Rechnungen / Belegdetails</div>
-                  <div className="text-[28px] font-extrabold leading-none text-white">Beleg {selected.receiptNumber}</div>
+                  <div className="text-[28px] font-extrabold leading-none text-white">Beleg {receipt.receiptNumber}</div>
                   <div className="mt-2 text-[13px] text-white/46">
-                    {formatDateTime(selected.createdAt)} · {euroFromCents(selected.turnoverValueCents, selected.currencyCode)}
+                    {formatDateTime(receipt.createdAt)} · {euroFromCents(receipt.turnoverValueCents, receipt.currencyCode)}
                   </div>
 
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${badgeClass(selected.status, "status")}`}>
+                    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${badgeClass(receipt.status, "status")}`}>
                       {statusLabel}
                     </span>
                     <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-white/80">
                       {paymentMethodDisplayLabel}
                     </span>
-                    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${paymentStatusBadgeClass(selected.paymentStatus)}`}>
+                    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${paymentStatusBadgeClass(receipt.paymentStatus)}`}>
                       {paymentStatusLabel}
                     </span>
                   </div>
                 </div>
 
                 <div className="flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/10 text-base font-bold text-white/90 shadow-[0_10px_30px_rgba(0,0,0,0.28)]">
-                  {selected.providerAvatarUrl && showProviderImage ? (
+                  {receipt.providerAvatarUrl && showProviderImage ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={selected.providerAvatarUrl}
+                      src={receipt.providerAvatarUrl}
                       alt={providerName}
                       className="h-full w-full object-cover"
                       onError={() => setShowProviderImage(false)}
                     />
                   ) : (
-                    <span>{providerInitials(providerName, selected.providerInitials)}</span>
+                    <span>{providerInitials(providerName, receipt.providerInitials)}</span>
                   )}
                 </div>
               </div>
@@ -1010,7 +1012,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                 <div className="flex items-start justify-between gap-6 border-b border-black/10 pb-4">
                   <div>
                     <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/60">Magnifique CRM</div>
-                    <div className="mt-2 text-3xl font-extrabold text-black">Beleg {selected.receiptNumber}</div>
+                    <div className="mt-2 text-3xl font-extrabold text-black">Beleg {receipt.receiptNumber}</div>
                     <div className="mt-2 text-sm text-black/65">{issuedAtLabel}</div>
                   </div>
                   <div className="text-right text-sm text-black/75">
@@ -1032,10 +1034,10 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                 </div>
               ) : null}
 
-              {paymentStatusHint(selected.paymentStatus) ? (
-                <div className={`rounded-[18px] border px-5 py-4 text-sm print-keep-together ${paymentStatusHint(selected.paymentStatus)?.className}`}>
-                  <div className="font-semibold">{paymentStatusHint(selected.paymentStatus)?.title}</div>
-                  <div className="mt-1">{paymentStatusHint(selected.paymentStatus)?.text}</div>
+              {paymentStatusHint(receipt.paymentStatus) ? (
+                <div className={`rounded-[18px] border px-5 py-4 text-sm print-keep-together ${paymentStatusHint(receipt.paymentStatus)?.className}`}>
+                  <div className="font-semibold">{paymentStatusHint(receipt.paymentStatus)?.title}</div>
+                  <div className="mt-1">{paymentStatusHint(receipt.paymentStatus)?.text}</div>
                 </div>
               ) : null}
 
@@ -1051,7 +1053,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                     customerSubmitArmedRef.current = false;
                   }}
                 >
-                  <input type="hidden" name="receipt_id" value={selected.id} />
+                  <input type="hidden" name="receipt_id" value={receipt.id} />
                   <input type="hidden" name="return_query" value={currentQuery} />
                   <input type="hidden" name="provider_name" value={providerName} />
                   <input type="hidden" name="lines_json" value={serializedLines} />
@@ -1145,7 +1147,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
 
               <InfoCard title="Leistungen" printKeepTogether>
                 <form action={updateFiscalReceiptDetails} className="space-y-4">
-                  <input type="hidden" name="receipt_id" value={selected.id} />
+                  <input type="hidden" name="receipt_id" value={receipt.id} />
                   <input type="hidden" name="return_query" value={currentQuery} />
                   <input type="hidden" name="provider_name" value={providerName} />
                   <input type="hidden" name="customer_name" value={customerDraft} />
@@ -1166,7 +1168,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
 
                           return (
                             <div
-                              key={`${selected.id}-edit-line-${index}`}
+                              key={`${receipt.id}-edit-line-${index}`}
                               className="rounded-[18px] border border-white/10 bg-black/20 p-4 shadow-[0_12px_30px_rgba(0,0,0,0.2)]"
                             >
                               <div className="mb-3 flex items-center justify-between gap-3">
@@ -1228,7 +1230,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                                       <option key={service.id} value={service.id}>
                                         {service.name}
                                         {typeof service.defaultPriceCents === "number"
-                                          ? ` · ${euroFromCents(service.defaultPriceCents, selected.currencyCode || "EUR")}`
+                                          ? ` · ${euroFromCents(service.defaultPriceCents, receipt.currencyCode || "EUR")}`
                                           : ""}
                                       </option>
                                     ))}
@@ -1367,7 +1369,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                             </tr>
                           ) : (
                             linesDraft.map((line, index) => (
-                              <tr key={`${selected.id}-payload-line-${index}`} className="border-b border-white/5 last:border-b-0 align-top">
+                              <tr key={`${receipt.id}-payload-line-${index}`} className="border-b border-white/5 last:border-b-0 align-top">
                                 <td className="px-4 py-3 text-white/90 print:text-black">{line.name || "—"}</td>
                                 <td className="px-2 py-3 text-white/70 print:text-black">{line.quantity || "—"}</td>
                                 <td className="px-2 py-3 text-white/85 print:text-black">
@@ -1389,7 +1391,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                       <div>
                         <div className="text-[11px] uppercase tracking-wide text-white/45 print-text-muted">Aktuelle Summe</div>
                         <div className="mt-1 text-[15px] font-semibold text-white print:text-black">
-                          {euroFromCents(totalDraftCents, selected.currencyCode)}
+                          {euroFromCents(totalDraftCents, receipt.currencyCode)}
                         </div>
                       </div>
 
