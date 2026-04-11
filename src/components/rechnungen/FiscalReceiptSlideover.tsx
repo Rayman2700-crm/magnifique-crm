@@ -1076,31 +1076,6 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                           <div className="mt-1 text-base font-semibold text-white print:text-black">{customerDraft || "Nicht hinterlegt"}</div>
                         </div>
 
-                        {!isEditingCustomer ? (
-                          <div className="receipt-print-hide">
-                            {isCancelled ? (
-                              <button
-                                type="button"
-                                disabled
-                                className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white/55 opacity-45 cursor-not-allowed"
-                                title={isStornoReceipt ? "Bearbeiten bei Stornobeleg deaktiviert" : "Bearbeiten bei storniertem Beleg deaktiviert"}
-                              >
-                                Bearbeiten
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  customerSubmitArmedRef.current = false;
-                                  setIsEditingCustomer(true);
-                                }}
-                                className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
-                              >
-                                Bearbeiten
-                              </button>
-                            )}
-                          </div>
-                        ) : null}
                       </div>
                     </div>
 
@@ -1178,7 +1153,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                   <input type="hidden" name="customer_phone" value={customerPhoneDraft} />
                   <input type="hidden" name="lines_json" value={serializedLines} />
 
-                  {isEditingLines ? (
+                  {false ? (
                     <div className="space-y-3 receipt-print-hide">
                       {linesDraft.length === 0 ? (
                         <div className="rounded-[16px] border border-dashed border-white/10 bg-black/20 px-4 py-5 text-center text-sm text-white/55">
@@ -1418,52 +1393,6 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-2 receipt-print-hide">
-                        {isCancelled ? (
-                          <button
-                            type="button"
-                            disabled
-                            className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white/55 opacity-45 cursor-not-allowed"
-                            title={isStornoReceipt ? "Bearbeiten bei Stornobeleg deaktiviert" : "Bearbeiten bei storniertem Beleg deaktiviert"}
-                          >
-                            Bearbeiten
-                          </button>
-                        ) : isEditingLines ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={addLine}
-                              className="inline-flex h-12 items-center justify-center rounded-[16px] border border-sky-300/40 bg-sky-500/10 px-4 text-sm font-semibold text-white transition-colors hover:bg-sky-500/15"
-                            >
-                              + Leistung hinzufügen
-                            </button>
-                            <button
-                              type="submit"
-                              className="inline-flex h-12 items-center justify-center rounded-[16px] border border-emerald-500/30 bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
-                            >
-                              Speichern
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setLinesDraft(buildEditableLines(payloadLines));
-                                setIsEditingLines(false);
-                              }}
-                              className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
-                            >
-                              Abbrechen
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setIsEditingLines(true)}
-                            className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
-                          >
-                            Bearbeiten
-                          </button>
-                        )}
-                      </div>
                     </div>
                   </div>
                 </form>
