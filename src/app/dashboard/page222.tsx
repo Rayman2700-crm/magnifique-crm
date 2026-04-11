@@ -418,14 +418,12 @@ function InvoiceCreateCard({
   openReceiptCount,
   weekRevenueCents,
   hasRecentReceipt,
-  closingDateKey,
 }: {
   todayRevenueCents: number;
   todayReceiptCount: number;
   openReceiptCount: number;
   weekRevenueCents: number;
   hasRecentReceipt: boolean;
-  closingDateKey: string;
 }) {
   const formatMoney = (cents: number) => {
     const euros = cents / 100;
@@ -501,27 +499,6 @@ function InvoiceCreateCard({
               className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-white/10 bg-transparent px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10 sm:col-span-2 xl:col-span-1"
             >
               {hasRecentReceipt ? "Belege öffnen" : "Belege"}
-            </Link>
-          </div>
-
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            <Link
-              href={`/rechnungen?closingDate=${encodeURIComponent(closingDateKey)}&closingPanel=day`}
-              className="inline-flex h-9 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-white/10 bg-[var(--surface-2)] px-2 text-xs font-medium text-[var(--text)] transition hover:bg-white/10"
-            >
-              Tagesabschluss
-            </Link>
-            <Link
-              href={`/rechnungen?closingDate=${encodeURIComponent(closingDateKey)}&closingPanel=month`}
-              className="inline-flex h-9 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-white/10 bg-[var(--surface-2)] px-2 text-xs font-medium text-[var(--text)] transition hover:bg-white/10"
-            >
-              Monatsabschluss
-            </Link>
-            <Link
-              href={`/rechnungen?closingDate=${encodeURIComponent(closingDateKey)}&closingPanel=year`}
-              className="inline-flex h-9 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-white/10 bg-[var(--surface-2)] px-2 text-xs font-medium text-[var(--text)] transition hover:bg-white/10"
-            >
-              Jahresabschluss
             </Link>
           </div>
         </div>
@@ -632,8 +609,6 @@ export default async function DashboardPage() {
   startOfWeek.setDate(startOfWeek.getDate() - diffToMonday);
   const endOfWeek = new Date(startOfWeek);
   endOfWeek.setDate(endOfWeek.getDate() + 7);
-
-  const closingDateKey = now.toISOString().slice(0, 10);
 
   let todayCountQuery = supabase
     .from("appointments")
@@ -1085,7 +1060,6 @@ export default async function DashboardPage() {
                 openReceiptCount={openReceiptCount}
                 weekRevenueCents={weekRevenueCents}
                 hasRecentReceipt={hasRecentReceipt}
-                closingDateKey={closingDateKey}
               />
 
               <AppointmentsOverviewCard todayCount={String(todayCount)} weekCount={String(weekCount)} />
