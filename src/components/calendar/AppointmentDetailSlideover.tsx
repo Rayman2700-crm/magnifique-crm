@@ -98,7 +98,7 @@ type CheckoutState = {
     currencyCode: string;
     methodCode: string;
     status: string;
-    paidAt: string;
+    paidAt: string | null;
   };
   receipt: null | {
     id: string;
@@ -1453,3 +1453,6 @@ export default function AppointmentDetailSlideover({
 
   return createPortal(content, document.body);
 }
+
+
+//test

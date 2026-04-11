@@ -120,9 +120,20 @@ async function ensurePaymentIntent(payment: PaymentRow) {
   return intent.id;
 }
 
+function isLiveReader(
+  reader: Stripe.Response<Stripe.Terminal.Reader | { deleted?: boolean }>
+): reader is Stripe.Response<Stripe.Terminal.Reader> {
+  return !("deleted" in reader && reader.deleted === true);
+}
+
 async function resolveReader(requestedReaderId: string) {
   if (requestedReaderId) {
     const requested = await stripe.terminal.readers.retrieve(requestedReaderId);
+
+    if (!isLiveReader(requested)) {
+      throw new Error(`Reader ${requestedReaderId} wurde gelöscht oder existiert nicht mehr.`);
+    }
+
     return maybeClearReaderAction(requested);
   }
   const list = await stripe.terminal.readers.list({ limit: 100 });
