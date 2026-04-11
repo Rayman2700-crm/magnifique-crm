@@ -811,9 +811,9 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
 
                 <button
                   type="button"
-                  onClick={() => window.open(`/rechnungen/thermal-print?receipt=${encodeURIComponent(selected.id)}`, "_blank", "noopener,noreferrer")}
-                  aria-label="Thermal drucken"
-                  title="Thermal drucken"
+                  onClick={() => window.print()}
+                  aria-label="Drucken / PDF"
+                  title="Drucken / PDF"
                   className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/15 bg-white/5 text-white transition-colors hover:bg-white/10"
                 >
                   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

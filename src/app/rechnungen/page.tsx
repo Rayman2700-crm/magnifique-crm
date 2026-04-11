@@ -1232,6 +1232,7 @@ function CompactClosingCard({
   actionHref,
   actionLabel,
   control,
+  controlLabel,
 }: {
   eyebrow: string;
   title: string;
@@ -1242,33 +1243,41 @@ function CompactClosingCard({
   actionHref: string;
   actionLabel: string;
   control?: ReactNode;
+  controlLabel?: string;
 }) {
   return (
     <div className="h-full rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 sm:p-5">
       <div className="flex h-full flex-col gap-4">
         <div className="min-w-0">
-          <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">{eyebrow}</div>
-          <div className="mt-2 text-[28px] font-semibold leading-none tracking-tight text-[var(--text)]">{title}</div>
+          <div className="text-[16px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">{eyebrow}</div>
+
           <div className="mt-2 text-sm text-[var(--text-muted)]">{periodLabel}</div>
         </div>
 
         <div className="flex-1">
-          {control ? <div className="mb-4">{control}</div> : <div className="mb-4 h-10" />}
+          {control ? (
+            <div className="mb-4">
+              {controlLabel ? <div className="mb-2 text-[11px] uppercase tracking-[0.12em] text-white/45">{controlLabel}</div> : null}
+              {control}
+            </div>
+          ) : (
+            <div className="mb-4 h-10" />
+          )}
 
           <div className="grid grid-cols-3 gap-2 sm:gap-3">
             <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Gesamt</div>
-              <div className="mt-1 text-sm font-semibold text-white">{totalLabel}</div>
+              <div className="text-[11px] uppercase tracking-[0.12em] text-white/45 sm:text-[11px]">Gesamt</div>
+              <div className="mt-1 text-[12px] font-semibold leading-tight text-white sm:text-[12px]">{totalLabel}</div>
             </div>
 
             <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Belege</div>
-              <div className="mt-1 text-sm font-semibold text-white">{receiptCount}</div>
+              <div className="text-[11px] uppercase tracking-[0.12em] text-white/45 sm:text-[11px]">Belege</div>
+              <div className="mt-1 text-[11px] font-semibold leading-tight text-white sm:text-[11px]">{receiptCount}</div>
             </div>
 
             <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Stornos</div>
-              <div className="mt-1 text-sm font-semibold text-white">{stornoCount}</div>
+              <div className="text-[11px] uppercase tracking-[0.12em] text-white/45 sm:text-[11px]">Stornos</div>
+              <div className="mt-1 text-[11px] font-semibold leading-tight text-white sm:text-[11px]">{stornoCount}</div>
             </div>
           </div>
         </div>
@@ -2517,6 +2526,7 @@ export default async function RechnungenPage({
                   closingPanel: "month",
                 })}
                 actionLabel="Öffnen"
+                controlLabel="Monat"
                 control={
                   <ClosingPeriodMenu
                     label={formatMonthLabel(closingMonth)}
@@ -2544,6 +2554,7 @@ export default async function RechnungenPage({
                   closingPanel: "year",
                 })}
                 actionLabel="Öffnen"
+                controlLabel="Jahr"
                 control={
                   <ClosingPeriodMenu
                     label={closingYear}
