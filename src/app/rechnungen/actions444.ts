@@ -735,11 +735,13 @@ export async function sendFiscalReceiptEmail(formData: FormData) {
   const salesOrderId = String(receipt.sales_order_id ?? "").trim();
   let customerName =
     readFirstString(payload, [["customer_name"], ["person_name"], ["customer", "full_name"], ["customer", "name"]]) || "";
-  let customerEmail =
-    firstNonEmpty(
-      readFirstString(payload, [["customer_email"], ["customer", "email"], ["email"]]),
-      readFirstString(payload, [["person_email"]]),
-    ) || "";
+  let customerEmail = "";
+  let customerPhone = "";
+  let customerAddress1 = "";
+  let customerAddress2 = "";
+  let customerAddress3 = "";
+
+  const payloadCustomerAddress = buildCustomerAddressSnapshot(payload);
 
   if (salesOrderId) {
     const { data: salesOrderRaw } = await admin
@@ -752,15 +754,42 @@ export async function sendFiscalReceiptEmail(formData: FormData) {
     if (customerProfileId) {
       const { data: customerProfileRaw } = await admin
         .from("customer_profiles")
-        .select(`id, person:persons ( full_name, email, phone )`)
+        .select(`
+          id,
+          person_id,
+          address_line1,
+          address_line2,
+          zip,
+          city,
+          country,
+          person:persons ( full_name, email, phone )
+        `)
         .eq("id", customerProfileId)
         .maybeSingle();
 
-      const personJoin = firstJoin((customerProfileRaw as any)?.person);
+      const customerProfile = (customerProfileRaw ?? null) as CustomerPdfProfileRow | null;
+      const personJoin = firstJoin(customerProfile?.person);
+
       customerName = firstNonEmpty(String(personJoin?.full_name ?? ""), customerName);
       customerEmail = firstNonEmpty(String(personJoin?.email ?? ""), customerEmail);
+      customerPhone = firstNonEmpty(
+        String(personJoin?.phone ?? ""),
+        readFirstString(payload, [["customer_phone"], ["customer", "phone"]]),
+      );
+      customerAddress1 = firstNonEmpty(String(customerProfile?.address_line1 ?? ""), payloadCustomerAddress.address1);
+      customerAddress2 = firstNonEmpty(
+        combineAddressLine2(
+          String(customerProfile?.zip ?? ""),
+          String(customerProfile?.city ?? ""),
+          String(customerProfile?.address_line2 ?? ""),
+        ),
+        payloadCustomerAddress.address2,
+      );
+      customerAddress3 = firstNonEmpty(String(customerProfile?.country ?? ""), payloadCustomerAddress.address3);
     }
   }
+
+  customerEmail = firstNonEmpty(customerEmail, readFirstString(payload, [["customer_email"], ["customer", "email"]]));
 
   if (!customerEmail) {
     redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: "Beim Kunden ist keine E-Mail-Adresse hinterlegt." }));
@@ -768,32 +797,54 @@ export async function sendFiscalReceiptEmail(formData: FormData) {
 
   const { data: tenantMailSettingsRaw } = await admin
     .from("tenants")
-    .select("display_name, email, mail_sender_name, mail_reply_to_email, mail_subject_template, mail_body_template, mail_delivery_mode, mail_is_active")
+    .select(`
+      id,
+      slug,
+      display_name,
+      legal_name,
+      invoice_address_line1,
+      invoice_address_line2,
+      zip,
+      city,
+      country,
+      phone,
+      email,
+      iban,
+      bic,
+      invoice_prefix,
+      kleinunternehmer_text,
+      mail_sender_name,
+      mail_reply_to_email,
+      mail_subject_template,
+      mail_body_template,
+      mail_delivery_mode,
+      mail_is_active
+    `)
     .eq("id", tenantId)
     .maybeSingle();
 
-  const tenantMailSettings = (tenantMailSettingsRaw ?? null) as {
-    display_name?: string | null;
-    email?: string | null;
+  const tenantMailSettings = (tenantMailSettingsRaw ?? null) as (TenantPdfProfileRow & {
     mail_sender_name?: string | null;
     mail_reply_to_email?: string | null;
     mail_subject_template?: string | null;
     mail_body_template?: string | null;
     mail_delivery_mode?: string | null;
     mail_is_active?: boolean | null;
-  } | null;
+  }) | null;
 
   const providerName =
-    readFirstString(payload, [["provider_name"], ["tenant_display_name"], ["tenant_name"], ["tenant", "display_name"]]) ||
-    String(tenantMailSettings?.display_name ?? "").trim();
+    firstNonEmpty(
+      readFirstString(payload, [["provider_name"], ["tenant_display_name"], ["tenant_name"], ["tenant", "display_name"]]),
+      String(tenantMailSettings?.legal_name ?? ""),
+      String(tenantMailSettings?.display_name ?? ""),
+    ) || "Magnifique CRM";
 
   const tenantMailIsActive = tenantMailSettings?.mail_is_active !== false;
   if (!tenantMailIsActive) {
     redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: "E-Mail-Versand ist für diesen Behandler aktuell deaktiviert." }));
   }
 
-  const senderEmail =
-    String(tenantMailSettings?.email ?? "").trim();
+  const senderEmail = String(tenantMailSettings?.email ?? "").trim();
   const senderName =
     String(tenantMailSettings?.mail_sender_name ?? "").trim() ||
     providerName ||
@@ -809,15 +860,17 @@ export async function sendFiscalReceiptEmail(formData: FormData) {
 
   let paymentMethodLabel = "—";
   const paymentId = String(receipt.payment_id ?? "").trim();
+  let paymentPaidAtLabel = "";
   if (paymentId) {
     const { data: paymentRaw } = await admin
       .from("payments")
-      .select(`id, payment_method:payment_methods ( code, name )`)
+      .select(`id, paid_at, payment_method:payment_methods ( code, name )`)
       .eq("id", paymentId)
       .maybeSingle();
 
     const paymentMethod = firstJoin((paymentRaw as any)?.payment_method);
     paymentMethodLabel = String(paymentMethod?.name ?? paymentMethod?.code ?? "—").trim() || "—";
+    paymentPaidAtLabel = formatReceiptDateTimeLabel((paymentRaw as { paid_at?: string | null } | null)?.paid_at ?? null);
   }
 
   const amountLabel = formatGrossAmountLabel(
@@ -851,7 +904,7 @@ export async function sendFiscalReceiptEmail(formData: FormData) {
 
   const { data: receiptLineRowsRaw, error: receiptLinesError } = await admin
     .from("fiscal_receipt_lines")
-    .select("name, quantity, unit_price_gross, line_total_gross")
+    .select("source_line_id, name, quantity, unit_price_gross, line_total_gross")
     .eq("fiscal_receipt_id", receiptId)
     .order("created_at", { ascending: true });
 
@@ -859,29 +912,105 @@ export async function sendFiscalReceiptEmail(formData: FormData) {
     redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: receiptLinesError.message ?? "Belegpositionen konnten nicht geladen werden." }));
   }
 
+  const sourceLineIds = ((receiptLineRowsRaw ?? []) as Array<{ source_line_id?: string | null }>)
+    .map((line) => String(line.source_line_id ?? "").trim())
+    .filter(Boolean);
+
+  const salesLineMap = new Map<string, { description?: string | null; reference_id?: string | null }>();
+
+  if (sourceLineIds.length > 0) {
+    const { data: salesLineRowsRaw } = await admin
+      .from("sales_order_lines")
+      .select("id, reference_id, description")
+      .in("id", sourceLineIds);
+
+    for (const row of ((salesLineRowsRaw ?? []) as Array<{ id?: string | null; reference_id?: string | null; description?: string | null }>)) {
+      const id = String(row.id ?? "").trim();
+      if (id) salesLineMap.set(id, row);
+    }
+  }
+
+  const serviceIds = Array.from(
+    new Set(
+      Array.from(salesLineMap.values())
+        .map((line) => String(line.reference_id ?? "").trim())
+        .filter(Boolean)
+    )
+  );
+
+  const serviceMap = new Map<string, PdfServiceRow>();
+  if (serviceIds.length > 0) {
+    const { data: serviceRowsRaw } = await admin
+      .from("services")
+      .select("id, description, duration_minutes")
+      .in("id", serviceIds);
+
+    for (const row of ((serviceRowsRaw ?? []) as PdfServiceRow[])) {
+      const id = String(row.id ?? "").trim();
+      if (id) serviceMap.set(id, row);
+    }
+  }
+
   const receiptLineRows = ((receiptLineRowsRaw ?? []) as Array<{
+    source_line_id?: string | null;
     name?: string | null;
     quantity?: number | null;
     unit_price_gross?: number | null;
     line_total_gross?: number | null;
-  }>).map((line) => ({
-    name: String(line.name ?? "Position").trim() || "Position",
-    quantity: Number(line.quantity ?? 0) || 0,
-    unitPriceGross: Number(line.unit_price_gross ?? 0) || 0,
-    lineTotalGross: Number(line.line_total_gross ?? 0) || 0,
-  }));
+  }>).map((line) => {
+    const sourceLineId = String(line.source_line_id ?? "").trim();
+    const salesLine = sourceLineId ? salesLineMap.get(sourceLineId) : undefined;
+    const serviceId = String(salesLine?.reference_id ?? "").trim();
+    const service = serviceId ? serviceMap.get(serviceId) : undefined;
+
+    return {
+      name: String(line.name ?? "Position").trim() || "Position",
+      quantity: Number(line.quantity ?? 0) || 0,
+      unitPriceGross: Number(line.unit_price_gross ?? 0) || 0,
+      lineTotalGross: Number(line.line_total_gross ?? 0) || 0,
+      description: firstNonEmpty(String(service?.description ?? ""), String(salesLine?.description ?? "")) || null,
+      durationMinutes: service?.duration_minutes ?? null,
+    };
+  });
+
+  const providerAddress2 = combineAddressLine2(
+    String(tenantMailSettings?.zip ?? ""),
+    String(tenantMailSettings?.city ?? ""),
+    String(tenantMailSettings?.invoice_address_line2 ?? ""),
+  );
 
   const pdfAttachment = await buildFiscalReceiptPdf({
     receiptNumber,
     issuedAtLabel: formatReceiptDateTimeLabel(readFirstString(payload, [["issued_at"]]) || null) !== "—"
       ? formatReceiptDateTimeLabel(readFirstString(payload, [["issued_at"]]) || null)
-      : formatReceiptDateTimeLabel((receipt as { issued_at?: string | null }).issued_at ?? null),
-    providerName: providerName || "Magnifique CRM",
+      : formatReceiptDateTimeLabel(receipt.issued_at ?? null),
+    paidAtLabel: paymentPaidAtLabel !== "—" ? paymentPaidAtLabel : undefined,
+    providerName: firstNonEmpty(String(tenantMailSettings?.legal_name ?? ""), providerName) || "Magnifique CRM",
+    providerStudioName: String(tenantMailSettings?.display_name ?? "").trim() || "Magnifique Beauty Institut",
+    providerAddress1: String(tenantMailSettings?.invoice_address_line1 ?? "").trim(),
+    providerAddress2,
+    providerCountry: String(tenantMailSettings?.country ?? "").trim() || "Österreich",
+    providerPhone: String(tenantMailSettings?.phone ?? "").trim(),
+    providerEmail: String(tenantMailSettings?.email ?? "").trim(),
+    providerIban: String(tenantMailSettings?.iban ?? "").trim(),
+    providerBic: String(tenantMailSettings?.bic ?? "").trim(),
+    providerInvoicePrefix: String(tenantMailSettings?.invoice_prefix ?? "").trim(),
+    providerLogoPath: buildProviderLogoPath({
+      invoicePrefix: tenantMailSettings?.invoice_prefix,
+      legalName: tenantMailSettings?.legal_name,
+      slug: tenantMailSettings?.slug,
+    }),
     customerName: customerName || "—",
+    customerAddress1,
+    customerAddress2,
+    customerAddress3,
+    customerPhone,
+    customerEmail,
     paymentMethodLabel,
     amountLabel,
     currencyCode: receipt.currency_code || "EUR",
     lines: receiptLineRows,
+    smallBusinessNotice: String(tenantMailSettings?.kleinunternehmer_text ?? "").trim() || undefined,
     note: isCancelled ? "Dieser Beleg ist storniert." : null,
   });
 

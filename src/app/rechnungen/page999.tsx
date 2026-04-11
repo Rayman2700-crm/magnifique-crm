@@ -5,7 +5,13 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getEffectiveTenantId } from "@/lib/effectiveTenant";
 import { Card, CardContent } from "@/components/ui/card";
 import FiscalReceiptSlideover from "@/components/rechnungen/FiscalReceiptSlideover";
-import { cancelCardPaymentForCheckout, completeCardPaymentForCheckout, createFiscalReceiptForPayment, createPaymentForSalesOrder, createSalesOrderFromAppointment, failCardPaymentForCheckout, startCardPaymentForCheckout } from "./actions";
+import PendingReaderPaymentsCard from "./PendingReaderPaymentsCard";
+import ClosingDateAutoSubmit from "@/components/rechnungen/ClosingDateAutoSubmit";
+import RechnungenClosingSlideover from "@/components/rechnungen/RechnungenClosingSlideover";
+import { backfillReadyFiscalReceipts, cancelCardPaymentForCheckout, completeCardPaymentForCheckout, createFiscalReceiptForPayment, createPaymentForSalesOrder, createSalesOrderFromAppointment, failCardPaymentForCheckout, startCardPaymentForCheckout } from "./actions";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type FiscalReceiptRow = {
   id: string;
@@ -215,6 +221,7 @@ type PendingPaymentListItem = {
   id: string;
   tenantId: string | null;
   salesOrderId: string | null;
+  appointmentId: string | null;
   customerName: string | null;
   providerName: string | null;
   amount: number | null;
@@ -235,6 +242,33 @@ type AvatarFilterOption = {
   filterKey: string;
 };
 
+type ClosingSnapshotReceipt = {
+  receiptNumber: string | null;
+  issuedAt: string | null;
+  customerName: string | null;
+  paymentMethodLabel: string | null;
+  amountCents: number;
+  isStorno: boolean;
+};
+
+type ClosingGroupSummary = {
+  key: string;
+  tenantId: string | null;
+  cashRegisterId: string | null;
+  providerName: string | null;
+  receiptCount: number;
+  cashCents: number;
+  cardCents: number;
+  transferCents: number;
+  totalCents: number;
+  stornoCount: number;
+  stornoCents: number;
+  latestIssuedAt: string | null;
+  receipts: ClosingSnapshotReceipt[];
+};
+
+
+
 
 function euroFromCents(value: number | null | undefined, currencyCode?: string | null) {
   if (typeof value !== "number") return "—";
@@ -250,11 +284,14 @@ function euroFromGross(value: number | null | undefined, currencyCode?: string |
   return value < 0 ? `-${formatted}` : formatted;
 }
 
+const BUSINESS_TIME_ZONE = "Europe/Vienna";
+
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat("de-AT", {
+    timeZone: BUSINESS_TIME_ZONE,
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -527,6 +564,240 @@ function toneForPaymentStatus(value: string | null | undefined) {
   return "neutral" as const;
 }
 
+function formatBusinessDateKey(value: Date | string | null | undefined) {
+  const date = value instanceof Date ? value : value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function formatBusinessMonthKey(value: Date | string | null | undefined) {
+  const date = value instanceof Date ? value : value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+  }).format(date);
+}
+
+function formatBusinessYearKey(value: Date | string | null | undefined) {
+  const date = value instanceof Date ? value : value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+  }).format(date);
+}
+
+function formatMonthLabel(value: string) {
+  const match = String(value ?? "").match(/^(\d{4})-(\d{2})$/);
+  if (!match) return value || "—";
+  const [, year, month] = match;
+  const monthIndex = Number(month) - 1;
+  const date = new Date(Number(year), monthIndex, 1);
+  return new Intl.DateTimeFormat("de-AT", { month: "long", year: "numeric" }).format(date);
+}
+
+
+function buildMonthOptions(anchorDate: string, count = 12) {
+  const base = /^\d{4}-\d{2}-\d{2}$/.test(String(anchorDate ?? "").trim())
+    ? new Date(`${anchorDate}T12:00:00`)
+    : new Date();
+  const start = new Date(base.getFullYear(), base.getMonth(), 1);
+  const items: { key: string; label: string; closingDate: string }[] = [];
+
+  for (let index = 0; index < count; index += 1) {
+    const date = new Date(start.getFullYear(), start.getMonth() - index, 1);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    items.push({
+      key: `${year}-${month}`,
+      label: new Intl.DateTimeFormat("de-AT", { month: "long", year: "numeric" }).format(date),
+      closingDate: `${year}-${month}-01`,
+    });
+  }
+
+  return items;
+}
+
+function buildYearOptions(anchorDate: string, count = 6) {
+  const base = /^\d{4}-\d{2}-\d{2}$/.test(String(anchorDate ?? "").trim())
+    ? new Date(`${anchorDate}T12:00:00`)
+    : new Date();
+  const startYear = base.getFullYear();
+  return Array.from({ length: count }, (_, index) => {
+    const year = String(startYear - index);
+    return {
+      key: year,
+      label: year,
+      closingDate: `${year}-01-01`,
+    };
+  });
+}
+
+function buildDashboardPrimaryButtonClass(fullWidth = false) {
+  return [
+    "inline-flex h-10 items-center justify-center whitespace-nowrap rounded-[16px] border border-[var(--primary)] bg-[var(--primary)] px-4 text-sm font-medium text-[var(--primary-foreground)] shadow-[0_12px_26px_rgba(214,195,163,0.18)] transition hover:opacity-90",
+    fullWidth ? "w-full" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function buildDashboardSecondaryButtonClass(fullWidth = false) {
+  return [
+    "inline-flex h-10 items-center justify-center whitespace-nowrap rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-4 text-sm font-medium text-[var(--text)] transition hover:bg-white/10",
+    fullWidth ? "w-full" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function ClosingPeriodMenu({
+  label,
+  options,
+}: {
+  label: string;
+  options: { href: string; label: string; isActive?: boolean }[];
+}) {
+  return (
+    <details className="group relative w-full">
+      <summary className={buildDashboardSecondaryButtonClass(true)}>
+        <span className="truncate">{label}</span>
+        <svg
+          viewBox="0 0 20 20"
+          className="ml-2 h-4 w-4 shrink-0 transition group-open:rotate-180"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="m5 7.5 5 5 5-5" />
+        </svg>
+      </summary>
+
+      <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 rounded-[18px] border border-white/10 bg-[#101114] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.42)] backdrop-blur-xl">
+        <div className="hide-scrollbar max-h-64 overflow-auto space-y-1" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+          {options.map((option) => (
+            <Link
+              key={option.href}
+              href={option.href}
+              className={`flex items-center justify-between rounded-[14px] px-3 py-2 text-sm transition ${
+                option.isActive ? "bg-white text-black" : "bg-white/[0.03] text-white hover:bg-white/[0.08]"
+              }`}
+            >
+              <span className="truncate">{option.label}</span>
+              {option.isActive ? (
+                <span className="ml-3 text-[11px] font-semibold uppercase tracking-[0.12em]">Aktiv</span>
+              ) : null}
+            </Link>
+          ))}
+        </div>
+      </div>
+    </details>
+  );
+}
+
+function buildClosingGroups(items: SlideoverReceipt[]): ClosingGroupSummary[] {
+  const groupsMap = new Map<string, ClosingGroupSummary>();
+
+  for (const item of items) {
+    const businessState = getReceiptBusinessState(item);
+    const groupKey = `${String(item.tenantId ?? "").trim() || "no-tenant"}__${String(item.cashRegisterId ?? "").trim() || "no-register"}`;
+    const existing = groupsMap.get(groupKey) ?? {
+      key: groupKey,
+      tenantId: item.tenantId ?? null,
+      cashRegisterId: item.cashRegisterId ?? null,
+      providerName: item.providerName ?? null,
+      receiptCount: 0,
+      cashCents: 0,
+      cardCents: 0,
+      transferCents: 0,
+      totalCents: 0,
+      stornoCount: 0,
+      stornoCents: 0,
+      latestIssuedAt: item.issuedAt ?? item.createdAt ?? null,
+      receipts: [],
+    };
+
+    const turnover = Number(item.turnoverValueCents ?? 0) || 0;
+    const normalizedPaymentStatus = String(item.paymentStatus ?? "").trim().toUpperCase();
+    const receiptEntry: ClosingSnapshotReceipt = {
+      receiptNumber: item.receiptNumber ?? null,
+      issuedAt: item.issuedAt ?? item.createdAt ?? null,
+      customerName: item.customerName ?? null,
+      paymentMethodLabel: item.paymentMethodLabel ?? null,
+      amountCents: Math.abs(turnover),
+      isStorno: businessState.key === "cancelled",
+    };
+
+    if (businessState.key === "cancelled") {
+      existing.stornoCount += 1;
+      existing.stornoCents += Math.abs(turnover);
+      existing.receipts.push(receiptEntry);
+    } else if (businessState.key !== "error" && normalizedPaymentStatus === "COMPLETED") {
+      existing.receiptCount += 1;
+      existing.totalCents += turnover;
+      const paymentMethod = normalizeClosingPaymentMethod(item.paymentMethodLabel);
+      if (paymentMethod === "CASH") existing.cashCents += turnover;
+      else if (paymentMethod === "CARD") existing.cardCents += turnover;
+      else if (paymentMethod === "TRANSFER") existing.transferCents += turnover;
+      existing.receipts.push(receiptEntry);
+    }
+
+    const latestCandidate = item.issuedAt ?? item.createdAt ?? null;
+    if (latestCandidate && (!existing.latestIssuedAt || latestCandidate > existing.latestIssuedAt)) {
+      existing.latestIssuedAt = latestCandidate;
+    }
+
+    groupsMap.set(groupKey, existing);
+  }
+
+  return Array.from(groupsMap.values()).sort((a, b) => {
+    const aName = String(a.providerName ?? "").trim();
+    const bName = String(b.providerName ?? "").trim();
+    return aName.localeCompare(bName, "de", { sensitivity: "base" });
+  });
+}
+
+function buildClosingTotals(groups: ClosingGroupSummary[]) {
+  return groups.reduce(
+    (sum, group) => ({
+      receiptCount: sum.receiptCount + group.receiptCount,
+      cashCents: sum.cashCents + group.cashCents,
+      cardCents: sum.cardCents + group.cardCents,
+      transferCents: sum.transferCents + group.transferCents,
+      totalCents: sum.totalCents + group.totalCents,
+      stornoCount: sum.stornoCount + group.stornoCount,
+      stornoCents: sum.stornoCents + group.stornoCents,
+    }),
+    {
+      receiptCount: 0,
+      cashCents: 0,
+      cardCents: 0,
+      transferCents: 0,
+      totalCents: 0,
+      stornoCount: 0,
+      stornoCents: 0,
+    }
+  );
+}
+
+function normalizeClosingPaymentMethod(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  if (normalized === "BAR" || normalized === "CASH") return "CASH" as const;
+  if (normalized === "KARTE" || normalized === "CARD") return "CARD" as const;
+  if (normalized === "ÜBERWEISUNG" || normalized === "UEBERWEISUNG" || normalized === "TRANSFER") return "TRANSFER" as const;
+  return "OTHER" as const;
+}
+
 
 function startOfDay(date: Date) {
   const copy = new Date(date);
@@ -656,10 +927,13 @@ function getQuickFilterLabel(filter: string) {
   return labels[filter] ?? "Alle";
 }
 
+
 function buildRechnungenHref({
   qRaw,
   filter,
   practitioner,
+  closingDate,
+  closingPanel,
   receipt,
   appointmentId,
   salesOrder,
@@ -668,6 +942,8 @@ function buildRechnungenHref({
   qRaw?: string;
   filter?: string;
   practitioner?: string;
+  closingDate?: string;
+  closingPanel?: string;
   receipt?: string;
   appointmentId?: string;
   salesOrder?: string;
@@ -677,6 +953,8 @@ function buildRechnungenHref({
   if (qRaw?.trim()) params.set("q", qRaw.trim());
   if (filter && filter !== "all") params.set("filter", filter);
   if (practitioner && practitioner !== "all") params.set("practitioner", practitioner);
+  if (closingDate?.trim()) params.set("closingDate", closingDate.trim());
+  if (closingPanel?.trim()) params.set("closingPanel", closingPanel.trim());
   if (receipt) params.set("receipt", receipt);
   if (appointmentId) params.set("appointmentId", appointmentId);
   if (salesOrder) params.set("salesOrder", salesOrder);
@@ -685,15 +963,59 @@ function buildRechnungenHref({
   return query ? `/rechnungen?${query}` : "/rechnungen";
 }
 
+function ClosingPdfButton({
+  periodType,
+  mode,
+  practitioner,
+  closingDate,
+  generatedByName,
+  generatedAt,
+  snapshot,
+  label,
+  className,
+}: {
+  periodType: "day" | "month" | "year";
+  mode: "all" | "single";
+  practitioner: string;
+  closingDate: string;
+  generatedByName: string;
+  generatedAt: string;
+  snapshot: Record<string, unknown>;
+  label: string;
+  className: string;
+}) {
+  return (
+    <form
+      action="/api/rechnungen/daily-closing-pdf"
+      method="post"
+      target="_blank"
+      className="w-full"
+    >
+      <input type="hidden" name="periodType" value={periodType} />
+      <input type="hidden" name="mode" value={mode} />
+      <input type="hidden" name="practitioner" value={practitioner} />
+      <input type="hidden" name="closingDate" value={closingDate} />
+      <input type="hidden" name="generatedByName" value={generatedByName} />
+      <input type="hidden" name="generatedAt" value={generatedAt} />
+      <input type="hidden" name="snapshot" value={JSON.stringify(snapshot)} />
+      <button type="submit" className={className}>
+        {label}
+      </button>
+    </form>
+  );
+}
+
 function MobileReceiptFilterMenu({
   qRaw,
   currentFilter,
   practitionerFilter,
+  closingDate,
   counts,
 }: {
   qRaw: string;
   currentFilter: string;
   practitionerFilter: string;
+  closingDate: string;
   counts: { all: number; today: number; week: number; month: number; open: number; cancelled: number; error: number };
 }) {
   const items = [
@@ -748,7 +1070,7 @@ function MobileReceiptFilterMenu({
             return (
               <Link
                 key={item.key}
-                href={buildRechnungenHref({ qRaw, filter: item.key, practitioner: practitionerFilter })}
+                href={buildRechnungenHref({ qRaw, filter: item.key, practitioner: practitionerFilter, closingDate })}
                 className="flex items-center justify-between rounded-2xl border px-3 py-3 text-left"
                 style={{
                   borderColor: selected ? "rgba(214,195,163,0.28)" : "rgba(255,255,255,0.10)",
@@ -773,11 +1095,13 @@ function MobileReceiptAvatarMenu({
   practitionerFilter,
   qRaw,
   currentFilter,
+  closingDate,
 }: {
   avatarOptions: AvatarFilterOption[];
   practitionerFilter: string;
   qRaw: string;
   currentFilter: string;
+  closingDate: string;
 }) {
   const activeOption =
     avatarOptions.find((option) => option.filterKey === practitionerFilter) ??
@@ -837,6 +1161,7 @@ function MobileReceiptAvatarMenu({
                   qRaw,
                   filter: currentFilter,
                   practitioner: option.filterKey,
+                  closingDate,
                 })}
                 className="flex items-center justify-between rounded-2xl border px-3 py-3 text-left"
                 style={{
@@ -873,12 +1198,76 @@ function MobileReceiptAvatarMenu({
 }
 
 
+
+
+function CompactClosingCard({
+  eyebrow,
+  title,
+  periodLabel,
+  totalLabel,
+  receiptCount,
+  stornoCount,
+  actionHref,
+  actionLabel,
+  control,
+}: {
+  eyebrow: string;
+  title: string;
+  periodLabel: string;
+  totalLabel: string;
+  receiptCount: number;
+  stornoCount: number;
+  actionHref: string;
+  actionLabel: string;
+  control?: ReactNode;
+}) {
+  return (
+    <div className="h-full rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 sm:p-5">
+      <div className="flex h-full flex-col gap-4">
+        <div className="min-w-0">
+          <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">{eyebrow}</div>
+          <div className="mt-2 text-[28px] font-semibold leading-none tracking-tight text-[var(--text)]">{title}</div>
+          <div className="mt-2 text-sm text-[var(--text-muted)]">{periodLabel}</div>
+        </div>
+
+        <div className="flex-1">
+          {control ? <div className="mb-4">{control}</div> : <div className="mb-4 h-10" />}
+
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Gesamt</div>
+              <div className="mt-1 text-sm font-semibold text-white">{totalLabel}</div>
+            </div>
+
+            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Belege</div>
+              <div className="mt-1 text-sm font-semibold text-white">{receiptCount}</div>
+            </div>
+
+            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Stornos</div>
+              <div className="mt-1 text-sm font-semibold text-white">{stornoCount}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-auto">
+          <Link href={actionHref} className={buildDashboardPrimaryButtonClass(true)}>
+            {actionLabel}
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 export default async function RechnungenPage({
   searchParams,
 }: {
   searchParams?:
-    | Promise<{ q?: string; filter?: string; practitioner?: string; receipt?: string; appointmentId?: string; salesOrder?: string; payment?: string; success?: string; error?: string }>
-    | { q?: string; filter?: string; practitioner?: string; receipt?: string; appointmentId?: string; salesOrder?: string; payment?: string; success?: string; error?: string };
+    | Promise<{ q?: string; filter?: string; practitioner?: string; closingDate?: string; closingPanel?: string; receipt?: string; appointmentId?: string; salesOrder?: string; payment?: string; success?: string; error?: string }>
+    | { q?: string; filter?: string; practitioner?: string; closingDate?: string; closingPanel?: string; receipt?: string; appointmentId?: string; salesOrder?: string; payment?: string; success?: string; error?: string };
 }) {
   const sp = searchParams ? await searchParams : undefined;
   const qRaw = String(sp?.q ?? "").trim();
@@ -891,6 +1280,20 @@ export default async function RechnungenPage({
   const receiptId = String(sp?.receipt ?? "").trim();
   const successMessage = String(sp?.success ?? "").trim();
   const errorMessage = String(sp?.error ?? "").trim();
+  const todayDateKey = formatBusinessDateKey(new Date());
+  const requestedClosingDate = String((sp as any)?.closingDate ?? "").trim();
+  const closingDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedClosingDate) ? requestedClosingDate : todayDateKey;
+  const closingPanel = ["day", "month", "year"].includes(String((sp as any)?.closingPanel ?? "").trim().toLowerCase())
+    ? (String((sp as any)?.closingPanel ?? "").trim().toLowerCase() as "day" | "month" | "year")
+    : "";
+  const readyForFiscalReturnQuery = (() => {
+    const params = new URLSearchParams();
+    if (qRaw) params.set("q", qRaw);
+    if (currentFilter && currentFilter !== "all") params.set("filter", currentFilter);
+    if (practitionerFilter && practitionerFilter !== "all") params.set("practitioner", practitionerFilter);
+    if (closingDate) params.set("closingDate", closingDate);
+    return params.toString();
+  })();
 
   const supabase = await supabaseServer();
   const admin = supabaseAdmin();
@@ -1164,7 +1567,7 @@ export default async function RechnungenPage({
 
   const receipts = (receiptsRaw ?? []) as FiscalReceiptRow[];
 
-  const pendingStatusCodes = ["PENDING", "PROCESSING", "FAILED", "CANCELLED"];
+  const pendingStatusCodes = ["PENDING", "PROCESSING", "FAILED", "CANCELLED", "COMPLETED"];
   let pendingPaymentsQuery = admin
     .from("payments")
     .select(`
@@ -1310,20 +1713,23 @@ export default async function RechnungenPage({
   );
   const pendingSalesOrderCustomerIdBySalesOrderId = new Map<string, string>();
   const pendingTenantIdBySalesOrderId = new Map<string, string>();
+  const pendingAppointmentIdBySalesOrderId = new Map<string, string>();
 
   if (pendingSalesOrderIds.length > 0) {
     const { data: pendingSalesOrderRows } = await admin
       .from("sales_orders")
-      .select("id, customer_id, tenant_id")
+      .select("id, customer_id, tenant_id, appointment_id")
       .in("id", pendingSalesOrderIds);
 
-    for (const row of (pendingSalesOrderRows ?? []) as Array<{ id: string; customer_id: string | null; tenant_id: string | null }>) {
+    for (const row of (pendingSalesOrderRows ?? []) as Array<{ id: string; customer_id: string | null; tenant_id: string | null; appointment_id: string | null }>) {
       const soId = String(row.id ?? "").trim();
       if (!soId) continue;
       const customerId = String(row.customer_id ?? "").trim();
       const tenantId = String(row.tenant_id ?? "").trim();
+      const appointmentId = String(row.appointment_id ?? "").trim();
       if (customerId) pendingSalesOrderCustomerIdBySalesOrderId.set(soId, customerId);
       if (tenantId) pendingTenantIdBySalesOrderId.set(soId, tenantId);
+      if (appointmentId) pendingAppointmentIdBySalesOrderId.set(soId, appointmentId);
     }
   }
 
@@ -1362,6 +1768,7 @@ export default async function RechnungenPage({
         id: String(row.id),
         tenantId: tenantId ? String(tenantId) : null,
         salesOrderId,
+        appointmentId: salesOrderId ? pendingAppointmentIdBySalesOrderId.get(salesOrderId) ?? null : null,
         customerName: customerProfile?.customerName ?? null,
         providerName,
         amount: row.amount,
@@ -1378,6 +1785,16 @@ export default async function RechnungenPage({
         ? true
         : normalizePractitionerKey(item.providerName) === practitionerFilter
     );
+
+  const readerPendingPaymentItems = pendingPaymentItems.filter((item) => {
+    const normalizedStatus = String(item.status ?? "").trim().toUpperCase();
+    return normalizedStatus === "PENDING" || normalizedStatus === "PROCESSING" || normalizedStatus === "FAILED" || normalizedStatus === "CANCELLED";
+  });
+
+  const readyForFiscalPaymentItems = pendingPaymentItems.filter((item) => {
+    const normalizedStatus = String(item.status ?? "").trim().toUpperCase();
+    return normalizedStatus === "COMPLETED";
+  });
   const receiptDeliveryByReceiptId = new Map<string, SlideoverDelivery[]>();
   if (receiptIds.length > 0) {
     const { data: deliveryRows } = await admin
@@ -1571,8 +1988,9 @@ export default async function RechnungenPage({
   const errorCount = quickFilterCounts.error;
   const paidCount = searchScopedItems.filter((item) => getReceiptBusinessState(item).key === "paid").length;
 
-  const pendingStripeCount = pendingPaymentItems.filter((item) => String(item.status ?? "").trim().toUpperCase() === "PENDING").length;
-  const processingStripeCount = pendingPaymentItems.filter((item) => String(item.status ?? "").trim().toUpperCase() === "PROCESSING").length;
+  const pendingStripeCount = readerPendingPaymentItems.filter((item) => String(item.status ?? "").trim().toUpperCase() === "PENDING").length;
+  const processingStripeCount = readerPendingPaymentItems.filter((item) => String(item.status ?? "").trim().toUpperCase() === "PROCESSING").length;
+  const readyForFiscalCount = readyForFiscalPaymentItems.length;
 
   const revenueTodayCents = searchScopedItems.reduce((sum, item) => {
     const issued = item.issuedAt ?? item.createdAt;
@@ -1591,6 +2009,47 @@ export default async function RechnungenPage({
     const businessState = getReceiptBusinessState(item);
     return isBetween(issued, monthStart, nextMonthStart) && businessState.key !== "cancelled" ? sum + Number(item.turnoverValueCents ?? 0) : sum;
   }, 0);
+
+  const closingMonth = formatBusinessMonthKey(closingDate);
+  const closingYear = formatBusinessYearKey(closingDate);
+
+  const dailyClosingItems = practitionerScopedItems.filter((item) => formatBusinessDateKey(item.issuedAt ?? item.createdAt) === closingDate);
+  const monthlyClosingItems = practitionerScopedItems.filter((item) => formatBusinessMonthKey(item.issuedAt ?? item.createdAt) === closingMonth);
+  const yearlyClosingItems = practitionerScopedItems.filter((item) => formatBusinessYearKey(item.issuedAt ?? item.createdAt) === closingYear);
+
+  const dailyClosingGroups = buildClosingGroups(dailyClosingItems);
+  const monthlyClosingGroups = buildClosingGroups(monthlyClosingItems);
+  const yearlyClosingGroups = buildClosingGroups(yearlyClosingItems);
+
+  const dailyClosingTotals = buildClosingTotals(dailyClosingGroups);
+  const monthlyClosingTotals = buildClosingTotals(monthlyClosingGroups);
+  const yearlyClosingTotals = buildClosingTotals(yearlyClosingGroups);
+
+  const generatedAtIso = new Date().toISOString();
+  const generatedByName = String(profile?.full_name ?? "").trim() || user.email || "Unbekannt";
+
+  const monthOptions = buildMonthOptions(closingDate).map((option) => ({
+    ...option,
+    href: buildRechnungenHref({
+      qRaw,
+      filter: currentFilter,
+      practitioner: practitionerFilter,
+      closingDate: option.closingDate,
+    }),
+    isActive: option.key === closingMonth,
+  }));
+
+  const yearOptions = buildYearOptions(closingDate).map((option) => ({
+    ...option,
+    href: buildRechnungenHref({
+      qRaw,
+      filter: currentFilter,
+      practitioner: practitionerFilter,
+      closingDate: option.closingDate,
+    }),
+    isActive: option.key === closingYear,
+  }));
+
 
   const checkoutTenant = firstJoin(checkoutAppointment?.tenant);
   const checkoutPerson = firstJoin(checkoutAppointment?.person);
@@ -1669,6 +2128,7 @@ export default async function RechnungenPage({
                       qRaw={qRaw}
                       currentFilter={currentFilter}
                       practitionerFilter={practitionerFilter}
+                      closingDate={closingDate}
                       counts={quickFilterCounts}
                     />
 
@@ -1703,6 +2163,7 @@ export default async function RechnungenPage({
                       practitionerFilter={practitionerFilter}
                       qRaw={qRaw}
                       currentFilter={currentFilter}
+                      closingDate={closingDate}
                     />
                   </div>
 
@@ -1754,6 +2215,7 @@ export default async function RechnungenPage({
                               qRaw,
                               filter: currentFilter,
                               practitioner: option.filterKey,
+                              closingDate,
                               appointmentId,
                               salesOrder: salesOrderId,
                               payment: paymentId,
@@ -1858,6 +2320,7 @@ export default async function RechnungenPage({
                         qRaw,
                         filter: String(key),
                         practitioner: practitionerFilter,
+                        closingDate,
                         appointmentId,
                         salesOrder: salesOrderId,
                         payment: paymentId,
@@ -1891,10 +2354,91 @@ export default async function RechnungenPage({
                 <SummaryCard
                   label="Offene Belege"
                   value={openCount}
-                  subtext={`${cancelledCount} storniert · ${errorCount} mit Fehler · ${paidCount} bezahlt · ${pendingStripeCount} pending`}
+                  subtext={`${cancelledCount} storniert · ${errorCount} mit Fehler · ${paidCount} bezahlt · ${pendingStripeCount} pending · ${readyForFiscalCount} bereit für Fiscal`}
                 />
               </div>
             </div>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-3"/>
+              <CompactClosingCard
+                eyebrow="Tagesabschluss"
+                title="Tagesübersicht"
+                periodLabel={closingDate}
+                totalLabel={euroFromCents(dailyClosingTotals.totalCents, "EUR")}
+                receiptCount={dailyClosingTotals.receiptCount}
+                stornoCount={dailyClosingTotals.stornoCount}
+                actionHref={buildRechnungenHref({
+                  qRaw,
+                  filter: currentFilter,
+                  practitioner: practitionerFilter,
+                  closingDate,
+                  closingPanel: "day",
+                })}
+                actionLabel="Öffnen"
+                control={
+                  <ClosingDateAutoSubmit
+                    qRaw={qRaw}
+                    currentFilter={currentFilter}
+                    practitionerFilter={practitionerFilter}
+                    closingDate={closingDate}
+                  />
+                }
+              />
+
+              <CompactClosingCard
+                eyebrow="Monatsabschluss"
+                title="Monatsübersicht"
+                periodLabel={formatMonthLabel(closingMonth)}
+                totalLabel={euroFromCents(monthlyClosingTotals.totalCents, "EUR")}
+                receiptCount={monthlyClosingTotals.receiptCount}
+                stornoCount={monthlyClosingTotals.stornoCount}
+                actionHref={buildRechnungenHref({
+                  qRaw,
+                  filter: currentFilter,
+                  practitioner: practitionerFilter,
+                  closingDate,
+                  closingPanel: "month",
+                })}
+                actionLabel="Öffnen"
+                control={
+                  <ClosingPeriodMenu
+                    label={formatMonthLabel(closingMonth)}
+                    options={monthOptions.map((option) => ({
+                      href: option.href,
+                      label: option.label,
+                      isActive: option.isActive,
+                    }))}
+                  />
+                }
+              />
+
+              <CompactClosingCard
+                eyebrow="Jahresabschluss"
+                title="Jahresübersicht"
+                periodLabel={closingYear}
+                totalLabel={euroFromCents(yearlyClosingTotals.totalCents, "EUR")}
+                receiptCount={yearlyClosingTotals.receiptCount}
+                stornoCount={yearlyClosingTotals.stornoCount}
+                actionHref={buildRechnungenHref({
+                  qRaw,
+                  filter: currentFilter,
+                  practitioner: practitionerFilter,
+                  closingDate,
+                  closingPanel: "year",
+                })}
+                actionLabel="Öffnen"
+                control={
+                  <ClosingPeriodMenu
+                    label={closingYear}
+                    options={yearOptions.map((option) => ({
+                      href: option.href,
+                      label: option.label,
+                      isActive: option.isActive,
+                    }))}
+                  />
+                }
+              />
+
           </CardContent>
         </Card>
       </section>
@@ -1914,6 +2458,27 @@ export default async function RechnungenPage({
           </div>
           <Link href="/rechnungen" className="inline-flex h-9 items-center rounded-lg border border-white/10 bg-white/10 px-3 text-sm font-medium text-white hover:bg-white/15">Zurücksetzen</Link>
         </div>
+      ) : null}
+
+
+      {!isCheckoutFlow ? (
+        <RechnungenClosingSlideover
+          panel={closingPanel}
+          qRaw={qRaw}
+          currentFilter={currentFilter}
+          practitionerFilter={practitionerFilter}
+          closingDate={closingDate}
+          closingMonth={closingMonth}
+          closingYear={closingYear}
+          generatedByName={generatedByName}
+          generatedAtIso={generatedAtIso}
+          dailyClosingTotals={dailyClosingTotals}
+          dailyClosingGroups={dailyClosingGroups}
+          monthlyClosingTotals={monthlyClosingTotals}
+          monthlyClosingGroups={monthlyClosingGroups}
+          yearlyClosingTotals={yearlyClosingTotals}
+          yearlyClosingGroups={yearlyClosingGroups}
+        />
       ) : null}
 
       {showCheckoutBuilder ? (
@@ -2195,46 +2760,62 @@ export default async function RechnungenPage({
       ) : null}
 
 
-      {!isCheckoutFlow && pendingPaymentItems.length > 0 ? (
-        <Card className="mt-6 overflow-hidden border-amber-400/20 bg-amber-500/10">
+      {!isCheckoutFlow && readyForFiscalPaymentItems.length > 0 ? (
+        <Card className="mt-6 overflow-hidden border-emerald-400/20 bg-emerald-500/10">
           <CardContent className="p-0">
             <div className="border-b border-white/8 px-5 py-4 md:px-6">
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <div className="text-lg font-semibold text-white">Offene Kartenzahlungen</div>
+                  <div className="text-lg font-semibold text-white">Bereit für Fiscal</div>
                   <div className="mt-1 text-sm text-white/65">
-                    Stripe-Payments ohne Fiscal-Beleg. Pending: {pendingStripeCount} · Verarbeitung: {processingStripeCount}
+                    Erfolgreiche Stripe-Kartenzahlungen ohne Fiscal-Beleg. Diese Fälle dürfen nicht verschwinden, bevor der Beleg wirklich erstellt wurde.
                   </div>
                 </div>
-                <div className="text-xs text-white/55">
-                  Diese Liste ist bewusst getrennt von der Belegliste.
+                <div className="flex flex-col items-start gap-2 md:items-end">
+                  <div className="text-xs text-white/55">
+                    Erfolgreich bezahlt in Stripe, aber noch kein Eintrag in fiscal_receipts.
+                  </div>
+                  {readyForFiscalPaymentItems.length > 1 ? (
+                    <form action={backfillReadyFiscalReceipts}>
+                      <input type="hidden" name="return_query" value={readyForFiscalReturnQuery} />
+                      <button
+                        type="submit"
+                        className="inline-flex h-10 items-center rounded-xl border border-emerald-500/30 bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-500"
+                      >
+                        Alle automatisch nachziehen
+                      </button>
+                    </form>
+                  ) : null}
                 </div>
               </div>
             </div>
+
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1040px] table-auto text-sm">
+              <table className="w-full min-w-[1080px] table-auto text-sm">
                 <thead className="bg-white/[0.03]">
                   <tr>
-                    <th className="w-[18%] px-6 py-4 font-semibold text-left text-white/60">Payment</th>
-                    <th className="w-[26%] px-4 py-4 font-semibold text-left text-white/60">Kunde</th>
-                    <th className="w-[18%] px-4 py-4 font-semibold text-left text-white/60">Erstellt</th>
-                    <th className="w-[12%] px-4 py-4 font-semibold text-left text-white/60">Betrag</th>
-                    <th className="w-[26%] px-6 py-4 font-semibold text-right text-white/60">Status</th>
+                    <th className="w-[16%] px-6 py-4 text-left font-semibold text-white/60">Payment</th>
+                    <th className="w-[20%] px-4 py-4 text-left font-semibold text-white/60">Kunde</th>
+                    <th className="w-[14%] px-4 py-4 text-left font-semibold text-white/60">Erstellt</th>
+                    <th className="w-[12%] px-4 py-4 text-left font-semibold text-white/60">Betrag</th>
+                    <th className="w-[14%] px-4 py-4 text-left font-semibold text-white/60">Status</th>
+                    <th className="w-[24%] px-6 py-4 text-left font-semibold text-white/60">Aktion</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {pendingPaymentItems.map((item) => {
-                    const providerBadge = providerBadgeMeta(item.providerName);
+                  {readyForFiscalPaymentItems.map((item) => {
                     const detailHref = buildRechnungenHref({
                       qRaw,
                       filter: currentFilter,
                       practitioner: practitionerFilter,
+                      closingDate,
+                      appointmentId: item.appointmentId ?? undefined,
                       salesOrder: item.salesOrderId ?? undefined,
                       payment: item.id,
                     });
 
                     return (
-                      <tr key={`pending-${item.id}`} className="border-t border-white/8 transition hover:bg-white/[0.025]">
+                      <tr key={`ready-fiscal-${item.id}`} className="border-t border-white/8 transition hover:bg-white/[0.025]">
                         <td className="px-6 py-4 align-middle">
                           <div className="flex items-center gap-3">
                             <Link
@@ -2251,44 +2832,45 @@ export default async function RechnungenPage({
                             <div className="min-h-[52px]">
                               <div className="font-semibold leading-none text-white">{shortId(item.id)}</div>
                               <div className="mt-1.5 text-[11px] text-white/50">
-                                {item.providerTransactionId ? `Stripe ${shortId(item.providerTransactionId)}` : "Stripe-Referenz folgt"}
+                                {item.provider ? item.provider : "Stripe"}
                               </div>
-                              {item.salesOrderId ? (
-                                <div className="mt-1 text-[11px] text-white/45">Sales Order {shortId(item.salesOrderId)}</div>
-                              ) : null}
+                              <div className="mt-1 text-[11px] text-white/40">
+                                {item.providerTransactionId ? shortId(item.providerTransactionId) : "ohne Stripe-ID"}
+                              </div>
                             </div>
                           </div>
+                        </td>
+                        <td className="px-4 py-4 align-middle">
+                          <div className="min-h-[52px]">
+                            <div className="font-semibold text-white">{item.customerName || "Unbekannter Kunde"}</div>
+                            <div className="mt-1 text-xs text-white/55">{item.providerName || "Behandler"}</div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 align-middle text-white/75">{formatDateTime(item.createdAt)}</td>
+                        <td className="px-4 py-4 align-middle font-semibold text-white">{euroFromGross(item.amount, item.currencyCode || "EUR")}</td>
+                        <td className="px-4 py-4 align-middle">
+                          <Badge tone={toneForPaymentStatus(item.status)}>{formatPaymentStatus(item.status)}</Badge>
+                          <div className="mt-2 text-xs text-emerald-200/80">Stripe bezahlt · Fiscal fehlt noch</div>
                         </td>
                         <td className="px-6 py-4 align-middle">
-                          <div className="flex items-center gap-4">
-                            <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${providerBadge.className}`}>
-                              {providerBadge.initials}
-                            </span>
-                            <div className="min-w-0">
-                              <div className="truncate font-semibold text-white">{item.customerName || "Kunde offen"}</div>
-                              <div className="mt-1 truncate text-xs text-white/50">{item.providerName || "Behandler"}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 align-middle text-white/75">{formatDateTime(item.createdAt)}</td>
-                        <td className="px-6 py-4 align-middle font-medium text-white">{euroFromGross(item.amount, item.currencyCode)}</td>
-                        <td className="px-6 py-4 text-right align-middle">
-                          <div className="flex items-center justify-end gap-2">
-                            <Badge tone={toneForPaymentStatus(item.status)}>
-                              <svg viewBox="0 0 20 20" className="mr-1 h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                <rect x="3.5" y="5.5" width="13" height="9" rx="2" />
-                                <path d="M3.5 8.5h13" />
-                              </svg>
-                              {formatPaymentStatus(item.status)}
-                            </Badge>
-                            <Badge tone="blue">
-                              <svg viewBox="0 0 20 20" className="mr-1 h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                <path d="M10 5v5l3 2" />
-                                <circle cx="10" cy="10" r="7" />
-                              </svg>
-                              {item.paymentMethodLabel || "Karte"}
-                            </Badge>
-                          </div>
+                          <form action={createFiscalReceiptForPayment} className="flex flex-wrap items-center gap-2">
+                            <input type="hidden" name="appointment_id" value={item.appointmentId ?? ""} />
+                            <input type="hidden" name="sales_order_id" value={item.salesOrderId ?? ""} />
+                            <input type="hidden" name="payment_id" value={item.id} />
+                            <input type="hidden" name="return_query" value={readyForFiscalReturnQuery} />
+                            <button
+                              type="submit"
+                              className="inline-flex h-10 items-center rounded-xl border border-emerald-500/30 bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-500"
+                            >
+                              Fiscal-Beleg erzeugen
+                            </button>
+                            <Link
+                              href={detailHref}
+                              className="inline-flex h-10 items-center rounded-xl border border-white/10 bg-white/10 px-4 text-sm font-semibold text-white hover:bg-white/15"
+                            >
+                              Payment öffnen
+                            </Link>
+                          </form>
                         </td>
                       </tr>
                     );
@@ -2298,6 +2880,17 @@ export default async function RechnungenPage({
             </div>
           </CardContent>
         </Card>
+      ) : null}
+
+      {!isCheckoutFlow && readerPendingPaymentItems.length > 0 ? (
+        <PendingReaderPaymentsCard
+          items={readerPendingPaymentItems}
+          qRaw={qRaw}
+          currentFilter={currentFilter}
+          practitionerFilter={practitionerFilter}
+          pendingStripeCount={pendingStripeCount}
+          processingStripeCount={processingStripeCount}
+        />
       ) : null}
 
       {!isCheckoutFlow ? (
@@ -2351,7 +2944,7 @@ export default async function RechnungenPage({
                       <th className="w-[28%] px-6 py-4 font-semibold text-right text-white/60">Aktion</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody suppressHydrationWarning={true}>
                     {filteredItems.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="px-6 py-10 text-center text-white/45">Keine Fiscal-Receipts gefunden.</td>

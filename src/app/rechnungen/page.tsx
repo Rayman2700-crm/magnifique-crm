@@ -1,7 +1,5 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getEffectiveTenantId } from "@/lib/effectiveTenant";
@@ -9,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import FiscalReceiptSlideover from "@/components/rechnungen/FiscalReceiptSlideover";
 import PendingReaderPaymentsCard from "./PendingReaderPaymentsCard";
 import ClosingDateAutoSubmit from "@/components/rechnungen/ClosingDateAutoSubmit";
+import RechnungenClosingSlideover from "@/components/rechnungen/RechnungenClosingSlideover";
 import { backfillReadyFiscalReceipts, cancelCardPaymentForCheckout, completeCardPaymentForCheckout, createFiscalReceiptForPayment, createPaymentForSalesOrder, createSalesOrderFromAppointment, failCardPaymentForCheckout, startCardPaymentForCheckout } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -243,189 +242,31 @@ type AvatarFilterOption = {
   filterKey: string;
 };
 
-type DailyClosingSaveEventRow = {
-  id: string;
-  cash_register_id: string | null;
-  performed_by: string | null;
-  event_timestamp: string | null;
-  reference_data: Record<string, unknown> | null;
-  created_at: string | null;
+type ClosingSnapshotReceipt = {
+  receiptNumber: string | null;
+  issuedAt: string | null;
+  customerName: string | null;
+  paymentMethodLabel: string | null;
+  amountCents: number;
+  isStorno: boolean;
 };
 
-type DailyClosingSavedMeta = {
-  eventId: string;
-  savedAt: string | null;
-  savedByUserId: string | null;
-  savedByName: string | null;
+type ClosingGroupSummary = {
+  key: string;
+  tenantId: string | null;
+  cashRegisterId: string | null;
+  providerName: string | null;
+  receiptCount: number;
+  cashCents: number;
+  cardCents: number;
+  transferCents: number;
+  totalCents: number;
+  stornoCount: number;
+  stornoCents: number;
+  latestIssuedAt: string | null;
+  receipts: ClosingSnapshotReceipt[];
 };
 
-function getStringRecordValue(source: Record<string, unknown> | null | undefined, key: string) {
-  const value = source?.[key];
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function getNumberRecordValue(source: Record<string, unknown> | null | undefined, key: string) {
-  const value = source?.[key];
-  const num = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(num) ? num : 0;
-}
-
-function buildClosingPageUrl(input: {
-  qRaw?: string;
-  filter?: string;
-  practitioner?: string;
-  closingDate?: string;
-  success?: string;
-  error?: string;
-}) {
-  const params = new URLSearchParams();
-  if (input.qRaw?.trim()) params.set("q", input.qRaw.trim());
-  if (input.filter && input.filter !== "all") params.set("filter", input.filter);
-  if (input.practitioner && input.practitioner !== "all") params.set("practitioner", input.practitioner);
-  if (input.closingDate?.trim()) params.set("closingDate", input.closingDate.trim());
-  if (input.success?.trim()) params.set("success", input.success.trim());
-  if (input.error?.trim()) params.set("error", input.error.trim());
-  const query = params.toString();
-  return query ? `/rechnungen?${query}` : "/rechnungen";
-}
-
-async function saveDailyClosingSnapshot(formData: FormData) {
-  "use server";
-
-  const closingDate = String(formData.get("closing_date") ?? "").trim();
-  const qRaw = String(formData.get("return_q") ?? "").trim();
-  const currentFilter = String(formData.get("return_filter") ?? "all").trim().toLowerCase() || "all";
-  const practitionerFilter = String(formData.get("return_practitioner") ?? "all").trim() || "all";
-  const mode = String(formData.get("mode") ?? "single").trim().toLowerCase();
-
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(closingDate)) {
-    redirect(buildClosingPageUrl({
-      qRaw,
-      filter: currentFilter,
-      practitioner: practitionerFilter,
-      closingDate,
-      error: "Tagesabschluss-Datum ist ungültig.",
-    }));
-  }
-
-  const supabase = await supabaseServer();
-  const admin = supabaseAdmin();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
-  const { data: profile } = await supabase
-    .from("user_profiles")
-    .select("role, tenant_id, calendar_tenant_id, full_name")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  const effectiveTenantId = await getEffectiveTenantId({
-    role: String((profile as { role?: string | null } | null)?.role ?? "PRACTITIONER"),
-    tenant_id: (profile as { tenant_id?: string | null } | null)?.tenant_id ?? null,
-    calendar_tenant_id: (profile as { calendar_tenant_id?: string | null } | null)?.calendar_tenant_id ?? null,
-  });
-
-  const savedByName = String((profile as { full_name?: string | null } | null)?.full_name ?? "").trim() || "Unbekannt";
-
-  const payloads = mode === "all"
-    ? (() => {
-        let parsed: unknown = [];
-        try {
-          parsed = JSON.parse(String(formData.get("groups_json") ?? "[]"));
-        } catch {
-          parsed = [];
-        }
-        return Array.isArray(parsed) ? parsed : [];
-      })()
-    : [{
-        tenantId: String(formData.get("tenant_id") ?? "").trim() || null,
-        cashRegisterId: String(formData.get("cash_register_id") ?? "").trim() || null,
-        providerName: String(formData.get("provider_name") ?? "").trim() || null,
-        receiptCount: Number(formData.get("receipt_count") ?? 0) || 0,
-        cashCents: Number(formData.get("cash_cents") ?? 0) || 0,
-        cardCents: Number(formData.get("card_cents") ?? 0) || 0,
-        transferCents: Number(formData.get("transfer_cents") ?? 0) || 0,
-        totalCents: Number(formData.get("total_cents") ?? 0) || 0,
-        stornoCount: Number(formData.get("storno_count") ?? 0) || 0,
-        stornoCents: Number(formData.get("storno_cents") ?? 0) || 0,
-      }];
-
-  const normalizedPayloads = payloads
-    .map((entry: any) => ({
-      tenantId: String(entry?.tenantId ?? "").trim() || null,
-      cashRegisterId: String(entry?.cashRegisterId ?? "").trim() || null,
-      providerName: String(entry?.providerName ?? "").trim() || null,
-      receiptCount: Number(entry?.receiptCount ?? 0) || 0,
-      cashCents: Number(entry?.cashCents ?? 0) || 0,
-      cardCents: Number(entry?.cardCents ?? 0) || 0,
-      transferCents: Number(entry?.transferCents ?? 0) || 0,
-      totalCents: Number(entry?.totalCents ?? 0) || 0,
-      stornoCount: Number(entry?.stornoCount ?? 0) || 0,
-      stornoCents: Number(entry?.stornoCents ?? 0) || 0,
-    }))
-    .filter((entry) => entry.tenantId || entry.cashRegisterId || entry.providerName);
-
-  if (normalizedPayloads.length === 0) {
-    redirect(buildClosingPageUrl({
-      qRaw,
-      filter: currentFilter,
-      practitioner: practitionerFilter,
-      closingDate,
-      error: "Es gibt keinen speicherbaren Tagesabschluss.",
-    }));
-  }
-
-  const inserts = normalizedPayloads.map((entry) => ({
-    tenant_id: entry.tenantId ?? effectiveTenantId ?? null,
-    cash_register_id: entry.cashRegisterId ?? null,
-    fiscal_receipt_id: null,
-    event_type: "DAILY_CLOSING_SAVED",
-    performed_by: user.id,
-    notes: `Tagesabschluss ${closingDate} gespeichert`,
-    reference_data: {
-      closing_date: closingDate,
-      tenant_id: entry.tenantId ?? effectiveTenantId ?? null,
-      cash_register_id: entry.cashRegisterId ?? null,
-      provider_name: entry.providerName ?? null,
-      receipt_count: entry.receiptCount,
-      cash_cents: entry.cashCents,
-      card_cents: entry.cardCents,
-      transfer_cents: entry.transferCents,
-      total_cents: entry.totalCents,
-      storno_count: entry.stornoCount,
-      storno_cents: entry.stornoCents,
-      saved_by_user_id: user.id,
-      saved_by_name: savedByName,
-      source: "rechnungen_tagesabschluss_v2",
-    },
-  }));
-
-  const { error } = await admin.from("fiscal_events").insert(inserts);
-
-  if (error) {
-    redirect(buildClosingPageUrl({
-      qRaw,
-      filter: currentFilter,
-      practitioner: practitionerFilter,
-      closingDate,
-      error: error.message ?? "Tagesabschluss konnte nicht gespeichert werden.",
-    }));
-  }
-
-  revalidatePath("/rechnungen");
-  redirect(buildClosingPageUrl({
-    qRaw,
-    filter: currentFilter,
-    practitioner: practitionerFilter,
-    closingDate,
-    success: mode === "all"
-      ? `Tagesabschluss für ${normalizedPayloads.length} Kassen gespeichert ✅`
-      : "Tagesabschluss gespeichert ✅",
-  }));
-}
 
 
 
@@ -734,6 +575,221 @@ function formatBusinessDateKey(value: Date | string | null | undefined) {
   }).format(date);
 }
 
+function formatBusinessMonthKey(value: Date | string | null | undefined) {
+  const date = value instanceof Date ? value : value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+  }).format(date);
+}
+
+function formatBusinessYearKey(value: Date | string | null | undefined) {
+  const date = value instanceof Date ? value : value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+  }).format(date);
+}
+
+function formatMonthLabel(value: string) {
+  const match = String(value ?? "").match(/^(\d{4})-(\d{2})$/);
+  if (!match) return value || "—";
+  const [, year, month] = match;
+  const monthIndex = Number(month) - 1;
+  const date = new Date(Number(year), monthIndex, 1);
+  return new Intl.DateTimeFormat("de-AT", { month: "long", year: "numeric" }).format(date);
+}
+
+
+function buildMonthOptions(anchorDate: string, count = 12) {
+  const base = /^\d{4}-\d{2}-\d{2}$/.test(String(anchorDate ?? "").trim())
+    ? new Date(`${anchorDate}T12:00:00`)
+    : new Date();
+  const start = new Date(base.getFullYear(), base.getMonth(), 1);
+  const items: { key: string; label: string; closingDate: string }[] = [];
+
+  for (let index = 0; index < count; index += 1) {
+    const date = new Date(start.getFullYear(), start.getMonth() - index, 1);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    items.push({
+      key: `${year}-${month}`,
+      label: new Intl.DateTimeFormat("de-AT", { month: "long", year: "numeric" }).format(date),
+      closingDate: `${year}-${month}-01`,
+    });
+  }
+
+  return items;
+}
+
+function buildYearOptions(anchorDate: string, count = 6) {
+  const base = /^\d{4}-\d{2}-\d{2}$/.test(String(anchorDate ?? "").trim())
+    ? new Date(`${anchorDate}T12:00:00`)
+    : new Date();
+  const startYear = base.getFullYear();
+  return Array.from({ length: count }, (_, index) => {
+    const year = String(startYear - index);
+    return {
+      key: year,
+      label: year,
+      closingDate: `${year}-01-01`,
+    };
+  });
+}
+
+function buildDashboardPrimaryButtonClass(fullWidth = false) {
+  return [
+    "inline-flex h-10 items-center justify-center whitespace-nowrap rounded-[16px] border border-[var(--primary)] bg-[var(--primary)] px-4 text-sm font-medium text-[var(--primary-foreground)] shadow-[0_12px_26px_rgba(214,195,163,0.18)] transition hover:opacity-90",
+    fullWidth ? "w-full" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function buildDashboardSecondaryButtonClass(fullWidth = false) {
+  return [
+    "inline-flex h-10 items-center justify-center whitespace-nowrap rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-4 text-sm font-medium text-[var(--text)] transition hover:bg-white/10",
+    fullWidth ? "w-full" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function ClosingPeriodMenu({
+  label,
+  options,
+}: {
+  label: string;
+  options: { href: string; label: string; isActive?: boolean }[];
+}) {
+  return (
+    <details className="group relative w-full">
+      <summary className={buildDashboardSecondaryButtonClass(true)}>
+        <span className="truncate">{label}</span>
+        <svg
+          viewBox="0 0 20 20"
+          className="ml-2 h-4 w-4 shrink-0 transition group-open:rotate-180"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="m5 7.5 5 5 5-5" />
+        </svg>
+      </summary>
+
+      <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 rounded-[18px] border border-white/10 bg-[#101114] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.42)] backdrop-blur-xl">
+        <div className="hide-scrollbar max-h-64 overflow-auto space-y-1" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+          {options.map((option) => (
+            <Link
+              key={option.href}
+              href={option.href}
+              className={`flex items-center justify-between rounded-[14px] px-3 py-2 text-sm transition ${
+                option.isActive ? "bg-white text-black" : "bg-white/[0.03] text-white hover:bg-white/[0.08]"
+              }`}
+            >
+              <span className="truncate">{option.label}</span>
+              {option.isActive ? (
+                <span className="ml-3 text-[11px] font-semibold uppercase tracking-[0.12em]">Aktiv</span>
+              ) : null}
+            </Link>
+          ))}
+        </div>
+      </div>
+    </details>
+  );
+}
+
+function buildClosingGroups(items: SlideoverReceipt[]): ClosingGroupSummary[] {
+  const groupsMap = new Map<string, ClosingGroupSummary>();
+
+  for (const item of items) {
+    const businessState = getReceiptBusinessState(item);
+    const groupKey = `${String(item.tenantId ?? "").trim() || "no-tenant"}__${String(item.cashRegisterId ?? "").trim() || "no-register"}`;
+    const existing = groupsMap.get(groupKey) ?? {
+      key: groupKey,
+      tenantId: item.tenantId ?? null,
+      cashRegisterId: item.cashRegisterId ?? null,
+      providerName: item.providerName ?? null,
+      receiptCount: 0,
+      cashCents: 0,
+      cardCents: 0,
+      transferCents: 0,
+      totalCents: 0,
+      stornoCount: 0,
+      stornoCents: 0,
+      latestIssuedAt: item.issuedAt ?? item.createdAt ?? null,
+      receipts: [],
+    };
+
+    const turnover = Number(item.turnoverValueCents ?? 0) || 0;
+    const normalizedPaymentStatus = String(item.paymentStatus ?? "").trim().toUpperCase();
+    const receiptEntry: ClosingSnapshotReceipt = {
+      receiptNumber: item.receiptNumber ?? null,
+      issuedAt: item.issuedAt ?? item.createdAt ?? null,
+      customerName: item.customerName ?? null,
+      paymentMethodLabel: item.paymentMethodLabel ?? null,
+      amountCents: Math.abs(turnover),
+      isStorno: businessState.key === "cancelled",
+    };
+
+    if (businessState.key === "cancelled") {
+      existing.stornoCount += 1;
+      existing.stornoCents += Math.abs(turnover);
+      existing.receipts.push(receiptEntry);
+    } else if (businessState.key !== "error" && normalizedPaymentStatus === "COMPLETED") {
+      existing.receiptCount += 1;
+      existing.totalCents += turnover;
+      const paymentMethod = normalizeClosingPaymentMethod(item.paymentMethodLabel);
+      if (paymentMethod === "CASH") existing.cashCents += turnover;
+      else if (paymentMethod === "CARD") existing.cardCents += turnover;
+      else if (paymentMethod === "TRANSFER") existing.transferCents += turnover;
+      existing.receipts.push(receiptEntry);
+    }
+
+    const latestCandidate = item.issuedAt ?? item.createdAt ?? null;
+    if (latestCandidate && (!existing.latestIssuedAt || latestCandidate > existing.latestIssuedAt)) {
+      existing.latestIssuedAt = latestCandidate;
+    }
+
+    groupsMap.set(groupKey, existing);
+  }
+
+  return Array.from(groupsMap.values()).sort((a, b) => {
+    const aName = String(a.providerName ?? "").trim();
+    const bName = String(b.providerName ?? "").trim();
+    return aName.localeCompare(bName, "de", { sensitivity: "base" });
+  });
+}
+
+function buildClosingTotals(groups: ClosingGroupSummary[]) {
+  return groups.reduce(
+    (sum, group) => ({
+      receiptCount: sum.receiptCount + group.receiptCount,
+      cashCents: sum.cashCents + group.cashCents,
+      cardCents: sum.cardCents + group.cardCents,
+      transferCents: sum.transferCents + group.transferCents,
+      totalCents: sum.totalCents + group.totalCents,
+      stornoCount: sum.stornoCount + group.stornoCount,
+      stornoCents: sum.stornoCents + group.stornoCents,
+    }),
+    {
+      receiptCount: 0,
+      cashCents: 0,
+      cardCents: 0,
+      transferCents: 0,
+      totalCents: 0,
+      stornoCount: 0,
+      stornoCents: 0,
+    }
+  );
+}
+
 function normalizeClosingPaymentMethod(value: string | null | undefined) {
   const normalized = String(value ?? "").trim().toUpperCase();
   if (normalized === "BAR" || normalized === "CASH") return "CASH" as const;
@@ -871,11 +927,13 @@ function getQuickFilterLabel(filter: string) {
   return labels[filter] ?? "Alle";
 }
 
+
 function buildRechnungenHref({
   qRaw,
   filter,
   practitioner,
   closingDate,
+  closingPanel,
   receipt,
   appointmentId,
   salesOrder,
@@ -885,6 +943,7 @@ function buildRechnungenHref({
   filter?: string;
   practitioner?: string;
   closingDate?: string;
+  closingPanel?: string;
   receipt?: string;
   appointmentId?: string;
   salesOrder?: string;
@@ -895,12 +954,55 @@ function buildRechnungenHref({
   if (filter && filter !== "all") params.set("filter", filter);
   if (practitioner && practitioner !== "all") params.set("practitioner", practitioner);
   if (closingDate?.trim()) params.set("closingDate", closingDate.trim());
+  if (closingPanel?.trim()) params.set("closingPanel", closingPanel.trim());
   if (receipt) params.set("receipt", receipt);
   if (appointmentId) params.set("appointmentId", appointmentId);
   if (salesOrder) params.set("salesOrder", salesOrder);
   if (payment) params.set("payment", payment);
   const query = params.toString();
   return query ? `/rechnungen?${query}` : "/rechnungen";
+}
+
+function ClosingPdfButton({
+  periodType,
+  mode,
+  practitioner,
+  closingDate,
+  generatedByName,
+  generatedAt,
+  snapshot,
+  label,
+  className,
+}: {
+  periodType: "day" | "month" | "year";
+  mode: "all" | "single";
+  practitioner: string;
+  closingDate: string;
+  generatedByName: string;
+  generatedAt: string;
+  snapshot: Record<string, unknown>;
+  label: string;
+  className: string;
+}) {
+  return (
+    <form
+      action="/api/rechnungen/daily-closing-pdf"
+      method="post"
+      target="_blank"
+      className="w-full"
+    >
+      <input type="hidden" name="periodType" value={periodType} />
+      <input type="hidden" name="mode" value={mode} />
+      <input type="hidden" name="practitioner" value={practitioner} />
+      <input type="hidden" name="closingDate" value={closingDate} />
+      <input type="hidden" name="generatedByName" value={generatedByName} />
+      <input type="hidden" name="generatedAt" value={generatedAt} />
+      <input type="hidden" name="snapshot" value={JSON.stringify(snapshot)} />
+      <button type="submit" className={className}>
+        {label}
+      </button>
+    </form>
+  );
 }
 
 function MobileReceiptFilterMenu({
@@ -1096,12 +1198,76 @@ function MobileReceiptAvatarMenu({
 }
 
 
+
+
+function CompactClosingCard({
+  eyebrow,
+  title,
+  periodLabel,
+  totalLabel,
+  receiptCount,
+  stornoCount,
+  actionHref,
+  actionLabel,
+  control,
+}: {
+  eyebrow: string;
+  title: string;
+  periodLabel: string;
+  totalLabel: string;
+  receiptCount: number;
+  stornoCount: number;
+  actionHref: string;
+  actionLabel: string;
+  control?: ReactNode;
+}) {
+  return (
+    <div className="h-full rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 sm:p-5">
+      <div className="flex h-full flex-col gap-4">
+        <div className="min-w-0">
+          <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">{eyebrow}</div>
+          <div className="mt-2 text-[28px] font-semibold leading-none tracking-tight text-[var(--text)]">{title}</div>
+          <div className="mt-2 text-sm text-[var(--text-muted)]">{periodLabel}</div>
+        </div>
+
+        <div className="flex-1">
+          {control ? <div className="mb-4">{control}</div> : <div className="mb-4 h-10" />}
+
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Gesamt</div>
+              <div className="mt-1 text-sm font-semibold text-white">{totalLabel}</div>
+            </div>
+
+            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Belege</div>
+              <div className="mt-1 text-sm font-semibold text-white">{receiptCount}</div>
+            </div>
+
+            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Stornos</div>
+              <div className="mt-1 text-sm font-semibold text-white">{stornoCount}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-auto">
+          <Link href={actionHref} className={buildDashboardPrimaryButtonClass(true)}>
+            {actionLabel}
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 export default async function RechnungenPage({
   searchParams,
 }: {
   searchParams?:
-    | Promise<{ q?: string; filter?: string; practitioner?: string; closingDate?: string; receipt?: string; appointmentId?: string; salesOrder?: string; payment?: string; success?: string; error?: string }>
-    | { q?: string; filter?: string; practitioner?: string; closingDate?: string; receipt?: string; appointmentId?: string; salesOrder?: string; payment?: string; success?: string; error?: string };
+    | Promise<{ q?: string; filter?: string; practitioner?: string; closingDate?: string; closingPanel?: string; receipt?: string; appointmentId?: string; salesOrder?: string; payment?: string; success?: string; error?: string }>
+    | { q?: string; filter?: string; practitioner?: string; closingDate?: string; closingPanel?: string; receipt?: string; appointmentId?: string; salesOrder?: string; payment?: string; success?: string; error?: string };
 }) {
   const sp = searchParams ? await searchParams : undefined;
   const qRaw = String(sp?.q ?? "").trim();
@@ -1117,6 +1283,9 @@ export default async function RechnungenPage({
   const todayDateKey = formatBusinessDateKey(new Date());
   const requestedClosingDate = String((sp as any)?.closingDate ?? "").trim();
   const closingDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedClosingDate) ? requestedClosingDate : todayDateKey;
+  const closingPanel = ["day", "month", "year"].includes(String((sp as any)?.closingPanel ?? "").trim().toLowerCase())
+    ? (String((sp as any)?.closingPanel ?? "").trim().toLowerCase() as "day" | "month" | "year")
+    : "";
   const readyForFiscalReturnQuery = (() => {
     const params = new URLSearchParams();
     if (qRaw) params.set("q", qRaw);
@@ -1841,134 +2010,46 @@ export default async function RechnungenPage({
     return isBetween(issued, monthStart, nextMonthStart) && businessState.key !== "cancelled" ? sum + Number(item.turnoverValueCents ?? 0) : sum;
   }, 0);
 
+  const closingMonth = formatBusinessMonthKey(closingDate);
+  const closingYear = formatBusinessYearKey(closingDate);
+
   const dailyClosingItems = practitionerScopedItems.filter((item) => formatBusinessDateKey(item.issuedAt ?? item.createdAt) === closingDate);
-  const dailyClosingGroupsMap = new Map<string, {
-    key: string;
-    tenantId: string | null;
-    cashRegisterId: string | null;
-    providerName: string | null;
-    receiptCount: number;
-    cashCents: number;
-    cardCents: number;
-    transferCents: number;
-    totalCents: number;
-    stornoCount: number;
-    stornoCents: number;
-    latestIssuedAt: string | null;
-  }>();
+  const monthlyClosingItems = practitionerScopedItems.filter((item) => formatBusinessMonthKey(item.issuedAt ?? item.createdAt) === closingMonth);
+  const yearlyClosingItems = practitionerScopedItems.filter((item) => formatBusinessYearKey(item.issuedAt ?? item.createdAt) === closingYear);
 
-  for (const item of dailyClosingItems) {
-    const businessState = getReceiptBusinessState(item);
-    const groupKey = `${String(item.tenantId ?? "").trim() || "no-tenant"}__${String(item.cashRegisterId ?? "").trim() || "no-register"}`;
-    const existing = dailyClosingGroupsMap.get(groupKey) ?? {
-      key: groupKey,
-      tenantId: item.tenantId ?? null,
-      cashRegisterId: item.cashRegisterId ?? null,
-      providerName: item.providerName ?? null,
-      receiptCount: 0,
-      cashCents: 0,
-      cardCents: 0,
-      transferCents: 0,
-      totalCents: 0,
-      stornoCount: 0,
-      stornoCents: 0,
-      latestIssuedAt: item.issuedAt ?? item.createdAt ?? null,
-    };
+  const dailyClosingGroups = buildClosingGroups(dailyClosingItems);
+  const monthlyClosingGroups = buildClosingGroups(monthlyClosingItems);
+  const yearlyClosingGroups = buildClosingGroups(yearlyClosingItems);
 
-    const turnover = Number(item.turnoverValueCents ?? 0) || 0;
-    const normalizedPaymentStatus = String(item.paymentStatus ?? "").trim().toUpperCase();
+  const dailyClosingTotals = buildClosingTotals(dailyClosingGroups);
+  const monthlyClosingTotals = buildClosingTotals(monthlyClosingGroups);
+  const yearlyClosingTotals = buildClosingTotals(yearlyClosingGroups);
 
-    if (businessState.key === "cancelled") {
-      existing.stornoCount += 1;
-      existing.stornoCents += Math.abs(turnover);
-    } else if (businessState.key !== "error" && normalizedPaymentStatus === "COMPLETED") {
-      existing.receiptCount += 1;
-      existing.totalCents += turnover;
-      const paymentMethod = normalizeClosingPaymentMethod(item.paymentMethodLabel);
-      if (paymentMethod === "CASH") existing.cashCents += turnover;
-      else if (paymentMethod === "CARD") existing.cardCents += turnover;
-      else if (paymentMethod === "TRANSFER") existing.transferCents += turnover;
-    }
+  const generatedAtIso = new Date().toISOString();
+  const generatedByName = String(profile?.full_name ?? "").trim() || user.email || "Unbekannt";
 
-    const latestCandidate = item.issuedAt ?? item.createdAt ?? null;
-    if (latestCandidate && (!existing.latestIssuedAt || latestCandidate > existing.latestIssuedAt)) {
-      existing.latestIssuedAt = latestCandidate;
-    }
-
-    dailyClosingGroupsMap.set(groupKey, existing);
-  }
-
-  const dailyClosingGroups = Array.from(dailyClosingGroupsMap.values()).sort((a, b) => {
-    const aName = String(a.providerName ?? "").trim();
-    const bName = String(b.providerName ?? "").trim();
-    return aName.localeCompare(bName, "de", { sensitivity: "base" });
-  });
-
-  const dailyClosingTotals = dailyClosingGroups.reduce(
-    (sum, group) => ({
-      receiptCount: sum.receiptCount + group.receiptCount,
-      cashCents: sum.cashCents + group.cashCents,
-      cardCents: sum.cardCents + group.cardCents,
-      transferCents: sum.transferCents + group.transferCents,
-      totalCents: sum.totalCents + group.totalCents,
-      stornoCount: sum.stornoCount + group.stornoCount,
-      stornoCents: sum.stornoCents + group.stornoCents,
+  const monthOptions = buildMonthOptions(closingDate).map((option) => ({
+    ...option,
+    href: buildRechnungenHref({
+      qRaw,
+      filter: currentFilter,
+      practitioner: practitionerFilter,
+      closingDate: option.closingDate,
     }),
-    {
-      receiptCount: 0,
-      cashCents: 0,
-      cardCents: 0,
-      transferCents: 0,
-      totalCents: 0,
-      stornoCount: 0,
-      stornoCents: 0,
-    }
-  );
+    isActive: option.key === closingMonth,
+  }));
 
-  const dailyClosingSaveEventsQuery = admin
-    .from("fiscal_events")
-    .select("id, cash_register_id, performed_by, event_timestamp, reference_data, created_at")
-    .eq("event_type", "DAILY_CLOSING_SAVED")
-    .order("created_at", { ascending: false })
-    .limit(300);
+  const yearOptions = buildYearOptions(closingDate).map((option) => ({
+    ...option,
+    href: buildRechnungenHref({
+      qRaw,
+      filter: currentFilter,
+      practitioner: practitionerFilter,
+      closingDate: option.closingDate,
+    }),
+    isActive: option.key === closingYear,
+  }));
 
-  const scopedDailyClosingSaveEventsQuery =
-    !isAdmin && effectiveTenantId
-      ? dailyClosingSaveEventsQuery.eq("tenant_id", effectiveTenantId)
-      : dailyClosingSaveEventsQuery;
-
-  const { data: dailyClosingSaveEventsRaw } = await scopedDailyClosingSaveEventsQuery;
-  const dailyClosingSaveEvents = (dailyClosingSaveEventsRaw ?? []) as DailyClosingSaveEventRow[];
-
-  const dailyClosingSavedByGroup = new Map<string, DailyClosingSavedMeta>();
-  for (const row of dailyClosingSaveEvents) {
-    const referenceData = row.reference_data ?? null;
-    if (getStringRecordValue(referenceData, "closing_date") !== closingDate) continue;
-    const tenantIdFromEvent = getStringRecordValue(referenceData, "tenant_id");
-    const registerIdFromEvent = getStringRecordValue(referenceData, "cash_register_id");
-    const eventKey = `${tenantIdFromEvent || "no-tenant"}__${registerIdFromEvent || "no-register"}`;
-    if (dailyClosingSavedByGroup.has(eventKey)) continue;
-    dailyClosingSavedByGroup.set(eventKey, {
-      eventId: row.id,
-      savedAt: row.event_timestamp ?? row.created_at ?? null,
-      savedByUserId: getStringRecordValue(referenceData, "saved_by_user_id") || row.performed_by || null,
-      savedByName: getStringRecordValue(referenceData, "saved_by_name") || null,
-    });
-  }
-
-  const savedDailyClosingCount = dailyClosingGroups.filter((group) => dailyClosingSavedByGroup.has(group.key)).length;
-  const groupsJsonForSaveAll = JSON.stringify(dailyClosingGroups.map((group) => ({
-    tenantId: group.tenantId,
-    cashRegisterId: group.cashRegisterId,
-    providerName: group.providerName,
-    receiptCount: group.receiptCount,
-    cashCents: group.cashCents,
-    cardCents: group.cardCents,
-    transferCents: group.transferCents,
-    totalCents: group.totalCents,
-    stornoCount: group.stornoCount,
-    stornoCents: group.stornoCents,
-  })));
 
   const checkoutTenant = firstJoin(checkoutAppointment?.tenant);
   const checkoutPerson = firstJoin(checkoutAppointment?.person);
@@ -2277,6 +2358,88 @@ export default async function RechnungenPage({
                 />
               </div>
             </div>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-3">
+              <CompactClosingCard
+                eyebrow="Tagesabschluss"
+                title="Tagesübersicht"
+                periodLabel={closingDate}
+                totalLabel={euroFromCents(dailyClosingTotals.totalCents, "EUR")}
+                receiptCount={dailyClosingTotals.receiptCount}
+                stornoCount={dailyClosingTotals.stornoCount}
+                actionHref={buildRechnungenHref({
+                  qRaw,
+                  filter: currentFilter,
+                  practitioner: practitionerFilter,
+                  closingDate,
+                  closingPanel: "day",
+                })}
+                actionLabel="Öffnen"
+                control={
+                  <ClosingDateAutoSubmit
+                    qRaw={qRaw}
+                    currentFilter={currentFilter}
+                    practitionerFilter={practitionerFilter}
+                    closingDate={closingDate}
+                  />
+                }
+              />
+
+              <CompactClosingCard
+                eyebrow="Monatsabschluss"
+                title="Monatsübersicht"
+                periodLabel={formatMonthLabel(closingMonth)}
+                totalLabel={euroFromCents(monthlyClosingTotals.totalCents, "EUR")}
+                receiptCount={monthlyClosingTotals.receiptCount}
+                stornoCount={monthlyClosingTotals.stornoCount}
+                actionHref={buildRechnungenHref({
+                  qRaw,
+                  filter: currentFilter,
+                  practitioner: practitionerFilter,
+                  closingDate,
+                  closingPanel: "month",
+                })}
+                actionLabel="Öffnen"
+                control={
+                  <ClosingPeriodMenu
+                    label={formatMonthLabel(closingMonth)}
+                    options={monthOptions.map((option) => ({
+                      href: option.href,
+                      label: option.label,
+                      isActive: option.isActive,
+                    }))}
+                  />
+                }
+              />
+
+              <CompactClosingCard
+                eyebrow="Jahresabschluss"
+                title="Jahresübersicht"
+                periodLabel={closingYear}
+                totalLabel={euroFromCents(yearlyClosingTotals.totalCents, "EUR")}
+                receiptCount={yearlyClosingTotals.receiptCount}
+                stornoCount={yearlyClosingTotals.stornoCount}
+                actionHref={buildRechnungenHref({
+                  qRaw,
+                  filter: currentFilter,
+                  practitioner: practitionerFilter,
+                  closingDate,
+                  closingPanel: "year",
+                })}
+                actionLabel="Öffnen"
+                control={
+                  <ClosingPeriodMenu
+                    label={closingYear}
+                    options={yearOptions.map((option) => ({
+                      href: option.href,
+                      label: option.label,
+                      isActive: option.isActive,
+                    }))}
+                  />
+                }
+              />
+            </div>
+
           </CardContent>
         </Card>
       </section>
@@ -2298,135 +2461,24 @@ export default async function RechnungenPage({
         </div>
       ) : null}
 
+
       {!isCheckoutFlow ? (
-        <Card className="mt-6 overflow-hidden border-white/10 bg-white/[0.03]">
-          <CardContent className="p-5 md:p-6">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Kassenabschluss / Tagesabschluss</div>
-                <h2 className="mt-2 text-2xl font-black text-white">Tagesübersicht pro Kassa</h2>
-                <p className="mt-2 max-w-3xl text-sm text-white/60">
-                  Das ist bewusst zuerst der lesende Abschlussblock: pro Behandler und Kassa siehst du für einen Tag die bezahlten Belege, Zahlungsarten und Stornos. Grundlage sind deine Fiscal-Belege plus Payment-Methode. Die bisherige Rechnungsseite bleibt dabei unverändert. 
-                </p>
-              </div>
-              <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/20 p-4">
-                <ClosingDateAutoSubmit
-                  qRaw={qRaw}
-                  currentFilter={currentFilter}
-                  practitionerFilter={practitionerFilter}
-                  closingDate={closingDate}
-                />
-                {dailyClosingGroups.length > 0 ? (
-                  <form action={saveDailyClosingSnapshot} className="flex">
-                    <input type="hidden" name="mode" value="all" />
-                    <input type="hidden" name="closing_date" value={closingDate} />
-                    <input type="hidden" name="return_q" value={qRaw} />
-                    <input type="hidden" name="return_filter" value={currentFilter} />
-                    <input type="hidden" name="return_practitioner" value={practitionerFilter} />
-                    <input type="hidden" name="groups_json" value={groupsJsonForSaveAll} />
-                    <button type="submit" className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-500">
-                      Tagesabschluss speichern
-                    </button>
-                  </form>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <SummaryCard label="Datum" value={closingDate} subtext="Business-Tag Europe/Vienna" />
-              <SummaryCard label="Bezahlt gesamt" value={euroFromCents(dailyClosingTotals.totalCents, "EUR")} subtext={`${dailyClosingTotals.receiptCount} Belege`} />
-              <SummaryCard label="Karte / Bar" value={`${euroFromCents(dailyClosingTotals.cardCents, "EUR")} · ${euroFromCents(dailyClosingTotals.cashCents, "EUR")}`} subtext={`Überweisung ${euroFromCents(dailyClosingTotals.transferCents, "EUR")}`} />
-              <SummaryCard label="Stornos" value={dailyClosingTotals.stornoCount} subtext={`${euroFromCents(dailyClosingTotals.stornoCents, "EUR")} storniertes Volumen`} />
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-white/65">
-              <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">
-                Gespeichert: {savedDailyClosingCount} / {dailyClosingGroups.length || 0} Kassen
-              </span>
-              <span className="text-white/45">Zeitstempel und Benutzer werden im Fiscal-Eventlog protokolliert.</span>
-            </div>
-
-            <div className="mt-5 grid gap-4 xl:grid-cols-2">
-              {dailyClosingGroups.length > 0 ? dailyClosingGroups.map((group) => (
-                <div key={group.key} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <div className="text-lg font-semibold text-white">{group.providerName || "Behandler"}</div>
-                      <div className="mt-1 text-xs text-white/50">
-                        {group.cashRegisterId ? `Kassa ${shortId(group.cashRegisterId)}` : "Kassa noch nicht zugeordnet"}
-                      </div>
-                      <div className="mt-1 text-xs text-white/45">
-                        Letzte Buchung: {formatDateTime(group.latestIssuedAt)}
-                      </div>
-                    </div>
-                    <Badge tone={group.stornoCount > 0 ? "amber" : "green"}>
-                      {group.receiptCount} Belege · {group.stornoCount} Stornos
-                    </Badge>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3">
-                      <div className="text-xs uppercase tracking-wide text-white/45">Bar</div>
-                      <div className="mt-1 text-lg font-bold text-white">{euroFromCents(group.cashCents, "EUR")}</div>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3">
-                      <div className="text-xs uppercase tracking-wide text-white/45">Karte</div>
-                      <div className="mt-1 text-lg font-bold text-white">{euroFromCents(group.cardCents, "EUR")}</div>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3">
-                      <div className="text-xs uppercase tracking-wide text-white/45">Überweisung</div>
-                      <div className="mt-1 text-lg font-bold text-white">{euroFromCents(group.transferCents, "EUR")}</div>
-                    </div>
-                    <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-3">
-                      <div className="text-xs uppercase tracking-wide text-emerald-200/70">Gesamt</div>
-                      <div className="mt-1 text-lg font-bold text-white">{euroFromCents(group.totalCents, "EUR")}</div>
-                    </div>
-                  </div>
-
-                  {(() => {
-                    const savedMeta = dailyClosingSavedByGroup.get(group.key);
-                    return savedMeta ? (
-                      <div className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-3 text-sm text-emerald-100">
-                        Gespeichert am {formatDateTime(savedMeta.savedAt)}{savedMeta.savedByName ? ` · von ${savedMeta.savedByName}` : ""}
-                      </div>
-                    ) : null;
-                  })()}
-
-                  {group.stornoCount > 0 ? (
-                    <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-3 text-sm text-amber-100">
-                      Storno-Volumen an diesem Tag: {euroFromCents(group.stornoCents, "EUR")}
-                    </div>
-                  ) : null}
-
-                  <form action={saveDailyClosingSnapshot} className="mt-4">
-                    <input type="hidden" name="mode" value="single" />
-                    <input type="hidden" name="closing_date" value={closingDate} />
-                    <input type="hidden" name="return_q" value={qRaw} />
-                    <input type="hidden" name="return_filter" value={currentFilter} />
-                    <input type="hidden" name="return_practitioner" value={practitionerFilter} />
-                    <input type="hidden" name="tenant_id" value={group.tenantId ?? ""} />
-                    <input type="hidden" name="cash_register_id" value={group.cashRegisterId ?? ""} />
-                    <input type="hidden" name="provider_name" value={group.providerName ?? ""} />
-                    <input type="hidden" name="receipt_count" value={String(group.receiptCount)} />
-                    <input type="hidden" name="cash_cents" value={String(group.cashCents)} />
-                    <input type="hidden" name="card_cents" value={String(group.cardCents)} />
-                    <input type="hidden" name="transfer_cents" value={String(group.transferCents)} />
-                    <input type="hidden" name="total_cents" value={String(group.totalCents)} />
-                    <input type="hidden" name="storno_count" value={String(group.stornoCount)} />
-                    <input type="hidden" name="storno_cents" value={String(group.stornoCents)} />
-                    <button type="submit" className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-white/10 bg-white/10 px-4 text-sm font-semibold text-white hover:bg-white/15">
-                      Abschluss für diese Kassa speichern
-                    </button>
-                  </form>
-                </div>
-              )) : (
-                <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-6 text-sm text-white/60 xl:col-span-2">
-                  Für {closingDate} gibt es in der aktuellen Auswahl noch keine bezahlten oder stornierten Fiscal-Belege.
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <RechnungenClosingSlideover
+          qRaw={qRaw}
+          currentFilter={currentFilter}
+          practitionerFilter={practitionerFilter}
+          closingDate={closingDate}
+          closingMonth={closingMonth}
+          closingYear={closingYear}
+          generatedByName={generatedByName}
+          generatedAtIso={generatedAtIso}
+          dailyClosingTotals={dailyClosingTotals}
+          dailyClosingGroups={dailyClosingGroups}
+          monthlyClosingTotals={monthlyClosingTotals}
+          monthlyClosingGroups={monthlyClosingGroups}
+          yearlyClosingTotals={yearlyClosingTotals}
+          yearlyClosingGroups={yearlyClosingGroups}
+        />
       ) : null}
 
       {showCheckoutBuilder ? (

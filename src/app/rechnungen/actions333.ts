@@ -687,7 +687,6 @@ export async function sendFiscalReceiptEmail(formData: FormData) {
       receipt_number,
       receipt_type,
       status,
-      issued_at,
       currency_code,
       turnover_value_cents,
       receipt_payload_canonical,
@@ -708,7 +707,6 @@ export async function sendFiscalReceiptEmail(formData: FormData) {
     receipt_number: string | null;
     receipt_type: string | null;
     status: string | null;
-    issued_at: string | null;
     currency_code: string | null;
     turnover_value_cents: number | null;
     receipt_payload_canonical: string | null;
@@ -735,11 +733,7 @@ export async function sendFiscalReceiptEmail(formData: FormData) {
   const salesOrderId = String(receipt.sales_order_id ?? "").trim();
   let customerName =
     readFirstString(payload, [["customer_name"], ["person_name"], ["customer", "full_name"], ["customer", "name"]]) || "";
-  let customerEmail =
-    firstNonEmpty(
-      readFirstString(payload, [["customer_email"], ["customer", "email"], ["email"]]),
-      readFirstString(payload, [["person_email"]]),
-    ) || "";
+  let customerEmail = "";
 
   if (salesOrderId) {
     const { data: salesOrderRaw } = await admin
@@ -752,13 +746,13 @@ export async function sendFiscalReceiptEmail(formData: FormData) {
     if (customerProfileId) {
       const { data: customerProfileRaw } = await admin
         .from("customer_profiles")
-        .select(`id, person:persons ( full_name, email, phone )`)
+        .select(`id, person:persons ( full_name, email )`)
         .eq("id", customerProfileId)
         .maybeSingle();
 
       const personJoin = firstJoin((customerProfileRaw as any)?.person);
-      customerName = firstNonEmpty(String(personJoin?.full_name ?? ""), customerName);
-      customerEmail = firstNonEmpty(String(personJoin?.email ?? ""), customerEmail);
+      customerName = String(personJoin?.full_name ?? customerName).trim() || customerName;
+      customerEmail = String(personJoin?.email ?? "").trim();
     }
   }
 
