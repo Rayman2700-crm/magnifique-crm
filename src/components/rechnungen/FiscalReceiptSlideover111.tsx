@@ -412,8 +412,8 @@ function InfoCard({
   printKeepTogether?: boolean;
 }) {
   return (
-    <div className={`rounded-[18px] border border-white/10 bg-white/[0.03] px-4 py-4 shadow-[0_14px_40px_rgba(0,0,0,0.26)] receipt-print-card ${printKeepTogether ? "print-keep-together" : ""}`}>
-      <div className="text-sm font-semibold text-white/92 print:text-black">{title}</div>
+    <div className={`rounded-3xl border border-white/10 bg-white/[0.03] p-5 receipt-print-card ${printKeepTogether ? "print-keep-together" : ""}`}>
+      <div className="text-base font-semibold text-white print:text-black">{title}</div>
       <div className="mt-4">{children}</div>
     </div>
   );
@@ -438,7 +438,7 @@ function IconButton({
       onClick={onClick}
       aria-label={title}
       title={title}
-      className={`inline-flex h-11 w-11 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 transition-colors ${hoverClassName ?? "hover:bg-white/10"} ${className ?? ""}`}
+      className={`inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 transition-colors ${hoverClassName ?? "hover:bg-white/10"} ${className ?? ""}`}
     >
       {children}
     </button>
@@ -450,7 +450,7 @@ function HeaderActionButton({ label, disabled = false }: { label: string; disabl
     <button
       type="button"
       disabled={disabled}
-      className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-white/5"
+      className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-white/5"
     >
       {label}
     </button>
@@ -738,14 +738,14 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
         }
       `}</style>
 
-      <div style={{ position: "fixed", inset: 0, zIndex: 1400 }}>
+      <div style={{ position: "fixed", inset: 0, zIndex: 1350, isolation: "isolate" }}>
         <div
           onClick={close}
           className="receipt-print-hide"
           style={{
             position: "absolute",
             inset: 0,
-            backgroundColor: "rgba(0,0,0,0.68)",
+            backgroundColor: "rgba(0,0,0,0.60)",
             backdropFilter: "blur(6px)",
             opacity: shown ? 1 : 0,
             transition: "opacity 200ms ease",
@@ -756,28 +756,25 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
           className="receipt-print-root"
           style={{
             position: "absolute",
-            top: 18,
-            right: 18,
-            bottom: 18,
-            width: 470,
-            maxWidth: "calc(100vw - 36px)",
+            top: 0,
+            right: 0,
+            height: "100%",
+            width: "min(590px, calc(100vw - 1rem))",
             transform: shown ? "translateX(0)" : "translateX(24px)",
             opacity: shown ? 1 : 0,
             transition: "transform 220ms ease, opacity 220ms ease",
-            borderRadius: 22,
-            border: "1px solid rgba(255,255,255,0.12)",
-            background: "linear-gradient(180deg, rgba(16,16,16,0.96), rgba(10,10,10,0.96))",
+            borderLeft: "1px solid rgba(255,255,255,0.08)",
+            background: "rgb(9,9,11)",
             color: "white",
-            boxShadow: "0 18px 60px rgba(0,0,0,0.55)",
-            overflow: "hidden",
+            boxShadow: "-12px 0 40px rgba(0,0,0,0.45)",
             display: "flex",
             flexDirection: "column",
           }}
         >
-          <div className="receipt-print-hide">
-            <div className="p-4 pb-3">
+          <div className="border-b border-white/10 receipt-print-hide">
+            <div className="px-5 pt-5 pb-4">
               <div
-                className="grid gap-3"
+                className="grid gap-2"
                 style={{ gridTemplateColumns: selected.salesOrderId ? "repeat(6, minmax(0, 1fr))" : "repeat(5, minmax(0, 1fr))" }}
               >
                 {selected.salesOrderId ? (
@@ -785,7 +782,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                     href={`/rechnungen?${new URLSearchParams({ q: selected.salesOrderId }).toString()}`}
                     aria-label="Sales Order suchen"
                     title="Sales Order suchen"
-                    className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/10 bg-white/10 text-white transition-colors hover:bg-white/10"
+                    className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white transition-colors hover:bg-white/10"
                   >
                     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <circle cx="11" cy="11" r="7" />
@@ -799,7 +796,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                   onClick={() => window.print()}
                   aria-label="Drucken / PDF"
                   title="Drucken / PDF"
-                  className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/10 bg-white/10 text-white transition-colors hover:bg-white/10"
+                  className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white transition-colors hover:bg-white/10"
                 >
                   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M6 9V3h12v6" />
@@ -817,7 +814,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                       type="submit"
                       aria-label="E-Mail senden"
                       title="E-Mail senden"
-                      className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/10 bg-white/10 transition-colors hover:bg-white/10"
+                      className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-white/15 bg-white/5 transition-colors hover:bg-white/10"
                     >
                       <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="M4 6h16v12H4z" />
@@ -831,7 +828,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                     disabled
                     aria-label={isCancelled ? "Versand bei storniertem Beleg deaktiviert" : "Keine E-Mail hinterlegt"}
                     title={isCancelled ? "Versand bei storniertem Beleg deaktiviert" : "Keine E-Mail hinterlegt"}
-                    className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/10 bg-white/10 text-white opacity-45 cursor-not-allowed"
+                    className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white opacity-45 cursor-not-allowed"
                   >
                     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M4 6h16v12H4z" />
@@ -848,7 +845,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                       type="submit"
                       aria-label="WhatsApp senden"
                       title="WhatsApp senden"
-                      className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/10 bg-white/10 transition-colors hover:bg-white/10"
+                      className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-white/15 bg-white/5 transition-colors hover:bg-white/10"
                     >
                       <svg viewBox="0 0 24 24" className="h-5 w-5" fill="#34d399" aria-hidden="true">
                         <path d="M20.52 3.48A11.82 11.82 0 0 0 12.07 0C5.5 0 .16 5.34.16 11.92c0 2.1.55 4.15 1.59 5.96L0 24l6.32-1.66a11.86 11.86 0 0 0 5.75 1.47h.01c6.57 0 11.91-5.34 11.91-11.92 0-3.18-1.24-6.17-3.47-8.41Zm-8.45 18.3h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.75.98 1-3.66-.24-.38a9.9 9.9 0 0 1-1.52-5.21c0-5.46 4.45-9.91 9.92-9.91 2.65 0 5.14 1.03 7.01 2.9a9.84 9.84 0 0 1 2.9 7c0 5.47-4.45 9.92-9.92 9.92Zm5.44-7.42c-.3-.15-1.77-.88-2.04-.98-.27-.1-.47-.15-.66.15-.2.3-.76.98-.94 1.18-.17.2-.35.22-.64.08-.3-.15-1.25-.46-2.38-1.47-.88-.79-1.47-1.77-1.64-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.44-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.66-1.59-.91-2.18-.24-.58-.48-.5-.66-.5h-.56c-.2 0-.52.08-.8.37-.27.3-1.05 1.03-1.05 2.5s1.08 2.9 1.23 3.1c.15.2 2.12 3.24 5.14 4.54.72.31 1.28.5 1.72.64.72.23 1.38.2 1.9.12.58-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.12-.27-.2-.56-.35Z" />
@@ -861,7 +858,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                     disabled
                     aria-label={isCancelled ? "Versand bei storniertem Beleg deaktiviert" : "Keine Telefonnummer hinterlegt"}
                     title={isCancelled ? "Versand bei storniertem Beleg deaktiviert" : "Keine Telefonnummer hinterlegt"}
-                    className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/10 bg-white/10 text-white opacity-45 cursor-not-allowed"
+                    className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white opacity-45 cursor-not-allowed"
                   >
                     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="#34d399" aria-hidden="true">
                       <path d="M20.52 3.48A11.82 11.82 0 0 0 12.07 0C5.5 0 .16 5.34.16 11.92c0 2.1.55 4.15 1.59 5.96L0 24l6.32-1.66a11.86 11.86 0 0 0 5.75 1.47h.01c6.57 0 11.91-5.34 11.91-11.92 0-3.18-1.24-6.17-3.47-8.41Zm-8.45 18.3h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.75.98 1-3.66-.24-.38a9.9 9.9 0 0 1-1.52-5.21c0-5.46 4.45-9.91 9.92-9.91 2.65 0 5.14 1.03 7.01 2.9a9.84 9.84 0 0 1 2.9 7c0 5.47-4.45 9.92-9.92 9.92Zm5.44-7.42c-.3-.15-1.77-.88-2.04-.98-.27-.1-.47-.15-.66.15-.2.3-.76.98-.94 1.18-.17.2-.35.22-.64.08-.3-.15-1.25-.46-2.38-1.47-.88-.79-1.47-1.77-1.64-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.44-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.66-1.59-.91-2.18-.24-.58-.48-.5-.66-.5h-.56c-.2 0-.52.08-.8.37-.27.3-1.05 1.03-1.05 2.5s1.08 2.9 1.23 3.1c.15.2 2.12 3.24 5.14 4.54.72.31 1.28.5 1.72.64.72.23 1.38.2 1.9.12.58-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.12-.27-.2-.56-.35Z" />
@@ -886,7 +883,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                   <button
                     type="submit"
                     disabled={isCancelled}
-                    className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/10 bg-white/10 px-4 text-sm font-semibold text-white transition-colors hover:bg-red-500/15 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-white/5 disabled:hover:text-white"
+                    className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-red-500/15 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-white/5 disabled:hover:text-white"
                     title={isStornoReceipt ? "Ein Stornobeleg kann nicht erneut storniert werden" : isCancelled ? "Beleg ist bereits storniert" : "Beleg stornieren"}
                   >
                     {isStornoReceipt ? "Stornobeleg" : isCancelled ? "Storniert" : "Storno"}
@@ -898,7 +895,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                   onClick={close}
                   aria-label="Schließen"
                   title="Schließen"
-                  className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/10 bg-white/10 text-white transition-colors hover:bg-red-600/90 hover:text-white"
+                  className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white transition-colors hover:bg-red-600/90 hover:text-white"
                 >
                   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
                     <path d="M6 6l12 12M18 6L6 18" />
@@ -907,14 +904,14 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
               </div>
             </div>
 
-            <div className="mx-4 border-t border-white/10" />
+            <div className="mx-5 border-t border-white/10" />
 
-            <div className="px-4 pt-3 pb-4">
+            <div className="px-5 pt-4 pb-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <div className="text-xs text-white/58">Rechnungen / Belegdetails</div>
-                  <div className="text-[28px] font-extrabold leading-none text-white">Beleg {selected.receiptNumber}</div>
-                  <div className="mt-2 text-[13px] text-white/46">
+                  <div className="text-sm text-white/55">Rechnungen / Belegdetails</div>
+                  <div className="text-2xl font-extrabold text-white">Beleg {selected.receiptNumber}</div>
+                  <div className="mt-1 text-sm text-white/55">
                     {formatDateTime(selected.createdAt)} · {euroFromCents(selected.turnoverValueCents, selected.currencyCode)}
                   </div>
 
@@ -931,7 +928,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                   </div>
                 </div>
 
-                <div className="flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/10 text-base font-bold text-white/90 shadow-[0_10px_30px_rgba(0,0,0,0.28)]">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/10 text-sm font-bold text-white/90">
                   {selected.providerAvatarUrl && showProviderImage ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -947,8 +944,8 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
               </div>
             </div>
           </div>
-          <div className="hide-scrollbar flex-1 overflow-y-auto p-4 receipt-print-scroll">
-            <div className="space-y-4">
+          <div className="flex-1 overflow-y-auto p-5 receipt-print-scroll">
+            <div className="mx-auto max-w-[760px] space-y-5">
               <div className="hidden print:block">
                 <div className="flex items-start justify-between gap-6 border-b border-black/10 pb-4">
                   <div>
@@ -966,17 +963,17 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
               </div>
 
               {isStornoReceipt ? (
-                <div className="rounded-[18px] border border-red-500/25 bg-red-500/10 px-5 py-4 text-sm font-semibold text-red-100 print-keep-together">
+                <div className="rounded-3xl border border-red-500/25 bg-red-500/10 px-5 py-4 text-sm font-semibold text-red-100 print-keep-together">
                   Dieser Beleg ist ein Stornobeleg{stornoInfo.originalReceiptNumber ? ` zu Beleg ${stornoInfo.originalReceiptNumber}` : ""}.
                 </div>
               ) : isCancelled ? (
-                <div className="rounded-[18px] border border-red-500/25 bg-red-500/10 px-5 py-4 text-sm font-semibold text-red-100 print-keep-together">
+                <div className="rounded-3xl border border-red-500/25 bg-red-500/10 px-5 py-4 text-sm font-semibold text-red-100 print-keep-together">
                   Dieser Beleg ist storniert{stornoInfo.stornoReceiptNumber ? ` durch Beleg ${stornoInfo.stornoReceiptNumber}` : ""}.
                 </div>
               ) : null}
 
               {paymentStatusHint(selected.paymentStatus) ? (
-                <div className={`rounded-[18px] border px-5 py-4 text-sm print-keep-together ${paymentStatusHint(selected.paymentStatus)?.className}`}>
+                <div className={`rounded-3xl border px-5 py-4 text-sm print-keep-together ${paymentStatusHint(selected.paymentStatus)?.className}`}>
                   <div className="font-semibold">{paymentStatusHint(selected.paymentStatus)?.title}</div>
                   <div className="mt-1">{paymentStatusHint(selected.paymentStatus)?.text}</div>
                 </div>
@@ -1000,7 +997,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                   <input type="hidden" name="lines_json" value={serializedLines} />
 
                   <div className="grid gap-3 md:grid-cols-2">
-                    <div className="rounded-[16px] border border-white/10 bg-black/20 p-4 receipt-print-grid-card md:col-span-2">
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4 receipt-print-grid-card md:col-span-2">
                       <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40 print-text-muted">Kunde</div>
                       {isEditingCustomer ? (
                         <input
@@ -1011,14 +1008,14 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                           onKeyDown={(e) => {
                             if (e.key === "Enter") e.preventDefault();
                           }}
-                          className="mt-2 h-12 w-full rounded-[16px] border border-white/10 bg-black/30 px-3 text-base font-semibold text-white outline-none receipt-print-hide"
+                          className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-base font-semibold text-white outline-none receipt-print-hide"
                         />
                       ) : null}
                       <input type="hidden" name="customer_name" value={customerDraft} />
                       <div className="mt-2 text-lg font-bold text-white print:text-black">{customerDraft || "Nicht hinterlegt"}</div>
                     </div>
 
-                    <div className="rounded-[16px] border border-white/10 bg-black/20 p-4 receipt-print-grid-card">
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4 receipt-print-grid-card">
                       <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40 print-text-muted">E-Mail</div>
                       {isEditingCustomer ? (
                         <input
@@ -1028,7 +1025,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                           onKeyDown={(e) => {
                             if (e.key === "Enter") e.preventDefault();
                           }}
-                          className="mt-2 h-12 w-full rounded-[16px] border border-white/10 bg-black/30 px-3 text-sm font-semibold text-white outline-none receipt-print-hide"
+                          className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm font-semibold text-white outline-none receipt-print-hide"
                           placeholder="kunde@mail.com"
                         />
                       ) : null}
@@ -1036,7 +1033,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                       <div className="mt-2 text-sm font-semibold text-white print:text-black">{customerEmailDraft || "Nicht hinterlegt"}</div>
                     </div>
 
-                    <div className="rounded-[16px] border border-white/10 bg-black/20 p-4 receipt-print-grid-card">
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4 receipt-print-grid-card">
                       <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40 print-text-muted">Telefon / WhatsApp</div>
                       {isEditingCustomer ? (
                         <input
@@ -1046,7 +1043,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                           onKeyDown={(e) => {
                             if (e.key === "Enter") e.preventDefault();
                           }}
-                          className="mt-2 h-12 w-full rounded-[16px] border border-white/10 bg-black/30 px-3 text-sm font-semibold text-white outline-none receipt-print-hide"
+                          className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm font-semibold text-white outline-none receipt-print-hide"
                           placeholder="+43..."
                         />
                       ) : null}
@@ -1060,7 +1057,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                       <button
                         type="button"
                         disabled
-                        className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white/55 opacity-45 cursor-not-allowed"
+                        className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white/55 opacity-45 cursor-not-allowed"
                         title={isStornoReceipt ? "Bearbeiten bei Stornobeleg deaktiviert" : "Bearbeiten bei storniertem Beleg deaktiviert"}
                       >
                         Bearbeiten
@@ -1072,7 +1069,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                           customerSubmitArmedRef.current = false;
                           setIsEditingCustomer(true);
                         }}
-                        className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                        className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
                       >
                         Bearbeiten
                       </button>
@@ -1083,7 +1080,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                           onClick={() => {
                             customerSubmitArmedRef.current = true;
                           }}
-                          className="inline-flex h-12 items-center justify-center rounded-[16px] border border-emerald-500/30 bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
+                          className="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
                         >
                           Speichern
                         </button>
@@ -1096,7 +1093,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                             setCustomerPhoneDraft(customerPhone);
                             setIsEditingCustomer(false);
                           }}
-                          className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                          className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
                         >
                           Abbrechen
                         </button>
@@ -1114,7 +1111,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                   <input type="hidden" name="customer_name" value={customerDraft} />
                   <input type="hidden" name="lines_json" value={serializedLines} />
 
-                  <div className="overflow-hidden rounded-[16px] border border-white/10 receipt-print-grid-card">
+                  <div className="overflow-hidden rounded-2xl border border-white/10 receipt-print-grid-card">
                     <table className="min-w-full table-fixed text-sm print-table">
                       <colgroup>
                         <col className="w-[46%]" />
@@ -1172,7 +1169,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                                             };
                                           });
                                         }}
-                                        className="h-10 w-full rounded-[16px] border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
+                                        className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
                                       >
                                         <option value="__custom__">Freie Eingabe / manuell</option>
                                         {serviceOptions.map((service) => (
@@ -1194,7 +1191,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                                             lineType: current.serviceId ? "SERVICE" : "ITEM",
                                           }))
                                         }
-                                        className="h-10 w-full rounded-[16px] border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
+                                        className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
                                         placeholder="Leistungsname"
                                       />
                                     </div>
@@ -1219,7 +1216,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                                           };
                                         })
                                       }
-                                      className="h-10 w-full rounded-[16px] border border-white/10 bg-black/30 px-2 text-center text-sm text-white outline-none receipt-print-hide"
+                                      className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-2 text-center text-sm text-white outline-none receipt-print-hide"
                                     />
                                   ) : null}
                                   <span className={isEditingLines ? "hidden print:inline" : "inline"}>{line.quantity || "—"}</span>
@@ -1239,7 +1236,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                                           };
                                         })
                                       }
-                                      className="h-10 w-full rounded-[16px] border border-white/10 bg-black/30 px-3 text-sm text-white outline-none receipt-print-hide"
+                                      className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none receipt-print-hide"
                                     />
                                   ) : null}
                                   <span className={isEditingLines ? "hidden print:inline" : "inline"}>{line.unitPriceGross ? `${line.unitPriceGross} €` : "—"}</span>
@@ -1252,12 +1249,12 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                                           value={shownTotal}
                                           disabled={!line.manualTotalOverride}
                                           onChange={(e) => updateLine(index, (current) => ({ ...current, lineTotalGross: e.target.value }))}
-                                          className="h-10 min-w-0 flex-1 rounded-[16px] border border-white/10 bg-black/30 px-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                                          className="h-10 min-w-0 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60"
                                         />
                                         <button
                                           type="button"
                                           onClick={() => setLinesDraft((current) => current.filter((_, rowIndex) => rowIndex !== index))}
-                                          className="inline-flex h-10 w-10 items-center justify-center rounded-[16px] border border-red-500/20 bg-red-500/10 text-red-100 hover:bg-red-500/15"
+                                          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-red-500/20 bg-red-500/10 text-red-100 hover:bg-red-500/15"
                                           title="Zeile entfernen"
                                         >
                                           −
@@ -1293,7 +1290,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                     </table>
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-white/10 bg-black/20 px-4 py-3 receipt-print-grid-card">
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 receipt-print-grid-card">
                     <div>
                       <div className="text-xs uppercase tracking-wide text-white/45 print-text-muted">Aktuelle Summe</div>
                       <div className="mt-1 text-lg font-bold text-white print:text-black">{euroFromCents(totalDraftCents, selected.currencyCode)}</div>
@@ -1304,7 +1301,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                         <button
                           type="button"
                           disabled
-                          className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white/55 opacity-45 cursor-not-allowed"
+                          className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white/55 opacity-45 cursor-not-allowed"
                           title={isStornoReceipt ? "Bearbeiten bei Stornobeleg deaktiviert" : "Bearbeiten bei storniertem Beleg deaktiviert"}
                         >
                           Bearbeiten
@@ -1314,13 +1311,13 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                           <button
                             type="button"
                             onClick={addLine}
-                            className="inline-flex h-12 items-center justify-center rounded-[16px] border border-sky-300/40 bg-sky-500/10 px-4 text-sm font-semibold text-white transition-colors hover:bg-sky-500/15"
+                            className="inline-flex h-11 items-center justify-center rounded-xl border border-sky-300/40 bg-sky-500/10 px-4 text-sm font-semibold text-white transition-colors hover:bg-sky-500/15"
                           >
                             + Leistung hinzufügen
                           </button>
                           <button
                             type="submit"
-                            className="inline-flex h-12 items-center justify-center rounded-[16px] border border-emerald-500/30 bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
+                            className="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
                           >
                             Speichern
                           </button>
@@ -1330,7 +1327,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                               setLinesDraft(buildEditableLines(payloadLines));
                               setIsEditingLines(false);
                             }}
-                            className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                            className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
                           >
                             Abbrechen
                           </button>
@@ -1339,7 +1336,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                         <button
                           type="button"
                           onClick={() => setIsEditingLines(true)}
-                          className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                          className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
                         >
                           Bearbeiten
                         </button>
@@ -1374,12 +1371,12 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                 {communicationOpen ? (
                   <div className="mt-5 space-y-3">
                     {deliveries.length === 0 ? (
-                      <div className="rounded-[16px] border border-dashed border-white/10 bg-black/20 px-4 py-4 text-sm text-white/55 print:text-black/60">
+                      <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-4 text-sm text-white/55 print:text-black/60">
                         Noch kein Versand protokolliert.
                       </div>
                     ) : (
                       deliveries.map((delivery) => (
-                        <div key={delivery.id} className="rounded-[16px] border border-white/10 bg-black/20 p-4 receipt-print-grid-card">
+                        <div key={delivery.id} className="rounded-2xl border border-white/10 bg-black/20 p-4 receipt-print-grid-card">
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
                               <div className="flex flex-wrap items-center gap-2">
@@ -1402,7 +1399,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                           {delivery.subject ? <div className="mt-1 text-sm text-white/75 print:text-black">{delivery.subject}</div> : null}
 
                           {delivery.errorMessage ? (
-                            <div className="mt-3 rounded-[16px] border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-100 print:border-red-200 print:bg-red-50 print:text-red-700">
+                            <div className="mt-3 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-100 print:border-red-200 print:bg-red-50 print:text-red-700">
                               {delivery.errorMessage}
                             </div>
                           ) : null}
@@ -1413,9 +1410,9 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                 ) : null}
               </InfoCard>
 
-              <div className="hidden rounded-[18px] border border-black/10 bg-white p-5 print:block print-keep-together">
+              <div className="hidden rounded-3xl border border-black/10 bg-white p-5 print:block print-keep-together">
                 {isCancelled ? (
-                  <div className="mb-4 rounded-[16px] border border-red-300 bg-red-50 px-4 py-3 text-center text-base font-extrabold uppercase tracking-[0.16em] text-red-700">
+                  <div className="mb-4 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-center text-base font-extrabold uppercase tracking-[0.16em] text-red-700">
                     Storniert
                   </div>
                 ) : null}
