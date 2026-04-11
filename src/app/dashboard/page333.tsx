@@ -479,52 +479,50 @@ function InvoiceCreateCard({
             </div>
           </div>
 
-          <div className="mt-auto space-y-2">
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              <Link
-                href="/dashboard?invoice=1"
-                className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] bg-[var(--primary)] px-3 text-sm font-medium text-[var(--primary-foreground)] shadow-[0_4px_20px_rgba(214,195,163,0.18)] transition hover:opacity-90"
-              >
-                + Rechnung
-              </Link>
+          <div className="mt-auto grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            <Link
+              href="/dashboard?invoice=1"
+              className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] bg-[var(--primary)] px-3 text-sm font-medium text-[var(--primary-foreground)] shadow-[0_4px_20px_rgba(214,195,163,0.18)] transition hover:opacity-90"
+            >
+              Abrechnen
+            </Link>
 
-              {openReceiptCount > 0 ? (
-                <Link
-                  href="/rechnungen?filter=open"
-                  className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
-                >
-                  Offen prüfen ({openReceiptCount})
-                </Link>
-              ) : null}
-
+            {openReceiptCount > 0 ? (
               <Link
-                href="/rechnungen"
-                className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-white/10 bg-transparent px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10 sm:col-span-2 xl:col-span-1"
-              >
-                {hasRecentReceipt ? "Belege öffnen" : "Belege"}
-              </Link>
-            </div>
-
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              <Link
-                href={`/rechnungen?closingDate=${encodeURIComponent(closingDateKey)}&closingPanel=day`}
+                href="/rechnungen?filter=open"
                 className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
               >
-                Tagesabschluss
+                Offen prüfen ({openReceiptCount})
               </Link>
-              <Link
-                href={`/rechnungen?closingDate=${encodeURIComponent(closingDateKey)}&closingPanel=month`}
-                className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
-              >
-                Monatsabschluss
-              </Link>
-              <Link
-                href={`/rechnungen?closingDate=${encodeURIComponent(closingDateKey)}&closingPanel=year`}
-                className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
-              >
-                Jahresabschluss
-              </Link>
-            </div>
+            ) : null}
+
+            <Link
+              href="/rechnungen"
+              className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-white/10 bg-transparent px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10 sm:col-span-2 xl:col-span-1"
+            >
+              {hasRecentReceipt ? "Belege öffnen" : "Belege"}
+            </Link>
+          </div>
+
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            <Link
+              href={`/rechnungen?closingDate=${encodeURIComponent(closingDateKey)}&closingPanel=day`}
+              className="inline-flex h-9 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-white/10 bg-[var(--surface-2)] px-2 text-xs font-medium text-[var(--text)] transition hover:bg-white/10"
+            >
+              Tagesabschluss
+            </Link>
+            <Link
+              href={`/rechnungen?closingDate=${encodeURIComponent(closingDateKey)}&closingPanel=month`}
+              className="inline-flex h-9 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-white/10 bg-[var(--surface-2)] px-2 text-xs font-medium text-[var(--text)] transition hover:bg-white/10"
+            >
+              Monatsabschluss
+            </Link>
+            <Link
+              href={`/rechnungen?closingDate=${encodeURIComponent(closingDateKey)}&closingPanel=year`}
+              className="inline-flex h-9 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-white/10 bg-[var(--surface-2)] px-2 text-xs font-medium text-[var(--text)] transition hover:bg-white/10"
+            >
+              Jahresabschluss
+            </Link>
           </div>
         </div>
       </CardContent>
