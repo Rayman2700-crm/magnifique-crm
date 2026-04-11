@@ -29,8 +29,6 @@ type ReaderSummary = {
   actionStatus: string | null;
   actionType: string | null;
   lastSeenAt: number | null;
-  isReady?: boolean;
-  readinessReason?: string | null;
 };
 
 type Props = {
@@ -96,8 +94,6 @@ function readerStatusLabel(reader: ReaderSummary) {
   const status = normalizeStatus(reader.status);
   const actionType = String(reader.actionType ?? "").trim();
   const actionStatus = String(reader.actionStatus ?? "").trim();
-  const readinessReason = String(reader.readinessReason ?? "").trim();
-  if (readinessReason) return readinessReason;
   if (actionType && actionStatus) return `${status || "unbekannt"} · ${actionType} · ${actionStatus}`;
   return status || "unbekannt";
 }
@@ -165,12 +161,7 @@ export default function PendingReaderPaymentsCard({
   const hardReloadingRef = useRef(false);
 
   const readerOptions = useMemo(
-    () =>
-      readers.map((reader) => ({
-        value: reader.id,
-        label: `${reader.label || reader.serialNumber || reader.id} · ${readerStatusLabel(reader)}`,
-        disabled: reader.isReady === false,
-      })),
+    () => readers.map((reader) => ({ value: reader.id, label: `${reader.label || reader.serialNumber || reader.id} · ${readerStatusLabel(reader)}` })),
     [readers]
   );
 
@@ -180,12 +171,6 @@ export default function PendingReaderPaymentsCard({
       pollTimersRef.current = {};
     };
   }, []);
-
-  useEffect(() => {
-    if (!readersLoaded && !loadingReaders) {
-      void loadReaders();
-    }
-  }, [readersLoaded, loadingReaders]);
 
   function stopPolling(paymentId: string) {
     const timerId = pollTimersRef.current[paymentId];
@@ -242,23 +227,9 @@ export default function PendingReaderPaymentsCard({
               : paymentStatus,
       }));
 
-      if (json?.receipt?.id || json?.should_reload) {
+      if (json?.receipt?.id || json?.should_reload || json?.terminal_done) {
         stopPolling(paymentId);
         hardReloadToList();
-        return;
-      }
-
-      if (json?.terminal_done) {
-        const retryAllowed = normalizeStatus(json?.payment?.status) === "FAILED" || normalizeStatus(json?.payment?.status) === "CANCELLED";
-        stopPolling(paymentId);
-        if (!retryAllowed) {
-          hardReloadToList();
-          return;
-        }
-        setErrorByPayment((prev) => ({
-          ...prev,
-          [paymentId]: String(json?.error ?? "").trim() || "Kartenzahlung wurde beendet, aber nicht erfolgreich abgeschlossen.",
-        }));
         return;
       }
 
@@ -302,13 +273,9 @@ export default function PendingReaderPaymentsCard({
       });
       setSelectedReaderByPayment((prev) => {
         const next = { ...prev };
-        const preferredReaderId =
-          nextReaders.find((reader) => reader.isReady)?.id ??
-          nextReaders[0]?.id ??
-          "";
-        if (preferredReaderId) {
+        if (nextReaders.length === 1) {
           for (const item of items) {
-            if (!next[item.id]) next[item.id] = preferredReaderId;
+            if (!next[item.id]) next[item.id] = nextReaders[0].id;
           }
         }
         return next;
@@ -323,16 +290,8 @@ export default function PendingReaderPaymentsCard({
 
   async function sendToReader(paymentId: string) {
     const readerId = selectedReaderByPayment[paymentId];
-    const selectedReaderInfo = readers.find((reader) => reader.id === readerId) ?? null;
     if (!readerId) {
       setErrorByPayment((prev) => ({ ...prev, [paymentId]: "Bitte zuerst einen Reader auswählen." }));
-      return;
-    }
-    if (selectedReaderInfo && selectedReaderInfo.isReady === false) {
-      setErrorByPayment((prev) => ({
-        ...prev,
-        [paymentId]: selectedReaderInfo.readinessReason || "Der gewählte Reader ist aktuell nicht bereit.",
-      }));
       return;
     }
 
@@ -388,17 +347,9 @@ export default function PendingReaderPaymentsCard({
               : paymentStatus,
       }));
 
-      if (json?.receipt?.id || json?.should_reload) {
+      if (json?.receipt?.id || json?.should_reload || json?.terminal_done) {
         hardReloadToList();
         return;
-      }
-
-      if (json?.terminal_done) {
-        const retryAllowed = normalizeStatus(json?.payment?.status) === "FAILED" || normalizeStatus(json?.payment?.status) === "CANCELLED";
-        if (!retryAllowed) {
-          hardReloadToList();
-          return;
-        }
       }
     } catch (error: any) {
       setErrorByPayment((prev) => ({ ...prev, [paymentId]: String(error?.message ?? "Payment-Status konnte nicht geprüft werden.") }));
@@ -508,7 +459,7 @@ export default function PendingReaderPaymentsCard({
                       >
                         <option value="">Reader wählen</option>
                         {readerOptions.map((reader) => (
-                          <option key={`${item.id}-${reader.value}`} value={reader.value} disabled={reader.disabled}>
+                          <option key={`${item.id}-${reader.value}`} value={reader.value}>
                             {reader.label}
                           </option>
                         ))}

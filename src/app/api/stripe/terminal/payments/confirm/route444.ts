@@ -28,7 +28,6 @@ type PaymentRow = {
   paid_at: string | null;
   provider_transaction_id: string | null;
   provider_response_json: Record<string, unknown> | null;
-  failure_reason?: string | null;
 };
 
 type CashRegisterRow = {
@@ -49,8 +48,6 @@ type SalesOrderLineRow = {
   tax_rate: number | null;
   line_total_gross: number | null;
   created_at: string | null;
-  reference_id?: string | null;
-  line_type?: string | null;
 };
 
 type AppointmentDetailLookupRow = {
@@ -73,15 +70,15 @@ function jsonNoStore(body: any, init?: ResponseInit) {
 
 function normalizePaymentStatus(value: string | null | undefined) {
   const normalized = String(value ?? "").trim().toUpperCase();
-  if (normalized == "PENDING") return "Ausstehend";
-  if (normalized == "PROCESSING") return "Wird verarbeitet";
-  if (normalized == "COMPLETED") return "Bezahlt";
-  if (normalized == "FAILED") return "Fehlgeschlagen";
-  if (normalized == "CANCELLED") return "Abgebrochen";
+  if (normalized === "PENDING") return "Ausstehend";
+  if (normalized === "PROCESSING") return "Wird verarbeitet";
+  if (normalized === "COMPLETED") return "Bezahlt";
+  if (normalized === "FAILED") return "Fehlgeschlagen";
+  if (normalized === "CANCELLED") return "Abgebrochen";
   return normalized || "—";
 }
 
-function mapStripeStatusBase(intentStatus: string) {
+function mapStripeStatus(intentStatus: string) {
   switch (intentStatus) {
     case "requires_payment_method":
     case "requires_confirmation":
@@ -98,33 +95,9 @@ function mapStripeStatusBase(intentStatus: string) {
   }
 }
 
-function resolveTerminalPaymentStatus(input: {
-  intentStatus: string;
-  providerPayload: Record<string, unknown>;
-  currentPaymentStatus: string | null | undefined;
-}) {
-  const normalizedIntentStatus = String(input.intentStatus ?? "").trim().toLowerCase();
-  const currentPaymentStatus = String(input.currentPaymentStatus ?? "").trim().toUpperCase();
-  const providerPayload = input.providerPayload ?? {};
-  const phase = String(providerPayload.phase ?? "").trim().toLowerCase();
-  const hasReaderContext =
-    Boolean(String(providerPayload.reader_id ?? "").trim()) ||
-    phase.includes("reader") ||
-    phase.includes("sent_to_reader");
-
-  if (normalizedIntentStatus === "requires_payment_method") {
-    if (hasReaderContext || currentPaymentStatus === "PROCESSING") {
-      return "FAILED";
-    }
-    return "PENDING";
-  }
-
-  return mapStripeStatusBase(normalizedIntentStatus);
-}
-
 function firstJoin<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
-  return Array.isArray(value) ? value[0] ?? null : value;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
 function isLegacyCashRegister(row: CashRegisterRow | null | undefined) {
@@ -304,7 +277,7 @@ async function createFiscalReceiptIfMissing(input: {
 
   const { data: lineRows, error: linesError } = await admin
     .from("sales_order_lines")
-    .select("id, sales_order_id, name, quantity, unit_price_gross, tax_rate, line_total_gross, created_at, reference_id, line_type")
+    .select("id, sales_order_id, name, quantity, unit_price_gross, tax_rate, line_total_gross, created_at")
     .eq("sales_order_id", salesOrderId)
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
@@ -332,8 +305,6 @@ async function createFiscalReceiptIfMissing(input: {
 
     return {
       source_line_id: line.id,
-      reference_id: line.reference_id ?? null,
-      line_type: String(line.line_type ?? "ITEM").trim().toUpperCase() === "SERVICE" ? "SERVICE" : "ITEM",
       name: line.name ?? "Position",
       quantity: qty,
       unit_price_gross: unitGross,
@@ -466,18 +437,24 @@ async function createFiscalReceiptIfMissing(input: {
     throw new Error(failureMessage);
   }
 
+  await admin.from("payments").update({ cash_register_id: cashRegisterId }).eq("id", paymentId);
+  await admin.from("sales_orders").update({ cash_register_id: cashRegisterId }).eq("id", salesOrderId);
+
   await insertFiscalEventSafe(admin, {
     tenantId,
     cashRegisterId,
     fiscalReceiptId: receiptId,
     eventType: "STANDARD_RECEIPT_CREATED",
-    notes: "Fiscal Receipt nach erfolgreicher Stripe-Terminal-Zahlung automatisch erzeugt.",
+    notes: "Fiscal-Receipt automatisch nach erfolgreicher Stripe-Terminal-Zahlung erzeugt.",
     referenceData: {
       sales_order_id: salesOrderId,
       payment_id: paymentId,
       receipt_id: receiptId,
       receipt_number: receiptNumber,
-      line_count: salesOrderLines.length,
+      turnover_value_cents: totalCents,
+      line_count: receiptLinePayload.length,
+      customer_name: customerName,
+      provider_name: providerName,
       source: "stripe_terminal_confirm_route",
     },
   });
@@ -487,7 +464,7 @@ async function createFiscalReceiptIfMissing(input: {
     cashRegisterId,
     fiscalReceiptId: receiptId,
     eventType: "RECEIPT_VERIFICATION_SUCCEEDED",
-    notes: "Simulierte Verifikation erfolgreich abgeschlossen.",
+    notes: "Simulierte Verifikation automatisch abgeschlossen.",
     referenceData: {
       receipt_id: receiptId,
       verification_status: "VALID",
@@ -500,12 +477,12 @@ async function createFiscalReceiptIfMissing(input: {
   return {
     id: receiptId,
     receiptNumber,
-    status: "CREATED",
+    status: "REQUESTED",
     verificationStatus: "VALID",
     issuedAt,
     turnoverValueCents: totalCents,
     currencyCode: payment.currency_code || salesOrder.currency_code || "EUR",
-    lineCount: salesOrderLines.length,
+    lineCount: receiptLinePayload.length,
     alreadyExisted: false,
   };
 }
@@ -518,14 +495,14 @@ export async function GET(req: NextRequest) {
     }
 
     const admin = supabaseAdmin();
-    const { data: paymentRaw, error: paymentError } = await admin
+    const { data: paymentRaw, error } = await admin
       .from("payments")
-      .select("id, tenant_id, sales_order_id, cash_register_id, payment_method_id, amount, currency_code, status, paid_at, provider_transaction_id, provider_response_json, failure_reason")
+      .select("id, tenant_id, sales_order_id, cash_register_id, payment_method_id, amount, currency_code, status, paid_at, provider_transaction_id, provider_response_json")
       .eq("id", paymentId)
       .maybeSingle();
 
-    if (paymentError) {
-      return jsonNoStore({ error: paymentError.message ?? "Payment konnte nicht geladen werden." }, { status: 500 });
+    if (error) {
+      return jsonNoStore({ error: error.message ?? "Payment konnte nicht geladen werden." }, { status: 500 });
     }
 
     if (!paymentRaw?.id) {
@@ -534,135 +511,117 @@ export async function GET(req: NextRequest) {
 
     const payment = paymentRaw as PaymentRow;
     const salesOrderId = String(payment.sales_order_id ?? "").trim();
-    const { data: salesOrderRaw, error: salesOrderError } = salesOrderId
-      ? await admin
-          .from("sales_orders")
-          .select("id, tenant_id, customer_id, appointment_id, cash_register_id, status, currency_code, grand_total")
-          .eq("id", salesOrderId)
-          .maybeSingle()
-      : { data: null, error: null };
 
-    if (salesOrderError) {
-      return jsonNoStore({ error: salesOrderError.message ?? "Sales Order konnte nicht geladen werden." }, { status: 500 });
+    let salesOrder: SalesOrderRow | null = null;
+    if (salesOrderId) {
+      const { data: salesOrderRaw, error: salesOrderError } = await admin
+        .from("sales_orders")
+        .select("id, tenant_id, customer_id, appointment_id, cash_register_id, status, currency_code, grand_total")
+        .eq("id", salesOrderId)
+        .maybeSingle();
+
+      if (salesOrderError) {
+        return jsonNoStore({ error: salesOrderError.message ?? "Sales Order konnte nicht geladen werden." }, { status: 500 });
+      }
+
+      salesOrder = (salesOrderRaw ?? null) as SalesOrderRow | null;
     }
 
-    const salesOrder = (salesOrderRaw ?? null) as SalesOrderRow | null;
-    const stripeIntentId = String(payment.provider_transaction_id ?? "").trim();
-    const providerPayload = (payment.provider_response_json ?? {}) as Record<string, unknown>;
-    const readerInfo = {
-      id: String(providerPayload?.reader_id ?? "").trim() || null,
-      label: String(providerPayload?.reader_label ?? "").trim() || null,
-      status: String(providerPayload?.reader_status ?? "").trim() || null,
-      action_status: String((providerPayload?.reader_action as Record<string, unknown> | undefined)?.status ?? "").trim() || null,
-      action_type: String((providerPayload?.reader_action as Record<string, unknown> | undefined)?.type ?? "").trim() || null,
-      last_seen_at: null as number | null,
+    const intentId = String(payment.provider_transaction_id ?? "").trim();
+    if (!intentId) {
+      return jsonNoStore({
+        ok: true,
+        payment: {
+          id: payment.id,
+          status: payment.status ?? null,
+          status_label: normalizePaymentStatus(payment.status),
+          paid_at: payment.paid_at ?? null,
+        },
+        stripe: null,
+        receipt: null,
+        should_reload: false,
+        terminal_done: false,
+      });
+    }
+
+    const intent = await stripe.paymentIntents.retrieve(intentId);
+    const mappedStatus = mapStripeStatus(intent.status);
+
+    const updatePayload: Record<string, unknown> = {
+      status: mappedStatus,
+      provider: "STRIPE_TERMINAL",
+      provider_transaction_id: intent.id,
+      provider_response_json: intent as unknown as Record<string, unknown>,
+      failure_reason: intent.last_payment_error?.message?.trim() || null,
+      updated_at: new Date().toISOString(),
     };
 
-    let stripeStatus = String(providerPayload?.stripe_status ?? "").trim() || null;
-    let stripeLastError = String(providerPayload?.error_message ?? "").trim() || null;
-
-    if (stripeIntentId) {
-      const intent = await stripe.paymentIntents.retrieve(stripeIntentId);
-      stripeStatus = String(intent.status ?? "").trim() || stripeStatus;
-      stripeLastError = String(intent.last_payment_error?.message ?? "").trim() || stripeLastError;
-
-      const mappedStatus = resolveTerminalPaymentStatus({
-        intentStatus: intent.status,
-        providerPayload,
-        currentPaymentStatus: payment.status,
-      });
-      const shouldUpdatePayment =
-        mappedStatus !== String(payment.status ?? "").trim().toUpperCase() ||
-        stripeLastError !== String(payment.failure_reason ?? "").trim();
-
-      if (shouldUpdatePayment) {
-        const nextProviderPayload = {
-          ...providerPayload,
-          phase:
-            mappedStatus === "COMPLETED"
-              ? "terminal_completed"
-              : mappedStatus === "CANCELLED"
-                ? "terminal_cancelled"
-                : mappedStatus === "FAILED"
-                  ? "terminal_failed"
-                  : "terminal_pending",
-          stripe_status: stripeStatus,
-          checked_at: new Date().toISOString(),
-          error_message: stripeLastError,
-        };
-
-        await admin
-          .from("payments")
-          .update({
-            status: mappedStatus,
-            paid_at: mappedStatus === "COMPLETED" ? payment.paid_at ?? new Date().toISOString() : payment.paid_at,
-            failure_reason:
-              mappedStatus === "FAILED" || mappedStatus === "CANCELLED"
-                ? stripeLastError || payment.failure_reason || "Stripe verlangt erneut eine Zahlungsmethode."
-                : null,
-            provider_response_json: nextProviderPayload,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", payment.id);
-
-        payment.status = mappedStatus;
-        payment.paid_at = mappedStatus === "COMPLETED" ? payment.paid_at ?? new Date().toISOString() : payment.paid_at;
-        payment.failure_reason =
-          mappedStatus === "FAILED" || mappedStatus === "CANCELLED"
-            ? stripeLastError || payment.failure_reason || "Stripe verlangt erneut eine Zahlungsmethode."
-            : null;
-        payment.provider_response_json = nextProviderPayload;
-      }
+    if (mappedStatus === "COMPLETED") {
+      updatePayload.paid_at = new Date().toISOString();
     }
 
-    let receipt: { id: string | null; receipt_number: string | null } | null = null;
-    if (String(payment.status ?? "").trim().toUpperCase() === "COMPLETED" && salesOrder?.id) {
+    await admin.from("payments").update(updatePayload).eq("id", paymentId);
+
+    if (salesOrder?.id) {
       await admin
         .from("sales_orders")
         .update({
-          status: "COMPLETED",
-          completed_at: new Date().toISOString(),
+          status: mappedStatus === "COMPLETED" ? "COMPLETED" : "OPEN",
+          ...(mappedStatus === "COMPLETED" ? { completed_at: new Date().toISOString() } : {}),
           updated_at: new Date().toISOString(),
         })
         .eq("id", salesOrder.id);
-
-      const receiptRow = await createFiscalReceiptIfMissing({
-        admin,
-        payment,
-        salesOrder,
-      });
-
-      receipt = {
-        id: receiptRow.id,
-        receipt_number: receiptRow.receiptNumber,
-      };
     }
 
-    const normalizedPaymentStatus = String(payment.status ?? "").trim().toUpperCase();
-    const terminalDone = Boolean(receipt?.id) || ["FAILED", "CANCELLED", "COMPLETED"].includes(normalizedPaymentStatus);
-    const terminalState = receipt?.id ? "SUCCEEDED" : normalizedPaymentStatus;
+    let receipt: any = null;
+    if (mappedStatus === "COMPLETED" && salesOrder?.id) {
+      receipt = await createFiscalReceiptIfMissing({
+        admin,
+        payment: {
+          ...payment,
+          status: mappedStatus,
+          paid_at: String(updatePayload.paid_at ?? payment.paid_at ?? null),
+          provider_transaction_id: intent.id,
+        },
+        salesOrder,
+      });
+    }
+
+    const terminalDone = mappedStatus === "COMPLETED" || mappedStatus === "FAILED" || mappedStatus === "CANCELLED";
 
     return jsonNoStore({
       ok: true,
       payment: {
         id: payment.id,
-        status: payment.status ?? null,
-        status_label: normalizePaymentStatus(payment.status),
-        failure_reason: payment.failure_reason ?? null,
+        status: mappedStatus,
+        status_label: normalizePaymentStatus(mappedStatus),
       },
       stripe: {
-        id: stripeIntentId || null,
-        status: stripeStatus,
-        last_error: stripeLastError,
+        id: intent.id,
+        status: intent.status,
+        amount: intent.amount,
+        reader_action: intent.next_action?.type ?? null,
       },
-      receipt,
-      reader: readerInfo,
+      receipt: receipt
+        ? {
+            id: receipt.id,
+            receipt_number: receipt.receiptNumber,
+            status: receipt.status,
+            verification_status: receipt.verificationStatus,
+            issued_at: receipt.issuedAt,
+            turnover_value_cents: receipt.turnoverValueCents,
+            currency_code: receipt.currencyCode,
+            line_count: receipt.lineCount,
+            already_existed: receipt.alreadyExisted,
+          }
+        : null,
+      should_reload: Boolean(receipt) || terminalDone,
       terminal_done: terminalDone,
-      terminal_state: terminalState,
-      should_reload: Boolean(receipt?.id),
-      retry_allowed: ["FAILED", "CANCELLED"].includes(normalizedPaymentStatus),
     });
   } catch (error: any) {
-    return jsonNoStore({ error: String(error?.message ?? "Payment-Status konnte nicht geprüft werden.") }, { status: 500 });
+    return jsonNoStore(
+      { error: error?.message ?? "Payment-Status konnte nicht geprüft werden." },
+      { status: 500 }
+    );
   }
 }

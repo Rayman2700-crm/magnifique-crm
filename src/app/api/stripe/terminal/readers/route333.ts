@@ -3,51 +3,30 @@ import { listStripeTerminalReaders } from "@/lib/stripe/server";
 
 export const runtime = "nodejs";
 
-function isReaderBlockingActionStatus(value: string | null | undefined) {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  return normalized === "in_progress" || normalized === "pending";
-}
-
-function isReaderRecoverableActionStatus(value: string | null | undefined) {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  return normalized === "failed" || normalized === "succeeded" || normalized === "canceled" || normalized === "cancelled";
-}
-
 function rankReader(reader: any) {
   const status = String(reader.status ?? "").trim().toLowerCase();
   const actionStatus = String(reader.action?.status ?? "").trim().toLowerCase();
   if (status === "online" && !actionStatus) return 0;
-  if (status === "online" && isReaderRecoverableActionStatus(actionStatus)) return 1;
-  if (status === "online") return 2;
-  if (status === "offline") return 4;
-  return 3;
+  if (status === "online") return 1;
+  if (status === "offline") return 3;
+  return 2;
 }
 
 function buildReadiness(reader: any) {
   const status = String(reader.status ?? "").trim().toLowerCase();
   const actionStatus = String(reader.action?.status ?? "").trim().toLowerCase();
-
   if (status !== "online") {
     return {
       isReady: false,
       reason: status ? `Reader ist ${status}.` : "Reader ist nicht online.",
     };
   }
-
-  if (isReaderBlockingActionStatus(actionStatus)) {
+  if (actionStatus) {
     return {
       isReady: false,
       reason: `Reader ist gerade beschäftigt (${actionStatus}).`,
     };
   }
-
-  if (isReaderRecoverableActionStatus(actionStatus)) {
-    return {
-      isReady: true,
-      reason: `Reader hatte einen alten Abschlusszustand (${actionStatus}) und kann erneut verwendet werden.`,
-    };
-  }
-
   return {
     isReady: true,
     reason: null,

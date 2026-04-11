@@ -42,34 +42,13 @@ function isSimulatedReader(reader: Stripe.Terminal.Reader) {
   return label.includes("simulated reader") || deviceType.includes("simulated");
 }
 
-function isReaderBlockingActionStatus(value: string | null | undefined) {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  return normalized === "in_progress" || normalized === "pending";
-}
-
-function isReaderRecoverableActionStatus(value: string | null | undefined) {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  return normalized === "failed" || normalized === "succeeded" || normalized === "canceled" || normalized === "cancelled";
-}
-
 function rankReader(reader: Stripe.Terminal.Reader) {
   const status = String(reader.status ?? "").trim().toLowerCase();
   const actionStatus = String(reader.action?.status ?? "").trim().toLowerCase();
   if (status === "online" && !actionStatus) return 0;
-  if (status === "online" && isReaderRecoverableActionStatus(actionStatus)) return 1;
-  if (status === "online") return 2;
-  if (status === "offline") return 4;
-  return 3;
-}
-
-async function maybeClearReaderAction(reader: Stripe.Terminal.Reader) {
-  const actionStatus = String(reader.action?.status ?? "").trim().toLowerCase();
-  if (!isReaderRecoverableActionStatus(actionStatus)) return reader;
-  try {
-    return await stripe.terminal.readers.cancelAction(reader.id);
-  } catch {
-    return reader;
-  }
+  if (status === "online") return 1;
+  if (status === "offline") return 3;
+  return 2;
 }
 
 async function ensurePaymentIntent(payment: PaymentRow) {
@@ -122,13 +101,11 @@ async function ensurePaymentIntent(payment: PaymentRow) {
 
 async function resolveReader(requestedReaderId: string) {
   if (requestedReaderId) {
-    const requested = await stripe.terminal.readers.retrieve(requestedReaderId);
-    return maybeClearReaderAction(requested);
+    return stripe.terminal.readers.retrieve(requestedReaderId);
   }
   const list = await stripe.terminal.readers.list({ limit: 100 });
   const ordered = [...list.data].sort((a, b) => rankReader(a) - rankReader(b));
-  const candidate = ordered[0] ?? null;
-  return candidate ? maybeClearReaderAction(candidate) : null;
+  return ordered[0] ?? null;
 }
 
 export async function POST(req: NextRequest) {
@@ -154,7 +131,7 @@ export async function POST(req: NextRequest) {
     if (readerStatus !== "online") {
       return jsonNoStore({ error: `Reader ${reader.label ?? reader.id} ist aktuell nicht online.` }, { status: 409 });
     }
-    if (isReaderBlockingActionStatus(readerActionStatus)) {
+    if (readerActionStatus) {
       return jsonNoStore({ error: `Reader ${reader.label ?? reader.id} ist gerade beschäftigt (${readerActionStatus}).` }, { status: 409 });
     }
 

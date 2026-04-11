@@ -81,7 +81,7 @@ function normalizePaymentStatus(value: string | null | undefined) {
   return normalized || "—";
 }
 
-function mapStripeStatusBase(intentStatus: string) {
+function mapStripeStatus(intentStatus: string) {
   switch (intentStatus) {
     case "requires_payment_method":
     case "requires_confirmation":
@@ -96,30 +96,6 @@ function mapStripeStatusBase(intentStatus: string) {
     default:
       return "FAILED";
   }
-}
-
-function resolveTerminalPaymentStatus(input: {
-  intentStatus: string;
-  providerPayload: Record<string, unknown>;
-  currentPaymentStatus: string | null | undefined;
-}) {
-  const normalizedIntentStatus = String(input.intentStatus ?? "").trim().toLowerCase();
-  const currentPaymentStatus = String(input.currentPaymentStatus ?? "").trim().toUpperCase();
-  const providerPayload = input.providerPayload ?? {};
-  const phase = String(providerPayload.phase ?? "").trim().toLowerCase();
-  const hasReaderContext =
-    Boolean(String(providerPayload.reader_id ?? "").trim()) ||
-    phase.includes("reader") ||
-    phase.includes("sent_to_reader");
-
-  if (normalizedIntentStatus === "requires_payment_method") {
-    if (hasReaderContext || currentPaymentStatus === "PROCESSING") {
-      return "FAILED";
-    }
-    return "PENDING";
-  }
-
-  return mapStripeStatusBase(normalizedIntentStatus);
 }
 
 function firstJoin<T>(value: T | T[] | null | undefined): T | null {
@@ -566,26 +542,13 @@ export async function GET(req: NextRequest) {
       stripeStatus = String(intent.status ?? "").trim() || stripeStatus;
       stripeLastError = String(intent.last_payment_error?.message ?? "").trim() || stripeLastError;
 
-      const mappedStatus = resolveTerminalPaymentStatus({
-        intentStatus: intent.status,
-        providerPayload,
-        currentPaymentStatus: payment.status,
-      });
-      const shouldUpdatePayment =
-        mappedStatus !== String(payment.status ?? "").trim().toUpperCase() ||
-        stripeLastError !== String(payment.failure_reason ?? "").trim();
+      const mappedStatus = mapStripeStatus(intent.status);
+      const shouldUpdatePayment = mappedStatus !== String(payment.status ?? "").trim().toUpperCase() || stripeLastError !== String(payment.failure_reason ?? "").trim();
 
       if (shouldUpdatePayment) {
         const nextProviderPayload = {
           ...providerPayload,
-          phase:
-            mappedStatus === "COMPLETED"
-              ? "terminal_completed"
-              : mappedStatus === "CANCELLED"
-                ? "terminal_cancelled"
-                : mappedStatus === "FAILED"
-                  ? "terminal_failed"
-                  : "terminal_pending",
+          phase: mappedStatus === "COMPLETED" ? "terminal_completed" : mappedStatus === "CANCELLED" ? "terminal_cancelled" : mappedStatus === "FAILED" ? "terminal_failed" : "terminal_pending",
           stripe_status: stripeStatus,
           checked_at: new Date().toISOString(),
           error_message: stripeLastError,
@@ -596,10 +559,7 @@ export async function GET(req: NextRequest) {
           .update({
             status: mappedStatus,
             paid_at: mappedStatus === "COMPLETED" ? payment.paid_at ?? new Date().toISOString() : payment.paid_at,
-            failure_reason:
-              mappedStatus === "FAILED" || mappedStatus === "CANCELLED"
-                ? stripeLastError || payment.failure_reason || "Stripe verlangt erneut eine Zahlungsmethode."
-                : null,
+            failure_reason: mappedStatus === "FAILED" || mappedStatus === "CANCELLED" ? stripeLastError ?? payment.failure_reason ?? null : null,
             provider_response_json: nextProviderPayload,
             updated_at: new Date().toISOString(),
           })
@@ -607,10 +567,7 @@ export async function GET(req: NextRequest) {
 
         payment.status = mappedStatus;
         payment.paid_at = mappedStatus === "COMPLETED" ? payment.paid_at ?? new Date().toISOString() : payment.paid_at;
-        payment.failure_reason =
-          mappedStatus === "FAILED" || mappedStatus === "CANCELLED"
-            ? stripeLastError || payment.failure_reason || "Stripe verlangt erneut eine Zahlungsmethode."
-            : null;
+        payment.failure_reason = mappedStatus === "FAILED" || mappedStatus === "CANCELLED" ? stripeLastError ?? payment.failure_reason ?? null : null;
         payment.provider_response_json = nextProviderPayload;
       }
     }
@@ -639,7 +596,7 @@ export async function GET(req: NextRequest) {
     }
 
     const normalizedPaymentStatus = String(payment.status ?? "").trim().toUpperCase();
-    const terminalDone = Boolean(receipt?.id) || ["FAILED", "CANCELLED", "COMPLETED"].includes(normalizedPaymentStatus);
+    const terminalDone = Boolean(receipt?.id) || ["FAILED", "CANCELLED"].includes(normalizedPaymentStatus);
     const terminalState = receipt?.id ? "SUCCEEDED" : normalizedPaymentStatus;
 
     return jsonNoStore({
@@ -659,7 +616,6 @@ export async function GET(req: NextRequest) {
       reader: readerInfo,
       terminal_done: terminalDone,
       terminal_state: terminalState,
-      should_reload: Boolean(receipt?.id),
       retry_allowed: ["FAILED", "CANCELLED"].includes(normalizedPaymentStatus),
     });
   } catch (error: any) {

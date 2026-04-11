@@ -4,6 +4,7 @@ import { getTenantLogoPath } from "./logoMap";
 type DbTenantInvoiceData = {
   legal_name: string | null;
   display_name?: string | null;
+  studio_name?: string | null;
   invoice_address_line1: string | null;
   zip: string | number | null;
   city: string | null;
@@ -18,19 +19,24 @@ type DbTenantInvoiceData = {
 
 type InvoicePdfItem = {
   title: string;
+  description?: string | null;
+  durationMinutes?: number | string | null;
   qty: number;
   unitPrice: number;
 };
 
 type InvoicePdfData = {
-  invoiceNumber: string;
-  issueDate: string;
-  paidAt?: string | null;
+  invoiceNumber?: string | null;
+  invoiceSequence?: number | string | null;
+  issueDate?: string | Date | null;
+  paidAt?: string | Date | null;
   paymentMethod?: string | null;
   customerName: string;
   customerAddress1?: string | null;
   customerAddress2?: string | null;
   customerAddress3?: string | null;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
   items: InvoicePdfItem[];
 };
 
@@ -50,21 +56,48 @@ type TenantViewModel = {
   email: string;
   iban: string;
   bic: string;
+  invoicePrefix: string;
   kleinunternehmerText: string;
-  footerText: string;
+  thankYouText: string;
+  footerLegalText: string;
   logoUrl: string | null;
+};
+
+type ResolvedInvoiceItem = {
+  title: string;
+  description: string;
+  durationLabel: string;
+  qty: number;
+  unitPrice: number;
+};
+
+type ResolvedInvoiceViewModel = {
+  invoiceNumber: string;
+  issueDate: string;
+  paidAt: string;
+  paymentMethod: string;
+  paymentTermsText: string;
+  paymentReference: string;
+  customerName: string;
+  customerAddress1: string;
+  customerAddress2: string;
+  customerAddress3: string;
+  customerPhone: string;
+  customerEmail: string;
+  items: ResolvedInvoiceItem[];
 };
 
 const DEFAULT_DB_TENANT: DbTenantInvoiceData = {
   legal_name: "Radu Craus",
-  display_name: "Radu Craus",
+  display_name: "Magnifique Beauty Institut",
+  studio_name: "Magnifique Beauty Institut",
   invoice_address_line1: "Flugfeldgürtel 24/1",
   zip: "2700",
   city: "Wiener Neustadt",
   country: "Österreich",
   phone: "+43 676 6742429",
   email: "radu.craus@gmail.com",
-  iban: "",
+  iban: "AT12 3456 7890 1234 5678",
   bic: "",
   invoice_prefix: "RAD",
   kleinunternehmer_text:
@@ -72,25 +105,142 @@ const DEFAULT_DB_TENANT: DbTenantInvoiceData = {
 };
 
 const DEFAULT_INVOICE: InvoicePdfData = {
-  invoiceNumber: "RAD-2026-0001",
-  issueDate: "07.04.2026",
-  paidAt: "07.04.2026",
+  invoiceSequence: 1,
+  issueDate: null,
+  paidAt: null,
   paymentMethod: "Karte",
   customerName: "Maria Mustermann",
   customerAddress1: "Musterstraße 12",
   customerAddress2: "2700 Wiener Neustadt",
   customerAddress3: "Österreich",
+  customerPhone: "+43 664 1234567",
+  customerEmail: "maria.mustermann@example.com",
   items: [
-    { title: "Permanent Make-up Beratung", qty: 1, unitPrice: 80.0 },
-    { title: "Nachbehandlung", qty: 1, unitPrice: 120.0 },
-    { title: "Pflegeprodukt", qty: 5, unitPrice: 19.9 },
-    { title: "Nagelspange", qty: 2, unitPrice: 95.0 },
+    {
+      title: "AUFFÜLLUNG KLASSISCH",
+      description:
+        "Schonendes Entfernen des alten Materials und präzises Auffüllen. Stärkt und perfektioniert die Nägel, damit sie ihre Form und Eleganz behalten. inkl. russ. Maniküre",
+      durationMinutes: 90,
+      qty: 1,
+      unitPrice: 65.0,
+    },
+    {
+      title: "Nagelspange",
+      description: "Korrektur und Entlastung eingewachsener Nägel.",
+      durationMinutes: 45,
+      qty: 2,
+      unitPrice: 95.0,
+    },
   ],
 };
 
 function toText(value: unknown): string {
   if (value == null) return "";
   return String(value).trim();
+}
+
+function padInvoiceSequence(value: number | string | null | undefined): string {
+  const raw = toText(value);
+  if (!raw) return "0001";
+  if (/^\d+$/.test(raw)) return raw.padStart(4, "0");
+  return raw;
+}
+
+function parseDateInput(value: string | Date | null | undefined): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+
+  const raw = value.trim();
+  if (!raw) return null;
+
+  const ddmmyyyy = raw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (ddmmyyyy) {
+    const [, dd, mm, yyyy] = ddmmyyyy;
+    const parsed = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const isoDate = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoDate) {
+    const [, yyyy, mm, dd] = isoDate;
+    const parsed = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatDateAT(value: string | Date | null | undefined, fallbackToToday = false): string {
+  const parsed = parseDateInput(value);
+  const date = parsed ?? (fallbackToToday ? new Date() : null);
+  if (!date) return "";
+
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = String(date.getFullYear());
+  return `${day}.${month}.${year}`;
+}
+
+function getYearFromDateInput(value: string | Date | null | undefined): string {
+  const parsed = parseDateInput(value) ?? new Date();
+  return String(parsed.getFullYear());
+}
+
+function normalizePaymentMethod(value: string | null | undefined): string {
+  const raw = toText(value);
+  if (!raw) return "-";
+
+  const upper = raw.toUpperCase();
+  const map: Record<string, string> = {
+    CASH: "Bar",
+    BAR: "Bar",
+    CARD: "Karte",
+    KARTE: "Karte",
+    EC: "Karte",
+    BANK_TRANSFER: "Überweisung",
+    UEBERWEISUNG: "Überweisung",
+    ÜBERWEISUNG: "Überweisung",
+    TRANSFER: "Überweisung",
+  };
+
+  return map[upper] ?? raw;
+}
+
+function buildPaymentTermsText(paymentMethod: string): string {
+  switch (paymentMethod) {
+    case "Bar":
+      return "Zahlungskonditionen: Betrag dankend in Bar kassiert";
+    case "Karte":
+      return "Zahlungskonditionen: Betrag mit Karte bezahlt";
+    case "Überweisung":
+      return "Zahlungskonditionen: Prompt netto Kassa bei Erhalt der Faktura";
+    default:
+      return `Zahlungskonditionen: ${paymentMethod || "-"}`;
+  }
+}
+
+function buildInvoiceNumber(
+  invoiceNumber: string | null | undefined,
+  invoicePrefix: string,
+  issueDate: string | Date | null | undefined,
+  invoiceSequence: number | string | null | undefined,
+): string {
+  const explicit = toText(invoiceNumber);
+  if (explicit) return explicit;
+
+  const prefix = toText(invoicePrefix).toUpperCase() || "INV";
+  const year = getYearFromDateInput(issueDate);
+  const sequence = padInvoiceSequence(invoiceSequence);
+  return `${prefix}-${year}-${sequence}`;
+}
+
+function resolveStudioName(dbTenant: DbTenantInvoiceData): string {
+  return (
+    toText(dbTenant.studio_name) ||
+    toText(dbTenant.display_name) ||
+    "Magnifique Beauty Institut"
+  );
 }
 
 function buildTenantViewModel(dbTenant: DbTenantInvoiceData): TenantViewModel {
@@ -100,7 +250,7 @@ function buildTenantViewModel(dbTenant: DbTenantInvoiceData): TenantViewModel {
 
   return {
     legalName: toText(dbTenant.legal_name),
-    studioName: "Magnifique Beauty Institut",
+    studioName: resolveStudioName(dbTenant),
     address1: toText(dbTenant.invoice_address_line1),
     address2,
     country: toText(dbTenant.country) || "Österreich",
@@ -108,12 +258,68 @@ function buildTenantViewModel(dbTenant: DbTenantInvoiceData): TenantViewModel {
     email: toText(dbTenant.email),
     iban: toText(dbTenant.iban),
     bic: toText(dbTenant.bic),
+    invoicePrefix: toText(dbTenant.invoice_prefix).toUpperCase(),
     kleinunternehmerText:
       toText(dbTenant.kleinunternehmer_text) ||
       "Gemäß § 6 Abs. 1 Z 27 UStG wird keine Umsatzsteuer berechnet.",
-    footerText:
+    thankYouText:
       "Vielen Dank für Ihren Besuch bei Magnifique Beauty Institut. Wir freuen uns, Sie bald wieder verwöhnen zu dürfen.",
+    footerLegalText:
+      "Inhaber: Raluca Craus | Standort: Flugfeldgürtel 24/1, 2700 Wiener Neustadt | Tel: +43 676 4106468 | Kontaktdaten: +43 676 4106468, raluca.schwarz@gmail.com | Einzelunternehmen | Firmengericht: Landesgericht Wiener Neustadt | Aufsichtsbehörde: Bezirkshauptmannschaft Wiener Neustadt | Kammer: Wirtschaftskammer Niederösterreich | Berufszweig: Kosmetik",
     logoUrl: getTenantLogoPath(dbTenant.invoice_prefix),
+  };
+}
+
+function formatDurationLabel(value: number | string | null | undefined): string {
+  const raw = toText(value);
+  if (!raw) return "";
+  if (/^\d+$/.test(raw)) return `${raw} Min`;
+  return raw;
+}
+
+function buildPaymentReference(invoiceNumber: string, customerName: string): string {
+  return [toText(invoiceNumber), toText(customerName)].filter(Boolean).join(" - ");
+}
+
+function buildResolvedInvoiceViewModel(
+  invoice: InvoicePdfData,
+  tenant: TenantViewModel,
+): ResolvedInvoiceViewModel {
+  const issueDate = formatDateAT(invoice.issueDate, true);
+  const paidAt = formatDateAT(invoice.paidAt, false);
+  const paymentMethod = normalizePaymentMethod(invoice.paymentMethod);
+
+  const invoiceNumber = buildInvoiceNumber(
+    invoice.invoiceNumber,
+    tenant.invoicePrefix,
+    invoice.issueDate,
+    invoice.invoiceSequence,
+  );
+
+  const customerName = toText(invoice.customerName);
+
+  return {
+    invoiceNumber,
+    issueDate,
+    paidAt,
+    paymentMethod,
+    paymentTermsText: buildPaymentTermsText(paymentMethod),
+    paymentReference: buildPaymentReference(invoiceNumber, customerName),
+    customerName,
+    customerAddress1: toText(invoice.customerAddress1),
+    customerAddress2: toText(invoice.customerAddress2),
+    customerAddress3: toText(invoice.customerAddress3),
+    customerPhone: toText(invoice.customerPhone),
+    customerEmail: toText(invoice.customerEmail),
+    items: Array.isArray(invoice.items)
+      ? invoice.items.map((item) => ({
+          title: toText(item.title),
+          description: toText(item.description),
+          durationLabel: formatDurationLabel(item.durationMinutes),
+          qty: Number(item.qty) || 0,
+          unitPrice: Number(item.unitPrice) || 0,
+        }))
+      : [],
   };
 }
 
@@ -155,15 +361,84 @@ function drawWrappedText(
   return currentY;
 }
 
+
+function drawCenteredWrappedText(
+  page: any,
+  text: string,
+  centerX: number,
+  startY: number,
+  maxWidth: number,
+  font: any,
+  size: number,
+  color: ReturnType<typeof rgb>,
+  lineHeight = 12,
+) {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (!words.length) return startY;
+
+  const lines: string[] = [];
+  let line = "";
+
+  for (const word of words) {
+    const testLine = line ? `${line} ${word}` : word;
+    const testWidth = font.widthOfTextAtSize(testLine, size);
+
+    if (testWidth > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = testLine;
+    }
+  }
+
+  if (line) lines.push(line);
+
+  let currentY = startY;
+  for (const currentLine of lines) {
+    const lineWidth = font.widthOfTextAtSize(currentLine, size);
+    page.drawText(currentLine, {
+      x: centerX - lineWidth / 2,
+      y: currentY,
+      size,
+      font,
+      color,
+    });
+    currentY -= lineHeight;
+  }
+
+  return currentY;
+}
+
+function drawRightAlignedText(
+  page: any,
+  text: string,
+  rightX: number,
+  y: number,
+  font: any,
+  size: number,
+  color: ReturnType<typeof rgb>,
+) {
+  const safeText = text ?? "";
+  const textWidth = font.widthOfTextAtSize(safeText, size);
+  page.drawText(safeText, {
+    x: rightX - textWidth,
+    y,
+    size,
+    font,
+    color,
+  });
+}
+
 export async function createInvoicePdf(
   input: CreateInvoicePdfInput = {},
 ) {
   const dbTenant = input.dbTenant ?? DEFAULT_DB_TENANT;
-  const invoice = input.invoice ?? DEFAULT_INVOICE;
+  const invoiceInput = input.invoice ?? DEFAULT_INVOICE;
   const downloadFileName =
     input.downloadFileName ?? "rechnung-prototyp-dynamisch.pdf";
 
   const tenant = buildTenantViewModel(dbTenant);
+  const invoice = buildResolvedInvoiceViewModel(invoiceInput, tenant);
 
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([595.28, 841.89]);
@@ -195,7 +470,7 @@ export async function createInvoicePdf(
       return pdfDoc.embedPng(bytes);
     }
 
-    if (lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".webp")) {
+    if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
       return pdfDoc.embedJpg(bytes);
     }
 
@@ -283,7 +558,7 @@ export async function createInvoicePdf(
     color: rgb(0.2, 0.2, 0.2),
   });
 
-  page.drawText(`Zahlungsart: ${toText(invoice.paymentMethod) || "-"}`, {
+  page.drawText(`Zahlungsart: ${invoice.paymentMethod}`, {
     x: rightX,
     y: height - 125,
     size: 10,
@@ -291,8 +566,8 @@ export async function createInvoicePdf(
     color: rgb(0.2, 0.2, 0.2),
   });
 
-  if (toText(invoice.paidAt)) {
-    page.drawText(`Bezahlt am: ${toText(invoice.paidAt)}`, {
+  if (invoice.paidAt) {
+    page.drawText(`Bezahlt am: ${invoice.paidAt}`, {
       x: rightX,
       y: height - 140,
       size: 10,
@@ -311,63 +586,27 @@ export async function createInvoicePdf(
     color: rgb(0.1, 0.1, 0.1),
   });
 
-  page.drawText(tenant.studioName, {
-    x: rightX,
-    y: providerStartY - 20,
-    size: 10,
-    font: fontRegular,
-    color: rgb(0.35, 0.35, 0.35),
+  const providerLines = [
+    tenant.studioName,
+    tenant.address1,
+    tenant.address2,
+    tenant.country,
+    tenant.phone ? `Tel: ${tenant.phone}` : "",
+    tenant.email ? `E-Mail: ${tenant.email}` : "",
+  ].filter(Boolean);
+
+  let providerY = providerStartY - 20;
+
+  providerLines.forEach((line) => {
+    page.drawText(line, {
+      x: rightX,
+      y: providerY,
+      size: 10,
+      font: fontRegular,
+      color: rgb(0.35, 0.35, 0.35),
+    });
+    providerY -= 15;
   });
-
-  if (tenant.address1) {
-    page.drawText(tenant.address1, {
-      x: rightX,
-      y: providerStartY - 35,
-      size: 10,
-      font: fontRegular,
-      color: rgb(0.35, 0.35, 0.35),
-    });
-  }
-
-  if (tenant.address2) {
-    page.drawText(tenant.address2, {
-      x: rightX,
-      y: providerStartY - 50,
-      size: 10,
-      font: fontRegular,
-      color: rgb(0.35, 0.35, 0.35),
-    });
-  }
-
-  if (tenant.country) {
-    page.drawText(tenant.country, {
-      x: rightX,
-      y: providerStartY - 65,
-      size: 10,
-      font: fontRegular,
-      color: rgb(0.35, 0.35, 0.35),
-    });
-  }
-
-  if (tenant.phone) {
-    page.drawText(`Tel: ${tenant.phone}`, {
-      x: rightX,
-      y: providerStartY - 85,
-      size: 10,
-      font: fontRegular,
-      color: rgb(0.35, 0.35, 0.35),
-    });
-  }
-
-  if (tenant.email) {
-    page.drawText(`E-Mail: ${tenant.email}`, {
-      x: rightX,
-      y: providerStartY - 100,
-      size: 10,
-      font: fontRegular,
-      color: rgb(0.35, 0.35, 0.35),
-    });
-  }
 
   let customerY = providerStartY;
 
@@ -395,6 +634,8 @@ export async function createInvoicePdf(
     toText(invoice.customerAddress1),
     toText(invoice.customerAddress2),
     toText(invoice.customerAddress3),
+    invoice.customerPhone ? `Tel: ${toText(invoice.customerPhone)}` : "",
+    invoice.customerEmail ? `E-Mail: ${toText(invoice.customerEmail)}` : "",
   ].filter(Boolean);
 
   customerLines.forEach((line) => {
@@ -409,96 +650,130 @@ export async function createInvoicePdf(
   });
 
   const tableTop = 470;
+  const tableRightX = width - marginRight;
+  const amountGap = 68;
+  const qtyGap = 76;
   const col1 = marginLeft;
-  const col2 = 340;
-  const col3 = 400;
-  const col4 = 480;
+  const col4Right = tableRightX;
+  const col3Right = col4Right - amountGap;
+  const col2Right = col3Right - qtyGap;
+  const col4HeaderX = col4Right - fontBold.widthOfTextAtSize("Gesamt", 10);
+  const col3HeaderX = col3Right - fontBold.widthOfTextAtSize("Einzelpreis", 10);
+  const col2HeaderX = col2Right - fontBold.widthOfTextAtSize("Menge", 10);
+  const serviceMaxWidth = col2HeaderX - col1 - 24;
 
   page.drawLine({
     start: { x: marginLeft, y: tableTop + 18 },
-    end: { x: width - marginRight, y: tableTop + 18 },
+    end: { x: tableRightX, y: tableTop + 18 },
     thickness: 1,
     color: rgb(0.85, 0.85, 0.85),
   });
 
   page.drawText("Leistung", { x: col1, y: tableTop, size: 10, font: fontBold });
-  page.drawText("Menge", { x: col2, y: tableTop, size: 10, font: fontBold });
-  page.drawText("Einzelpreis", { x: col3, y: tableTop, size: 10, font: fontBold });
-  page.drawText("Gesamt", { x: col4, y: tableTop, size: 10, font: fontBold });
+  page.drawText("Menge", { x: col2HeaderX, y: tableTop, size: 10, font: fontBold });
+  page.drawText("Einzelpreis", { x: col3HeaderX, y: tableTop, size: 10, font: fontBold });
+  page.drawText("Gesamt", { x: col4HeaderX, y: tableTop, size: 10, font: fontBold });
 
   let rowY = tableTop - 28;
   let total = 0;
 
-  invoice.items.forEach((item) => {
+  for (const item of invoice.items) {
     const lineTotal = item.qty * item.unitPrice;
     total += lineTotal;
 
-    page.drawText(item.title, {
-      x: col1,
-      y: rowY,
-      size: 10,
-      font: fontRegular,
-      color: rgb(0.15, 0.15, 0.15),
-      maxWidth: col2 - col1 - 12,
+    const serviceParts = [
+      item.title,
+      item.description,
+      item.durationLabel ? `Dauer: ${item.durationLabel}` : "",
+    ].filter(Boolean);
+
+    let serviceY = rowY;
+    serviceParts.forEach((part, index) => {
+      serviceY = drawWrappedText(
+        page,
+        part,
+        col1,
+        serviceY,
+        serviceMaxWidth,
+        index === 0 ? fontBold : fontRegular,
+        index === 0 ? 10 : 9,
+        index === 0 ? rgb(0.12, 0.12, 0.12) : rgb(0.35, 0.35, 0.35),
+        11,
+      );
+      if (index < serviceParts.length - 1) {
+        serviceY -= 2;
+      }
     });
 
-    page.drawText(String(item.qty), {
-      x: col2,
-      y: rowY,
-      size: 10,
-      font: fontRegular,
-      color: rgb(0.15, 0.15, 0.15),
-    });
+    drawRightAlignedText(
+      page,
+      String(item.qty),
+      col2Right,
+      rowY,
+      fontRegular,
+      10,
+      rgb(0.15, 0.15, 0.15),
+    );
 
-    page.drawText(euro(item.unitPrice), {
-      x: col3,
-      y: rowY,
-      size: 10,
-      font: fontRegular,
-      color: rgb(0.15, 0.15, 0.15),
-    });
+    drawRightAlignedText(
+      page,
+      euro(item.unitPrice),
+      col3Right,
+      rowY,
+      fontRegular,
+      10,
+      rgb(0.15, 0.15, 0.15),
+    );
 
-    page.drawText(euro(lineTotal), {
-      x: col4,
-      y: rowY,
-      size: 10,
-      font: fontRegular,
-      color: rgb(0.15, 0.15, 0.15),
-    });
+    drawRightAlignedText(
+      page,
+      euro(lineTotal),
+      col4Right,
+      rowY,
+      fontRegular,
+      10,
+      rgb(0.15, 0.15, 0.15),
+    );
 
-    rowY -= 24;
-  });
+    rowY = Math.min(serviceY - 10, rowY - 28);
+  }
 
   page.drawLine({
     start: { x: marginLeft, y: rowY + 8 },
-    end: { x: width - marginRight, y: rowY + 8 },
+    end: { x: tableRightX, y: rowY + 8 },
     thickness: 1,
     color: rgb(0.85, 0.85, 0.85),
   });
 
   const totalY = rowY - 24;
   const hintY = totalY - 35;
-  const bankTitleY = hintY - 130;
-  const bankIbanY = bankTitleY - 16;
-  const bankBicY = bankIbanY - 14;
-  const footerLineY = bankBicY - 28;
-  const footerTextY = footerLineY - 18;
+  const paymentTermsY = hintY - 26;
+  const accountHeadingY = paymentTermsY - 34;
+  const accountHolderY = accountHeadingY - 18;
+  const accountIbanY = accountHolderY - 14;
+  const accountReferenceY = accountIbanY - 14;
 
-  page.drawText("Gesamtbetrag", {
-    x: 365,
-    y: totalY,
-    size: 11,
-    font: fontBold,
-    color: rgb(0.1, 0.1, 0.1),
-  });
+  const totalLabelRight = col3Right - 18;
 
-  page.drawText(euro(total), {
-    x: col4,
-    y: totalY,
-    size: 11,
-    font: fontBold,
-    color: rgb(0.1, 0.1, 0.1),
-  });
+  drawRightAlignedText(
+    page,
+    "Gesamtbetrag",
+    totalLabelRight,
+    totalY,
+    fontBold,
+    11,
+    rgb(0.1, 0.1, 0.1),
+  );
+
+  drawRightAlignedText(
+    page,
+    euro(total),
+    col4Right,
+    totalY,
+    fontBold,
+    11,
+    rgb(0.1, 0.1, 0.1),
+  );
 
   drawWrappedText(
     page,
@@ -512,37 +787,69 @@ export async function createInvoicePdf(
     11,
   );
 
-  const hasBankData = Boolean(tenant.iban || tenant.bic);
+  drawWrappedText(
+    page,
+    invoice.paymentTermsText,
+    marginLeft,
+    paymentTermsY,
+    contentWidth,
+    fontRegular,
+    9,
+    rgb(0.4, 0.4, 0.4),
+    11,
+  );
 
-  if (hasBankData) {
-    page.drawText("Bankverbindung", {
-      x: marginLeft,
-      y: bankTitleY,
-      size: 10,
-      font: fontBold,
-      color: rgb(0.1, 0.1, 0.1),
-    });
+  page.drawText("Kontodaten", {
+    x: marginLeft,
+    y: accountHeadingY,
+    size: 10,
+    font: fontBold,
+    color: rgb(0.1, 0.1, 0.1),
+  });
 
-    if (tenant.iban) {
-      page.drawText(`IBAN: ${tenant.iban}`, {
-        x: marginLeft,
-        y: bankIbanY,
-        size: 9,
-        font: fontRegular,
-        color: rgb(0.2, 0.2, 0.2),
-      });
-    }
+  page.drawText(`Behandlername: ${tenant.legalName || "-"}`, {
+    x: marginLeft,
+    y: accountHolderY,
+    size: 9,
+    font: fontRegular,
+    color: rgb(0.2, 0.2, 0.2),
+  });
 
-    if (tenant.bic) {
-      page.drawText(`BIC: ${tenant.bic}`, {
-        x: marginLeft,
-        y: bankBicY,
-        size: 9,
-        font: fontRegular,
-        color: rgb(0.2, 0.2, 0.2),
-      });
-    }
-  }
+  page.drawText(`IBAN: ${tenant.iban || ""}`, {
+    x: marginLeft,
+    y: accountIbanY,
+    size: 9,
+    font: fontRegular,
+    color: rgb(0.2, 0.2, 0.2),
+  });
+
+  const afterReferenceY = drawWrappedText(
+    page,
+    `Verwendungszweck: ${invoice.paymentReference}`,
+    marginLeft,
+    accountReferenceY,
+    contentWidth,
+    fontRegular,
+    9,
+    rgb(0.2, 0.2, 0.2),
+    11,
+  );
+
+  const thankYouY = afterReferenceY - 12;
+  const footerLineY = thankYouY - 44;
+  const footerTextY = footerLineY - 18;
+
+  drawWrappedText(
+    page,
+    tenant.thankYouText,
+    marginLeft,
+    thankYouY,
+    contentWidth,
+    fontRegular,
+    9,
+    rgb(0.4, 0.4, 0.4),
+    11,
+  );
 
   page.drawLine({
     start: { x: marginLeft, y: footerLineY },
@@ -551,16 +858,17 @@ export async function createInvoicePdf(
     color: rgb(0.88, 0.88, 0.88),
   });
 
-  drawWrappedText(
+  const footerTextWidth = width - marginLeft - marginRight;
+  drawCenteredWrappedText(
     page,
-    tenant.footerText,
-    marginLeft,
+    tenant.footerLegalText,
+    width / 2,
     footerTextY,
-    contentWidth,
+    footerTextWidth,
     fontRegular,
-    9,
-    rgb(0.4, 0.4, 0.4),
-    11,
+    8,
+    rgb(0.55, 0.55, 0.55),
+    10,
   );
 
   const pdfBytes = await pdfDoc.save();

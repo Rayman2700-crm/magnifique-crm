@@ -42,34 +42,31 @@ function isSimulatedReader(reader: Stripe.Terminal.Reader) {
   return label.includes("simulated reader") || deviceType.includes("simulated");
 }
 
-function isReaderBlockingActionStatus(value: string | null | undefined) {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  return normalized === "in_progress" || normalized === "pending";
+function normalizeReaderActionStatus(reader: Stripe.Terminal.Reader) {
+  return String(reader.action?.status ?? "").trim().toLowerCase();
 }
 
-function isReaderRecoverableActionStatus(value: string | null | undefined) {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  return normalized === "failed" || normalized === "succeeded" || normalized === "canceled" || normalized === "cancelled";
+function isReaderOnline(reader: Stripe.Terminal.Reader) {
+  return String(reader.status ?? "").trim().toLowerCase() === "online";
+}
+
+function isReaderBusyLike(reader: Stripe.Terminal.Reader) {
+  const actionStatus = normalizeReaderActionStatus(reader);
+  return actionStatus === "in_progress" || actionStatus === "pending";
+}
+
+function isReaderReusable(reader: Stripe.Terminal.Reader) {
+  if (!isReaderOnline(reader)) return false;
+  const actionStatus = normalizeReaderActionStatus(reader);
+  return !actionStatus;
 }
 
 function rankReader(reader: Stripe.Terminal.Reader) {
-  const status = String(reader.status ?? "").trim().toLowerCase();
-  const actionStatus = String(reader.action?.status ?? "").trim().toLowerCase();
-  if (status === "online" && !actionStatus) return 0;
-  if (status === "online" && isReaderRecoverableActionStatus(actionStatus)) return 1;
-  if (status === "online") return 2;
-  if (status === "offline") return 4;
-  return 3;
-}
-
-async function maybeClearReaderAction(reader: Stripe.Terminal.Reader) {
-  const actionStatus = String(reader.action?.status ?? "").trim().toLowerCase();
-  if (!isReaderRecoverableActionStatus(actionStatus)) return reader;
-  try {
-    return await stripe.terminal.readers.cancelAction(reader.id);
-  } catch {
-    return reader;
-  }
+  if (isReaderReusable(reader)) return 0;
+  if (isReaderOnline(reader) && !isReaderBusyLike(reader)) return 1;
+  if (isReaderBusyLike(reader)) return 3;
+  if (String(reader.status ?? "").trim().toLowerCase() === "offline") return 5;
+  return 4;
 }
 
 async function ensurePaymentIntent(payment: PaymentRow) {
@@ -122,13 +119,47 @@ async function ensurePaymentIntent(payment: PaymentRow) {
 
 async function resolveReader(requestedReaderId: string) {
   if (requestedReaderId) {
-    const requested = await stripe.terminal.readers.retrieve(requestedReaderId);
-    return maybeClearReaderAction(requested);
+    return stripe.terminal.readers.retrieve(requestedReaderId);
   }
+
   const list = await stripe.terminal.readers.list({ limit: 100 });
   const ordered = [...list.data].sort((a, b) => rankReader(a) - rankReader(b));
-  const candidate = ordered[0] ?? null;
-  return candidate ? maybeClearReaderAction(candidate) : null;
+  return ordered.find((reader) => isReaderReusable(reader)) ?? ordered[0] ?? null;
+}
+
+async function clearReaderIfNeeded(reader: Stripe.Terminal.Reader) {
+  const actionStatus = normalizeReaderActionStatus(reader);
+  if (!actionStatus) return reader;
+
+  if (actionStatus === "failed") {
+    try {
+      return await stripe.terminal.readers.cancelAction(reader.id);
+    } catch {
+      return reader;
+    }
+  }
+
+  return reader;
+}
+
+function buildReaderUnavailableMessage(reader: Stripe.Terminal.Reader) {
+  const label = reader.label ?? reader.id;
+  const status = String(reader.status ?? "").trim().toLowerCase();
+  const actionStatus = normalizeReaderActionStatus(reader);
+
+  if (status !== "online") {
+    return `Reader ${label} ist aktuell nicht online.`;
+  }
+
+  if (actionStatus === "failed") {
+    return `Reader ${label} hatte einen fehlgeschlagenen Alt-Zustand und konnte nicht automatisch bereinigt werden. Bitte Reader in Stripe kurz zurücksetzen.`;
+  }
+
+  if (actionStatus) {
+    return `Reader ${label} ist gerade beschäftigt (${actionStatus}). Bitte kurz warten oder einen anderen freien Reader verwenden.`;
+  }
+
+  return `Reader ${label} ist aktuell nicht bereit.`;
 }
 
 export async function POST(req: NextRequest) {
@@ -142,20 +173,6 @@ export async function POST(req: NextRequest) {
 
     if (!paymentId) {
       return jsonNoStore({ error: "payment_id fehlt." }, { status: 400 });
-    }
-
-    const reader = await resolveReader(requestedReaderId);
-    if (!reader?.id) {
-      return jsonNoStore({ error: "Kein verfügbarer Reader gefunden." }, { status: 400 });
-    }
-
-    const readerStatus = String(reader.status ?? "").trim().toLowerCase();
-    const readerActionStatus = String(reader.action?.status ?? "").trim().toLowerCase();
-    if (readerStatus !== "online") {
-      return jsonNoStore({ error: `Reader ${reader.label ?? reader.id} ist aktuell nicht online.` }, { status: 409 });
-    }
-    if (isReaderBlockingActionStatus(readerActionStatus)) {
-      return jsonNoStore({ error: `Reader ${reader.label ?? reader.id} ist gerade beschäftigt (${readerActionStatus}).` }, { status: 409 });
     }
 
     const { data: payment, error } = await admin
@@ -181,6 +198,54 @@ export async function POST(req: NextRequest) {
     }
     if (normalizedStatus === "CANCELLED") {
       return jsonNoStore({ error: "Dieses Payment wurde bereits abgebrochen.", should_reload: true }, { status: 409 });
+    }
+
+    let reader = await resolveReader(requestedReaderId);
+    if (!reader?.id) {
+      return jsonNoStore({ error: "Kein verfügbarer Reader gefunden." }, { status: 400 });
+    }
+
+    reader = await clearReaderIfNeeded(reader);
+
+    if (!isReaderReusable(reader)) {
+      const message = buildReaderUnavailableMessage(reader);
+
+      await admin
+        .from("payments")
+        .update({
+          status: "PENDING",
+          failure_reason: message,
+          provider_response_json: {
+            ...((payment.provider_response_json as Record<string, unknown> | null) ?? {}),
+            phase: "reader_not_ready",
+            checked_at: new Date().toISOString(),
+            reader_id: reader.id,
+            reader_label: reader.label ?? null,
+            reader_status: reader.status ?? null,
+            reader_action: {
+              status: reader.action?.status ?? null,
+              type: reader.action?.type ?? null,
+            },
+            error_message: message,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", paymentId);
+
+      return jsonNoStore(
+        {
+          error: message,
+          retry_allowed: true,
+          reader: {
+            id: reader.id,
+            label: reader.label ?? null,
+            status: reader.status ?? null,
+            actionStatus: reader.action?.status ?? null,
+            actionType: reader.action?.type ?? null,
+          },
+        },
+        { status: 409 }
+      );
     }
 
     const paymentIntentId = await ensurePaymentIntent(payment as PaymentRow);

@@ -36,8 +36,6 @@ type ReaderSummary = {
   actionStatus: string | null;
   actionType: string | null;
   lastSeenAt: number | null;
-  isReady?: boolean;
-  readinessReason?: string | null;
 };
 
 type ConfirmResult = {
@@ -46,29 +44,17 @@ type ConfirmResult = {
     id?: string;
     status?: string | null;
     status_label?: string | null;
-    failure_reason?: string | null;
   } | null;
   stripe?: {
     id?: string | null;
     status?: string | null;
-    last_error?: string | null;
   } | null;
   receipt?: {
     id?: string | null;
     receipt_number?: string | null;
   } | null;
-  reader?: {
-    id?: string | null;
-    label?: string | null;
-    status?: string | null;
-    action_status?: string | null;
-    action_type?: string | null;
-    last_seen_at?: number | null;
-  } | null;
   should_reload?: boolean;
   terminal_done?: boolean;
-  terminal_state?: string | null;
-  retry_allowed?: boolean;
   error?: string;
 };
 
@@ -148,23 +134,12 @@ function AutoCardPaymentPanel({
   const [error, setError] = useState("");
   const [readerLabel, setReaderLabel] = useState("");
   const [started, setStarted] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [canRetry, setCanRetry] = useState(false);
-  const [readerHint, setReaderHint] = useState("");
   const pollTimerRef = useRef<number | null>(null);
   const startedAtRef = useRef<number>(Date.now());
-  const wasClosedRef = useRef(false);
-
-  function clearPollTimer() {
-    if (pollTimerRef.current) {
-      window.clearTimeout(pollTimerRef.current);
-      pollTimerRef.current = null;
-    }
-  }
 
   useEffect(() => {
     return () => {
-      clearPollTimer();
+      if (pollTimerRef.current) window.clearTimeout(pollTimerRef.current);
     };
   }, []);
 
@@ -174,21 +149,12 @@ function AutoCardPaymentPanel({
         cache: "no-store",
       });
       const json = (await res.json()) as ConfirmResult;
-      const responseError = String(json?.error ?? "").trim();
+      if (!res.ok) throw new Error(String(json?.error ?? "Payment-Status konnte nicht geprüft werden."));
+
       const paymentStatus = String(json?.payment?.status_label ?? json?.payment?.status ?? "Unbekannt");
       const stripeStatus = String(json?.stripe?.status ?? "").trim();
       const receiptId = String(json?.receipt?.id ?? "").trim();
       const receiptNumber = String(json?.receipt?.receipt_number ?? "").trim();
-      const failureReason = String(json?.payment?.failure_reason ?? json?.stripe?.last_error ?? responseError ?? "").trim();
-      const terminalState = String(json?.terminal_state ?? "").trim().toUpperCase();
-      const readerStateParts = [
-        String(json?.reader?.label ?? "").trim(),
-        String(json?.reader?.status ?? "").trim(),
-        String(json?.reader?.action_status ?? "").trim(),
-      ].filter(Boolean);
-      if (readerStateParts.length > 0) {
-        setReaderHint(readerStateParts.join(" · "));
-      }
 
       if (receiptId) {
         window.location.href = buildReceiptUrl(
@@ -198,138 +164,79 @@ function AutoCardPaymentPanel({
         return;
       }
 
-      if (!res.ok) {
-        throw new Error(responseError || failureReason || "Payment-Status konnte nicht geprüft werden.");
-      }
-
       setStatus(stripeStatus ? `${paymentStatus} · Stripe ${stripeStatus}` : paymentStatus);
 
-      if (terminalState === "FAILED" || terminalState === "CANCELLED") {
-        setError(
-          failureReason ||
-            (terminalState === "CANCELLED"
-              ? "Die Kartenzahlung wurde am Terminal abgebrochen."
-              : "Die Kartenzahlung konnte nicht abgeschlossen werden.")
-        );
-        setCanRetry(Boolean(json?.retry_allowed));
-        clearPollTimer();
-        return;
-      }
-
-      if (json?.terminal_done) {
-        setStatus(`${paymentStatus} · Bitte kurz warten…`);
-        clearPollTimer();
-        return;
-      }
-
       const elapsed = Date.now() - startedAtRef.current;
-      if (elapsed > 90000) {
-        setError("Timeout beim Warten auf die Kartenzahlung. Bitte Status erneut laden oder Slideover schließen.");
-        setCanRetry(true);
-        clearPollTimer();
+      if (json?.terminal_done || elapsed > 60000) {
+        if (json?.terminal_done) {
+          setStatus(`${paymentStatus} · Bitte kurz warten…`);
+        } else {
+          setError("Timeout beim Warten auf die Kartenzahlung. Bitte Slideover schließen und später erneut öffnen.");
+        }
         return;
       }
 
-      clearPollTimer();
       pollTimerRef.current = window.setTimeout(() => {
         void poll();
       }, 1800);
     } catch (err: any) {
       setError(String(err?.message ?? "Terminal-Status konnte nicht geprüft werden."));
-      setCanRetry(true);
-      clearPollTimer();
-    }
-  }
-
-  async function startFlow() {
-    clearPollTimer();
-    setBusy(true);
-    setError("");
-    setCanRetry(false);
-    setReaderHint("");
-    startedAtRef.current = Date.now();
-
-    try {
-      setStatus("Reader wird automatisch gesucht…");
-
-      const readerRes = await fetch("/api/stripe/terminal/readers", { cache: "no-store" });
-      const readerJson = await readerRes.json();
-      if (!readerRes.ok) throw new Error(String(readerJson?.error ?? "Reader konnten nicht geladen werden."));
-      const readers = Array.isArray(readerJson?.readers) ? (readerJson.readers as ReaderSummary[]) : [];
-      const preferredReader =
-        readers.find((reader) => reader.isReady) ??
-        readers.find((reader) => String(reader.status ?? "").trim().toLowerCase() === "online" && !String(reader.actionStatus ?? "").trim()) ??
-        readers.find((reader) => String(reader.status ?? "").trim().toLowerCase() === "online") ??
-        readers[0] ??
-        null;
-
-      if (!preferredReader?.id) {
-        throw new Error("Kein Stripe-Reader gefunden. Bitte zuerst einen Reader in Stripe Terminal registrieren.");
-      }
-
-      const label = preferredReader.label || preferredReader.serialNumber || preferredReader.id;
-      setReaderLabel(label);
-      if (String(preferredReader.status ?? "").trim().toLowerCase() !== "online") {
-        throw new Error(`Reader ${label} ist aktuell nicht online.`);
-      }
-      if (preferredReader.isReady === false) {
-        throw new Error(preferredReader.readinessReason || `Reader ${label} ist gerade nicht bereit.`);
-      }
-      if (String(preferredReader.actionStatus ?? "").trim() && !preferredReader.isReady) {
-        throw new Error(`Reader ${label} ist gerade beschäftigt (${preferredReader.actionStatus}).`);
-      }
-
-      setStatus(`Reader bereit: ${label}. Zahlung wird gestartet…`);
-
-      const sendRes = await fetch("/api/stripe/terminal/readers/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          payment_id: paymentId,
-          sales_order_id: salesOrderId,
-          reader_id: preferredReader.id,
-        }),
-      });
-      const sendJson = await sendRes.json();
-      if (!sendRes.ok) throw new Error(String(sendJson?.error ?? "Payment konnte nicht an den Reader gesendet werden."));
-
-      const activeReaderLabel =
-        String(sendJson?.reader?.label ?? "").trim() ||
-        String(sendJson?.reader?.id ?? "").trim() ||
-        label;
-      setReaderLabel(activeReaderLabel);
-      setReaderHint([
-        String(sendJson?.reader?.status ?? "").trim(),
-        String(sendJson?.reader?.actionStatus ?? sendJson?.reader?.action_status ?? "").trim(),
-      ].filter(Boolean).join(" · "));
-      setStatus(
-        sendJson?.auto_presented_test_card
-          ? "Testkarte wird automatisch präsentiert. Warte auf erfolgreichen Abschluss…"
-          : "Zahlung wurde an den Reader gesendet. Warte auf erfolgreichen Abschluss…"
-      );
-
-      pollTimerRef.current = window.setTimeout(() => {
-        void poll();
-      }, 1200);
-    } catch (err: any) {
-      setError(String(err?.message ?? "Kartenzahlung konnte nicht automatisch gestartet werden."));
-      setCanRetry(true);
-    } finally {
-      setBusy(false);
     }
   }
 
   useEffect(() => {
     if (started) return;
     setStarted(true);
-    void startFlow();
-  }, [started]);
+    startedAtRef.current = Date.now();
 
-  function handleClose() {
-    wasClosedRef.current = true;
-    clearPollTimer();
-    onClose();
-  }
+    const run = async () => {
+      try {
+        setStatus("Reader wird automatisch gesucht…");
+
+        const readerRes = await fetch("/api/stripe/terminal/readers", { cache: "no-store" });
+        const readerJson = await readerRes.json();
+        if (!readerRes.ok) throw new Error(String(readerJson?.error ?? "Reader konnten nicht geladen werden."));
+        const readers = Array.isArray(readerJson?.readers) ? (readerJson.readers as ReaderSummary[]) : [];
+        const preferredReader =
+          readers.find((reader) => String(reader.status ?? "").trim().toLowerCase() === "online") ??
+          readers[0] ??
+          null;
+
+        if (!preferredReader?.id) {
+          throw new Error("Kein Stripe-Reader gefunden. Bitte zuerst einen Reader in Stripe Terminal registrieren.");
+        }
+
+        setReaderLabel(preferredReader.label || preferredReader.serialNumber || preferredReader.id);
+        setStatus(`Reader verbunden: ${preferredReader.label || preferredReader.serialNumber || preferredReader.id}. Zahlung wird gestartet…`);
+
+        const sendRes = await fetch("/api/stripe/terminal/readers/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            payment_id: paymentId,
+            sales_order_id: salesOrderId,
+            reader_id: preferredReader.id,
+          }),
+        });
+        const sendJson = await sendRes.json();
+        if (!sendRes.ok) throw new Error(String(sendJson?.error ?? "Payment konnte nicht an den Reader gesendet werden."));
+
+        setStatus(
+          sendJson?.auto_presented_test_card
+            ? "Testkarte wird automatisch präsentiert. Warte auf erfolgreichen Abschluss…"
+            : "Zahlung wurde an den Reader gesendet. Warte auf erfolgreichen Abschluss…"
+        );
+
+        pollTimerRef.current = window.setTimeout(() => {
+          void poll();
+        }, 1200);
+      } catch (err: any) {
+        setError(String(err?.message ?? "Kartenzahlung konnte nicht automatisch gestartet werden."));
+      }
+    };
+
+    void run();
+  }, [paymentId, salesOrderId, started]);
 
   return (
     <div className="hide-scrollbar" style={{ padding: 16, overflow: "auto", scrollbarWidth: "none", msOverflowStyle: "none" }}>
@@ -338,20 +245,19 @@ function AutoCardPaymentPanel({
           <div className="text-[11px] uppercase tracking-[0.14em] text-amber-200/80">Kartenzahlung</div>
           <div className="mt-2 text-xl font-bold text-white">Terminal läuft automatisch</div>
           <div className="mt-2 text-sm text-white/70">
-            Reader wird automatisch geprüft, Payment gesendet und laufend auf Erfolg, Fehler oder Abbruch überwacht.
+            Reader wird automatisch gewählt, Payment automatisch gesendet und danach automatisch geprüft.
           </div>
         </div>
 
         <div className="rounded-[18px] border border-white/10 bg-white/[0.03] px-4 py-4">
           <div className="text-xs uppercase tracking-[0.14em] text-white/45">Sales Order</div>
-          <div className="mt-2 font-semibold text-white break-all">{salesOrderId}</div>
+          <div className="mt-2 font-semibold text-white">{salesOrderId}</div>
           <div className="mt-3 text-xs uppercase tracking-[0.14em] text-white/45">Payment</div>
-          <div className="mt-2 font-semibold text-white break-all">{paymentId}</div>
+          <div className="mt-2 font-semibold text-white">{paymentId}</div>
           {readerLabel ? (
             <>
               <div className="mt-3 text-xs uppercase tracking-[0.14em] text-white/45">Reader</div>
               <div className="mt-2 font-semibold text-white">{readerLabel}</div>
-              {readerHint ? <div className="mt-1 text-sm text-white/55">{readerHint}</div> : null}
             </>
           ) : null}
         </div>
@@ -375,34 +281,17 @@ function AutoCardPaymentPanel({
         <div className="grid gap-3">
           <button
             type="button"
-            onClick={() => {
-              setError("");
-              setStatus("Status wird erneut geladen…");
-              void poll();
-            }}
-            disabled={busy}
-            className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/10 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => window.location.reload()}
+            className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/10 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/15"
           >
             Status erneut laden
           </button>
-          {canRetry ? (
-            <button
-              type="button"
-              onClick={() => {
-                void startFlow();
-              }}
-              disabled={busy}
-              className="inline-flex h-12 items-center justify-center rounded-[16px] border border-amber-300/20 bg-amber-400/10 px-4 text-sm font-semibold text-amber-100 transition hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Kartenflow erneut starten
-            </button>
-          ) : null}
           <button
             type="button"
-            onClick={handleClose}
+            onClick={onClose}
             className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/10 bg-black/30 px-4 text-sm font-semibold text-white transition hover:bg-white/10"
           >
-            Schließen
+            Abbrechen / Schließen
           </button>
         </div>
       </div>

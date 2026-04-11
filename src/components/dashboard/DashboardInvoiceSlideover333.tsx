@@ -36,8 +36,6 @@ type ReaderSummary = {
   actionStatus: string | null;
   actionType: string | null;
   lastSeenAt: number | null;
-  isReady?: boolean;
-  readinessReason?: string | null;
 };
 
 type ConfirmResult = {
@@ -257,7 +255,6 @@ function AutoCardPaymentPanel({
       if (!readerRes.ok) throw new Error(String(readerJson?.error ?? "Reader konnten nicht geladen werden."));
       const readers = Array.isArray(readerJson?.readers) ? (readerJson.readers as ReaderSummary[]) : [];
       const preferredReader =
-        readers.find((reader) => reader.isReady) ??
         readers.find((reader) => String(reader.status ?? "").trim().toLowerCase() === "online" && !String(reader.actionStatus ?? "").trim()) ??
         readers.find((reader) => String(reader.status ?? "").trim().toLowerCase() === "online") ??
         readers[0] ??
@@ -272,10 +269,7 @@ function AutoCardPaymentPanel({
       if (String(preferredReader.status ?? "").trim().toLowerCase() !== "online") {
         throw new Error(`Reader ${label} ist aktuell nicht online.`);
       }
-      if (preferredReader.isReady === false) {
-        throw new Error(preferredReader.readinessReason || `Reader ${label} ist gerade nicht bereit.`);
-      }
-      if (String(preferredReader.actionStatus ?? "").trim() && !preferredReader.isReady) {
+      if (String(preferredReader.actionStatus ?? "").trim()) {
         throw new Error(`Reader ${label} ist gerade beschäftigt (${preferredReader.actionStatus}).`);
       }
 

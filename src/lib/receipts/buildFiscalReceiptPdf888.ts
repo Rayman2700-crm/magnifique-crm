@@ -51,90 +51,13 @@ export type BuildFiscalReceiptPdfInput = {
 
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
-
-const TEXT = rgb(0.2, 0.2, 0.2);
+const DEFAULT_TEXT = rgb(0.2, 0.2, 0.2);
 const FOOTER_TEXT = rgb(0.55, 0.55, 0.55);
 const HEADER_BG = rgb(0.30, 0.30, 0.30);
 const HEADER_DIVIDER = rgb(0.82, 0.82, 0.82);
 const HEADER_TEXT = rgb(1, 1, 1);
 const LINE_LIGHT = rgb(0.85, 0.85, 0.85);
 const GOLD = rgb(0.72, 0.53, 0.17);
-
-type ProviderDefaults = {
-  studioName: string;
-  address1: string;
-  address2: string;
-  country: string;
-  phone: string;
-  email: string;
-  iban: string;
-  bic: string;
-  invoicePrefix: string;
-  logoPath: string;
-};
-
-const PROVIDER_DEFAULTS: Array<{ match: string; values: ProviderDefaults }> = [
-  {
-    match: "radu craus",
-    values: {
-      studioName: "Magnifique Beauty Institut",
-      address1: "Flugfeldgürtel 24/1",
-      address2: "2700 Wiener Neustadt",
-      country: "Österreich",
-      phone: "+43 676 6742429",
-      email: "radu.craus@gmail.com",
-      iban: "AT12 3456 7890 1234 5678",
-      bic: "",
-      invoicePrefix: "RAD",
-      logoPath: "/logos/radu-craus.png",
-    },
-  },
-  {
-    match: "raluca craus",
-    values: {
-      studioName: "Magnifique Beauty Institut",
-      address1: "Flugfeldgürtel 24/1",
-      address2: "2700 Wiener Neustadt",
-      country: "Österreich",
-      phone: "+43 676 4106468",
-      email: "raluca.schwarz@gmail.com",
-      iban: "",
-      bic: "",
-      invoicePrefix: "RAL",
-      logoPath: "/logos/raluca-craus.png",
-    },
-  },
-  {
-    match: "alexandra sacadat",
-    values: {
-      studioName: "Magnifique Beauty Institut",
-      address1: "Flugfeldgürtel 24/1",
-      address2: "2700 Wiener Neustadt",
-      country: "Österreich",
-      phone: "+43 664 1433818",
-      email: "alexandra_soj@hotmail.com",
-      iban: "",
-      bic: "",
-      invoicePrefix: "ALE",
-      logoPath: "/logos/alexandra-sacadat.png",
-    },
-  },
-  {
-    match: "barbara",
-    values: {
-      studioName: "Magnifique Beauty Institut",
-      address1: "Flugfeldgürtel 24/1",
-      address2: "2700 Wiener Neustadt",
-      country: "Österreich",
-      phone: "+43 699 12638348",
-      email: "eder.barbara1969@gmail.com",
-      iban: "",
-      bic: "",
-      invoicePrefix: "BAR",
-      logoPath: "/logos/barbara-eder.png",
-    },
-  },
-];
 
 function toText(value: unknown): string {
   if (value == null) return "";
@@ -192,31 +115,11 @@ function buildPaymentReference(receiptNumber: string, customerName: string): str
   return [toText(receiptNumber), toText(customerName)].filter(Boolean).join(" - ");
 }
 
-function parseIssuedDate(value: string) {
-  const raw = toText(value);
-  if (!raw) return "";
-  const match = raw.match(/^(\d{2}\.\d{2}\.\d{4})/);
-  return match ? match[1] : raw;
-}
-
-function extractYearFromDate(value: string) {
-  const match = parseIssuedDate(value).match(/(\d{4})$/);
-  return match ? match[1] : String(new Date().getFullYear());
-}
-
-function maybeFormatReceiptNumber(receiptNumber: string, prefix: string, issuedAtLabel: string) {
-  const raw = toText(receiptNumber);
-  if (!raw) return "-";
-  if (raw.includes("-")) return raw;
-  if (!/^\d+$/.test(raw) || !prefix) return raw;
-  return `${prefix}-${extractYearFromDate(issuedAtLabel)}-${raw.padStart(4, "0")}`;
-}
-
 function sanitizeIban(value: string): string {
   return value.replace(/\s+/g, "").toUpperCase();
 }
 
-function truncateEpcField(value: string, maxLength: number) {
+function truncateEpcField(value: string, maxLength: number): string {
   return value.slice(0, maxLength);
 }
 
@@ -258,24 +161,52 @@ async function buildTransferQrPngBytes(params: {
   amount?: number;
   reference?: string;
 }) {
-  return QRCode.toBuffer(buildEpcQrPayload(params), {
+  const payload = buildEpcQrPayload(params);
+  return QRCode.toBuffer(payload, {
     errorCorrectionLevel: "M",
     margin: 0,
     width: 256,
-    color: { dark: "#000000", light: "#FFFFFF" },
+    color: {
+      dark: "#000000",
+      light: "#FFFFFF",
+    },
     type: "png",
   });
 }
 
-function getProviderDefaults(providerName: string): ProviderDefaults | null {
-  const lower = toText(providerName).toLowerCase();
-  for (const item of PROVIDER_DEFAULTS) {
-    if (lower.includes(item.match)) return item.values;
-  }
-  return null;
+function getProviderLogoCandidates(input: BuildFiscalReceiptPdfInput) {
+  const manual = toText(input.providerLogoPath);
+  const footerManual = toText(input.footerLogoPath);
+  const provider = toText(input.providerName).toLowerCase();
+
+  const mappedFile =
+    provider.includes("radu") ? "radu-craus.png" :
+    provider.includes("raluca") ? "raluca-craus.png" :
+    provider.includes("alexandra") ? "alexandra-sacadat.png" :
+    provider.includes("barbara") ? "barbara-eder.png" :
+    "";
+
+  return [
+    manual,
+    mappedFile ? `/logos/${mappedFile}` : "",
+    "/logos/magnifique-footer.png",
+    "/branding/magnifique-logo-gold.png",
+    "/magnifique-logo-gold.png",
+    footerManual,
+  ].filter(Boolean);
 }
 
-function toAbsolutePublicPath(candidate: string) {
+function getFooterLogoCandidates(input: BuildFiscalReceiptPdfInput) {
+  const manual = toText(input.footerLogoPath);
+  return [
+    manual,
+    "/logos/magnifique-footer.png",
+    "/branding/magnifique-logo-gold.png",
+    "/magnifique-logo-gold.png",
+  ].filter(Boolean);
+}
+
+function toAbsoluteCandidate(candidate: string) {
   if (!candidate) return "";
   if (path.isAbsolute(candidate)) return candidate;
   return path.join(process.cwd(), "public", candidate.replace(/^\/+/, ""));
@@ -284,7 +215,7 @@ function toAbsolutePublicPath(candidate: string) {
 async function tryLoadImage(pdfDoc: PDFDocument, candidates: string[]): Promise<PDFImage | null> {
   for (const candidate of candidates) {
     try {
-      const absolute = toAbsolutePublicPath(candidate);
+      const absolute = toAbsoluteCandidate(candidate);
       const bytes = await readFile(absolute);
       const lower = absolute.toLowerCase();
       if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
@@ -292,7 +223,7 @@ async function tryLoadImage(pdfDoc: PDFDocument, candidates: string[]): Promise<
       }
       return await pdfDoc.embedPng(bytes);
     } catch {
-      // ignore and continue
+      // continue
     }
   }
   return null;
@@ -347,7 +278,13 @@ function drawRightAlignedText(
 ) {
   const safeText = text ?? "";
   const textWidth = font.widthOfTextAtSize(safeText, size);
-  page.drawText(safeText, { x: rightX - textWidth, y, size, font, color });
+  page.drawText(safeText, {
+    x: rightX - textWidth,
+    y,
+    size,
+    font,
+    color,
+  });
 }
 
 function drawCenteredText(
@@ -361,7 +298,13 @@ function drawCenteredText(
 ) {
   const safeText = text ?? "";
   const textWidth = font.widthOfTextAtSize(safeText, size);
-  page.drawText(safeText, { x: centerX - textWidth / 2, y, size, font, color });
+  page.drawText(safeText, {
+    x: centerX - textWidth / 2,
+    y,
+    size,
+    font,
+    color,
+  });
 }
 
 function drawImageContain(
@@ -377,6 +320,7 @@ function drawImageContain(
   const drawHeight = image.height * scale;
   const x = box.x + (box.width - drawWidth) / 2;
   const y = box.y + (box.height - drawHeight) / 2;
+
   page.drawImage(image, { x, y, width: drawWidth, height: drawHeight });
 }
 
@@ -388,38 +332,30 @@ export async function buildFiscalReceiptPdf(input: BuildFiscalReceiptPdfInput) {
   const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  const defaults = getProviderDefaults(input.providerName);
-
-  const providerStudioName = toText(input.providerStudioName) || defaults?.studioName || "Magnifique Beauty Institut";
-  const providerAddress1 = toText(input.providerAddress1) || defaults?.address1 || "";
-  const providerAddress2 = toText(input.providerAddress2) || defaults?.address2 || "";
-  const providerCountry = toText(input.providerCountry) || defaults?.country || "Österreich";
-  const providerPhone = toText(input.providerPhone) || defaults?.phone || "";
-  const providerEmail = toText(input.providerEmail) || defaults?.email || "";
-  const providerIban = toText(input.providerIban) || defaults?.iban || "";
-  const providerBic = toText(input.providerBic) || defaults?.bic || "";
-  const providerInvoicePrefix = toText(input.providerInvoicePrefix) || defaults?.invoicePrefix || "";
-
-  const providerLogo = await tryLoadImage(pdfDoc, [
-    toText(input.providerLogoPath),
-    defaults?.logoPath || "",
-  ].filter(Boolean));
-
-  const footerLogo = await tryLoadImage(pdfDoc, [
-    toText(input.footerLogoPath),
-    "/logos/magnifique-footer.png",
-    "/branding/magnifique-logo-gold.png",
-    "/magnifique-logo-gold.png",
-  ].filter(Boolean));
+  const logo = await tryLoadImage(pdfDoc, getProviderLogoCandidates(input));
+  const footerLogo = await tryLoadImage(pdfDoc, getFooterLogoCandidates(input));
 
   const lines = Array.isArray(input.lines) ? input.lines : [];
-  const total = lines.reduce((sum, line) => sum + Number(line.lineTotalGross || 0), 0);
+  const total =
+    lines.reduce((sum, line) => sum + Number(line.lineTotalGross || 0), 0);
 
   const paymentMethod = normalizePaymentMethod(input.paymentMethodLabel);
   const paymentTermsText = buildPaymentTermsText(paymentMethod);
-  const issueDateLabel = parseIssuedDate(input.issuedAtLabel);
-  const receiptNumberLabel = maybeFormatReceiptNumber(input.receiptNumber, providerInvoicePrefix, issueDateLabel);
-  const paymentReference = buildPaymentReference(receiptNumberLabel, input.customerName);
+  const paymentReference = buildPaymentReference(input.receiptNumber, input.customerName);
+
+  const marginLeft = 50;
+  const marginRight = 50;
+  const contentWidth = width - marginLeft - marginRight;
+  const rightX = 345;
+
+  const providerStudioName = toText(input.providerStudioName) || "Magnifique Beauty Institut";
+  const providerAddress1 = toText(input.providerAddress1);
+  const providerAddress2 = toText(input.providerAddress2);
+  const providerCountry = toText(input.providerCountry) || "Österreich";
+  const providerPhone = toText(input.providerPhone);
+  const providerEmail = toText(input.providerEmail);
+  const providerIban = toText(input.providerIban);
+  const providerBic = toText(input.providerBic);
 
   const thankYouText =
     toText(input.thankYouText) ||
@@ -430,20 +366,28 @@ export async function buildFiscalReceiptPdf(input: BuildFiscalReceiptPdfInput) {
     "Inhaber: Raluca Craus | Standort: Flugfeldgürtel 24/1, 2700 Wiener Neustadt | Tel: +43 676 4106468 | Kontaktdaten: +43 676 4106468, raluca.schwarz@gmail.com | Einzelunternehmen | Firmengericht: Landesgericht Wiener Neustadt | Aufsichtsbehörde: Bezirkshauptmannschaft Wiener Neustadt | Kammer: Wirtschaftskammer Niederösterreich | Berufszweig: Kosmetik";
 
   const footerWebsite = toText(input.footerWebsite) || "www.magnifique-beauty.at";
+
   const smallBusinessNotice =
     toText(input.smallBusinessNotice) ||
     "Gemäß § 6 Abs. 1 Z 27 UStG wird keine Umsatzsteuer berechnet.";
 
-  const marginLeft = 50;
-  const marginRight = 50;
-  const contentWidth = width - marginLeft - marginRight;
-  const rightX = 345;
+  page.drawRectangle({
+    x: 0,
+    y: 0,
+    width,
+    height,
+    color: rgb(1, 1, 1),
+  });
 
-  page.drawRectangle({ x: 0, y: 0, width, height, color: rgb(1, 1, 1) });
+  const logoBox = {
+    x: marginLeft,
+    y: height - 155,
+    width: 118,
+    height: 118,
+  };
 
-  const logoBox = { x: marginLeft, y: height - 155, width: 118, height: 118 };
-  if (providerLogo) {
-    drawImageContain(page, providerLogo, logoBox, 0);
+  if (logo) {
+    drawImageContain(page, logo, logoBox, 0);
   }
 
   page.drawText("RECHNUNG", {
@@ -451,23 +395,23 @@ export async function buildFiscalReceiptPdf(input: BuildFiscalReceiptPdfInput) {
     y: height - 60,
     size: 22,
     font: fontBold,
-    color: TEXT,
+    color: DEFAULT_TEXT,
   });
 
-  page.drawText(`Rechnungsnummer: ${receiptNumberLabel || "-"}`, {
+  page.drawText(`Rechnungsnummer: ${toText(input.receiptNumber) || "-"}`, {
     x: rightX,
     y: height - 95,
     size: 10,
     font: fontRegular,
-    color: TEXT,
+    color: DEFAULT_TEXT,
   });
 
-  page.drawText(`Rechnungsdatum: ${issueDateLabel || "-"}`, {
+  page.drawText(`Rechnungsdatum: ${toText(input.issuedAtLabel) || "-"}`, {
     x: rightX,
     y: height - 110,
     size: 10,
     font: fontRegular,
-    color: TEXT,
+    color: DEFAULT_TEXT,
   });
 
   page.drawText(`Zahlungsart: ${paymentMethod}`, {
@@ -475,7 +419,7 @@ export async function buildFiscalReceiptPdf(input: BuildFiscalReceiptPdfInput) {
     y: height - 125,
     size: 10,
     font: fontRegular,
-    color: TEXT,
+    color: DEFAULT_TEXT,
   });
 
   if (toText(input.paidAtLabel)) {
@@ -484,7 +428,7 @@ export async function buildFiscalReceiptPdf(input: BuildFiscalReceiptPdfInput) {
       y: height - 140,
       size: 10,
       font: fontRegular,
-      color: TEXT,
+      color: DEFAULT_TEXT,
     });
   }
 
@@ -495,7 +439,7 @@ export async function buildFiscalReceiptPdf(input: BuildFiscalReceiptPdfInput) {
     y: providerStartY,
     size: 16,
     font: fontBold,
-    color: TEXT,
+    color: DEFAULT_TEXT,
   });
 
   const providerLines = [
@@ -514,7 +458,7 @@ export async function buildFiscalReceiptPdf(input: BuildFiscalReceiptPdfInput) {
       y: providerY,
       size: 10,
       font: fontRegular,
-      color: TEXT,
+      color: DEFAULT_TEXT,
     });
     providerY -= 15;
   });
@@ -526,7 +470,7 @@ export async function buildFiscalReceiptPdf(input: BuildFiscalReceiptPdfInput) {
     y: customerY,
     size: 11,
     font: fontBold,
-    color: TEXT,
+    color: DEFAULT_TEXT,
   });
 
   customerY -= 22;
@@ -536,7 +480,7 @@ export async function buildFiscalReceiptPdf(input: BuildFiscalReceiptPdfInput) {
     y: customerY,
     size: 11,
     font: fontBold,
-    color: TEXT,
+    color: DEFAULT_TEXT,
   });
 
   customerY -= 16;
@@ -555,7 +499,7 @@ export async function buildFiscalReceiptPdf(input: BuildFiscalReceiptPdfInput) {
       y: customerY,
       size: 10,
       font: fontRegular,
-      color: TEXT,
+      color: DEFAULT_TEXT,
     });
     customerY -= 14;
   });
@@ -632,15 +576,15 @@ export async function buildFiscalReceiptPdf(input: BuildFiscalReceiptPdfInput) {
         serviceMaxWidth,
         index === 0 ? fontBold : fontRegular,
         index === 0 ? 10 : 9,
-        TEXT,
+        DEFAULT_TEXT,
         11,
       );
       if (index < serviceParts.length - 1) serviceY -= 2;
     });
 
-    drawRightAlignedText(page, String(Number(item.quantity || 0)), col2Right, rowY, fontRegular, 10, TEXT);
-    drawRightAlignedText(page, euro(Number(item.unitPriceGross || 0), input.currencyCode), col3Right, rowY, fontRegular, 10, TEXT);
-    drawRightAlignedText(page, euro(lineTotal, input.currencyCode), col4Right, rowY, fontRegular, 10, TEXT);
+    drawRightAlignedText(page, String(Number(item.quantity || 0)), col2Right, rowY, fontRegular, 10, DEFAULT_TEXT);
+    drawRightAlignedText(page, euro(Number(item.unitPriceGross || 0), input.currencyCode), col3Right, rowY, fontRegular, 10, DEFAULT_TEXT);
+    drawRightAlignedText(page, euro(lineTotal, input.currencyCode), col4Right, rowY, fontRegular, 10, DEFAULT_TEXT);
 
     rowY = Math.min(serviceY - 10, rowY - 28);
   }
@@ -662,18 +606,18 @@ export async function buildFiscalReceiptPdf(input: BuildFiscalReceiptPdfInput) {
 
   const totalLabelRight = col3Right - 18;
 
-  drawRightAlignedText(page, "Gesamtbetrag", totalLabelRight, totalY, fontBold, 11, TEXT);
-  drawRightAlignedText(page, euro(total, input.currencyCode), col4Right, totalY, fontBold, 11, TEXT);
+  drawRightAlignedText(page, "Gesamtbetrag", totalLabelRight, totalY, fontBold, 11, DEFAULT_TEXT);
+  drawRightAlignedText(page, euro(total, input.currencyCode), col4Right, totalY, fontBold, 11, DEFAULT_TEXT);
 
-  drawWrappedText(page, smallBusinessNotice, marginLeft, hintY, contentWidth, fontRegular, 9, TEXT, 11);
-  drawWrappedText(page, paymentTermsText, marginLeft, paymentTermsY, contentWidth, fontRegular, 9, TEXT, 11);
+  drawWrappedText(page, smallBusinessNotice, marginLeft, hintY, contentWidth, fontRegular, 9, DEFAULT_TEXT, 11);
+  drawWrappedText(page, paymentTermsText, marginLeft, paymentTermsY, contentWidth, fontRegular, 9, DEFAULT_TEXT, 11);
 
   page.drawText("Kontodaten", {
     x: marginLeft,
     y: accountHeadingY,
     size: 10,
     font: fontBold,
-    color: TEXT,
+    color: DEFAULT_TEXT,
   });
 
   page.drawText(`Behandlername: ${toText(input.providerName) || "-"}`, {
@@ -681,7 +625,7 @@ export async function buildFiscalReceiptPdf(input: BuildFiscalReceiptPdfInput) {
     y: accountHolderY,
     size: 9,
     font: fontRegular,
-    color: TEXT,
+    color: DEFAULT_TEXT,
   });
 
   page.drawText(`IBAN: ${providerIban}`, {
@@ -689,7 +633,7 @@ export async function buildFiscalReceiptPdf(input: BuildFiscalReceiptPdfInput) {
     y: accountIbanY,
     size: 9,
     font: fontRegular,
-    color: TEXT,
+    color: DEFAULT_TEXT,
   });
 
   const afterReferenceY = drawWrappedText(
@@ -700,7 +644,7 @@ export async function buildFiscalReceiptPdf(input: BuildFiscalReceiptPdfInput) {
     contentWidth,
     fontRegular,
     9,
-    TEXT,
+    DEFAULT_TEXT,
     11,
   );
 
@@ -708,7 +652,7 @@ export async function buildFiscalReceiptPdf(input: BuildFiscalReceiptPdfInput) {
   const footerLineY = thankYouY - 44;
   const footerTextY = footerLineY - 18;
 
-  drawWrappedText(page, thankYouText, marginLeft, thankYouY, contentWidth, fontRegular, 9, TEXT, 11);
+  drawWrappedText(page, thankYouText, marginLeft, thankYouY, contentWidth, fontRegular, 9, DEFAULT_TEXT, 11);
 
   const shouldShowTransferQr =
     paymentMethod === "Überweisung" &&
@@ -731,10 +675,10 @@ export async function buildFiscalReceiptPdf(input: BuildFiscalReceiptPdfInput) {
         qrBox.y + qrBox.height + 8,
         fontRegular,
         8,
-        TEXT,
+        DEFAULT_TEXT,
       );
 
-      const qrBytes = await buildTransferQrPngBytes({
+      const transferQrBytes = await buildTransferQrPngBytes({
         recipientName: toText(input.providerName),
         iban: providerIban,
         bic: providerBic,
@@ -742,8 +686,8 @@ export async function buildFiscalReceiptPdf(input: BuildFiscalReceiptPdfInput) {
         reference: paymentReference,
       });
 
-      const qrImage = await pdfDoc.embedPng(qrBytes);
-      drawImageContain(page, qrImage, qrBox, 0);
+      const transferQrImage = await pdfDoc.embedPng(transferQrBytes);
+      drawImageContain(page, transferQrImage, qrBox, 0);
     } catch (error) {
       console.error("QR-Code-Fehler:", error);
     }

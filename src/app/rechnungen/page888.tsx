@@ -1,14 +1,11 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getEffectiveTenantId } from "@/lib/effectiveTenant";
 import { Card, CardContent } from "@/components/ui/card";
 import FiscalReceiptSlideover from "@/components/rechnungen/FiscalReceiptSlideover";
 import PendingReaderPaymentsCard from "./PendingReaderPaymentsCard";
-import ClosingDateAutoSubmit from "@/components/rechnungen/ClosingDateAutoSubmit";
 import { backfillReadyFiscalReceipts, cancelCardPaymentForCheckout, completeCardPaymentForCheckout, createFiscalReceiptForPayment, createPaymentForSalesOrder, createSalesOrderFromAppointment, failCardPaymentForCheckout, startCardPaymentForCheckout } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -242,191 +239,6 @@ type AvatarFilterOption = {
   initials: string;
   filterKey: string;
 };
-
-type DailyClosingSaveEventRow = {
-  id: string;
-  cash_register_id: string | null;
-  performed_by: string | null;
-  event_timestamp: string | null;
-  reference_data: Record<string, unknown> | null;
-  created_at: string | null;
-};
-
-type DailyClosingSavedMeta = {
-  eventId: string;
-  savedAt: string | null;
-  savedByUserId: string | null;
-  savedByName: string | null;
-};
-
-function getStringRecordValue(source: Record<string, unknown> | null | undefined, key: string) {
-  const value = source?.[key];
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function getNumberRecordValue(source: Record<string, unknown> | null | undefined, key: string) {
-  const value = source?.[key];
-  const num = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(num) ? num : 0;
-}
-
-function buildClosingPageUrl(input: {
-  qRaw?: string;
-  filter?: string;
-  practitioner?: string;
-  closingDate?: string;
-  success?: string;
-  error?: string;
-}) {
-  const params = new URLSearchParams();
-  if (input.qRaw?.trim()) params.set("q", input.qRaw.trim());
-  if (input.filter && input.filter !== "all") params.set("filter", input.filter);
-  if (input.practitioner && input.practitioner !== "all") params.set("practitioner", input.practitioner);
-  if (input.closingDate?.trim()) params.set("closingDate", input.closingDate.trim());
-  if (input.success?.trim()) params.set("success", input.success.trim());
-  if (input.error?.trim()) params.set("error", input.error.trim());
-  const query = params.toString();
-  return query ? `/rechnungen?${query}` : "/rechnungen";
-}
-
-async function saveDailyClosingSnapshot(formData: FormData) {
-  "use server";
-
-  const closingDate = String(formData.get("closing_date") ?? "").trim();
-  const qRaw = String(formData.get("return_q") ?? "").trim();
-  const currentFilter = String(formData.get("return_filter") ?? "all").trim().toLowerCase() || "all";
-  const practitionerFilter = String(formData.get("return_practitioner") ?? "all").trim() || "all";
-  const mode = String(formData.get("mode") ?? "single").trim().toLowerCase();
-
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(closingDate)) {
-    redirect(buildClosingPageUrl({
-      qRaw,
-      filter: currentFilter,
-      practitioner: practitionerFilter,
-      closingDate,
-      error: "Tagesabschluss-Datum ist ungültig.",
-    }));
-  }
-
-  const supabase = await supabaseServer();
-  const admin = supabaseAdmin();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
-  const { data: profile } = await supabase
-    .from("user_profiles")
-    .select("role, tenant_id, calendar_tenant_id, full_name")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  const effectiveTenantId = await getEffectiveTenantId({
-    role: String((profile as { role?: string | null } | null)?.role ?? "PRACTITIONER"),
-    tenant_id: (profile as { tenant_id?: string | null } | null)?.tenant_id ?? null,
-    calendar_tenant_id: (profile as { calendar_tenant_id?: string | null } | null)?.calendar_tenant_id ?? null,
-  });
-
-  const savedByName = String((profile as { full_name?: string | null } | null)?.full_name ?? "").trim() || "Unbekannt";
-
-  const payloads = mode === "all"
-    ? (() => {
-        let parsed: unknown = [];
-        try {
-          parsed = JSON.parse(String(formData.get("groups_json") ?? "[]"));
-        } catch {
-          parsed = [];
-        }
-        return Array.isArray(parsed) ? parsed : [];
-      })()
-    : [{
-        tenantId: String(formData.get("tenant_id") ?? "").trim() || null,
-        cashRegisterId: String(formData.get("cash_register_id") ?? "").trim() || null,
-        providerName: String(formData.get("provider_name") ?? "").trim() || null,
-        receiptCount: Number(formData.get("receipt_count") ?? 0) || 0,
-        cashCents: Number(formData.get("cash_cents") ?? 0) || 0,
-        cardCents: Number(formData.get("card_cents") ?? 0) || 0,
-        transferCents: Number(formData.get("transfer_cents") ?? 0) || 0,
-        totalCents: Number(formData.get("total_cents") ?? 0) || 0,
-        stornoCount: Number(formData.get("storno_count") ?? 0) || 0,
-        stornoCents: Number(formData.get("storno_cents") ?? 0) || 0,
-      }];
-
-  const normalizedPayloads = payloads
-    .map((entry: any) => ({
-      tenantId: String(entry?.tenantId ?? "").trim() || null,
-      cashRegisterId: String(entry?.cashRegisterId ?? "").trim() || null,
-      providerName: String(entry?.providerName ?? "").trim() || null,
-      receiptCount: Number(entry?.receiptCount ?? 0) || 0,
-      cashCents: Number(entry?.cashCents ?? 0) || 0,
-      cardCents: Number(entry?.cardCents ?? 0) || 0,
-      transferCents: Number(entry?.transferCents ?? 0) || 0,
-      totalCents: Number(entry?.totalCents ?? 0) || 0,
-      stornoCount: Number(entry?.stornoCount ?? 0) || 0,
-      stornoCents: Number(entry?.stornoCents ?? 0) || 0,
-    }))
-    .filter((entry) => entry.tenantId || entry.cashRegisterId || entry.providerName);
-
-  if (normalizedPayloads.length === 0) {
-    redirect(buildClosingPageUrl({
-      qRaw,
-      filter: currentFilter,
-      practitioner: practitionerFilter,
-      closingDate,
-      error: "Es gibt keinen speicherbaren Tagesabschluss.",
-    }));
-  }
-
-  const inserts = normalizedPayloads.map((entry) => ({
-    tenant_id: entry.tenantId ?? effectiveTenantId ?? null,
-    cash_register_id: entry.cashRegisterId ?? null,
-    fiscal_receipt_id: null,
-    event_type: "DAILY_CLOSING_SAVED",
-    performed_by: user.id,
-    notes: `Tagesabschluss ${closingDate} gespeichert`,
-    reference_data: {
-      closing_date: closingDate,
-      tenant_id: entry.tenantId ?? effectiveTenantId ?? null,
-      cash_register_id: entry.cashRegisterId ?? null,
-      provider_name: entry.providerName ?? null,
-      receipt_count: entry.receiptCount,
-      cash_cents: entry.cashCents,
-      card_cents: entry.cardCents,
-      transfer_cents: entry.transferCents,
-      total_cents: entry.totalCents,
-      storno_count: entry.stornoCount,
-      storno_cents: entry.stornoCents,
-      saved_by_user_id: user.id,
-      saved_by_name: savedByName,
-      source: "rechnungen_tagesabschluss_v2",
-    },
-  }));
-
-  const { error } = await admin.from("fiscal_events").insert(inserts);
-
-  if (error) {
-    redirect(buildClosingPageUrl({
-      qRaw,
-      filter: currentFilter,
-      practitioner: practitionerFilter,
-      closingDate,
-      error: error.message ?? "Tagesabschluss konnte nicht gespeichert werden.",
-    }));
-  }
-
-  revalidatePath("/rechnungen");
-  redirect(buildClosingPageUrl({
-    qRaw,
-    filter: currentFilter,
-    practitioner: practitionerFilter,
-    closingDate,
-    success: mode === "all"
-      ? `Tagesabschluss für ${normalizedPayloads.length} Kassen gespeichert ✅`
-      : "Tagesabschluss gespeichert ✅",
-  }));
-}
-
 
 
 function euroFromCents(value: number | null | undefined, currencyCode?: string | null) {
@@ -875,7 +687,6 @@ function buildRechnungenHref({
   qRaw,
   filter,
   practitioner,
-  closingDate,
   receipt,
   appointmentId,
   salesOrder,
@@ -884,7 +695,6 @@ function buildRechnungenHref({
   qRaw?: string;
   filter?: string;
   practitioner?: string;
-  closingDate?: string;
   receipt?: string;
   appointmentId?: string;
   salesOrder?: string;
@@ -894,7 +704,6 @@ function buildRechnungenHref({
   if (qRaw?.trim()) params.set("q", qRaw.trim());
   if (filter && filter !== "all") params.set("filter", filter);
   if (practitioner && practitioner !== "all") params.set("practitioner", practitioner);
-  if (closingDate?.trim()) params.set("closingDate", closingDate.trim());
   if (receipt) params.set("receipt", receipt);
   if (appointmentId) params.set("appointmentId", appointmentId);
   if (salesOrder) params.set("salesOrder", salesOrder);
@@ -907,13 +716,11 @@ function MobileReceiptFilterMenu({
   qRaw,
   currentFilter,
   practitionerFilter,
-  closingDate,
   counts,
 }: {
   qRaw: string;
   currentFilter: string;
   practitionerFilter: string;
-  closingDate: string;
   counts: { all: number; today: number; week: number; month: number; open: number; cancelled: number; error: number };
 }) {
   const items = [
@@ -968,7 +775,7 @@ function MobileReceiptFilterMenu({
             return (
               <Link
                 key={item.key}
-                href={buildRechnungenHref({ qRaw, filter: item.key, practitioner: practitionerFilter, closingDate })}
+                href={buildRechnungenHref({ qRaw, filter: item.key, practitioner: practitionerFilter })}
                 className="flex items-center justify-between rounded-2xl border px-3 py-3 text-left"
                 style={{
                   borderColor: selected ? "rgba(214,195,163,0.28)" : "rgba(255,255,255,0.10)",
@@ -993,13 +800,11 @@ function MobileReceiptAvatarMenu({
   practitionerFilter,
   qRaw,
   currentFilter,
-  closingDate,
 }: {
   avatarOptions: AvatarFilterOption[];
   practitionerFilter: string;
   qRaw: string;
   currentFilter: string;
-  closingDate: string;
 }) {
   const activeOption =
     avatarOptions.find((option) => option.filterKey === practitionerFilter) ??
@@ -1059,7 +864,6 @@ function MobileReceiptAvatarMenu({
                   qRaw,
                   filter: currentFilter,
                   practitioner: option.filterKey,
-                  closingDate,
                 })}
                 className="flex items-center justify-between rounded-2xl border px-3 py-3 text-left"
                 style={{
@@ -1100,8 +904,8 @@ export default async function RechnungenPage({
   searchParams,
 }: {
   searchParams?:
-    | Promise<{ q?: string; filter?: string; practitioner?: string; closingDate?: string; receipt?: string; appointmentId?: string; salesOrder?: string; payment?: string; success?: string; error?: string }>
-    | { q?: string; filter?: string; practitioner?: string; closingDate?: string; receipt?: string; appointmentId?: string; salesOrder?: string; payment?: string; success?: string; error?: string };
+    | Promise<{ q?: string; filter?: string; practitioner?: string; receipt?: string; appointmentId?: string; salesOrder?: string; payment?: string; success?: string; error?: string }>
+    | { q?: string; filter?: string; practitioner?: string; receipt?: string; appointmentId?: string; salesOrder?: string; payment?: string; success?: string; error?: string };
 }) {
   const sp = searchParams ? await searchParams : undefined;
   const qRaw = String(sp?.q ?? "").trim();
@@ -1122,7 +926,6 @@ export default async function RechnungenPage({
     if (qRaw) params.set("q", qRaw);
     if (currentFilter && currentFilter !== "all") params.set("filter", currentFilter);
     if (practitionerFilter && practitionerFilter !== "all") params.set("practitioner", practitionerFilter);
-    if (closingDate) params.set("closingDate", closingDate);
     return params.toString();
   })();
 
@@ -1925,51 +1728,6 @@ export default async function RechnungenPage({
     }
   );
 
-  const dailyClosingSaveEventsQuery = admin
-    .from("fiscal_events")
-    .select("id, cash_register_id, performed_by, event_timestamp, reference_data, created_at")
-    .eq("event_type", "DAILY_CLOSING_SAVED")
-    .order("created_at", { ascending: false })
-    .limit(300);
-
-  const scopedDailyClosingSaveEventsQuery =
-    !isAdmin && effectiveTenantId
-      ? dailyClosingSaveEventsQuery.eq("tenant_id", effectiveTenantId)
-      : dailyClosingSaveEventsQuery;
-
-  const { data: dailyClosingSaveEventsRaw } = await scopedDailyClosingSaveEventsQuery;
-  const dailyClosingSaveEvents = (dailyClosingSaveEventsRaw ?? []) as DailyClosingSaveEventRow[];
-
-  const dailyClosingSavedByGroup = new Map<string, DailyClosingSavedMeta>();
-  for (const row of dailyClosingSaveEvents) {
-    const referenceData = row.reference_data ?? null;
-    if (getStringRecordValue(referenceData, "closing_date") !== closingDate) continue;
-    const tenantIdFromEvent = getStringRecordValue(referenceData, "tenant_id");
-    const registerIdFromEvent = getStringRecordValue(referenceData, "cash_register_id");
-    const eventKey = `${tenantIdFromEvent || "no-tenant"}__${registerIdFromEvent || "no-register"}`;
-    if (dailyClosingSavedByGroup.has(eventKey)) continue;
-    dailyClosingSavedByGroup.set(eventKey, {
-      eventId: row.id,
-      savedAt: row.event_timestamp ?? row.created_at ?? null,
-      savedByUserId: getStringRecordValue(referenceData, "saved_by_user_id") || row.performed_by || null,
-      savedByName: getStringRecordValue(referenceData, "saved_by_name") || null,
-    });
-  }
-
-  const savedDailyClosingCount = dailyClosingGroups.filter((group) => dailyClosingSavedByGroup.has(group.key)).length;
-  const groupsJsonForSaveAll = JSON.stringify(dailyClosingGroups.map((group) => ({
-    tenantId: group.tenantId,
-    cashRegisterId: group.cashRegisterId,
-    providerName: group.providerName,
-    receiptCount: group.receiptCount,
-    cashCents: group.cashCents,
-    cardCents: group.cardCents,
-    transferCents: group.transferCents,
-    totalCents: group.totalCents,
-    stornoCount: group.stornoCount,
-    stornoCents: group.stornoCents,
-  })));
-
   const checkoutTenant = firstJoin(checkoutAppointment?.tenant);
   const checkoutPerson = firstJoin(checkoutAppointment?.person);
   const checkoutServiceLabel =
@@ -2047,7 +1805,6 @@ export default async function RechnungenPage({
                       qRaw={qRaw}
                       currentFilter={currentFilter}
                       practitionerFilter={practitionerFilter}
-                      closingDate={closingDate}
                       counts={quickFilterCounts}
                     />
 
@@ -2082,7 +1839,6 @@ export default async function RechnungenPage({
                       practitionerFilter={practitionerFilter}
                       qRaw={qRaw}
                       currentFilter={currentFilter}
-                      closingDate={closingDate}
                     />
                   </div>
 
@@ -2134,7 +1890,6 @@ export default async function RechnungenPage({
                               qRaw,
                               filter: currentFilter,
                               practitioner: option.filterKey,
-                              closingDate,
                               appointmentId,
                               salesOrder: salesOrderId,
                               payment: paymentId,
@@ -2239,7 +1994,6 @@ export default async function RechnungenPage({
                         qRaw,
                         filter: String(key),
                         practitioner: practitionerFilter,
-                        closingDate,
                         appointmentId,
                         salesOrder: salesOrderId,
                         payment: paymentId,
@@ -2309,27 +2063,18 @@ export default async function RechnungenPage({
                   Das ist bewusst zuerst der lesende Abschlussblock: pro Behandler und Kassa siehst du für einen Tag die bezahlten Belege, Zahlungsarten und Stornos. Grundlage sind deine Fiscal-Belege plus Payment-Methode. Die bisherige Rechnungsseite bleibt dabei unverändert. 
                 </p>
               </div>
-              <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/20 p-4">
-                <ClosingDateAutoSubmit
-                  qRaw={qRaw}
-                  currentFilter={currentFilter}
-                  practitionerFilter={practitionerFilter}
-                  closingDate={closingDate}
-                />
-                {dailyClosingGroups.length > 0 ? (
-                  <form action={saveDailyClosingSnapshot} className="flex">
-                    <input type="hidden" name="mode" value="all" />
-                    <input type="hidden" name="closing_date" value={closingDate} />
-                    <input type="hidden" name="return_q" value={qRaw} />
-                    <input type="hidden" name="return_filter" value={currentFilter} />
-                    <input type="hidden" name="return_practitioner" value={practitionerFilter} />
-                    <input type="hidden" name="groups_json" value={groupsJsonForSaveAll} />
-                    <button type="submit" className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-500">
-                      Tagesabschluss speichern
-                    </button>
-                  </form>
-                ) : null}
-              </div>
+              <form action="/rechnungen" method="get" className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 sm:flex-row sm:items-end">
+                {qRaw ? <input type="hidden" name="q" value={qRaw} /> : null}
+                {currentFilter !== "all" ? <input type="hidden" name="filter" value={currentFilter} /> : null}
+                {practitionerFilter !== "all" ? <input type="hidden" name="practitioner" value={practitionerFilter} /> : null}
+                <div>
+                  <label className="text-xs uppercase tracking-wide text-white/45">Datum</label>
+                  <input type="date" name="closingDate" defaultValue={closingDate} className="mt-1 h-11 rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-white outline-none" />
+                </div>
+                <button type="submit" className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/10 px-4 text-sm font-semibold text-white hover:bg-white/15">
+                  Tagesabschluss laden
+                </button>
+              </form>
             </div>
 
             <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -2337,13 +2082,6 @@ export default async function RechnungenPage({
               <SummaryCard label="Bezahlt gesamt" value={euroFromCents(dailyClosingTotals.totalCents, "EUR")} subtext={`${dailyClosingTotals.receiptCount} Belege`} />
               <SummaryCard label="Karte / Bar" value={`${euroFromCents(dailyClosingTotals.cardCents, "EUR")} · ${euroFromCents(dailyClosingTotals.cashCents, "EUR")}`} subtext={`Überweisung ${euroFromCents(dailyClosingTotals.transferCents, "EUR")}`} />
               <SummaryCard label="Stornos" value={dailyClosingTotals.stornoCount} subtext={`${euroFromCents(dailyClosingTotals.stornoCents, "EUR")} storniertes Volumen`} />
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-white/65">
-              <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">
-                Gespeichert: {savedDailyClosingCount} / {dailyClosingGroups.length || 0} Kassen
-              </span>
-              <span className="text-white/45">Zeitstempel und Benutzer werden im Fiscal-Eventlog protokolliert.</span>
             </div>
 
             <div className="mt-5 grid gap-4 xl:grid-cols-2">
@@ -2383,41 +2121,11 @@ export default async function RechnungenPage({
                     </div>
                   </div>
 
-                  {(() => {
-                    const savedMeta = dailyClosingSavedByGroup.get(group.key);
-                    return savedMeta ? (
-                      <div className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-3 text-sm text-emerald-100">
-                        Gespeichert am {formatDateTime(savedMeta.savedAt)}{savedMeta.savedByName ? ` · von ${savedMeta.savedByName}` : ""}
-                      </div>
-                    ) : null;
-                  })()}
-
                   {group.stornoCount > 0 ? (
                     <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-3 text-sm text-amber-100">
                       Storno-Volumen an diesem Tag: {euroFromCents(group.stornoCents, "EUR")}
                     </div>
                   ) : null}
-
-                  <form action={saveDailyClosingSnapshot} className="mt-4">
-                    <input type="hidden" name="mode" value="single" />
-                    <input type="hidden" name="closing_date" value={closingDate} />
-                    <input type="hidden" name="return_q" value={qRaw} />
-                    <input type="hidden" name="return_filter" value={currentFilter} />
-                    <input type="hidden" name="return_practitioner" value={practitionerFilter} />
-                    <input type="hidden" name="tenant_id" value={group.tenantId ?? ""} />
-                    <input type="hidden" name="cash_register_id" value={group.cashRegisterId ?? ""} />
-                    <input type="hidden" name="provider_name" value={group.providerName ?? ""} />
-                    <input type="hidden" name="receipt_count" value={String(group.receiptCount)} />
-                    <input type="hidden" name="cash_cents" value={String(group.cashCents)} />
-                    <input type="hidden" name="card_cents" value={String(group.cardCents)} />
-                    <input type="hidden" name="transfer_cents" value={String(group.transferCents)} />
-                    <input type="hidden" name="total_cents" value={String(group.totalCents)} />
-                    <input type="hidden" name="storno_count" value={String(group.stornoCount)} />
-                    <input type="hidden" name="storno_cents" value={String(group.stornoCents)} />
-                    <button type="submit" className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-white/10 bg-white/10 px-4 text-sm font-semibold text-white hover:bg-white/15">
-                      Abschluss für diese Kassa speichern
-                    </button>
-                  </form>
                 </div>
               )) : (
                 <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-6 text-sm text-white/60 xl:col-span-2">
@@ -2756,7 +2464,6 @@ export default async function RechnungenPage({
                       qRaw,
                       filter: currentFilter,
                       practitioner: practitionerFilter,
-                      closingDate,
                       appointmentId: item.appointmentId ?? undefined,
                       salesOrder: item.salesOrderId ?? undefined,
                       payment: item.id,

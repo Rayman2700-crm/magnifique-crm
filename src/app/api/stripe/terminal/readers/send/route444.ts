@@ -17,16 +17,6 @@ type PaymentRow = {
   provider_response_json: Record<string, unknown> | null;
 };
 
-function jsonNoStore(body: any, init?: ResponseInit) {
-  return NextResponse.json(body, {
-    ...(init ?? {}),
-    headers: {
-      "Cache-Control": "no-store",
-      ...(init?.headers ?? {}),
-    },
-  });
-}
-
 function toAmountCents(value: number | null | undefined) {
   if (typeof value !== "number" || Number.isNaN(value) || value <= 0) return 0;
   return Math.round(value * 100);
@@ -42,34 +32,13 @@ function isSimulatedReader(reader: Stripe.Terminal.Reader) {
   return label.includes("simulated reader") || deviceType.includes("simulated");
 }
 
-function isReaderBlockingActionStatus(value: string | null | undefined) {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  return normalized === "in_progress" || normalized === "pending";
-}
-
-function isReaderRecoverableActionStatus(value: string | null | undefined) {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  return normalized === "failed" || normalized === "succeeded" || normalized === "canceled" || normalized === "cancelled";
-}
-
 function rankReader(reader: Stripe.Terminal.Reader) {
   const status = String(reader.status ?? "").trim().toLowerCase();
   const actionStatus = String(reader.action?.status ?? "").trim().toLowerCase();
   if (status === "online" && !actionStatus) return 0;
-  if (status === "online" && isReaderRecoverableActionStatus(actionStatus)) return 1;
-  if (status === "online") return 2;
-  if (status === "offline") return 4;
-  return 3;
-}
-
-async function maybeClearReaderAction(reader: Stripe.Terminal.Reader) {
-  const actionStatus = String(reader.action?.status ?? "").trim().toLowerCase();
-  if (!isReaderRecoverableActionStatus(actionStatus)) return reader;
-  try {
-    return await stripe.terminal.readers.cancelAction(reader.id);
-  } catch {
-    return reader;
-  }
+  if (status === "online") return 1;
+  if (status === "offline") return 3;
+  return 2;
 }
 
 async function ensurePaymentIntent(payment: PaymentRow) {
@@ -120,44 +89,29 @@ async function ensurePaymentIntent(payment: PaymentRow) {
   return intent.id;
 }
 
-async function resolveReader(requestedReaderId: string) {
-  if (requestedReaderId) {
-    const requested = await stripe.terminal.readers.retrieve(requestedReaderId);
-    return maybeClearReaderAction(requested);
-  }
+async function resolveReaderId(requestedReaderId: string) {
+  if (requestedReaderId) return requestedReaderId;
   const list = await stripe.terminal.readers.list({ limit: 100 });
   const ordered = [...list.data].sort((a, b) => rankReader(a) - rankReader(b));
-  const candidate = ordered[0] ?? null;
-  return candidate ? maybeClearReaderAction(candidate) : null;
+  return String(ordered[0]?.id ?? "").trim();
 }
 
 export async function POST(req: NextRequest) {
-  const admin = supabaseAdmin();
-  let paymentId = "";
-
   try {
     const body = await req.json();
-    paymentId = String(body?.payment_id ?? "").trim();
+    const paymentId = String(body?.payment_id ?? "").trim();
     const requestedReaderId = String(body?.reader_id ?? "").trim();
 
     if (!paymentId) {
-      return jsonNoStore({ error: "payment_id fehlt." }, { status: 400 });
+      return NextResponse.json({ error: "payment_id fehlt." }, { status: 400, headers: { "Cache-Control": "no-store" } });
     }
 
-    const reader = await resolveReader(requestedReaderId);
-    if (!reader?.id) {
-      return jsonNoStore({ error: "Kein verfügbarer Reader gefunden." }, { status: 400 });
+    const readerId = await resolveReaderId(requestedReaderId);
+    if (!readerId) {
+      return NextResponse.json({ error: "Kein verfügbarer Reader gefunden." }, { status: 400, headers: { "Cache-Control": "no-store" } });
     }
 
-    const readerStatus = String(reader.status ?? "").trim().toLowerCase();
-    const readerActionStatus = String(reader.action?.status ?? "").trim().toLowerCase();
-    if (readerStatus !== "online") {
-      return jsonNoStore({ error: `Reader ${reader.label ?? reader.id} ist aktuell nicht online.` }, { status: 409 });
-    }
-    if (isReaderBlockingActionStatus(readerActionStatus)) {
-      return jsonNoStore({ error: `Reader ${reader.label ?? reader.id} ist gerade beschäftigt (${readerActionStatus}).` }, { status: 409 });
-    }
-
+    const admin = supabaseAdmin();
     const { data: payment, error } = await admin
       .from("payments")
       .select("id, tenant_id, sales_order_id, amount, currency_code, status, provider, provider_transaction_id, provider_response_json")
@@ -165,27 +119,24 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     if (error) {
-      return jsonNoStore({ error: error.message ?? "Payment konnte nicht geladen werden." }, { status: 500 });
+      return NextResponse.json({ error: error.message ?? "Payment konnte nicht geladen werden." }, { status: 500, headers: { "Cache-Control": "no-store" } });
     }
 
     if (!payment?.id) {
-      return jsonNoStore({ error: "Payment wurde nicht gefunden." }, { status: 404 });
+      return NextResponse.json({ error: "Payment wurde nicht gefunden." }, { status: 404, headers: { "Cache-Control": "no-store" } });
     }
 
     const normalizedStatus = String(payment.status ?? "").trim().toUpperCase();
     if (normalizedStatus === "COMPLETED") {
-      return jsonNoStore({ error: "Payment ist bereits abgeschlossen.", should_reload: true }, { status: 409 });
-    }
-    if (normalizedStatus === "PROCESSING") {
-      return jsonNoStore({ error: "Payment läuft bereits am Terminal.", should_reload: true }, { status: 409 });
-    }
-    if (normalizedStatus === "CANCELLED") {
-      return jsonNoStore({ error: "Dieses Payment wurde bereits abgebrochen.", should_reload: true }, { status: 409 });
+      return NextResponse.json(
+        { error: "Payment ist bereits abgeschlossen.", should_reload: true },
+        { status: 409, headers: { "Cache-Control": "no-store" } }
+      );
     }
 
     const paymentIntentId = await ensurePaymentIntent(payment as PaymentRow);
 
-    const processedReader = await stripe.terminal.readers.processPaymentIntent(reader.id, {
+    const reader = await stripe.terminal.readers.processPaymentIntent(readerId, {
       payment_intent: paymentIntentId,
       process_config: {
         skip_tipping: true,
@@ -193,22 +144,22 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const autoPresentedTestCard = isTestSecretKey() && isSimulatedReader(processedReader);
+    const autoPresentedTestCard = isTestSecretKey() && isSimulatedReader(reader);
 
     if (autoPresentedTestCard) {
-      await stripe.testHelpers.terminal.readers.presentPaymentMethod(processedReader.id, {});
+      await stripe.testHelpers.terminal.readers.presentPaymentMethod(reader.id, {});
     }
 
     const providerPayload = {
       ...((payment.provider_response_json as Record<string, unknown> | null) ?? {}),
       phase: autoPresentedTestCard ? "sent_to_reader_and_auto_presented" : "sent_to_reader",
       sent_to_reader_at: new Date().toISOString(),
-      reader_id: processedReader.id,
-      reader_label: processedReader.label ?? null,
-      reader_status: processedReader.status ?? null,
+      reader_id: reader.id,
+      reader_label: reader.label ?? null,
+      reader_status: reader.status ?? null,
       reader_action: {
-        status: processedReader.action?.status ?? null,
-        type: processedReader.action?.type ?? null,
+        status: reader.action?.status ?? null,
+        type: reader.action?.type ?? null,
       },
       stripe_payment_intent_id: paymentIntentId,
       auto_presented_test_card: autoPresentedTestCard,
@@ -240,43 +191,30 @@ export async function POST(req: NextRequest) {
         .eq("id", payment.sales_order_id);
     }
 
-    return jsonNoStore({
-      ok: true,
-      payment_id: paymentId,
-      payment_intent_id: paymentIntentId,
-      auto_presented_test_card: autoPresentedTestCard,
-      poll_recommended: true,
-      reader: {
-        id: processedReader.id,
-        label: processedReader.label ?? null,
-        status: processedReader.status ?? null,
-        actionStatus: processedReader.action?.status ?? null,
-        actionType: processedReader.action?.type ?? null,
+    return NextResponse.json(
+      {
+        ok: true,
+        payment_id: paymentId,
+        payment_intent_id: paymentIntentId,
+        auto_presented_test_card: autoPresentedTestCard,
+        poll_recommended: true,
+        reader: {
+          id: reader.id,
+          label: reader.label ?? null,
+          status: reader.status ?? null,
+          actionStatus: reader.action?.status ?? null,
+          actionType: reader.action?.type ?? null,
+        },
       },
-    });
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (error: any) {
-    const message = String(error?.message ?? "Payment konnte nicht an den Reader gesendet werden.").trim() || "Payment konnte nicht an den Reader gesendet werden.";
-
-    if (paymentId) {
-      await admin
-        .from("payments")
-        .update({
-          status: "FAILED",
-          failure_reason: message,
-          provider_response_json: {
-            phase: "reader_send_failed",
-            failed_at: new Date().toISOString(),
-            error_message: message,
-          },
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", paymentId);
-    }
+    const message = String(error?.message ?? "Payment konnte nicht an den Reader gesendet werden.");
 
     if (error instanceof Stripe.errors.StripeError) {
-      return jsonNoStore({ error: message, retry_allowed: true }, { status: 400 });
+      return NextResponse.json({ error: message }, { status: 400, headers: { "Cache-Control": "no-store" } });
     }
 
-    return jsonNoStore({ error: message, retry_allowed: true }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500, headers: { "Cache-Control": "no-store" } });
   }
 }

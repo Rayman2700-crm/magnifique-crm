@@ -1,4 +1,4 @@
- "use server";
+"use server";
 
 import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
@@ -150,26 +150,7 @@ async function resolveCustomerProfileById(admin: any, tenantId: string, customer
   } satisfies ResolvedCustomerProfile;
 }
 
-function buildDashboardCardUrl(input?: {
-  salesOrderId?: string | null;
-  paymentId?: string | null;
-  success?: string | null;
-  error?: string | null;
-}) {
-  const url = new URL("/dashboard", "http://local");
-  url.searchParams.set("invoice", "1");
-  const salesOrderId = String(input?.salesOrderId ?? "").trim();
-  const paymentId = String(input?.paymentId ?? "").trim();
-  const success = String(input?.success ?? "").trim();
-  const error = String(input?.error ?? "").trim();
-  if (salesOrderId) url.searchParams.set("salesOrder", salesOrderId);
-  if (paymentId) url.searchParams.set("payment", paymentId);
-  if (success) url.searchParams.set("success", success);
-  if (error) url.searchParams.set("error", error);
-  return url.pathname + (url.search ? url.search : "");
-}
-
-function buildReceiptUrl(input?: {
+function buildDashboardInvoiceUrl(input?: {
   receiptId?: string | null;
   success?: string | null;
   error?: string | null;
@@ -305,15 +286,12 @@ async function nextReceiptNumber(admin: any, cashRegisterId: string) {
     .eq("cash_register_id", cashRegisterId)
     .order("created_at", { ascending: false })
     .limit(200);
-
   if (error) throw new Error(error.message ?? "Receipt-Nummer konnte nicht berechnet werden.");
-
   const maxNo = (data ?? []).reduce((max: number, row: any) => {
     const digits = String(row?.receipt_number ?? "").replace(/\D/g, "");
     const n = Number(digits || "0");
     return Number.isFinite(n) && n > max ? n : max;
   }, 0);
-
   return String(maxNo + 1).padStart(6, "0");
 }
 
@@ -461,7 +439,7 @@ export async function createDashboardInvoice(formData: FormData) {
       line_type: line.lineType,
       reference_id: line.serviceId,
       name: line.name,
-      description: "Quelle: Dashboard Schnellabrechnung",
+      description: `Quelle: Dashboard Schnellabrechnung`,
       quantity: line.quantity,
       unit_price_gross: toGrossNumber(line.priceCents),
       discount_amount: 0,
@@ -575,13 +553,9 @@ export async function createDashboardInvoice(formData: FormData) {
 
       revalidatePath("/rechnungen");
       revalidatePath("/dashboard");
-      redirect(
-        buildDashboardCardUrl({
-          salesOrderId,
-          paymentId,
-          success: "Dashboard-Kartenzahlung vorbereitet ✅",
-        })
-      );
+      redirect(buildDashboardInvoiceUrl({
+        success: `Dashboard-Kartenzahlung vorbereitet ✅`,
+      }));
     }
 
     await admin
@@ -649,7 +623,6 @@ export async function createDashboardInvoice(formData: FormData) {
         },
       ],
     };
-
     const payloadCanonical = JSON.stringify(payload);
     const payloadHash = createHash("sha256").update(payloadCanonical).digest("hex");
 
@@ -678,7 +651,7 @@ export async function createDashboardInvoice(formData: FormData) {
         signature_state: "SIMULATED",
         verification_status: "VALID",
         verification_checked_at: issuedAt,
-        verification_notes: "Dashboard-Schnellabrechnung ohne Terminbezug.",
+        verification_notes: "Simulierter Fiscal-Receipt aus Dashboard-Schnellabrechnung erstellt.",
       })
       .select("id")
       .single();
@@ -736,7 +709,7 @@ export async function createDashboardInvoice(formData: FormData) {
 
     revalidatePath("/rechnungen");
     revalidatePath("/dashboard");
-    redirect(buildReceiptUrl({
+    redirect(buildDashboardInvoiceUrl({
       receiptId,
       success: `Dashboard-Beleg ${receiptNumber} erstellt ✅`,
     }));
@@ -745,6 +718,6 @@ export async function createDashboardInvoice(formData: FormData) {
     if (digest.startsWith("NEXT_REDIRECT")) {
       throw error;
     }
-    redirect(buildDashboardCardUrl({ error: error?.message ?? "Dashboard-Rechnung konnte nicht erstellt werden." }));
+    redirect(buildDashboardInvoiceUrl({ error: error?.message ?? "Dashboard-Rechnung konnte nicht erstellt werden." }));
   }
 }

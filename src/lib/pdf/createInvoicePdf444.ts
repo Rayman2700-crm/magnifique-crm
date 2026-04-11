@@ -1,10 +1,10 @@
-
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { getTenantLogoPath } from "./logoMap";
 
 type DbTenantInvoiceData = {
   legal_name: string | null;
   display_name?: string | null;
+  studio_name?: string | null;
   invoice_address_line1: string | null;
   zip: string | number | null;
   city: string | null;
@@ -19,6 +19,8 @@ type DbTenantInvoiceData = {
 
 type InvoicePdfItem = {
   title: string;
+  description?: string | null;
+  durationMinutes?: number | string | null;
   qty: number;
   unitPrice: number;
 };
@@ -56,8 +58,17 @@ type TenantViewModel = {
   bic: string;
   invoicePrefix: string;
   kleinunternehmerText: string;
-  footerText: string;
+  thankYouText: string;
+  footerLegalText: string;
   logoUrl: string | null;
+};
+
+type ResolvedInvoiceItem = {
+  title: string;
+  description: string;
+  durationLabel: string;
+  qty: number;
+  unitPrice: number;
 };
 
 type ResolvedInvoiceViewModel = {
@@ -65,25 +76,28 @@ type ResolvedInvoiceViewModel = {
   issueDate: string;
   paidAt: string;
   paymentMethod: string;
+  paymentTermsText: string;
+  paymentReference: string;
   customerName: string;
   customerAddress1: string;
   customerAddress2: string;
   customerAddress3: string;
   customerPhone: string;
   customerEmail: string;
-  items: InvoicePdfItem[];
+  items: ResolvedInvoiceItem[];
 };
 
 const DEFAULT_DB_TENANT: DbTenantInvoiceData = {
   legal_name: "Radu Craus",
-  display_name: "Radu Craus",
+  display_name: "Magnifique Beauty Institut",
+  studio_name: "Magnifique Beauty Institut",
   invoice_address_line1: "Flugfeldgürtel 24/1",
   zip: "2700",
   city: "Wiener Neustadt",
   country: "Österreich",
   phone: "+43 676 6742429",
   email: "radu.craus@gmail.com",
-  iban: "",
+  iban: "AT12 3456 7890 1234 5678",
   bic: "",
   invoice_prefix: "RAD",
   kleinunternehmer_text:
@@ -102,10 +116,21 @@ const DEFAULT_INVOICE: InvoicePdfData = {
   customerPhone: "+43 664 1234567",
   customerEmail: "maria.mustermann@example.com",
   items: [
-    { title: "Permanent Make-up Beratung", qty: 1, unitPrice: 80.0 },
-    { title: "Nachbehandlung", qty: 1, unitPrice: 120.0 },
-    { title: "Pflegeprodukt", qty: 5, unitPrice: 19.9 },
-    { title: "Nagelspange", qty: 2, unitPrice: 95.0 },
+    {
+      title: "AUFFÜLLUNG KLASSISCH",
+      description:
+        "Schonendes Entfernen des alten Materials und präzises Auffüllen. Stärkt und perfektioniert die Nägel, damit sie ihre Form und Eleganz behalten. inkl. russ. Maniküre",
+      durationMinutes: 90,
+      qty: 1,
+      unitPrice: 65.0,
+    },
+    {
+      title: "Nagelspange",
+      description: "Korrektur und Entlastung eingewachsener Nägel.",
+      durationMinutes: 45,
+      qty: 2,
+      unitPrice: 95.0,
+    },
   ],
 };
 
@@ -182,6 +207,19 @@ function normalizePaymentMethod(value: string | null | undefined): string {
   return map[upper] ?? raw;
 }
 
+function buildPaymentTermsText(paymentMethod: string): string {
+  switch (paymentMethod) {
+    case "Bar":
+      return "Zahlungskonditionen: Betrag dankend in Bar kassiert";
+    case "Karte":
+      return "Zahlungskonditionen: Betrag mit Karte bezahlt";
+    case "Überweisung":
+      return "Zahlungskonditionen: Prompt netto Kassa bei Erhalt der Faktura";
+    default:
+      return `Zahlungskonditionen: ${paymentMethod || "-"}`;
+  }
+}
+
 function buildInvoiceNumber(
   invoiceNumber: string | null | undefined,
   invoicePrefix: string,
@@ -197,6 +235,14 @@ function buildInvoiceNumber(
   return `${prefix}-${year}-${sequence}`;
 }
 
+function resolveStudioName(dbTenant: DbTenantInvoiceData): string {
+  return (
+    toText(dbTenant.studio_name) ||
+    toText(dbTenant.display_name) ||
+    "Magnifique Beauty Institut"
+  );
+}
+
 function buildTenantViewModel(dbTenant: DbTenantInvoiceData): TenantViewModel {
   const zip = toText(dbTenant.zip);
   const city = toText(dbTenant.city);
@@ -204,7 +250,7 @@ function buildTenantViewModel(dbTenant: DbTenantInvoiceData): TenantViewModel {
 
   return {
     legalName: toText(dbTenant.legal_name),
-    studioName: "Magnifique Beauty Institut",
+    studioName: resolveStudioName(dbTenant),
     address1: toText(dbTenant.invoice_address_line1),
     address2,
     country: toText(dbTenant.country) || "Österreich",
@@ -216,10 +262,23 @@ function buildTenantViewModel(dbTenant: DbTenantInvoiceData): TenantViewModel {
     kleinunternehmerText:
       toText(dbTenant.kleinunternehmer_text) ||
       "Gemäß § 6 Abs. 1 Z 27 UStG wird keine Umsatzsteuer berechnet.",
-    footerText:
+    thankYouText:
       "Vielen Dank für Ihren Besuch bei Magnifique Beauty Institut. Wir freuen uns, Sie bald wieder verwöhnen zu dürfen.",
+    footerLegalText:
+      "Inhaber: Raluca Craus | Standort: Flugfeldgürtel 24/1, 2700 Wiener Neustadt | Tel: +43 676 4106468 | Kontaktdaten: +43 676 4106468, raluca.schwarz@gmail.com | Einzelunternehmen | Firmengericht: Landesgericht Wiener Neustadt | Aufsichtsbehörde: Bezirkshauptmannschaft Wiener Neustadt | Kammer: Wirtschaftskammer Niederösterreich | Berufszweig: Kosmetik",
     logoUrl: getTenantLogoPath(dbTenant.invoice_prefix),
   };
+}
+
+function formatDurationLabel(value: number | string | null | undefined): string {
+  const raw = toText(value);
+  if (!raw) return "";
+  if (/^\d+$/.test(raw)) return `${raw} Min`;
+  return raw;
+}
+
+function buildPaymentReference(invoiceNumber: string, customerName: string): string {
+  return [toText(invoiceNumber), toText(customerName)].filter(Boolean).join(" - ");
 }
 
 function buildResolvedInvoiceViewModel(
@@ -230,23 +289,37 @@ function buildResolvedInvoiceViewModel(
   const paidAt = formatDateAT(invoice.paidAt, false);
   const paymentMethod = normalizePaymentMethod(invoice.paymentMethod);
 
+  const invoiceNumber = buildInvoiceNumber(
+    invoice.invoiceNumber,
+    tenant.invoicePrefix,
+    invoice.issueDate,
+    invoice.invoiceSequence,
+  );
+
+  const customerName = toText(invoice.customerName);
+
   return {
-    invoiceNumber: buildInvoiceNumber(
-      invoice.invoiceNumber,
-      tenant.invoicePrefix,
-      invoice.issueDate,
-      invoice.invoiceSequence,
-    ),
+    invoiceNumber,
     issueDate,
     paidAt,
     paymentMethod,
-    customerName: toText(invoice.customerName),
+    paymentTermsText: buildPaymentTermsText(paymentMethod),
+    paymentReference: buildPaymentReference(invoiceNumber, customerName),
+    customerName,
     customerAddress1: toText(invoice.customerAddress1),
     customerAddress2: toText(invoice.customerAddress2),
     customerAddress3: toText(invoice.customerAddress3),
     customerPhone: toText(invoice.customerPhone),
     customerEmail: toText(invoice.customerEmail),
-    items: Array.isArray(invoice.items) ? invoice.items : [],
+    items: Array.isArray(invoice.items)
+      ? invoice.items.map((item) => ({
+          title: toText(item.title),
+          description: toText(item.description),
+          durationLabel: formatDurationLabel(item.durationMinutes),
+          qty: Number(item.qty) || 0,
+          unitPrice: Number(item.unitPrice) || 0,
+        }))
+      : [],
   };
 }
 
@@ -286,6 +359,74 @@ function drawWrappedText(
   }
 
   return currentY;
+}
+
+
+function drawCenteredWrappedText(
+  page: any,
+  text: string,
+  centerX: number,
+  startY: number,
+  maxWidth: number,
+  font: any,
+  size: number,
+  color: ReturnType<typeof rgb>,
+  lineHeight = 12,
+) {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (!words.length) return startY;
+
+  const lines: string[] = [];
+  let line = "";
+
+  for (const word of words) {
+    const testLine = line ? `${line} ${word}` : word;
+    const testWidth = font.widthOfTextAtSize(testLine, size);
+
+    if (testWidth > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = testLine;
+    }
+  }
+
+  if (line) lines.push(line);
+
+  let currentY = startY;
+  for (const currentLine of lines) {
+    const lineWidth = font.widthOfTextAtSize(currentLine, size);
+    page.drawText(currentLine, {
+      x: centerX - lineWidth / 2,
+      y: currentY,
+      size,
+      font,
+      color,
+    });
+    currentY -= lineHeight;
+  }
+
+  return currentY;
+}
+
+function drawRightAlignedText(
+  page: any,
+  text: string,
+  rightX: number,
+  y: number,
+  font: any,
+  size: number,
+  color: ReturnType<typeof rgb>,
+) {
+  const safeText = text ?? "";
+  const textWidth = font.widthOfTextAtSize(safeText, size);
+  page.drawText(safeText, {
+    x: rightX - textWidth,
+    y,
+    size,
+    font,
+    color,
+  });
 }
 
 export async function createInvoicePdf(
@@ -445,63 +586,27 @@ export async function createInvoicePdf(
     color: rgb(0.1, 0.1, 0.1),
   });
 
-  page.drawText(tenant.studioName, {
-    x: rightX,
-    y: providerStartY - 20,
-    size: 10,
-    font: fontRegular,
-    color: rgb(0.35, 0.35, 0.35),
+  const providerLines = [
+    tenant.studioName,
+    tenant.address1,
+    tenant.address2,
+    tenant.country,
+    tenant.phone ? `Tel: ${tenant.phone}` : "",
+    tenant.email ? `E-Mail: ${tenant.email}` : "",
+  ].filter(Boolean);
+
+  let providerY = providerStartY - 20;
+
+  providerLines.forEach((line) => {
+    page.drawText(line, {
+      x: rightX,
+      y: providerY,
+      size: 10,
+      font: fontRegular,
+      color: rgb(0.35, 0.35, 0.35),
+    });
+    providerY -= 15;
   });
-
-  if (tenant.address1) {
-    page.drawText(tenant.address1, {
-      x: rightX,
-      y: providerStartY - 35,
-      size: 10,
-      font: fontRegular,
-      color: rgb(0.35, 0.35, 0.35),
-    });
-  }
-
-  if (tenant.address2) {
-    page.drawText(tenant.address2, {
-      x: rightX,
-      y: providerStartY - 50,
-      size: 10,
-      font: fontRegular,
-      color: rgb(0.35, 0.35, 0.35),
-    });
-  }
-
-  if (tenant.country) {
-    page.drawText(tenant.country, {
-      x: rightX,
-      y: providerStartY - 65,
-      size: 10,
-      font: fontRegular,
-      color: rgb(0.35, 0.35, 0.35),
-    });
-  }
-
-  if (tenant.phone) {
-    page.drawText(`Tel: ${tenant.phone}`, {
-      x: rightX,
-      y: providerStartY - 85,
-      size: 10,
-      font: fontRegular,
-      color: rgb(0.35, 0.35, 0.35),
-    });
-  }
-
-  if (tenant.email) {
-    page.drawText(`E-Mail: ${tenant.email}`, {
-      x: rightX,
-      y: providerStartY - 100,
-      size: 10,
-      font: fontRegular,
-      color: rgb(0.35, 0.35, 0.35),
-    });
-  }
 
   let customerY = providerStartY;
 
@@ -545,96 +650,130 @@ export async function createInvoicePdf(
   });
 
   const tableTop = 470;
+  const tableRightX = width - marginRight;
+  const amountGap = 68;
+  const qtyGap = 76;
   const col1 = marginLeft;
-  const col2 = 340;
-  const col3 = 400;
-  const col4 = 480;
+  const col4Right = tableRightX;
+  const col3Right = col4Right - amountGap;
+  const col2Right = col3Right - qtyGap;
+  const col4HeaderX = col4Right - fontBold.widthOfTextAtSize("Gesamt", 10);
+  const col3HeaderX = col3Right - fontBold.widthOfTextAtSize("Einzelpreis", 10);
+  const col2HeaderX = col2Right - fontBold.widthOfTextAtSize("Menge", 10);
+  const serviceMaxWidth = col2HeaderX - col1 - 24;
 
   page.drawLine({
     start: { x: marginLeft, y: tableTop + 18 },
-    end: { x: width - marginRight, y: tableTop + 18 },
+    end: { x: tableRightX, y: tableTop + 18 },
     thickness: 1,
     color: rgb(0.85, 0.85, 0.85),
   });
 
   page.drawText("Leistung", { x: col1, y: tableTop, size: 10, font: fontBold });
-  page.drawText("Menge", { x: col2, y: tableTop, size: 10, font: fontBold });
-  page.drawText("Einzelpreis", { x: col3, y: tableTop, size: 10, font: fontBold });
-  page.drawText("Gesamt", { x: col4, y: tableTop, size: 10, font: fontBold });
+  page.drawText("Menge", { x: col2HeaderX, y: tableTop, size: 10, font: fontBold });
+  page.drawText("Einzelpreis", { x: col3HeaderX, y: tableTop, size: 10, font: fontBold });
+  page.drawText("Gesamt", { x: col4HeaderX, y: tableTop, size: 10, font: fontBold });
 
   let rowY = tableTop - 28;
   let total = 0;
 
-  invoice.items.forEach((item) => {
+  for (const item of invoice.items) {
     const lineTotal = item.qty * item.unitPrice;
     total += lineTotal;
 
-    page.drawText(item.title, {
-      x: col1,
-      y: rowY,
-      size: 10,
-      font: fontRegular,
-      color: rgb(0.15, 0.15, 0.15),
-      maxWidth: col2 - col1 - 12,
+    const serviceParts = [
+      item.title,
+      item.description,
+      item.durationLabel ? `Dauer: ${item.durationLabel}` : "",
+    ].filter(Boolean);
+
+    let serviceY = rowY;
+    serviceParts.forEach((part, index) => {
+      serviceY = drawWrappedText(
+        page,
+        part,
+        col1,
+        serviceY,
+        serviceMaxWidth,
+        index === 0 ? fontBold : fontRegular,
+        index === 0 ? 10 : 9,
+        index === 0 ? rgb(0.12, 0.12, 0.12) : rgb(0.35, 0.35, 0.35),
+        11,
+      );
+      if (index < serviceParts.length - 1) {
+        serviceY -= 2;
+      }
     });
 
-    page.drawText(String(item.qty), {
-      x: col2,
-      y: rowY,
-      size: 10,
-      font: fontRegular,
-      color: rgb(0.15, 0.15, 0.15),
-    });
+    drawRightAlignedText(
+      page,
+      String(item.qty),
+      col2Right,
+      rowY,
+      fontRegular,
+      10,
+      rgb(0.15, 0.15, 0.15),
+    );
 
-    page.drawText(euro(item.unitPrice), {
-      x: col3,
-      y: rowY,
-      size: 10,
-      font: fontRegular,
-      color: rgb(0.15, 0.15, 0.15),
-    });
+    drawRightAlignedText(
+      page,
+      euro(item.unitPrice),
+      col3Right,
+      rowY,
+      fontRegular,
+      10,
+      rgb(0.15, 0.15, 0.15),
+    );
 
-    page.drawText(euro(lineTotal), {
-      x: col4,
-      y: rowY,
-      size: 10,
-      font: fontRegular,
-      color: rgb(0.15, 0.15, 0.15),
-    });
+    drawRightAlignedText(
+      page,
+      euro(lineTotal),
+      col4Right,
+      rowY,
+      fontRegular,
+      10,
+      rgb(0.15, 0.15, 0.15),
+    );
 
-    rowY -= 24;
-  });
+    rowY = Math.min(serviceY - 10, rowY - 28);
+  }
 
   page.drawLine({
     start: { x: marginLeft, y: rowY + 8 },
-    end: { x: width - marginRight, y: rowY + 8 },
+    end: { x: tableRightX, y: rowY + 8 },
     thickness: 1,
     color: rgb(0.85, 0.85, 0.85),
   });
 
   const totalY = rowY - 24;
   const hintY = totalY - 35;
-  const bankTitleY = hintY - 130;
-  const bankIbanY = bankTitleY - 16;
-  const bankBicY = bankIbanY - 14;
-  const footerLineY = bankBicY - 28;
-  const footerTextY = footerLineY - 18;
+  const paymentTermsY = hintY - 26;
+  const accountHeadingY = paymentTermsY - 34;
+  const accountHolderY = accountHeadingY - 18;
+  const accountIbanY = accountHolderY - 14;
+  const accountReferenceY = accountIbanY - 14;
 
-  page.drawText("Gesamtbetrag", {
-    x: 365,
-    y: totalY,
-    size: 11,
-    font: fontBold,
-    color: rgb(0.1, 0.1, 0.1),
-  });
+  const totalLabelRight = col3Right - 18;
 
-  page.drawText(euro(total), {
-    x: col4,
-    y: totalY,
-    size: 11,
-    font: fontBold,
-    color: rgb(0.1, 0.1, 0.1),
-  });
+  drawRightAlignedText(
+    page,
+    "Gesamtbetrag",
+    totalLabelRight,
+    totalY,
+    fontBold,
+    11,
+    rgb(0.1, 0.1, 0.1),
+  );
+
+  drawRightAlignedText(
+    page,
+    euro(total),
+    col4Right,
+    totalY,
+    fontBold,
+    11,
+    rgb(0.1, 0.1, 0.1),
+  );
 
   drawWrappedText(
     page,
@@ -648,37 +787,69 @@ export async function createInvoicePdf(
     11,
   );
 
-  const hasBankData = Boolean(tenant.iban || tenant.bic);
+  drawWrappedText(
+    page,
+    invoice.paymentTermsText,
+    marginLeft,
+    paymentTermsY,
+    contentWidth,
+    fontRegular,
+    9,
+    rgb(0.4, 0.4, 0.4),
+    11,
+  );
 
-  if (hasBankData) {
-    page.drawText("Bankverbindung", {
-      x: marginLeft,
-      y: bankTitleY,
-      size: 10,
-      font: fontBold,
-      color: rgb(0.1, 0.1, 0.1),
-    });
+  page.drawText("Kontodaten", {
+    x: marginLeft,
+    y: accountHeadingY,
+    size: 10,
+    font: fontBold,
+    color: rgb(0.1, 0.1, 0.1),
+  });
 
-    if (tenant.iban) {
-      page.drawText(`IBAN: ${tenant.iban}`, {
-        x: marginLeft,
-        y: bankIbanY,
-        size: 9,
-        font: fontRegular,
-        color: rgb(0.2, 0.2, 0.2),
-      });
-    }
+  page.drawText(`Behandlername: ${tenant.legalName || "-"}`, {
+    x: marginLeft,
+    y: accountHolderY,
+    size: 9,
+    font: fontRegular,
+    color: rgb(0.2, 0.2, 0.2),
+  });
 
-    if (tenant.bic) {
-      page.drawText(`BIC: ${tenant.bic}`, {
-        x: marginLeft,
-        y: bankBicY,
-        size: 9,
-        font: fontRegular,
-        color: rgb(0.2, 0.2, 0.2),
-      });
-    }
-  }
+  page.drawText(`IBAN: ${tenant.iban || ""}`, {
+    x: marginLeft,
+    y: accountIbanY,
+    size: 9,
+    font: fontRegular,
+    color: rgb(0.2, 0.2, 0.2),
+  });
+
+  const afterReferenceY = drawWrappedText(
+    page,
+    `Verwendungszweck: ${invoice.paymentReference}`,
+    marginLeft,
+    accountReferenceY,
+    contentWidth,
+    fontRegular,
+    9,
+    rgb(0.2, 0.2, 0.2),
+    11,
+  );
+
+  const thankYouY = afterReferenceY - 12;
+  const footerLineY = thankYouY - 44;
+  const footerTextY = footerLineY - 18;
+
+  drawWrappedText(
+    page,
+    tenant.thankYouText,
+    marginLeft,
+    thankYouY,
+    contentWidth,
+    fontRegular,
+    9,
+    rgb(0.4, 0.4, 0.4),
+    11,
+  );
 
   page.drawLine({
     start: { x: marginLeft, y: footerLineY },
@@ -687,16 +858,48 @@ export async function createInvoicePdf(
     color: rgb(0.88, 0.88, 0.88),
   });
 
+  const footerLogoBox = {
+    x: marginLeft,
+    y: footerLineY - 60,
+    width: 88,
+    height: 42,
+  };
+
+  const footerWebsiteText = "www.magnifique-beauty.at";
+  const footerWebsiteRightX = width - marginRight;
+  const footerWebsiteY = footerLineY - 34;
+
+  try {
+    const footerLogoUrl = `${window.location.origin}/logos/magnifique-footer.png`;
+    const footerLogoImage = await embedImageFromUrl(footerLogoUrl);
+    drawImageContain(page, footerLogoImage, footerLogoBox, 0);
+  } catch (error) {
+    console.error("Footer-Logo-Fehler:", error);
+  }
+
+  drawRightAlignedText(
+    page,
+    footerWebsiteText,
+    footerWebsiteRightX,
+    footerWebsiteY,
+    fontBold,
+    10.5,
+    rgb(0.72, 0.53, 0.17),
+  );
+
+  const footerLegalX = footerLogoBox.x + footerLogoBox.width + 12;
+  const footerLegalMaxWidth = footerWebsiteRightX - footerLegalX - 150;
+
   drawWrappedText(
     page,
-    tenant.footerText,
-    marginLeft,
+    tenant.footerLegalText,
+    footerLegalX,
     footerTextY,
-    contentWidth,
+    footerLegalMaxWidth,
     fontRegular,
+    7.2,
+    rgb(0.55, 0.55, 0.55),
     9,
-    rgb(0.4, 0.4, 0.4),
-    11,
   );
 
   const pdfBytes = await pdfDoc.save();
