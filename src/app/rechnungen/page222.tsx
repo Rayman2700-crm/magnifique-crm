@@ -2795,7 +2795,7 @@ export default async function RechnungenPage({
               />
             </div>
 
-            <div className="mt-6 hidden md:grid gap-4 md:grid-cols-1 lg:grid-cols-3">
+            <div className="mt-6 hidden gap-4 md:grid lg:grid-cols-3">
               <CompactClosingCard
                 eyebrow="Tagesabschluss"
                 title=""

@@ -1174,116 +1174,97 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                   <input type="hidden" name="return_query" value={currentQuery} />
                   <input type="hidden" name="provider_name" value={providerName} />
                   <input type="hidden" name="customer_name" value={customerDraft} />
-                  <input type="hidden" name="customer_email" value={customerEmailDraft} />
-                  <input type="hidden" name="customer_phone" value={customerPhoneDraft} />
                   <input type="hidden" name="lines_json" value={serializedLines} />
 
-                  {isEditingLines ? (
-                    <div className="space-y-3 receipt-print-hide">
-                      {linesDraft.length === 0 ? (
-                        <div className="rounded-[16px] border border-dashed border-white/10 bg-black/20 px-4 py-5 text-center text-sm text-white/55">
-                          Keine Positionen vorhanden.
-                        </div>
-                      ) : (
-                        linesDraft.map((line, index) => {
-                          const autoTotal = formatMoneyInput(computeLineTotal(line.quantity, line.unitPriceGross));
-                          const shownTotal = line.manualTotalOverride ? line.lineTotalGross : autoTotal;
+                  <div className="overflow-hidden rounded-[16px] border border-white/10 receipt-print-grid-card">
+                    <table className="min-w-full table-fixed text-sm print-table">
+                      <colgroup>
+                        <col className="w-[46%]" />
+                        <col className="w-[11%]" />
+                        <col className="w-[19%]" />
+                        <col className="w-[24%]" />
+                      </colgroup>
+                      <thead className="border-b border-white/10 bg-white/[0.04] text-left text-white/50">
+                        <tr>
+                          <th className="px-4 py-3 font-medium">Leistung</th>
+                          <th className="px-2 py-3 font-medium">Menge</th>
+                          <th className="px-2 py-3 font-medium">Einzelpreis</th>
+                          <th className="px-2 py-3 font-medium">Gesamt</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {linesDraft.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="px-4 py-6 text-center text-white/45 print:text-black/60">
+                              Keine Positionen gefunden.
+                            </td>
+                          </tr>
+                        ) : (
+                          linesDraft.map((line, index) => {
+                            const autoTotal = formatMoneyInput(computeLineTotal(line.quantity, line.unitPriceGross));
+                            const shownTotal = line.manualTotalOverride ? line.lineTotalGross : autoTotal;
 
-                          return (
-                            <div
-                              key={`${selected.id}-edit-line-${index}`}
-                              className="rounded-[18px] border border-white/10 bg-black/20 p-4 shadow-[0_12px_30px_rgba(0,0,0,0.2)]"
-                            >
-                              <div className="mb-3 flex items-center justify-between gap-3">
-                                <div>
-                                  <div className="text-[11px] uppercase tracking-[0.12em] text-white/40">Position {index + 1}</div>
-                                  <div className="mt-1 text-sm font-semibold text-white/88">
-                                    {line.name || "Neue Leistung"}
-                                  </div>
-                                </div>
-
-                                <button
-                                  type="button"
-                                  onClick={() => setLinesDraft((current) => current.filter((_, rowIndex) => rowIndex !== index))}
-                                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] border border-red-500/20 bg-red-500/10 text-lg font-semibold text-red-100 transition-colors hover:bg-red-500/15"
-                                  title="Zeile entfernen"
-                                >
-                                  −
-                                </button>
-                              </div>
-
-                              <div className="grid gap-3">
-                                <div>
-                                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-white/42">
-                                    Leistung wählen
-                                  </label>
-                                  <select
-                                    value={line.serviceId ?? "__custom__"}
-                                    onChange={(e) => {
-                                      const nextValue = e.target.value;
-                                      if (nextValue === "__custom__") {
-                                        updateLine(index, (current) => ({
-                                          ...current,
-                                          serviceId: null,
-                                          lineType: "ITEM",
-                                        }));
-                                        return;
-                                      }
-                                      const selectedService = serviceOptions.find((service) => service.id === nextValue);
-                                      updateLine(index, (current) => {
-                                        const nextUnitPrice =
-                                          typeof selectedService?.defaultPriceCents === "number"
-                                            ? moneyInputFromCents(selectedService.defaultPriceCents)
-                                            : current.unitPriceGross;
-                                        const recalculatedTotal = formatMoneyInput(computeLineTotal(current.quantity, nextUnitPrice));
-                                        return {
-                                          ...current,
-                                          serviceId: nextValue,
-                                          lineType: "SERVICE",
-                                          name: selectedService?.name ?? current.name,
-                                          unitPriceGross: nextUnitPrice,
-                                          lineTotalGross: current.manualTotalOverride ? current.lineTotalGross : recalculatedTotal,
-                                        };
-                                      });
-                                    }}
-                                    className="h-11 w-full rounded-[14px] border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
-                                  >
-                                    <option value="__custom__">Freie Eingabe / manuell</option>
-                                    {serviceOptions.map((service) => (
-                                      <option key={service.id} value={service.id}>
-                                        {service.name}
-                                        {typeof service.defaultPriceCents === "number"
-                                          ? ` · ${euroFromCents(service.defaultPriceCents, selected.currencyCode || "EUR")}`
-                                          : ""}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-
-                                <div>
-                                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-white/42">
-                                    Bezeichnung
-                                  </label>
-                                  <input
-                                    value={line.name}
-                                    onChange={(e) =>
-                                      updateLine(index, (current) => ({
-                                        ...current,
-                                        name: e.target.value,
-                                        serviceId: current.serviceId,
-                                        lineType: current.serviceId ? "SERVICE" : "ITEM",
-                                      }))
-                                    }
-                                    className="h-11 w-full rounded-[14px] border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
-                                    placeholder="Leistungsname"
-                                  />
-                                </div>
-
-                                <div className="grid grid-cols-3 gap-3">
-                                  <div>
-                                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-white/42">
-                                      Menge
-                                    </label>
+                            return (
+                              <tr key={`${selected.id}-payload-line-${index}`} className="border-b border-white/5 last:border-b-0 align-top">
+                                <td className="px-4 py-3 text-white/90 print:text-black">
+                                  {isEditingLines ? (
+                                    <div className="space-y-2 receipt-print-hide">
+                                      <select
+                                        value={line.serviceId ?? "__custom__"}
+                                        onChange={(e) => {
+                                          const nextValue = e.target.value;
+                                          if (nextValue === "__custom__") {
+                                            updateLine(index, (current) => ({ ...current, serviceId: null, lineType: "ITEM" }));
+                                            return;
+                                          }
+                                          const selectedService = serviceOptions.find((service) => service.id === nextValue);
+                                          updateLine(index, (current) => {
+                                            const nextUnitPrice =
+                                              typeof selectedService?.defaultPriceCents === "number"
+                                                ? moneyInputFromCents(selectedService.defaultPriceCents)
+                                                : current.unitPriceGross;
+                                            const recalculatedTotal = formatMoneyInput(computeLineTotal(current.quantity, nextUnitPrice));
+                                            return {
+                                              ...current,
+                                              serviceId: nextValue,
+                                              lineType: "SERVICE",
+                                              name: selectedService?.name ?? current.name,
+                                              unitPriceGross: nextUnitPrice,
+                                              lineTotalGross: current.manualTotalOverride ? current.lineTotalGross : recalculatedTotal,
+                                            };
+                                          });
+                                        }}
+                                        className="h-10 w-full rounded-[16px] border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
+                                      >
+                                        <option value="__custom__">Freie Eingabe / manuell</option>
+                                        {serviceOptions.map((service) => (
+                                          <option key={service.id} value={service.id}>
+                                            {service.name}
+                                            {typeof service.defaultPriceCents === "number"
+                                              ? ` · ${euroFromCents(service.defaultPriceCents, selected.currencyCode || "EUR")}`
+                                              : ""}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      <input
+                                        value={line.name}
+                                        onChange={(e) =>
+                                          updateLine(index, (current) => ({
+                                            ...current,
+                                            name: e.target.value,
+                                            serviceId: current.serviceId,
+                                            lineType: current.serviceId ? "SERVICE" : "ITEM",
+                                          }))
+                                        }
+                                        className="h-10 w-full rounded-[16px] border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
+                                        placeholder="Leistungsname"
+                                      />
+                                    </div>
+                                  ) : null}
+                                  <span className={isEditingLines ? "hidden print:inline" : "inline"}>{line.name || "—"}</span>
+                                </td>
+                                <td className="px-2 py-3 text-white/70 print:text-black">
+                                  {isEditingLines ? (
                                     <input
                                       type="number"
                                       min="1"
@@ -1300,14 +1281,13 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                                           };
                                         })
                                       }
-                                      className="h-11 w-full rounded-[14px] border border-white/10 bg-black/30 px-3 text-center text-sm text-white outline-none"
+                                      className="h-10 w-full rounded-[16px] border border-white/10 bg-black/30 px-2 text-center text-sm text-white outline-none receipt-print-hide"
                                     />
-                                  </div>
-
-                                  <div>
-                                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-white/42">
-                                      Einzelpreis
-                                    </label>
+                                  ) : null}
+                                  <span className={isEditingLines ? "hidden print:inline" : "inline"}>{line.quantity || "—"}</span>
+                                </td>
+                                <td className="px-2 py-3 text-white/85 print:text-black">
+                                  {isEditingLines ? (
                                     <input
                                       value={line.unitPriceGross}
                                       onChange={(e) =>
@@ -1321,149 +1301,111 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                                           };
                                         })
                                       }
-                                      className="h-11 w-full rounded-[14px] border border-white/10 bg-black/30 px-3 text-sm text-white outline-none"
+                                      className="h-10 w-full rounded-[16px] border border-white/10 bg-black/30 px-3 text-sm text-white outline-none receipt-print-hide"
                                     />
-                                  </div>
-
-                                  <div>
-                                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-white/42">
-                                      Gesamt
-                                    </label>
-                                    <input
-                                      value={shownTotal}
-                                      disabled={!line.manualTotalOverride}
-                                      onChange={(e) => updateLine(index, (current) => ({ ...current, lineTotalGross: e.target.value }))}
-                                      className="h-11 w-full rounded-[14px] border border-white/10 bg-black/30 px-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                                    />
-                                  </div>
-                                </div>
-
-                                <div className="flex flex-wrap items-center justify-between gap-2 rounded-[14px] border border-white/8 bg-white/[0.03] px-3 py-2">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      updateLine(index, (current) => ({
-                                        ...current,
-                                        manualTotalOverride: !current.manualTotalOverride,
-                                        lineTotalGross: !current.manualTotalOverride ? current.lineTotalGross : autoTotal,
-                                      }))
-                                    }
-                                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                                      line.manualTotalOverride
-                                        ? "border-amber-400/25 bg-amber-400/10 text-amber-100"
-                                        : "border-white/10 bg-white/5 text-white/70"
-                                    }`}
-                                  >
-                                    {line.manualTotalOverride ? "Manueller Gesamtpreis aktiv" : "Gesamtpreis automatisch"}
-                                  </button>
-                                  <div className="text-[11px] text-white/48">
-                                    {!line.manualTotalOverride ? "Automatik = Menge × Einzelpreis" : "Du überschreibst den Gesamtpreis manuell"}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  ) : (
-                    <div className="overflow-hidden rounded-[16px] border border-white/10 receipt-print-grid-card">
-                      <table className="min-w-full table-fixed text-sm print-table">
-                        <colgroup>
-                          <col className="w-[46%]" />
-                          <col className="w-[11%]" />
-                          <col className="w-[19%]" />
-                          <col className="w-[24%]" />
-                        </colgroup>
-                        <thead className="border-b border-white/10 bg-white/[0.04] text-left text-white/50">
-                          <tr>
-                            <th className="px-4 py-3 font-medium">Leistung</th>
-                            <th className="px-2 py-3 font-medium">Menge</th>
-                            <th className="px-2 py-3 font-medium">Einzelpreis</th>
-                            <th className="px-2 py-3 font-medium">Gesamt</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {linesDraft.length === 0 ? (
-                            <tr>
-                              <td colSpan={4} className="px-4 py-6 text-center text-white/45 print:text-black/60">
-                                Keine Positionen gefunden.
-                              </td>
-                            </tr>
-                          ) : (
-                            linesDraft.map((line, index) => (
-                              <tr key={`${selected.id}-payload-line-${index}`} className="border-b border-white/5 last:border-b-0 align-top">
-                                <td className="px-4 py-3 text-white/90 print:text-black">{line.name || "—"}</td>
-                                <td className="px-2 py-3 text-white/70 print:text-black">{line.quantity || "—"}</td>
-                                <td className="px-2 py-3 text-white/85 print:text-black">
-                                  {line.unitPriceGross ? `${line.unitPriceGross} €` : "—"}
+                                  ) : null}
+                                  <span className={isEditingLines ? "hidden print:inline" : "inline"}>{line.unitPriceGross ? `${line.unitPriceGross} €` : "—"}</span>
                                 </td>
                                 <td className="px-2 py-3 text-white/90 print:text-black">
-                                  {line.lineTotalGross ? `${line.lineTotalGross} €` : "—"}
+                                  {isEditingLines ? (
+                                    <div className="space-y-2 receipt-print-hide">
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          value={shownTotal}
+                                          disabled={!line.manualTotalOverride}
+                                          onChange={(e) => updateLine(index, (current) => ({ ...current, lineTotalGross: e.target.value }))}
+                                          className="h-10 min-w-0 flex-1 rounded-[16px] border border-white/10 bg-black/30 px-3 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => setLinesDraft((current) => current.filter((_, rowIndex) => rowIndex !== index))}
+                                          className="inline-flex h-10 w-10 items-center justify-center rounded-[16px] border border-red-500/20 bg-red-500/10 text-red-100 hover:bg-red-500/15"
+                                          title="Zeile entfernen"
+                                        >
+                                          −
+                                        </button>
+                                      </div>
+                                      <div className="flex items-center justify-between gap-2 text-[11px] text-white/55">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            updateLine(index, (current) => ({
+                                              ...current,
+                                              manualTotalOverride: !current.manualTotalOverride,
+                                              lineTotalGross: !current.manualTotalOverride ? current.lineTotalGross : autoTotal,
+                                            }))
+                                          }
+                                          className={`rounded-full border px-2 py-1 font-semibold ${
+                                            line.manualTotalOverride ? "border-amber-400/25 bg-amber-400/10 text-amber-100" : "border-white/10 bg-white/5 text-white/70"
+                                          }`}
+                                        >
+                                          {line.manualTotalOverride ? "Manueller Override aktiv" : "Automatik aktiv"}
+                                        </button>
+                                        {!line.manualTotalOverride ? <span>Auto = Menge × Einzelpreis</span> : null}
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  <span className={isEditingLines ? "hidden print:inline" : "inline"}>{shownTotal ? `${shownTotal} €` : "—"}</span>
                                 </td>
                               </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-white/10 bg-black/20 px-4 py-3 receipt-print-grid-card">
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-white/45 print-text-muted">Aktuelle Summe</div>
+                      <div className="mt-1 text-[15px] font-semibold text-white print:text-black">{euroFromCents(totalDraftCents, selected.currencyCode)}</div>
                     </div>
-                  )}
 
-                  <div className="rounded-[16px] border border-white/10 bg-black/20 px-4 py-3 receipt-print-grid-card">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <div className="text-[11px] uppercase tracking-wide text-white/45 print-text-muted">Aktuelle Summe</div>
-                        <div className="mt-1 text-[15px] font-semibold text-white print:text-black">
-                          {euroFromCents(totalDraftCents, selected.currencyCode)}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2 receipt-print-hide">
-                        {isCancelled ? (
+                    <div className="flex flex-wrap gap-2 receipt-print-hide">
+                      {isCancelled ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white/55 opacity-45 cursor-not-allowed"
+                          title={isStornoReceipt ? "Bearbeiten bei Stornobeleg deaktiviert" : "Bearbeiten bei storniertem Beleg deaktiviert"}
+                        >
+                          Bearbeiten
+                        </button>
+                      ) : isEditingLines ? (
+                        <>
                           <button
                             type="button"
-                            disabled
-                            className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white/55 opacity-45 cursor-not-allowed"
-                            title={isStornoReceipt ? "Bearbeiten bei Stornobeleg deaktiviert" : "Bearbeiten bei storniertem Beleg deaktiviert"}
+                            onClick={addLine}
+                            className="inline-flex h-12 items-center justify-center rounded-[16px] border border-sky-300/40 bg-sky-500/10 px-4 text-sm font-semibold text-white transition-colors hover:bg-sky-500/15"
                           >
-                            Bearbeiten
+                            + Leistung hinzufügen
                           </button>
-                        ) : isEditingLines ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={addLine}
-                              className="inline-flex h-12 items-center justify-center rounded-[16px] border border-sky-300/40 bg-sky-500/10 px-4 text-sm font-semibold text-white transition-colors hover:bg-sky-500/15"
-                            >
-                              + Leistung hinzufügen
-                            </button>
-                            <button
-                              type="submit"
-                              className="inline-flex h-12 items-center justify-center rounded-[16px] border border-emerald-500/30 bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
-                            >
-                              Speichern
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setLinesDraft(buildEditableLines(payloadLines));
-                                setIsEditingLines(false);
-                              }}
-                              className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
-                            >
-                              Abbrechen
-                            </button>
-                          </>
-                        ) : (
+                          <button
+                            type="submit"
+                            className="inline-flex h-12 items-center justify-center rounded-[16px] border border-emerald-500/30 bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
+                          >
+                            Speichern
+                          </button>
                           <button
                             type="button"
-                            onClick={() => setIsEditingLines(true)}
+                            onClick={() => {
+                              setLinesDraft(buildEditableLines(payloadLines));
+                              setIsEditingLines(false);
+                            }}
                             className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
                           >
-                            Bearbeiten
+                            Abbrechen
                           </button>
-                        )}
-                      </div>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingLines(true)}
+                          className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                        >
+                          Bearbeiten
+                        </button>
+                      )}
                     </div>
                   </div>
                 </form>

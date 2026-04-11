@@ -2834,7 +2834,32 @@ export async function updateFiscalReceiptDetails(formData: FormData) {
   }
 
   const salesOrder = await resolveSalesOrder(admin, salesOrderId);
-  const personId = String(salesOrder.customer_id ?? '').trim();
+  const customerProfileId = String(salesOrder.customer_id ?? '').trim();
+
+  let personId = '';
+  if (customerProfileId) {
+    const { data: customerProfileRaw, error: customerProfileError } = await admin
+      .from('customer_profiles')
+      .select('id, person_id')
+      .eq('id', customerProfileId)
+      .maybeSingle();
+
+    if (customerProfileError) {
+      await insertFiscalFailureSafe(admin, {
+        tenantId,
+        cashRegisterId: receipt.cash_register_id,
+        salesOrderId,
+        paymentId,
+        fiscalReceiptId: receiptId,
+        failedStep: 'customer_profile_load',
+        errorMessage: customerProfileError.message ?? 'Kundenprofil konnte nicht geladen werden.',
+        createdBy: user.id,
+      });
+      redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: customerProfileError.message ?? 'Kundenprofil konnte nicht geladen werden.' }));
+    }
+
+    personId = String((customerProfileRaw as { person_id?: string | null } | null)?.person_id ?? '').trim();
+  }
 
   const payloadBefore = parsePayload(receipt.receipt_payload_canonical);
   const payloadBeforeLines = Array.isArray(payloadBefore?.lines) ? (payloadBefore.lines as Record<string, unknown>[]) : [];
