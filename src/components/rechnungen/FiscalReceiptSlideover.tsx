@@ -579,6 +579,12 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
   const customerEmail = selected?.customerEmail?.trim() || "";
   const customerPhone = selected?.customerPhone?.trim() || "";
   const deliveries = selected?.deliveries ?? [];
+  const emailDeliveryCount = deliveries.filter(
+    (delivery) => String(delivery.channel ?? "").trim().toUpperCase() === "EMAIL"
+  ).length;
+  const whatsappDeliveryCount = deliveries.filter(
+    (delivery) => String(delivery.channel ?? "").trim().toUpperCase() === "WHATSAPP"
+  ).length;
   const whatsappNumber = normalizePhoneForWhatsApp(customerPhone);
   const whatsappHref = whatsappNumber && selected
     ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(buildReceiptWhatsAppText(selected.receiptNumber, providerName, euroFromCents(selected.turnoverValueCents, selected.currencyCode))) }`
@@ -652,6 +658,15 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
   return createPortal(
     <>
       <style jsx global>{`
+        .receipt-scroll-hidden {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+
+        .receipt-scroll-hidden::-webkit-scrollbar {
+          display: none;
+        }
+
         @media print {
           @page {
             size: A4 portrait;
@@ -785,7 +800,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                     href={`/rechnungen?${new URLSearchParams({ q: selected.salesOrderId }).toString()}`}
                     aria-label="Sales Order suchen"
                     title="Sales Order suchen"
-                    className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/10 bg-white/10 text-white transition-colors hover:bg-white/10"
+                    className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/15 bg-white/5 text-white transition-colors hover:bg-white/10"
                   >
                     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <circle cx="11" cy="11" r="7" />
@@ -799,7 +814,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                   onClick={() => window.print()}
                   aria-label="Drucken / PDF"
                   title="Drucken / PDF"
-                  className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/10 bg-white/10 text-white transition-colors hover:bg-white/10"
+                  className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/15 bg-white/5 text-white transition-colors hover:bg-white/10"
                 >
                   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M6 9V3h12v6" />
@@ -817,12 +832,17 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                       type="submit"
                       aria-label="E-Mail senden"
                       title="E-Mail senden"
-                      className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/10 bg-white/10 transition-colors hover:bg-white/10"
+                      className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/15 bg-white/5 transition-colors hover:bg-white/10"
                     >
-                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M4 6h16v12H4z" />
-                        <path d="m4 8 8 6 8-6" />
-                      </svg>
+                      <span className="relative inline-flex h-9 w-9 items-center justify-center">
+                        <span className="pointer-events-none absolute -right-1 -top-1 z-10 inline-flex min-w-[20px] items-center justify-center rounded-full bg-[#2563eb] px-1.5 text-[11px] font-bold leading-5 text-white shadow-[0_0_0_2px_rgba(11,11,12,0.82),0_0_12px_rgba(37,99,235,0.42)]">
+                          {emailDeliveryCount}
+                        </span>
+                        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M4 6h16v12H4z" />
+                          <path d="m4 8 8 6 8-6" />
+                        </svg>
+                      </span>
                     </button>
                   </form>
                 ) : (
@@ -833,10 +853,15 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                     title={isCancelled ? "Versand bei storniertem Beleg deaktiviert" : "Keine E-Mail hinterlegt"}
                     className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/10 bg-white/10 text-white opacity-45 cursor-not-allowed"
                   >
-                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M4 6h16v12H4z" />
-                      <path d="m4 8 8 6 8-6" />
-                    </svg>
+                    <span className="relative inline-flex h-9 w-9 items-center justify-center">
+                      <span className="pointer-events-none absolute -right-1 -top-1 z-10 inline-flex min-w-[20px] items-center justify-center rounded-full bg-[#2563eb] px-1.5 text-[11px] font-bold leading-5 text-white shadow-[0_0_0_2px_rgba(11,11,12,0.82),0_0_12px_rgba(37,99,235,0.42)] opacity-100">
+                        {emailDeliveryCount}
+                      </span>
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M4 6h16v12H4z" />
+                        <path d="m4 8 8 6 8-6" />
+                      </svg>
+                    </span>
                   </button>
                 )}
 
@@ -848,11 +873,16 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                       type="submit"
                       aria-label="WhatsApp senden"
                       title="WhatsApp senden"
-                      className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/10 bg-white/10 transition-colors hover:bg-white/10"
+                      className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/15 bg-white/5 transition-colors hover:bg-white/10"
                     >
-                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="#34d399" aria-hidden="true">
-                        <path d="M20.52 3.48A11.82 11.82 0 0 0 12.07 0C5.5 0 .16 5.34.16 11.92c0 2.1.55 4.15 1.59 5.96L0 24l6.32-1.66a11.86 11.86 0 0 0 5.75 1.47h.01c6.57 0 11.91-5.34 11.91-11.92 0-3.18-1.24-6.17-3.47-8.41Zm-8.45 18.3h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.75.98 1-3.66-.24-.38a9.9 9.9 0 0 1-1.52-5.21c0-5.46 4.45-9.91 9.92-9.91 2.65 0 5.14 1.03 7.01 2.9a9.84 9.84 0 0 1 2.9 7c0 5.47-4.45 9.92-9.92 9.92Zm5.44-7.42c-.3-.15-1.77-.88-2.04-.98-.27-.1-.47-.15-.66.15-.2.3-.76.98-.94 1.18-.17.2-.35.22-.64.08-.3-.15-1.25-.46-2.38-1.47-.88-.79-1.47-1.77-1.64-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.44-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.66-1.59-.91-2.18-.24-.58-.48-.5-.66-.5h-.56c-.2 0-.52.08-.8.37-.27.3-1.05 1.03-1.05 2.5s1.08 2.9 1.23 3.1c.15.2 2.12 3.24 5.14 4.54.72.31 1.28.5 1.72.64.72.23 1.38.2 1.9.12.58-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.12-.27-.2-.56-.35Z" />
-                      </svg>
+                      <span className="relative inline-flex h-9 w-9 items-center justify-center">
+                        <span className="pointer-events-none absolute -right-1 -top-1 z-10 inline-flex min-w-[20px] items-center justify-center rounded-full bg-[#2563eb] px-1.5 text-[11px] font-bold leading-5 text-white shadow-[0_0_0_2px_rgba(11,11,12,0.82),0_0_12px_rgba(37,99,235,0.42)]">
+                          {whatsappDeliveryCount}
+                        </span>
+                        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="#34d399" aria-hidden="true">
+                          <path d="M20.52 3.48A11.82 11.82 0 0 0 12.07 0C5.5 0 .16 5.34.16 11.92c0 2.1.55 4.15 1.59 5.96L0 24l6.32-1.66a11.86 11.86 0 0 0 5.75 1.47h.01c6.57 0 11.91-5.34 11.91-11.92 0-3.18-1.24-6.17-3.47-8.41Zm-8.45 18.3h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.75.98 1-3.66-.24-.38a9.9 9.9 0 0 1-1.52-5.21c0-5.46 4.45-9.91 9.92-9.91 2.65 0 5.14 1.03 7.01 2.9a9.84 9.84 0 0 1 2.9 7c0 5.47-4.45 9.92-9.92 9.92Zm5.44-7.42c-.3-.15-1.77-.88-2.04-.98-.27-.1-.47-.15-.66.15-.2.3-.76.98-.94 1.18-.17.2-.35.22-.64.08-.3-.15-1.25-.46-2.38-1.47-.88-.79-1.47-1.77-1.64-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.44-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.66-1.59-.91-2.18-.24-.58-.48-.5-.66-.5h-.56c-.2 0-.52.08-.8.37-.27.3-1.05 1.03-1.05 2.5s1.08 2.9 1.23 3.1c.15.2 2.12 3.24 5.14 4.54.72.31 1.28.5 1.72.64.72.23 1.38.2 1.9.12.58-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.12-.27-.2-.56-.35Z" />
+                        </svg>
+                      </span>
                     </button>
                   </form>
                 ) : (
@@ -863,9 +893,14 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                     title={isCancelled ? "Versand bei storniertem Beleg deaktiviert" : "Keine Telefonnummer hinterlegt"}
                     className="inline-flex h-12 w-full items-center justify-center rounded-[16px] border border-white/10 bg-white/10 text-white opacity-45 cursor-not-allowed"
                   >
-                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="#34d399" aria-hidden="true">
-                      <path d="M20.52 3.48A11.82 11.82 0 0 0 12.07 0C5.5 0 .16 5.34.16 11.92c0 2.1.55 4.15 1.59 5.96L0 24l6.32-1.66a11.86 11.86 0 0 0 5.75 1.47h.01c6.57 0 11.91-5.34 11.91-11.92 0-3.18-1.24-6.17-3.47-8.41Zm-8.45 18.3h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.75.98 1-3.66-.24-.38a9.9 9.9 0 0 1-1.52-5.21c0-5.46 4.45-9.91 9.92-9.91 2.65 0 5.14 1.03 7.01 2.9a9.84 9.84 0 0 1 2.9 7c0 5.47-4.45 9.92-9.92 9.92Zm5.44-7.42c-.3-.15-1.77-.88-2.04-.98-.27-.1-.47-.15-.66.15-.2.3-.76.98-.94 1.18-.17.2-.35.22-.64.08-.3-.15-1.25-.46-2.38-1.47-.88-.79-1.47-1.77-1.64-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.44-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.66-1.59-.91-2.18-.24-.58-.48-.5-.66-.5h-.56c-.2 0-.52.08-.8.37-.27.3-1.05 1.03-1.05 2.5s1.08 2.9 1.23 3.1c.15.2 2.12 3.24 5.14 4.54.72.31 1.28.5 1.72.64.72.23 1.38.2 1.9.12.58-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.12-.27-.2-.56-.35Z" />
-                    </svg>
+                    <span className="relative inline-flex h-9 w-9 items-center justify-center">
+                      <span className="pointer-events-none absolute -right-1 -top-1 z-10 inline-flex min-w-[20px] items-center justify-center rounded-full bg-[#2563eb] px-1.5 text-[11px] font-bold leading-5 text-white shadow-[0_0_0_2px_rgba(11,11,12,0.82),0_0_12px_rgba(37,99,235,0.42)] opacity-100">
+                        {whatsappDeliveryCount}
+                      </span>
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="#34d399" aria-hidden="true">
+                        <path d="M20.52 3.48A11.82 11.82 0 0 0 12.07 0C5.5 0 .16 5.34.16 11.92c0 2.1.55 4.15 1.59 5.96L0 24l6.32-1.66a11.86 11.86 0 0 0 5.75 1.47h.01c6.57 0 11.91-5.34 11.91-11.92 0-3.18-1.24-6.17-3.47-8.41Zm-8.45 18.3h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.75.98 1-3.66-.24-.38a9.9 9.9 0 0 1-1.52-5.21c0-5.46 4.45-9.91 9.92-9.91 2.65 0 5.14 1.03 7.01 2.9a9.84 9.84 0 0 1 2.9 7c0 5.47-4.45 9.92-9.92 9.92Zm5.44-7.42c-.3-.15-1.77-.88-2.04-.98-.27-.1-.47-.15-.66.15-.2.3-.76.98-.94 1.18-.17.2-.35.22-.64.08-.3-.15-1.25-.46-2.38-1.47-.88-.79-1.47-1.77-1.64-2.07-.17-.3-.02-.46.13-.61.13-.13.3-.35.44-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.66-1.59-.91-2.18-.24-.58-.48-.5-.66-.5h-.56c-.2 0-.52.08-.8.37-.27.3-1.05 1.03-1.05 2.5s1.08 2.9 1.23 3.1c.15.2 2.12 3.24 5.14 4.54.72.31 1.28.5 1.72.64.72.23 1.38.2 1.9.12.58-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.12-.27-.2-.56-.35Z" />
+                      </svg>
+                    </span>
                   </button>
                 )}
 
@@ -947,7 +982,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
               </div>
             </div>
           </div>
-          <div className="hide-scrollbar flex-1 overflow-y-auto p-4 receipt-print-scroll">
+          <div className="receipt-scroll-hidden hide-scrollbar flex-1 overflow-y-auto p-4 receipt-print-scroll">
             <div className="space-y-4">
               <div className="hidden print:block">
                 <div className="flex items-start justify-between gap-6 border-b border-black/10 pb-4">
@@ -1000,26 +1035,56 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                   <input type="hidden" name="lines_json" value={serializedLines} />
 
                   <div className="grid gap-3 md:grid-cols-2">
-                    <div className="rounded-[16px] border border-white/10 bg-black/20 p-4 receipt-print-grid-card md:col-span-2">
-                      <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40 print-text-muted">Kunde</div>
-                      {isEditingCustomer ? (
-                        <input
-                          autoFocus
-                          name="customer_name"
-                          value={customerDraft}
-                          onChange={(e) => setCustomerDraft(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") e.preventDefault();
-                          }}
-                          className="mt-2 h-12 w-full rounded-[16px] border border-white/10 bg-black/30 px-3 text-base font-semibold text-white outline-none receipt-print-hide"
-                        />
-                      ) : null}
-                      <input type="hidden" name="customer_name" value={customerDraft} />
-                      <div className="mt-2 text-lg font-bold text-white print:text-black">{customerDraft || "Nicht hinterlegt"}</div>
+                    <div className="rounded-[16px] border border-white/10 bg-black/20 px-4 py-3 receipt-print-grid-card md:col-span-2">
+                      <div className="flex items-end justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs uppercase tracking-wide text-white/45 print-text-muted">Kunde</div>
+                          {isEditingCustomer ? (
+                            <input
+                              autoFocus
+                              name="customer_name"
+                              value={customerDraft}
+                              onChange={(e) => setCustomerDraft(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") e.preventDefault();
+                              }}
+                              className="mt-1 h-12 w-full rounded-[16px] border border-white/10 bg-black/30 px-3 text-base font-semibold text-white outline-none receipt-print-hide"
+                            />
+                          ) : null}
+                          <input type="hidden" name="customer_name" value={customerDraft} />
+                          <div className="mt-1 text-base font-semibold text-white print:text-black">{customerDraft || "Nicht hinterlegt"}</div>
+                        </div>
+
+                        {!isEditingCustomer ? (
+                          <div className="receipt-print-hide">
+                            {isCancelled ? (
+                              <button
+                                type="button"
+                                disabled
+                                className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white/55 opacity-45 cursor-not-allowed"
+                                title={isStornoReceipt ? "Bearbeiten bei Stornobeleg deaktiviert" : "Bearbeiten bei storniertem Beleg deaktiviert"}
+                              >
+                                Bearbeiten
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  customerSubmitArmedRef.current = false;
+                                  setIsEditingCustomer(true);
+                                }}
+                                className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                              >
+                                Bearbeiten
+                              </button>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
 
-                    <div className="rounded-[16px] border border-white/10 bg-black/20 p-4 receipt-print-grid-card">
-                      <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40 print-text-muted">E-Mail</div>
+                    <div className="rounded-[16px] border border-white/10 bg-black/20 px-4 py-3 receipt-print-grid-card">
+                      <div className="text-xs uppercase tracking-wide text-white/45 print-text-muted">E-Mail</div>
                       {isEditingCustomer ? (
                         <input
                           name="customer_email"
@@ -1028,16 +1093,16 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                           onKeyDown={(e) => {
                             if (e.key === "Enter") e.preventDefault();
                           }}
-                          className="mt-2 h-12 w-full rounded-[16px] border border-white/10 bg-black/30 px-3 text-sm font-semibold text-white outline-none receipt-print-hide"
+                          className="mt-1 h-12 w-full rounded-[16px] border border-white/10 bg-black/30 px-3 text-sm font-semibold text-white outline-none receipt-print-hide"
                           placeholder="kunde@mail.com"
                         />
                       ) : null}
                       <input type="hidden" name="customer_email" value={customerEmailDraft} />
-                      <div className="mt-2 text-sm font-semibold text-white print:text-black">{customerEmailDraft || "Nicht hinterlegt"}</div>
+                      <div className="mt-1 text-[13px] font-semibold leading-5 text-white print:text-black break-all">{customerEmailDraft || "Nicht hinterlegt"}</div>
                     </div>
 
-                    <div className="rounded-[16px] border border-white/10 bg-black/20 p-4 receipt-print-grid-card">
-                      <div className="text-[11px] font-semibold uppercase tracking-wide text-white/40 print-text-muted">Telefon / WhatsApp</div>
+                    <div className="rounded-[16px] border border-white/10 bg-black/20 px-4 py-3 receipt-print-grid-card">
+                      <div className="text-xs uppercase tracking-wide text-white/45 print-text-muted">Telefon / WhatsApp</div>
                       {isEditingCustomer ? (
                         <input
                           name="customer_phone"
@@ -1046,63 +1111,41 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
                           onKeyDown={(e) => {
                             if (e.key === "Enter") e.preventDefault();
                           }}
-                          className="mt-2 h-12 w-full rounded-[16px] border border-white/10 bg-black/30 px-3 text-sm font-semibold text-white outline-none receipt-print-hide"
+                          className="mt-1 h-12 w-full rounded-[16px] border border-white/10 bg-black/30 px-3 text-sm font-semibold text-white outline-none receipt-print-hide"
                           placeholder="+43..."
                         />
                       ) : null}
                       <input type="hidden" name="customer_phone" value={customerPhoneDraft} />
-                      <div className="mt-2 text-sm font-semibold text-white print:text-black">{customerPhoneDraft || "Nicht hinterlegt"}</div>
+                      <div className="mt-1 text-[13px] font-semibold leading-5 text-white print:text-black">{customerPhoneDraft || "Nicht hinterlegt"}</div>
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2 receipt-print-hide">
-                    {isCancelled ? (
+                  {isEditingCustomer ? (
+                    <div className="flex flex-wrap gap-2 receipt-print-hide">
                       <button
-                        type="button"
-                        disabled
-                        className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white/55 opacity-45 cursor-not-allowed"
-                        title={isStornoReceipt ? "Bearbeiten bei Stornobeleg deaktiviert" : "Bearbeiten bei storniertem Beleg deaktiviert"}
+                        type="submit"
+                        onClick={() => {
+                          customerSubmitArmedRef.current = true;
+                        }}
+                        className="inline-flex h-12 items-center justify-center rounded-[16px] border border-emerald-500/30 bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
                       >
-                        Bearbeiten
+                        Speichern
                       </button>
-                    ) : !isEditingCustomer ? (
                       <button
                         type="button"
                         onClick={() => {
                           customerSubmitArmedRef.current = false;
-                          setIsEditingCustomer(true);
+                          setCustomerDraft(customerName);
+                          setCustomerEmailDraft(customerEmail);
+                          setCustomerPhoneDraft(customerPhone);
+                          setIsEditingCustomer(false);
                         }}
                         className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
                       >
-                        Bearbeiten
+                        Abbrechen
                       </button>
-                    ) : (
-                      <>
-                        <button
-                          type="submit"
-                          onClick={() => {
-                            customerSubmitArmedRef.current = true;
-                          }}
-                          className="inline-flex h-12 items-center justify-center rounded-[16px] border border-emerald-500/30 bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-500"
-                        >
-                          Speichern
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            customerSubmitArmedRef.current = false;
-                            setCustomerDraft(customerName);
-                            setCustomerEmailDraft(customerEmail);
-                            setCustomerPhoneDraft(customerPhone);
-                            setIsEditingCustomer(false);
-                          }}
-                          className="inline-flex h-12 items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
-                        >
-                          Abbrechen
-                        </button>
-                      </>
-                    )}
-                  </div>
+                    </div>
+                  ) : null}
                 </form>
               </InfoCard>
 
@@ -1295,8 +1338,8 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
 
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-white/10 bg-black/20 px-4 py-3 receipt-print-grid-card">
                     <div>
-                      <div className="text-xs uppercase tracking-wide text-white/45 print-text-muted">Aktuelle Summe</div>
-                      <div className="mt-1 text-lg font-bold text-white print:text-black">{euroFromCents(totalDraftCents, selected.currencyCode)}</div>
+                      <div className="text-[11px] uppercase tracking-wide text-white/45 print-text-muted">Aktuelle Summe</div>
+                      <div className="mt-1 text-[15px] font-semibold text-white print:text-black">{euroFromCents(totalDraftCents, selected.currencyCode)}</div>
                     </div>
 
                     <div className="flex flex-wrap gap-2 receipt-print-hide">
