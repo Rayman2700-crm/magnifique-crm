@@ -8,7 +8,6 @@ import FiscalReceiptSlideover from "@/components/rechnungen/FiscalReceiptSlideov
 import PendingReaderPaymentsCard from "./PendingReaderPaymentsCard";
 import ClosingDateAutoSubmit from "@/components/rechnungen/ClosingDateAutoSubmit";
 import RechnungenClosingSlideover from "@/components/rechnungen/RechnungenClosingSlideover";
-import DashboardInvoiceSlideover from "@/components/dashboard/DashboardInvoiceSlideover";
 import { backfillReadyFiscalReceipts, cancelCardPaymentForCheckout, completeCardPaymentForCheckout, createFiscalReceiptForPayment, createPaymentForSalesOrder, createSalesOrderFromAppointment, failCardPaymentForCheckout, startCardPaymentForCheckout } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -964,27 +963,6 @@ function buildRechnungenHref({
   return query ? `/rechnungen?${query}` : "/rechnungen";
 }
 
-function buildInvoiceSlideoverHref({
-  qRaw,
-  filter,
-  practitioner,
-  closingDate,
-}: {
-  qRaw?: string;
-  filter?: string;
-  practitioner?: string;
-  closingDate?: string;
-}) {
-  const params = new URLSearchParams();
-  if (qRaw?.trim()) params.set("q", qRaw.trim());
-  if (filter && filter !== "all") params.set("filter", filter);
-  if (practitioner && practitioner !== "all") params.set("practitioner", practitioner);
-  if (closingDate?.trim()) params.set("closingDate", closingDate.trim());
-  params.set("invoice", "1");
-  const query = params.toString();
-  return query ? `/rechnungen?${query}` : "/rechnungen?invoice=1";
-}
-
 function ClosingPdfButton({
   periodType,
   mode,
@@ -1404,88 +1382,6 @@ export default async function RechnungenPage({
       },
     ];
   }
-
-  const invoiceTenantIds = Array.from(
-    new Set(
-      (isAdmin
-        ? Array.from(tenantNameById.keys())
-        : [String(profile?.tenant_id ?? profile?.calendar_tenant_id ?? effectiveTenantId ?? "").trim()]
-      ).filter(Boolean)
-    )
-  );
-
-  let invoiceTenantRows: Array<{ id: string; display_name: string | null }> = [];
-  if (invoiceTenantIds.length > 0) {
-    const { data } = await admin
-      .from("tenants")
-      .select("id, display_name")
-      .in("id", invoiceTenantIds)
-      .order("display_name", { ascending: true });
-    invoiceTenantRows = (data ?? []) as Array<{ id: string; display_name: string | null }>;
-  }
-
-  const { data: invoiceServiceRowsRaw } = await admin
-    .from("services")
-    .select("id, tenant_id, name, default_price_cents, is_active")
-    .in("tenant_id", invoiceTenantIds.length > 0 ? invoiceTenantIds : ["__none__"])
-    .eq("is_active", true)
-    .order("name", { ascending: true });
-
-  const invoiceServiceRows = (invoiceServiceRowsRaw ?? []) as Array<{
-    id: string;
-    tenant_id: string | null;
-    name: string | null;
-    default_price_cents: number | null;
-    is_active: boolean | null;
-  }>;
-
-  let invoiceCustomersQuery = admin
-    .from("customer_profiles")
-    .select("id, tenant_id, person:persons ( full_name, phone, email )")
-    .order("created_at", { ascending: false })
-    .limit(500);
-
-  if (!isAdmin && invoiceTenantIds.length > 0) {
-    invoiceCustomersQuery = invoiceCustomersQuery.in("tenant_id", invoiceTenantIds);
-  }
-
-  const { data: invoiceCustomerRowsRaw } = await invoiceCustomersQuery;
-  const dashboardCustomers = ((invoiceCustomerRowsRaw ?? []) as Array<{
-    id: string;
-    tenant_id: string | null;
-    person:
-      | { full_name: string | null; phone: string | null; email: string | null }
-      | { full_name: string | null; phone: string | null; email: string | null }[]
-      | null;
-  }>)
-    .map((row) => {
-      const person = firstJoin(row.person);
-      const displayName = String(person?.full_name ?? "").trim();
-      if (!displayName) return null;
-      return {
-        id: row.id,
-        tenantId: String(row.tenant_id ?? "").trim(),
-        displayName,
-        phone: String(person?.phone ?? "").trim() || null,
-        email: String(person?.email ?? "").trim() || null,
-      };
-    })
-    .filter(Boolean) as Array<{
-      id: string;
-      tenantId: string;
-      displayName: string;
-      phone: string | null;
-      email: string | null;
-    }>;
-
-  const invoiceSelectedTenantId =
-    String(profile?.tenant_id ?? profile?.calendar_tenant_id ?? effectiveTenantId ?? "").trim() ||
-    invoiceTenantRows[0]?.id ||
-    "";
-  const invoiceCurrentTenantName =
-    invoiceTenantRows.find((tenant) => tenant.id === invoiceSelectedTenantId)?.display_name ??
-    avatarOptions[0]?.label ??
-    "Behandler";
 
   let checkoutAppointment: CheckoutAppointmentRow | null = null;
   let checkoutServices: CheckoutServiceRow[] = [];
@@ -2237,13 +2133,8 @@ export default async function RechnungenPage({
                     />
 
                     <Link
-                      href={buildInvoiceSlideoverHref({
-                        qRaw,
-                        filter: currentFilter,
-                        practitioner: practitionerFilter,
-                        closingDate,
-                      })}
-                      aria-label="Rechnung erstellen"
+                      href="/calendar"
+                      aria-label="Abrechnung starten"
                       className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border md:hidden"
                       style={{
                         color: "#0b0b0c",
@@ -2402,17 +2293,9 @@ export default async function RechnungenPage({
                       </div>
                     </form>
 
-                    <Link
-                      href={buildInvoiceSlideoverHref({
-                        qRaw,
-                        filter: currentFilter,
-                        practitioner: practitionerFilter,
-                        closingDate,
-                      })}
-                      className="sm:shrink-0"
-                    >
+                    <Link href="/calendar" className="sm:shrink-0">
                       <div className="inline-flex h-11 w-full items-center justify-center rounded-[16px] border border-[var(--primary)] bg-[var(--primary)] px-5 text-sm font-semibold text-black shadow-[0_12px_26px_rgba(214,195,163,0.18)] sm:w-auto whitespace-nowrap">
-                        + Rechnung
+                        + Abrechnen
                       </div>
                     </Link>
                   </div>
@@ -3181,24 +3064,6 @@ export default async function RechnungenPage({
           </Card>
         </>
       ) : null}
-
-      <DashboardInvoiceSlideover
-        tenants={invoiceTenantRows.map((tenant) => ({
-          id: tenant.id,
-          displayName: tenant.display_name ?? "Behandler",
-        }))}
-        services={invoiceServiceRows.map((service) => ({
-          id: service.id,
-          tenantId: String(service.tenant_id ?? "").trim(),
-          name: service.name ?? "Unbenannte Dienstleistung",
-          defaultPriceCents: service.default_price_cents ?? null,
-        }))}
-        customers={dashboardCustomers}
-        selectedTenantId={invoiceSelectedTenantId}
-        currentUserName={String(profile?.full_name ?? "").trim() || user.email || "Benutzer"}
-        currentTenantName={String(invoiceCurrentTenantName ?? "").trim() || "Behandler"}
-        isAdmin={isAdmin}
-      />
 
       <FiscalReceiptSlideover items={items} />
     </main>
