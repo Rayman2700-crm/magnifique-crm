@@ -49,7 +49,7 @@ const sizes: Record<Size, string> = {
   sm: "h-9 px-3 text-sm rounded-[14px]",
   md: "h-10 px-4 text-sm rounded-[16px]",
   lg: "h-11 px-5 text-base rounded-[18px]",
-  icon: "h-11 w-11 rounded-[16px] p-0",
+  icon: "h-9 w-9 rounded-[16px] p-0",
   pill: "h-8 px-3 text-xs rounded-full",
 };
 

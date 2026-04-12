@@ -1045,10 +1045,10 @@ export default async function DashboardPage() {
   const profileTheme = tenantTheme(tenantDisplayName ?? displayName);
 
   return (
-    <div className="space-y-6 lg:space-y-8">
+    <div className="space-y-4 lg:space-y-8">
       <section>
         <Card className="overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
-          <CardContent className="p-4 sm:p-5 md:p-7 xl:p-8">
+          <CardContent className="px-1 py-2 sm:p-5 md:p-7 xl:p-8">
             <div className="hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 sm:p-5 md:block md:p-7">
               <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
                 <div className="flex min-w-0 items-center gap-4 sm:gap-5">
@@ -1064,8 +1064,8 @@ export default async function DashboardPage() {
                   </div>
 
                   <div className="min-w-0">
-                    <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">
-                      Clientique Dashboard
+                    <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--primary)]">
+                      Magnifique Beauty Institut Dashboard
                     </div>
                     <div className="mt-2 break-words text-[28px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[32px] md:text-[36px] xl:text-[42px]">
                       {displayName}
@@ -1084,7 +1084,32 @@ export default async function DashboardPage() {
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:mt-6 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4">
+            <div className="mt-0 rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] px-2 py-2 md:hidden">
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex h-[18px] w-[18px] shrink-0 items-center justify-center overflow-hidden rounded-[20px] border-[2px] shadow-[0_0_0_2px_rgba(11,11,12,0.9)]"
+                  style={{ borderColor: profileTheme.border, background: profileTheme.bg }}
+                >
+                  <img
+                    src={`/users/${user?.id}.png`}
+                    alt="Benutzerfoto"
+
+                  />
+                </div>
+
+                <div className="min-w-0">
+                  <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">
+                    Magnifique Beauty Institut Dashboard
+                  </div>
+                  <div className="mt-1.5 break-words text-[25px] font-semibold leading-none tracking-tight text-[var(--text)]">
+                    {displayName}
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 lg:mt-6 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4">
               <InvoiceCreateCard
                 todayRevenueCents={todayRevenueCents}
                 todayReceiptCount={todayReceiptCount}

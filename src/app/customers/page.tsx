@@ -369,13 +369,13 @@ export default async function CustomersPage({
   const resetHref = "/customers";
 
   return (
-    <main className="mx-auto max-w-7xl p-4 md:p-6 xl:p-8">
+    <main className="mx-auto max-w-7xl py-1 px-0 md:p-6 xl:p-8">
       <section>
         <Card className="overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
-          <CardContent className="p-5 md:p-6 xl:p-8">
+          <CardContent className="px-3 py-2 md:p-6 xl:p-8">
             <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
               <div className="min-w-0">
-                <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">Clientique Kundenbereich</div>
+                <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">Magnifique Beauty Institut Kundenbereich</div>
                 <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">Kunden</h1>
                 <p className="mt-2 text-sm text-[var(--text-muted)]">Eingeloggt als {profile?.full_name ?? user.email} ({profile?.role ?? "—"})</p>
                 {role === "ADMIN" ? (

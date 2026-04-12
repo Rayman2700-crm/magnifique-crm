@@ -24,6 +24,29 @@ type ChatMessageRow = {
   created_at: string;
 };
 
+
+function getNavIcon(key: string) {
+  switch (key) {
+    case "dashboard":
+      return <HomeIcon />;
+    case "customers":
+      return <UsersIcon />;
+    case "services":
+      return <ServicesIcon />;
+    case "receipts":
+      return <ReceiptIcon />;
+    case "chat":
+      return <ChatIcon />;
+    case "reminders":
+      return <BellIcon />;
+    case "waitlist":
+      return <ClockIcon />;
+    default:
+      return <HomeIcon />;
+  }
+}
+
+
 function getAvatarTheme(userLabel?: string) {
   if (!userLabel) return tenantTheme.Radu;
 
@@ -255,7 +278,7 @@ function SettingsMenuPopover({ open, shown, onClose, onOpenGoogleSetup, googleSe
   );
 }
 
-function MobileNavDrawer({ open, shown, onClose, pathname, openChat, openReminders, openWaitlist, unreadCount, liveReminderCount, liveWaitlistCount, chatPulse, reminderPulse, waitlistPulse }: { open: boolean; shown: boolean; onClose: () => void; pathname: string | null; openChat: () => void; openReminders: () => void; openWaitlist: () => void; unreadCount: number; liveReminderCount: number; liveWaitlistCount: number; chatPulse: boolean; reminderPulse: boolean; waitlistPulse: boolean; }) {
+function MobileNavDrawer({ open, shown, onClose, pathname, remindersOpen, waitlistOpen, openChat, openReminders, openWaitlist, unreadCount, liveReminderCount, liveWaitlistCount, chatPulse, reminderPulse, waitlistPulse }: { open: boolean; shown: boolean; onClose: () => void; pathname: string | null; remindersOpen: boolean; waitlistOpen: boolean; openChat: () => void; openReminders: () => void; openWaitlist: () => void; unreadCount: number; liveReminderCount: number; liveWaitlistCount: number; chatPulse: boolean; reminderPulse: boolean; waitlistPulse: boolean; }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   useEffect(() => {
@@ -275,26 +298,97 @@ function MobileNavDrawer({ open, shown, onClose, pathname, openChat, openReminde
   const itemClass = "flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-3 text-left text-sm font-medium text-white/90 transition hover:bg-white/[0.08]";
   const isActive = (href: string) => href === "/dashboard" ? pathname === "/dashboard" : pathname?.startsWith(href);
 
+  function DrawerLink({
+    label,
+    icon,
+    active = false,
+    badge,
+    onClick,
+    href,
+  }: {
+    label: string;
+    icon: React.ReactNode;
+    active?: boolean;
+    badge?: React.ReactNode;
+    onClick?: () => void;
+    href?: string;
+  }) {
+    const className = cn(itemClass, active && "border-white/20 bg-white/[0.08]");
+    const content = (
+      <>
+        <span className="flex items-center gap-3">
+          <span className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border",
+            active
+              ? "border-[rgba(214,195,163,0.24)] bg-[var(--primary-soft)] text-[var(--text)]"
+              : "border-white/10 bg-white/[0.03] text-white/72"
+          )}>
+            {icon}
+          </span>
+          <span>{label}</span>
+        </span>
+        {badge ?? null}
+      </>
+    );
+
+    if (href) {
+      return (
+        <Link href={href} onClick={onClick} className={className}>
+          {content}
+        </Link>
+      );
+    }
+
+    return (
+      <button type="button" onClick={onClick} className={className}>
+        {content}
+      </button>
+    );
+  }
+
   return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 1180, isolation: "isolate" }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.60)", backdropFilter: "blur(6px)", opacity: shown ? 1 : 0, transition: "opacity 200ms ease" }} />
-      <div style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: "min(360px, calc(100vw - 20px))", transform: shown ? "translateX(0)" : "translateX(-24px)", opacity: shown ? 1 : 0, transition: "transform 220ms ease, opacity 220ms ease", borderRight: "1px solid rgba(255,255,255,0.08)", background: "rgb(9,9,11)", color: "white", boxShadow: "12px 0 40px rgba(0,0,0,0.45)", display: "flex", flexDirection: "column" }}>
+      <div style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: "min(220px, calc(100vw - 20px))", transform: shown ? "translateX(0)" : "translateX(-24px)", opacity: shown ? 1 : 0, transition: "transform 220ms ease, opacity 220ms ease", borderRight: "1px solid rgba(255,255,255,0.08)", background: "rgb(9,9,11)", color: "white", boxShadow: "12px 0 40px rgba(0,0,0,0.45)", display: "flex", flexDirection: "column" }}>
         <div className="flex items-center justify-between border-b border-white/10 p-4">
           <div>
             <div className="text-xs uppercase tracking-[0.16em] text-white/45">Navigation</div>
-            <div className="mt-1 text-base font-semibold text-white">Clientique Menü</div>
+            <div className="mt-1 text-base font-semibold text-white">Magnifique Beauty CRM</div>
           </div>
           <button type="button" onClick={onClose} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/80" aria-label="Menü schließen">✕</button>
         </div>
         <div className="flex-1 space-y-3 overflow-y-auto p-4">
           {nav.slice(0, 4).map((item) => (
-            <Link key={item.key} href={item.href} onClick={onClose} className={cn(itemClass, isActive(item.href) && "border-white/20 bg-white/[0.08]")}>{item.label}</Link>
+            <DrawerLink
+              key={item.key}
+              href={item.href}
+              onClick={onClose}
+              label={item.label}
+              icon={getNavIcon(item.key)}
+              active={Boolean(isActive(item.href))}
+            />
           ))}
-          <button type="button" onClick={() => { onClose(); openChat(); }} className={cn(itemClass, pathname?.startsWith("/dashboard/chat") && "border-white/20 bg-white/[0.08]")}>
-            <span>Team Chat</span>{unreadCount > 0 ? <BrandBadge count={unreadCount} pulse={chatPulse} /> : null}
-          </button>
-          <button type="button" onClick={() => { onClose(); openReminders(); }} className={itemClass}><span>Reminder</span>{liveReminderCount > 0 ? <BrandBadge count={liveReminderCount} pulse={reminderPulse} /> : null}</button>
-          <button type="button" onClick={() => { onClose(); openWaitlist(); }} className={itemClass}><span>Warteliste</span>{liveWaitlistCount > 0 ? <BrandBadge count={liveWaitlistCount} pulse={waitlistPulse} /> : null}</button>
+          <DrawerLink
+            label="Team Chat"
+            icon={<ChatIcon />}
+            active={Boolean(pathname?.startsWith("/dashboard/chat"))}
+            badge={unreadCount > 0 ? <BrandBadge count={unreadCount} pulse={chatPulse} /> : null}
+            onClick={() => { onClose(); openChat(); }}
+          />
+          <DrawerLink
+            label="Reminder"
+            icon={<BellIcon />}
+            active={remindersOpen}
+            badge={liveReminderCount > 0 ? <BrandBadge count={liveReminderCount} pulse={reminderPulse} /> : null}
+            onClick={() => { onClose(); openReminders(); }}
+          />
+          <DrawerLink
+            label="Warteliste"
+            icon={<ClockIcon />}
+            active={waitlistOpen}
+            badge={liveWaitlistCount > 0 ? <BrandBadge count={liveWaitlistCount} pulse={waitlistPulse} /> : null}
+            onClick={() => { onClose(); openWaitlist(); }}
+          />
         </div>
       </div>
     </div>,
@@ -340,6 +434,7 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileMenuShown, setMobileMenuShown] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   const previousChatCount = useRef(0);
   const previousReminderCount = useRef(reminderCount);
@@ -355,6 +450,13 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
   useEffect(() => { if (!userMenuOpen) return; const t = window.setTimeout(() => setUserMenuShown(true), 10); return () => window.clearTimeout(t); }, [userMenuOpen]);
   useEffect(() => { if (!settingsMenuOpen) return; const t = window.setTimeout(() => setSettingsMenuShown(true), 10); return () => window.clearTimeout(t); }, [settingsMenuOpen]);
   useEffect(() => { if (!mobileMenuOpen) return; const t = window.setTimeout(() => setMobileMenuShown(true), 10); return () => window.clearTimeout(t); }, [mobileMenuOpen]);
+  useEffect(() => {
+    const syncIsMobile = () => setIsMobile(window.innerWidth < 768);
+    syncIsMobile();
+    window.addEventListener("resize", syncIsMobile);
+    return () => window.removeEventListener("resize", syncIsMobile);
+  }, []);
+
   useEffect(() => {
     const styleId = "topnav-badge-pulse-style";
     if (document.getElementById(styleId)) return;
@@ -455,10 +557,23 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
   function closeSettingsMenu() { setSettingsMenuShown(false); window.setTimeout(() => setSettingsMenuOpen(false), 160); }
   function closeMobileMenu() { setMobileMenuShown(false); window.setTimeout(() => setMobileMenuOpen(false), 160); }
   function toggleSettingsMenu() { if (settingsMenuOpen) { closeSettingsMenu(); return; } closeMobileMenu(); setUserMenuShown(false); setUserMenuOpen(false); setSettingsMenuOpen(true); }
+  function toggleMobileDrawer() {
+    if (mobileMenuOpen) {
+      closeMobileMenu();
+      return;
+    }
+    closeSettingsMenu();
+    setUserMenuShown(false);
+    setUserMenuOpen(false);
+    setMobileMenuOpen(true);
+  }
   function openGoogleSetup() { const params = new URLSearchParams(searchParams?.toString() ?? ""); params.set("openGoogleSetup", "1"); params.delete("success"); params.delete("error"); params.delete("link"); const qs = params.toString(); closeSettingsMenu(); router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }); }
 
   const googleSetupActive = pathname?.startsWith("/calendar/google") || searchParams?.get("openGoogleSetup") === "1";
   const showGoogleSetupAlert = googleSetupAlertCount > 0;
+  const remindersOpen = searchParams?.get("openReminders") === "1";
+  const waitlistOpen = searchParams?.get("openWaitlist") === "1";
+  const chatOpen = searchParams?.get("openChat") === "1";
   const isActive = (href: string) => href === "/dashboard" ? pathname === "/dashboard" : pathname?.startsWith(href);
 
 return (
@@ -466,17 +581,23 @@ return (
 <aside
   className={cn(
     "clientique-sidebar-rail fixed inset-y-0 left-0 z-50 border-r border-white/8 bg-[rgba(10,10,11,0.86)] backdrop-blur-xl transition-[width] duration-200",
-    expanded ? "w-[216px]" : "w-[72px]"
+    isMobile ? "w-[60px]" : expanded ? "w-[216px]" : "w-[60px]"
   )}
-  onMouseEnter={() => setExpanded(true)}
-  onMouseLeave={() => setExpanded(false)}
+  onMouseEnter={() => { if (!isMobile) setExpanded(true); }}
+  onMouseLeave={() => { if (!isMobile) setExpanded(false); }}
+  onClick={(event) => {
+    if (!isMobile || mobileMenuOpen) return;
+    const target = event.target as HTMLElement;
+    if (target.closest('button') || target.closest('a') || target.closest('form')) return;
+    toggleMobileDrawer();
+  }}
 >
   <div className="flex h-full flex-col px-2 pb-3">
     <div className="flex h-[60px] items-center">
       <button
         type="button"
-        onClick={() => setExpanded((value) => !value)}
-        className="flex h-10 w-full items-center rounded-xl px-2 text-left"
+        onClick={() => { if (typeof window !== "undefined" && window.innerWidth < 768) { toggleMobileDrawer(); return; } setExpanded((value) => !value); }}
+        className="flex h-10 w-full items-center rounded-xl px-1 text-left"
         aria-label="Sidebar ein- oder ausklappen"
       >
         <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#111216] shadow-[0_0_0_2px_rgba(11,11,12,0.95),0_0_0_4px_#D6C3A3]">
@@ -488,7 +609,7 @@ return (
         <span
           className={cn(
             "overflow-hidden transition-all duration-200",
-            expanded ? "ml-2.5 w-[112px] opacity-100" : "ml-0 w-0 opacity-0"
+            expanded ? "ml-2.5 w-[112px] opacity-80" : "ml-0 w-0 opacity-0"
           )}
         >
           <span className="flex h-10 flex-col justify-center leading-tight">
@@ -501,30 +622,24 @@ return (
 
     <div className="clientique-scrollbar flex-1 overflow-y-auto pr-1">
       <div className="space-y-1">
-        <SidebarItem icon={<HomeIcon />} label="Dashboard" href="/dashboard" active={isActive("/dashboard")} expanded={expanded} />
-        <SidebarItem icon={<UsersIcon />} label="Kunden" href="/customers" active={isActive("/customers")} expanded={expanded} />
-        <SidebarItem icon={<ServicesIcon />} label="Dienstleistungen" href="/services" active={isActive("/services")} expanded={expanded} />
-        <SidebarItem icon={<ReceiptIcon />} label="Rechnungen" href="/rechnungen" active={isActive("/rechnungen")} expanded={expanded} />
-        <SidebarItem icon={<ChatIcon />} label="Team Chat" onClick={openChat} active={pathname?.startsWith("/dashboard/chat") || searchParams?.get("openChat") === "1"} badgeCount={unreadCount} pulse={chatPulse} expanded={expanded} />
-        <SidebarItem icon={<BellIcon />} label="Reminder" onClick={openReminders} active={searchParams?.get("openReminders") === "1"} badgeCount={liveReminderCount} pulse={reminderPulse} expanded={expanded} />
-        <SidebarItem icon={<ClockIcon />} label="Warteliste" onClick={openWaitlist} active={searchParams?.get("openWaitlist") === "1"} badgeCount={liveWaitlistCount} pulse={waitlistPulse} expanded={expanded} />
+        <SidebarItem icon={<HomeIcon />} label="Dashboard" href={isMobile ? undefined : "/dashboard"} onClick={isMobile ? toggleMobileDrawer : undefined} active={isActive("/dashboard")} expanded={expanded} />
+        <SidebarItem icon={<UsersIcon />} label="Kunden" href={isMobile ? undefined : "/customers"} onClick={isMobile ? toggleMobileDrawer : undefined} active={isActive("/customers")} expanded={expanded} />
+        <SidebarItem icon={<ServicesIcon />} label="Dienstleistungen" href={isMobile ? undefined : "/services"} onClick={isMobile ? toggleMobileDrawer : undefined} active={isActive("/services")} expanded={expanded} />
+        <SidebarItem icon={<ReceiptIcon />} label="Rechnungen" href={isMobile ? undefined : "/rechnungen"} onClick={isMobile ? toggleMobileDrawer : undefined} active={isActive("/rechnungen")} expanded={expanded} />
+        <SidebarItem icon={<ChatIcon />} label="Team Chat" onClick={isMobile ? toggleMobileDrawer : openChat} active={Boolean(pathname?.startsWith("/dashboard/chat")) || chatOpen} badgeCount={unreadCount} pulse={chatPulse} expanded={expanded} />
+        <SidebarItem icon={<BellIcon />} label="Reminder" onClick={isMobile ? toggleMobileDrawer : openReminders} active={remindersOpen} badgeCount={liveReminderCount} pulse={reminderPulse} expanded={expanded} />
+        <SidebarItem icon={<ClockIcon />} label="Warteliste" onClick={isMobile ? toggleMobileDrawer : openWaitlist} active={waitlistOpen} badgeCount={liveWaitlistCount} pulse={waitlistPulse} expanded={expanded} />
       </div>
     </div>
 
     <div className="border-t border-white/8 pt-2.5">
-      <SidebarItem icon={<SettingsIcon />} label="Einstellungen" onClick={toggleSettingsMenu} active={settingsMenuOpen || googleSetupActive} badgeCount={showGoogleSetupAlert ? googleSetupAlertCount : 0} expanded={expanded} />
+      <SidebarItem icon={<SettingsIcon />} label="Einstellungen" onClick={isMobile ? toggleMobileDrawer : toggleSettingsMenu} active={settingsMenuOpen || googleSetupActive} badgeCount={showGoogleSetupAlert ? googleSetupAlertCount : 0} expanded={expanded} />
     </div>
   </div>
 </aside>
 
-    <div className="clientique-topbar fixed left-[64px] right-0 top-0 z-40 border-b border-white/10">
-      <div className="relative flex h-[60px] items-center justify-between px-2.5 sm:px-4 lg:px-6">
-        <div className="pointer-events-none absolute left-1/2 top-1/2 block -translate-x-1/2 -translate-y-1/2 md:hidden">
-          <div className="text-center text-[10px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">
-            Clientique Dashboard
-          </div>
-        </div>
-
+    <div className="clientique-topbar fixed left-[64px] right-0 top-0 z-40 border-b border-white/10 md:left-[64px]">
+      <div className="relative flex h-[60px] items-center justify-between px-1.5 pr-2 sm:px-4 lg:px-6 md:h-[60px]">
         <nav className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto md:flex">
           {nav.slice(0, 5).map((item) => {
             const isChat = item.href === "/dashboard/chat";
@@ -561,14 +676,14 @@ return (
             );
           })}
 
-          <button type="button" onClick={openReminders} className={cn("clientique-nav-pill shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium text-[var(--text-muted)] hover:border-[rgba(255,255,255,0.08)] hover:bg-white/[0.04] hover:text-[var(--text)]", searchParams?.get("openReminders") === "1" && "clientique-nav-pill-active")}>
+          <button type="button" onClick={openReminders} className={cn("clientique-nav-pill shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium text-[var(--text-muted)] hover:border-[rgba(255,255,255,0.08)] hover:bg-white/[0.04] hover:text-[var(--text)]", remindersOpen && "clientique-nav-pill-active")}>
             <span className="inline-flex items-center gap-2">
               Reminder
               {liveReminderCount > 0 ? <BrandBadge count={liveReminderCount} pulse={reminderPulse} /> : null}
             </span>
           </button>
 
-          <button type="button" onClick={openWaitlist} className={cn("clientique-nav-pill shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium text-[var(--text-muted)] hover:border-[rgba(255,255,255,0.08)] hover:bg-white/[0.04] hover:text-[var(--text)]", searchParams?.get("openWaitlist") === "1" && "clientique-nav-pill-active")}>
+          <button type="button" onClick={openWaitlist} className={cn("clientique-nav-pill shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium text-[var(--text-muted)] hover:border-[rgba(255,255,255,0.08)] hover:bg-white/[0.04] hover:text-[var(--text)]", waitlistOpen && "clientique-nav-pill-active")}>
             <span className="inline-flex items-center gap-2">
               Warteliste
               {liveWaitlistCount > 0 ? <BrandBadge count={liveWaitlistCount} pulse={waitlistPulse} /> : null}
@@ -578,14 +693,62 @@ return (
 
         <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-2">
           <div className="hidden md:block">{rightSlot}</div>
+
+          <button
+            type="button"
+            onClick={toggleMobileDrawer}
+            className={cn(
+              "relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-[rgba(10,10,11,0.86)] text-[var(--text-muted)] backdrop-blur-xl hover:bg-white/[0.06] hover:text-[var(--text)] md:hidden",
+              mobileMenuOpen && "bg-[var(--primary-soft)] text-[var(--text)]"
+            )}
+            aria-label="Navigation öffnen"
+            title="Navigation"
+          >
+            <MenuIcon />
+          </button>
+
           <button type="button" onClick={toggleSettingsMenu} className={cn("relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-[rgba(10,10,11,0.86)] text-[var(--text-muted)] backdrop-blur-xl hover:bg-white/[0.06] hover:text-[var(--text)]", (settingsMenuOpen || googleSetupActive) && "bg-[var(--primary-soft)] text-[var(--text)]")} aria-label="Einstellungen" title="Einstellungen"><SettingsIcon />{showGoogleSetupAlert ? <span style={{ position: "absolute", top: "-6px", right: "-6px" }}><BrandBadge count={googleSetupAlertCount} /></span> : null}</button>
-          <button type="button" onClick={() => { closeSettingsMenu(); closeMobileMenu(); setUserMenuOpen(true); }} className="relative inline-flex h-9 w-9 items-center justify-center rounded-full" style={{ boxShadow: `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px ${avatarTheme.color}` }} aria-label="Benutzermenü öffnen">
+
+          <button
+            type="button"
+            onClick={() => { closeSettingsMenu(); closeMobileMenu(); setUserMenuOpen(true); }}
+            className="relative hidden h-9 w-9 items-center justify-center rounded-full md:inline-flex"
+            style={{ boxShadow: `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px ${avatarTheme.color}` }}
+            aria-label="Benutzermenü öffnen"
+          >
             <span className="block h-full w-full overflow-hidden rounded-full border-2 border-[#111216]"><img src={`/users/${currentUserId}.png`} alt="Benutzerfoto" className="block h-full w-full object-cover" /></span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { closeSettingsMenu(); closeMobileMenu(); setUserMenuOpen(true); }}
+            className="relative inline-flex h-[40px] w-[40px] items-center justify-center overflow-hidden rounded-[14px] border-[3px] border-[#111216] shadow-[0_0_0_2px_rgba(11,11,12,0.9)] md:hidden"
+            style={{ borderColor: "rgba(59,130,246,0.45)", background: "rgba(59,130,246,0.16)" }}
+            aria-label="Benutzermenü öffnen"
+          >
+            <img src={`/users/${currentUserId}.png`} alt="Benutzerfoto" className="h-full w-full rounded-[11px] object-cover" />
           </button>
         </div>
       </div>
     </div>
 
+    <MobileNavDrawer
+      open={mobileMenuOpen}
+      shown={mobileMenuShown}
+      onClose={closeMobileMenu}
+      pathname={pathname}
+      remindersOpen={remindersOpen}
+      waitlistOpen={waitlistOpen}
+      openChat={openChat}
+      openReminders={openReminders}
+      openWaitlist={openWaitlist}
+      unreadCount={unreadCount}
+      liveReminderCount={liveReminderCount}
+      liveWaitlistCount={liveWaitlistCount}
+      chatPulse={chatPulse}
+      reminderPulse={reminderPulse}
+      waitlistPulse={waitlistPulse}
+    />
     <SettingsMenuPopover open={settingsMenuOpen} shown={settingsMenuShown} onClose={closeSettingsMenu} onOpenGoogleSetup={openGoogleSetup} googleSetupAlertCount={googleSetupAlertCount} />
     <UserMenuPopover open={userMenuOpen} shown={userMenuShown} onClose={closeUserMenu} userLabel={userLabel} userEmail={userEmail} currentUserId={currentUserId} />
   </>
