@@ -417,6 +417,7 @@ function InvoiceCreateCard({
   todayReceiptCount,
   openReceiptCount,
   weekRevenueCents,
+  monthRevenueCents,
   hasRecentReceipt,
   closingDateKey,
 }: {
@@ -424,6 +425,7 @@ function InvoiceCreateCard({
   todayReceiptCount: number;
   openReceiptCount: number;
   weekRevenueCents: number;
+  monthRevenueCents: number;
   hasRecentReceipt: boolean;
   closingDateKey: string;
 }) {
@@ -467,45 +469,20 @@ function InvoiceCreateCard({
             </div>
 
             <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Offen</div>
-              <div className="mt-1 text-sm font-semibold text-white">{openReceiptCount}</div>
-              <div className="mt-0.5 text-[11px] text-white/40">noch prüfen</div>
-            </div>
-
-            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Woche</div>
               <div className="mt-1 text-sm font-semibold text-white">{formatMoney(weekRevenueCents)}</div>
               <div className="mt-0.5 text-[11px] text-white/40">laufender Stand</div>
             </div>
+
+            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Monat</div>
+              <div className="mt-1 text-sm font-semibold text-white">{formatMoney(monthRevenueCents)}</div>
+              <div className="mt-0.5 text-[11px] text-white/40">aktueller Monat</div>
+            </div>
           </div>
 
           <div className="mt-auto space-y-2">
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              <Link
-                href="/dashboard?invoice=1"
-                className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] bg-[var(--primary)] px-3 text-sm font-medium text-[var(--primary-foreground)] shadow-[0_4px_20px_rgba(214,195,163,0.18)] transition hover:opacity-90"
-              >
-                + Rechnung
-              </Link>
-
-              {openReceiptCount > 0 ? (
-                <Link
-                  href="/rechnungen?filter=open"
-                  className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
-                >
-                  Offen prüfen ({openReceiptCount})
-                </Link>
-              ) : null}
-
-              <Link
-                href="/rechnungen"
-                className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-white/10 bg-transparent px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10 sm:col-span-2 xl:col-span-1"
-              >
-                {hasRecentReceipt ? "Belege öffnen" : "Belege"}
-              </Link>
-            </div>
-
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-4">
               <Link
                 href={`/rechnungen?closingDate=${encodeURIComponent(closingDateKey)}&closingPanel=day`}
                 className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
@@ -524,7 +501,22 @@ function InvoiceCreateCard({
               >
                 Jahresabschluss
               </Link>
+              <Link
+                href="/dashboard?invoice=1"
+                className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] bg-[var(--primary)] px-3 text-sm font-medium text-[var(--primary-foreground)] shadow-[0_4px_20px_rgba(214,195,163,0.18)] transition hover:opacity-90"
+              >
+                + Rechnung
+              </Link>
             </div>
+
+            {openReceiptCount > 0 ? (
+              <Link
+                href="/rechnungen?filter=open"
+                className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
+              >
+                Offen prüfen ({openReceiptCount})
+              </Link>
+            ) : null}
           </div>
         </div>
       </CardContent>
@@ -634,6 +626,9 @@ export default async function DashboardPage() {
   startOfWeek.setDate(startOfWeek.getDate() - diffToMonday);
   const endOfWeek = new Date(startOfWeek);
   endOfWeek.setDate(endOfWeek.getDate() + 7);
+
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
   const closingDateKey = now.toISOString().slice(0, 10);
 
@@ -955,6 +950,15 @@ export default async function DashboardPage() {
     return sum;
   }, 0);
 
+  const monthRevenueCents = fiscalReceipts.reduce((sum, row) => {
+    const issued = row.issued_at ?? row.created_at;
+    const date = new Date(issued);
+    if (date >= startOfMonth && date < endOfMonth) {
+      return sum + (row.turnover_value_cents ?? 0);
+    }
+    return sum;
+  }, 0);
+
   const openReceiptCount = fiscalReceipts.filter((row) => {
     const status = String(row.status ?? "").toUpperCase();
     return status === "CREATED" || status === "PENDING" || status === "DRAFT";
@@ -1045,7 +1049,7 @@ export default async function DashboardPage() {
       <section>
         <Card className="overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
           <CardContent className="p-4 sm:p-5 md:p-7 xl:p-8">
-            <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 sm:p-5 md:p-7">
+            <div className="hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 sm:p-5 md:block md:p-7">
               <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
                 <div className="flex min-w-0 items-center gap-4 sm:gap-5">
                   <div
@@ -1072,7 +1076,7 @@ export default async function DashboardPage() {
                   </div>
                 </div>
 
-                <div className="w-full rounded-[22px] border border-white/10 bg-black/20 px-5 py-4 sm:w-auto sm:min-w-[220px]">
+                <div className="hidden w-full rounded-[22px] border border-white/10 bg-black/20 px-5 py-4 xl:block xl:w-auto xl:min-w-[220px]">
                   <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Heute</div>
                   <div className="mt-2 text-base font-medium text-[var(--text)] sm:text-lg">{currentDateLabel}</div>
                   <div className="mt-1 text-sm text-[var(--primary)] sm:text-base">{currentTimeLabel} Uhr</div>
@@ -1086,6 +1090,7 @@ export default async function DashboardPage() {
                 todayReceiptCount={todayReceiptCount}
                 openReceiptCount={openReceiptCount}
                 weekRevenueCents={weekRevenueCents}
+                monthRevenueCents={monthRevenueCents}
                 hasRecentReceipt={hasRecentReceipt}
                 closingDateKey={closingDateKey}
               />

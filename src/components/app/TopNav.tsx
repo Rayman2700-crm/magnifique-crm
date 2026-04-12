@@ -352,6 +352,7 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileMenuShown, setMobileMenuShown] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const asideRef = useRef<HTMLElement | null>(null);
 
   const previousChatCount = useRef(0);
   const previousReminderCount = useRef(reminderCount);
@@ -460,6 +461,27 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
     document.title = unreadCount > 0 ? `(${unreadCount}) ${baseTitle}` : baseTitle;
   }, [unreadCount]);
 
+  useEffect(() => {
+    if (!expanded) return;
+    const handleOutsidePointer = (event: PointerEvent) => {
+      if (typeof window === "undefined" || window.innerWidth >= 768) return;
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (asideRef.current?.contains(target)) return;
+      setExpanded(false);
+    };
+
+    window.addEventListener("pointerdown", handleOutsidePointer);
+    return () => window.removeEventListener("pointerdown", handleOutsidePointer);
+  }, [expanded]);
+
+  function handleMobileSidebarInteractCapture(event: React.PointerEvent<HTMLElement>) {
+    if (typeof window === "undefined" || window.innerWidth >= 768 || expanded) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setExpanded(true);
+  }
+
   function openChat() { const params = new URLSearchParams(searchParams?.toString() ?? ""); params.set("openChat", "1"); const qs = params.toString(); router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }); }
   function openReminders() { const params = new URLSearchParams(searchParams?.toString() ?? ""); params.set("openReminders", "1"); const qs = params.toString(); router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }); }
   function openWaitlist() { const params = new URLSearchParams(searchParams?.toString() ?? ""); params.set("openWaitlist", "1"); const qs = params.toString(); router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }); }
@@ -476,44 +498,22 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
 return (
   <>
 <aside
+  ref={asideRef}
   className={cn(
     "clientique-sidebar-rail fixed inset-y-0 left-0 z-50 border-r border-white/8 bg-[rgba(10,10,11,0.86)] backdrop-blur-xl transition-[width] duration-200",
     expanded ? "w-[216px]" : "w-[68px]"
   )}
   onMouseEnter={() => setExpanded(true)}
   onMouseLeave={() => setExpanded(false)}
+  onPointerDownCapture={handleMobileSidebarInteractCapture}
 >
   <div className="flex h-full flex-col px-2 pb-3">
     
 <div className="flex h-[60px] items-center">
       <button
         type="button"
-        onClick={() => {
-          closeSettingsMenu();
-          closeMobileMenu();
-          setUserMenuOpen(true);
-        }}
-        className="flex h-10 w-full items-center justify-center rounded-xl px-2 text-left md:hidden"
-        aria-label="Benutzermenü öffnen"
-      >
-        <span
-          className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-          style={{ boxShadow: `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px ${avatarTheme.color}` }}
-        >
-          <span className="block h-full w-full overflow-hidden rounded-full border-2 border-[#111216]">
-            <img
-              src={`/users/${currentUserId}.png`}
-              alt="Benutzerfoto"
-              className="block h-full w-full object-cover"
-            />
-          </span>
-        </span>
-      </button>
-
-      <button
-        type="button"
         onClick={() => setExpanded((value) => !value)}
-        className="hidden h-10 w-full items-center rounded-xl px-2 text-left md:flex"
+        className="flex h-10 w-full items-center rounded-xl px-2 text-left"
         aria-label="Sidebar ein- oder ausklappen"
       >
         <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#111216] shadow-[0_0_0_2px_rgba(11,11,12,0.95),0_0_0_4px_#D6C3A3]">
