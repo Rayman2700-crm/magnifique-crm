@@ -235,19 +235,7 @@ function SettingsMenuPopover({ open, shown, onClose, onOpenGoogleSetup, googleSe
     <div style={{ position: "fixed", inset: 0, zIndex: 1190, isolation: "isolate" }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "transparent" }} />
       <div style={{ position: "absolute", top: 14, right: 68, width: 248, maxWidth: "calc(100vw - 24px)", borderRadius: 22, border: "1px solid rgba(255,255,255,0.10)", background: "linear-gradient(180deg, rgba(28,28,31,0.98) 0%, rgba(18,19,22,0.98) 100%)", boxShadow: "0 24px 70px rgba(0,0,0,0.44)", overflow: "hidden", transform: shown ? "translateY(0) scale(1)" : "translateY(-6px) scale(0.98)", opacity: shown ? 1 : 0, transformOrigin: "top right", transition: "transform 180ms ease, opacity 180ms ease", backdropFilter: "blur(18px)" }}>
-        <div style={{ padding: 8, display: "grid", gap: 8 }}>
-          <Link href="/einstellungen/mail" onClick={onClose} className="block w-full rounded-xl border border-white/10 bg-white/[0.04] text-left transition hover:bg-white/[0.07]">
-            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: 12 }}>
-              <div style={{ width: 26, height: 26, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.92)" }}>
-                <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.96)", lineHeight: 1.2 }}>Mail-Absender</div>
-                <div style={{ marginTop: 4, fontSize: 12, color: "rgba(247,247,245,0.58)", lineHeight: 1.2 }}>Absenderdaten pro Behandler pflegen</div>
-              </div>
-            </div>
-          </Link>
-
+        <div style={{ padding: 8 }}>
           <button type="button" onClick={onOpenGoogleSetup} className="block w-full rounded-xl border border-white/10 bg-white/[0.04] text-left transition hover:bg-white/[0.07]">
             <div style={{ display: "flex", alignItems: "center", gap: 12, padding: 8 }}>
               <GoogleCalendarMark day={day} />
@@ -352,7 +340,6 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileMenuShown, setMobileMenuShown] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const asideRef = useRef<HTMLElement | null>(null);
 
   const previousChatCount = useRef(0);
   const previousReminderCount = useRef(reminderCount);
@@ -461,27 +448,6 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
     document.title = unreadCount > 0 ? `(${unreadCount}) ${baseTitle}` : baseTitle;
   }, [unreadCount]);
 
-  useEffect(() => {
-    if (!expanded) return;
-    const handleOutsidePointer = (event: PointerEvent) => {
-      if (typeof window === "undefined" || window.innerWidth >= 768) return;
-      const target = event.target as Node | null;
-      if (!target) return;
-      if (asideRef.current?.contains(target)) return;
-      setExpanded(false);
-    };
-
-    window.addEventListener("pointerdown", handleOutsidePointer);
-    return () => window.removeEventListener("pointerdown", handleOutsidePointer);
-  }, [expanded]);
-
-  function handleMobileSidebarInteractCapture(event: React.PointerEvent<HTMLElement>) {
-    if (typeof window === "undefined" || window.innerWidth >= 768 || expanded) return;
-    event.preventDefault();
-    event.stopPropagation();
-    setExpanded(true);
-  }
-
   function openChat() { const params = new URLSearchParams(searchParams?.toString() ?? ""); params.set("openChat", "1"); const qs = params.toString(); router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }); }
   function openReminders() { const params = new URLSearchParams(searchParams?.toString() ?? ""); params.set("openReminders", "1"); const qs = params.toString(); router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }); }
   function openWaitlist() { const params = new URLSearchParams(searchParams?.toString() ?? ""); params.set("openWaitlist", "1"); const qs = params.toString(); router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }); }
@@ -498,18 +464,15 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
 return (
   <>
 <aside
-  ref={asideRef}
   className={cn(
     "clientique-sidebar-rail fixed inset-y-0 left-0 z-50 border-r border-white/8 bg-[rgba(10,10,11,0.86)] backdrop-blur-xl transition-[width] duration-200",
-    expanded ? "w-[216px]" : "w-[68px]"
+    expanded ? "w-[216px]" : "w-[72px]"
   )}
   onMouseEnter={() => setExpanded(true)}
   onMouseLeave={() => setExpanded(false)}
-  onPointerDownCapture={handleMobileSidebarInteractCapture}
 >
   <div className="flex h-full flex-col px-2 pb-3">
-    
-<div className="flex h-[60px] items-center">
+    <div className="flex h-[60px] items-center">
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
@@ -554,7 +517,7 @@ return (
   </div>
 </aside>
 
-    <div className="clientique-topbar fixed left-[64px] right-0 top-0 z-40 hidden border-b border-white/10 md:block">
+    <div className="clientique-topbar fixed left-[64px] right-0 top-0 z-40 border-b border-white/10">
       <div className="relative flex h-[60px] items-center justify-between px-2.5 sm:px-4 lg:px-6">
         <div className="pointer-events-none absolute left-1/2 top-1/2 block -translate-x-1/2 -translate-y-1/2 md:hidden">
           <div className="text-center text-[10px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">

@@ -22,12 +22,11 @@ export default async function LoginPage({
   return (
     <main className="min-h-dvh bg-gradient-to-b from-black to-[#050505] flex items-center justify-center p-6">
       <div className="w-full max-w-md">
-        {/* BIG LOGO: same width as card */}
         <div className="mb-8 flex justify-center">
           <div className="relative w-full h-[220px] sm:h-[260px]">
             <Image
-              src="/brand/logo.png"
-              alt="Magnifique CRM"
+              src="/brand/login-logo.png"
+              alt="CLIENTIQUE Digital Solutions"
               fill
               priority
               className="object-contain"
@@ -35,7 +34,6 @@ export default async function LoginPage({
           </div>
         </div>
 
-        {/* Login Card */}
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-sm">
           <div className="text-[var(--foreground)]">
             <Logo size="md" />
