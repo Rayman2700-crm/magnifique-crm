@@ -23,7 +23,7 @@ export default async function LoginPage({
     <main className="min-h-dvh bg-gradient-to-b from-black to-[#050505] flex items-center justify-center p-6">
       <div className="w-full max-w-md">
         <div className="mb-8 flex justify-center">
-          <div className="relative w-full h-[220px] sm:h-[260px]">
+          <div className="relative w-full h-[260px] sm:h-[300px]">
             <Image
               src="/brand/login-logo.png"
               alt="CLIENTIQUE Digital Solutions"

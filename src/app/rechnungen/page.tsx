@@ -1241,6 +1241,128 @@ function MobileReceiptAvatarMenu({
 
 
 
+
+
+function DesktopReceiptAvatarCompactMenu({
+  avatarOptions,
+  practitionerFilter,
+  qRaw,
+  currentFilter,
+  closingDate,
+  appointmentId,
+  salesOrderId,
+  paymentId,
+  receiptId,
+}: {
+  avatarOptions: AvatarFilterOption[];
+  practitionerFilter: string;
+  qRaw: string;
+  currentFilter: string;
+  closingDate: string;
+  appointmentId: string;
+  salesOrderId: string;
+  paymentId: string;
+  receiptId: string;
+}) {
+  const activeOption =
+    avatarOptions.find((option) => option.filterKey === practitionerFilter) ??
+    avatarOptions[0] ??
+    null;
+
+  const ringColors = ["#d6c3a3", ...avatarOptions.filter((option) => option.tenantId !== "all").map((option) => avatarRingColor(option.label))];
+  const step = 100 / Math.max(1, ringColors.length);
+  const ringBackground = `conic-gradient(${ringColors
+    .map((color, index) => `${color} ${Math.round(index * step)}% ${Math.round((index + 1) * step)}%`)
+    .join(", ")})`;
+
+  return (
+    <div id="desktop-rechnungen-avatar-compact">
+      <button
+        type="button"
+        popoverTarget="desktop-rechnungen-avatar-menu"
+        popoverTargetAction="toggle"
+        className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
+        aria-label="Behandler auswählen"
+        style={{
+          background: ringBackground,
+          boxShadow: "0 0 0 2px rgba(11,11,12,0.95), 0 10px 28px rgba(0,0,0,0.34)",
+        }}
+      >
+        <span className="flex h-[37px] w-[37px] items-center justify-center overflow-hidden rounded-full border-2 border-[#111216] bg-[#0f1013] text-[11px] font-extrabold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+          {activeOption?.tenantId === "all" ? (
+            <span className="flex h-full w-full items-center justify-center rounded-full bg-white text-black">Alle</span>
+          ) : activeOption?.imageUrl ? (
+            <img src={activeOption.imageUrl} alt={activeOption.label} className="h-full w-full object-cover" />
+          ) : (
+            activeOption?.initials ?? "BE"
+          )}
+        </span>
+        <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#2563eb] px-1 text-[10px] font-extrabold text-white shadow-[0_0_0_2px_rgba(11,11,12,0.92)]">
+          {activeOption?.tenantId === "all" ? avatarOptions.length : "1"}
+        </span>
+      </button>
+
+      <div
+        id="desktop-rechnungen-avatar-menu"
+        popover="auto"
+        className="fixed right-28 top-[230px] z-[2147483647] m-0 w-[320px] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl"
+      >
+        <div className="px-1 pb-2">
+          <div className="text-sm font-semibold text-white">Behandler wählen</div>
+          <div className="mt-0.5 text-xs text-white/45">Rechnungen filtern</div>
+        </div>
+        <div className="grid gap-2">
+          {avatarOptions.map((option) => {
+            const selected = option.filterKey === practitionerFilter;
+            const ringColor = option.tenantId === "all" ? "rgba(255,255,255,0.55)" : avatarRingColor(option.label);
+            return (
+              <Link
+                key={`desktop-avatar-${option.userId}-${option.tenantId ?? "self"}`}
+                href={buildRechnungenHref({
+                  qRaw,
+                  filter: currentFilter,
+                  practitioner: option.filterKey,
+                  closingDate,
+                  appointmentId,
+                  salesOrder: salesOrderId,
+                  payment: paymentId,
+                  receipt: receiptId,
+                })}
+                className="flex items-center justify-between rounded-2xl border px-3 py-3 text-left"
+                style={{
+                  borderColor: selected ? `${ringColor}66` : "rgba(255,255,255,0.10)",
+                  backgroundColor: selected ? `${ringColor}22` : "rgba(255,255,255,0.04)",
+                }}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <span
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 bg-[#111216] text-sm font-extrabold text-white"
+                    style={{ borderColor: option.tenantId === "all" ? "rgba(255,255,255,0.55)" : ringColor }}
+                  >
+                    {option.tenantId === "all" ? (
+                      <span className="flex h-full w-full items-center justify-center rounded-full bg-white text-black">Alle</span>
+                    ) : option.imageUrl ? (
+                      <img src={option.imageUrl} alt={option.label} className="h-full w-full object-cover" />
+                    ) : (
+                      option.initials
+                    )}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-white">{option.tenantId === "all" ? "Alle" : firstNameLabel(option.label, "Behandler")}</div>
+                    <div className="truncate text-xs text-white/50">{option.tenantId === "all" ? "Alle Behandler" : option.label}</div>
+                  </div>
+                </div>
+                {selected ? <span className="pl-3 text-xs font-semibold text-[var(--primary)]">Aktiv</span> : null}
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function CompactClosingCard({
   eyebrow,
   title,
@@ -1284,19 +1406,19 @@ function CompactClosingCard({
           )}
 
           <div className="grid grid-cols-3 gap-2 sm:gap-3">
-            <div className="rounded-[18px] border border-white/10 bg-black/20 px-2.5 py-3 sm:px-3">
+            <div className="rounded-[18px] border border-white/10 bg-black/20 px-2.5 py-2 sm:px-2">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Gesamt</div>
-              <div className="mt-1 text-[11px] font-semibold leading-tight text-white sm:text-[12px]">{totalLabel}</div>
+              <div className="mt-1 text-[10px] font-semibold leading-tight text-white sm:text-[10px]">{totalLabel}</div>
             </div>
 
-            <div className="rounded-[18px] border border-white/10 bg-black/20 px-2.5 py-3 sm:px-3">
+            <div className="rounded-[18px] border border-white/10 bg-black/20 px-2.5 py-2 sm:px-2">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Belege</div>
-              <div className="mt-1 text-[11px] font-semibold leading-tight text-white sm:text-[12px]">{receiptCount}</div>
+              <div className="mt-1 text-[10px] font-semibold leading-tight text-white sm:text-[10px]">{receiptCount}</div>
             </div>
 
-            <div className="rounded-[18px] border border-white/10 bg-black/20 px-2.5 py-3 sm:px-3">
+            <div className="rounded-[18px] border border-white/10 bg-black/20 px-2.5 py-2 sm:px-2">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Stornos</div>
-              <div className="mt-1 text-[11px] font-semibold leading-tight text-white sm:text-[12px]">{stornoCount}</div>
+              <div className="mt-1 text-[10px] font-semibold leading-tight text-white sm:text-[10px]">{stornoCount}</div>
             </div>
           </div>
         </div>
@@ -2297,7 +2419,7 @@ export default async function RechnungenPage({
                 <div className="flex flex-col gap-6">
                   <div className="min-w-0">
                     <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)] whitespace-nowrap">
-                      Clientique Backoffice
+                      Magnifique Beauty Institut Backoffice
                     </div>
                     <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">
                       Rechnungen
@@ -2412,8 +2534,98 @@ export default async function RechnungenPage({
             </div>
 
             <div className="hidden md:block">
-              <div id="desktop-rechnungen-header" className="relative pr-[160px]">
+              <div id="desktop-rechnungen-header" className="relative pr-[360px] xl:pr-[640px]">
                 <div className="absolute right-0 top-0 z-30 flex items-start justify-end gap-3">
+                  <div id="desktop-rechnungen-avatar-strip" className="max-w-[640px] overflow-hidden">
+                    <div className="max-w-full overflow-x-auto">
+                      <div className="min-w-max">
+                        <div className="flex items-start gap-3">
+                          {avatarOptions.map((option) => {
+                            const active = option.filterKey === practitionerFilter;
+                            const ringColor = option.tenantId === "all" ? "rgba(255,255,255,0.55)" : avatarRingColor(option.label);
+                            const chipLabel = option.tenantId === "all" ? "Alle" : firstNameLabel(option.label, "Behandler");
+                            return (
+                              <Link
+                                key={`${option.userId}-${option.tenantId ?? "self"}`}
+                                href={buildRechnungenHref({
+                                  qRaw,
+                                  filter: currentFilter,
+                                  practitioner: option.filterKey,
+                                  closingDate,
+                                  appointmentId,
+                                  salesOrder: salesOrderId,
+                                  payment: paymentId,
+                                  receipt: receiptId,
+                                })}
+                                className="flex shrink-0 flex-col items-center gap-1.5"
+                                title={option.label}
+                              >
+                                <div
+                                  className="relative overflow-hidden rounded-full"
+                                  style={{
+                                    width: 44,
+                                    height: 44,
+                                    border: option.tenantId === "all" ? "3px solid rgba(255,255,255,0.55)" : `3px solid ${ringColor}`,
+                                    boxShadow: "0 10px 22px rgba(0,0,0,0.28)",
+                                    background: option.tenantId === "all" ? "rgba(255,255,255,0.96)" : "rgba(255,255,255,0.04)",
+                                  }}
+                                >
+                                  {option.tenantId === "all" ? (
+                                    <span className="flex h-full w-full items-center justify-center text-[11px] font-extrabold text-black">Alle</span>
+                                  ) : option.imageUrl ? (
+                                    <img src={option.imageUrl} alt={option.label} className="h-full w-full object-cover" />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-[11px] font-extrabold text-white/90">
+                                      {option.initials}
+                                    </div>
+                                  )}
+
+                                  {option.tenantId !== "all" ? (
+                                    <div
+                                      style={{
+                                        position: "absolute",
+                                        right: 2,
+                                        bottom: 2,
+                                        width: 8,
+                                        height: 8,
+                                        borderRadius: 999,
+                                        backgroundColor: ringColor,
+                                        boxShadow: "0 0 0 2px rgba(0,0,0,0.65)",
+                                      }}
+                                    />
+                                  ) : null}
+                                </div>
+
+                                <div
+                                  className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                    active
+                                      ? "border border-white bg-white text-black"
+                                      : "border border-white/10 bg-black/25 text-white/90"
+                                  }`}
+                                  style={{ backdropFilter: "blur(8px)", lineHeight: 1 }}
+                                >
+                                  {chipLabel}
+                                </div>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <DesktopReceiptAvatarCompactMenu
+                    avatarOptions={avatarOptions}
+                    practitionerFilter={practitionerFilter}
+                    qRaw={qRaw}
+                    currentFilter={currentFilter}
+                    closingDate={closingDate}
+                    appointmentId={appointmentId}
+                    salesOrderId={salesOrderId}
+                    paymentId={paymentId}
+                    receiptId={receiptId}
+                  />
+
                   <div id="desktop-rechnungen-search-wrap" className="relative">
                     <button
                       id="desktop-rechnungen-search-toggle"
@@ -2577,85 +2789,12 @@ export default async function RechnungenPage({
 
                 <div className="min-w-0">
                   <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">
-                    Clientique Backoffice
+                    Magnifique Beauty Institut Backoffice
                   </div>
                   <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">
                     Rechnungen
                   </h1>
 
-                  <div className="mt-5 pb-1">
-                    <div className="flex items-start gap-3">
-                      {avatarOptions.map((option) => {
-                        const active = option.filterKey === practitionerFilter;
-                        const ringColor = option.tenantId === "all" ? "rgba(255,255,255,0.55)" : avatarRingColor(option.label);
-                        const chipLabel = option.tenantId === "all" ? "Alle" : firstNameLabel(option.label, "Behandler");
-                        return (
-                          <Link
-                            key={`${option.userId}-${option.tenantId ?? "self"}`}
-                            href={buildRechnungenHref({
-                              qRaw,
-                              filter: currentFilter,
-                              practitioner: option.filterKey,
-                              closingDate,
-                              appointmentId,
-                              salesOrder: salesOrderId,
-                              payment: paymentId,
-                              receipt: receiptId,
-                            })}
-                            className="flex shrink-0 flex-col items-center gap-2"
-                            title={option.label}
-                          >
-                            <div
-                              className="relative overflow-hidden rounded-full"
-                              style={{
-                                width: 56,
-                                height: 56,
-                                border: option.tenantId === "all" ? "4px solid rgba(255,255,255,0.55)" : `4px solid ${ringColor}`,
-                                boxShadow: "0 12px 26px rgba(0,0,0,0.32)",
-                                background: option.tenantId === "all" ? "rgba(255,255,255,0.96)" : "rgba(255,255,255,0.04)",
-                              }}
-                            >
-                              {option.tenantId === "all" ? (
-                                <span className="flex h-full w-full items-center justify-center text-sm font-extrabold text-black">Alle</span>
-                              ) : option.imageUrl ? (
-                                <img src={option.imageUrl} alt={option.label} className="h-full w-full object-cover" />
-                              ) : (
-                                <div className="flex h-full w-full items-center justify-center text-[13px] font-extrabold text-white/90">
-                                  {option.initials}
-                                </div>
-                              )}
-
-                              {option.tenantId !== "all" ? (
-                                <div
-                                  style={{
-                                    position: "absolute",
-                                    right: 3,
-                                    bottom: 3,
-                                    width: 10,
-                                    height: 10,
-                                    borderRadius: 999,
-                                    backgroundColor: ringColor,
-                                    boxShadow: "0 0 0 2px rgba(0,0,0,0.65)",
-                                  }}
-                                />
-                              ) : null}
-                            </div>
-
-                            <div
-                              className={`px-3 py-1.5 rounded-full text-sm font-semibold ${
-                                active
-                                  ? "border border-white bg-white text-black"
-                                  : "border border-white/10 bg-black/25 text-white/90"
-                              }`}
-                              style={{ backdropFilter: "blur(8px)", lineHeight: 1 }}
-                            >
-                              {chipLabel}
-                            </div>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  </div>
                 </div>
               </div>
               <div className="mt-6 flex items-center gap-2 md:flex-wrap">
@@ -3501,6 +3640,22 @@ export default async function RechnungenPage({
       />
 
       <FiscalReceiptSlideover items={items} />
+
+
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            @media (min-width: 768px) {
+              #desktop-rechnungen-avatar-strip { display: block; }
+              #desktop-rechnungen-avatar-compact { display: none; }
+            }
+            @media (min-width: 768px) and (max-width: 1020px) {
+              #desktop-rechnungen-avatar-strip { display: none; }
+              #desktop-rechnungen-avatar-compact { display: block; }
+            }
+          `,
+        }}
+      />
 
       <script
         dangerouslySetInnerHTML={{
