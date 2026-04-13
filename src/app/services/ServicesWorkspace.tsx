@@ -2,6 +2,7 @@
 
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   createService,
@@ -30,12 +31,24 @@ type ServiceRow = {
     | null;
 };
 
+type TenantOption = {
+  id: string;
+  display_name: string | null;
+};
+
 type Props = {
   selectedTenantId: string;
   tenantName: string | null;
   services: ServiceRow[];
   initialCreateOpen?: boolean;
+  tenantOptions?: TenantOption[];
+  isAdmin?: boolean;
 };
+
+function getTenantDisplayLabel(name: string | null | undefined, fallback: string) {
+  const source = String(name ?? "").trim() || fallback;
+  return source.split(/\s+/)[0] || fallback;
+}
 
 function euroFromCents(value: number | null | undefined) {
   const cents = Number(value ?? 0);
@@ -151,7 +164,7 @@ function ServiceSheet({
   if (!mounted || !open || typeof document === "undefined") return null;
 
   const content = (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1200, isolation: "isolate" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 1200, isolation: "isolate", pointerEvents: shown ? "auto" : "none" }}>
       <div
         onClick={onClose}
         style={{
@@ -180,6 +193,7 @@ function ServiceSheet({
           transform: shown ? "translateX(0)" : "translateX(18px)",
           opacity: shown ? 1 : 0,
           transition: "all 220ms ease",
+          pointerEvents: shown ? "auto" : "none",
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
@@ -216,13 +230,23 @@ function ServiceSheet({
   return createPortal(content, document.body);
 }
 
-export default function ServicesWorkspace({ selectedTenantId, tenantName, services, initialCreateOpen = false }: Props) {
+export default function ServicesWorkspace({
+  selectedTenantId,
+  tenantName,
+  services,
+  initialCreateOpen = false,
+  tenantOptions = [],
+  isAdmin = false,
+}: Props) {
   const missingCreateTenant = selectedTenantId === "all";
   const [mounted, setMounted] = useState(false);
   const [createOpen, setCreateOpen] = useState(initialCreateOpen);
   const [createShown, setCreateShown] = useState(false);
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
   const [editShown, setEditShown] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     setMounted(true);
@@ -252,21 +276,20 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
 
   const closeCreate = () => {
     setCreateShown(false);
-    window.setTimeout(() => setCreateOpen(false), 180);
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("create");
-      window.history.replaceState({}, "", url.pathname + (url.search ? `?${url.searchParams.toString()}` : ""));
-    }
+    window.setTimeout(() => {
+      setCreateOpen(false);
+      const params = new URLSearchParams(searchParams?.toString() ?? "");
+      params.delete("create");
+      const next = params.toString();
+      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+    }, 180);
   };
 
   const openCreate = () => {
     setCreateOpen(true);
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-      url.searchParams.set("create", "1");
-      window.history.replaceState({}, "", url.pathname + (url.search ? `?${url.searchParams.toString()}` : ""));
-    }
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
+    params.set("create", "1");
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
   const closeEdit = () => {
@@ -279,6 +302,43 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
     [editingServiceId, services]
   );
 
+  const availableTenantOptions = useMemo(() => {
+    if (tenantOptions.length > 0) {
+      return tenantOptions;
+    }
+
+    const seen = new Set<string>();
+    const derived = services.reduce<TenantOption[]>((acc, service) => {
+      const tenantId = String(service.tenant_id ?? "").trim();
+      if (!tenantId || seen.has(tenantId)) return acc;
+      seen.add(tenantId);
+
+      const tenant = firstJoin(service.tenant);
+      acc.push({
+        id: tenantId,
+        display_name: tenant?.display_name ?? tenantId,
+      });
+      return acc;
+    }, []);
+
+    if (derived.length > 0) {
+      return derived.sort((a, b) =>
+        getTenantDisplayLabel(a.display_name, a.id).localeCompare(
+          getTenantDisplayLabel(b.display_name, b.id)
+        )
+      );
+    }
+
+    if (selectedTenantId && selectedTenantId !== "all") {
+      return [{ id: selectedTenantId, display_name: tenantName ?? selectedTenantId }];
+    }
+
+    return [];
+  }, [tenantOptions, services, selectedTenantId, tenantName]);
+
+  const shouldShowTenantSelect = availableTenantOptions.length > 0;
+  const selectedCreateTenantId = selectedTenantId !== "all" ? selectedTenantId : "";
+
   return (
     <>
       <section className="mt-6 rounded-[28px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] md:p-5">
@@ -290,31 +350,6 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={openCreate}
-            aria-label="Dienstleistung hinzufügen"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border font-semibold transition hover:-translate-y-0.5 md:inline-flex"
-            style={{
-              color: "#60a5fa",
-              backgroundColor: "rgba(96,165,250,0.14)",
-              borderColor: "rgba(96,165,250,0.30)",
-            }}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-[18px] w-[18px]"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M12 5v14" />
-              <path d="M5 12h14" />
-            </svg>
-          </button>
         </div>
 
         {services.length === 0 ? (
@@ -405,16 +440,36 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
         onClose={closeCreate}
       >
         <form action={createService} className="space-y-4">
-          <input type="hidden" name="tenant_id" value={selectedTenantId} />
-
-          <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-sm text-white/80">
-            <div className="text-xs text-white/55">Behandler</div>
-            <div className="mt-1 font-medium text-white">{tenantName ?? "Aktueller Behandler"}</div>
-          </div>
+          {shouldShowTenantSelect ? (
+            <div>
+              <label className="text-white text-sm">Behandler *</label>
+              <select
+                name="tenant_id"
+                defaultValue={selectedCreateTenantId}
+                required
+                className={fieldClassName()}
+              >
+                <option value="">Behandler auswählen</option>
+                {availableTenantOptions.map((tenant) => (
+                  <option key={tenant.id} value={tenant.id}>
+                    {getTenantDisplayLabel(tenant.display_name, tenant.id)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <>
+              <input type="hidden" name="tenant_id" value={selectedTenantId} />
+              <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-sm text-white/80">
+                <div className="text-xs text-white/55">Behandler</div>
+                <div className="mt-1 font-medium text-white">{tenantName ?? "Aktueller Behandler"}</div>
+              </div>
+            </>
+          )}
 
           {missingCreateTenant ? (
             <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-              Wähle zuerst einen Behandler aus, bevor du eine neue Dienstleistung speicherst.
+              Wähle hier im Slideover einen Behandler aus, bevor du die neue Dienstleistung speicherst.
             </div>
           ) : null}
 
@@ -457,7 +512,7 @@ export default function ServicesWorkspace({ selectedTenantId, tenantName, servic
             </label>
           </div>
 
-          <Button type="submit" className="w-full" disabled={missingCreateTenant}>
+          <Button type="submit" className="w-full" disabled={!shouldShowTenantSelect && missingCreateTenant}>
             Dienstleistung speichern
           </Button>
 

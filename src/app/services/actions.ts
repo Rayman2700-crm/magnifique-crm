@@ -140,10 +140,25 @@ export async function setActiveServiceTenant(formData: FormData) {
 
 export async function createService(formData: FormData) {
   const { admin, profile } = await requireUserProfile();
-  const selectedTenantId = await getSelectedTenantId(profile);
+  const role = normalizedRole(profile);
+  const requestedTenantId = String(formData.get("tenant_id") ?? "").trim();
+  const fallbackTenantId = await getSelectedTenantId(profile);
+  const selectedTenantId = role === "ADMIN" ? (requestedTenantId || fallbackTenantId) : fallbackTenantId;
 
-  if (!selectedTenantId) {
+  if (!selectedTenantId || selectedTenantId === "all") {
     redirect(buildServicesUrl("error", "Bitte zuerst einen Behandler/Tenant auswählen."));
+  }
+
+  if (role === "ADMIN") {
+    const { data: tenant, error: tenantError } = await admin
+      .from("tenants")
+      .select("id")
+      .eq("id", selectedTenantId)
+      .single();
+
+    if (tenantError || !tenant) {
+      redirect(buildServicesUrl("error", "Behandler/Tenant nicht gefunden."));
+    }
   }
 
   assertTenantAccess(profile, selectedTenantId);

@@ -137,11 +137,11 @@ function AdminTenantAvatarPicker({
 
   return (
     <div className="pb-1">
-      <div className="flex items-start gap-4 flex-nowrap">
+      <div className="flex items-start gap-3 overflow-x-auto md:flex-wrap md:overflow-visible">
         <form action={action} className="shrink-0">
           <input type="hidden" name="tenant" value="all" />
           <button type="submit" className="flex flex-col items-center gap-2" title="Alle Kunden anzeigen">
-            <div className="relative overflow-hidden rounded-full flex items-center justify-center text-sm font-extrabold" style={{ width: 56, height: 56, border: "4px solid rgba(255,255,255,0.55)", boxShadow: "0 12px 26px rgba(0,0,0,0.32)", background: "rgba(255,255,255,0.96)", color: "#000" }}>Alle</div>
+            <div className="relative overflow-hidden rounded-full flex items-center justify-center text-sm font-extrabold" style={{ width: 44, height: 44, border: "3px solid rgba(255,255,255,0.55)", boxShadow: "0 10px 22px rgba(0,0,0,0.28)", background: "rgba(255,255,255,0.96)", color: "#000" }}>Alle</div>
             <div className={`px-3 py-1.5 rounded-full text-sm font-semibold ${current === "all" ? "border border-white bg-white text-black" : "border border-white/10 bg-black/25 text-white/90"}`}>Alle</div>
           </button>
         </form>
@@ -152,13 +152,13 @@ function AdminTenantAvatarPicker({
             <form key={entry.tenant_id} action={action} className="shrink-0">
               <input type="hidden" name="tenant" value={entry.tenant_id} />
               <button type="submit" className="flex flex-col items-center gap-2" title={`${entry.displayLabel} anzeigen`}>
-                <div className="relative overflow-hidden rounded-full" style={{ width: 56, height: 56, border: `4px solid ${entry.ringColor}`, boxShadow: "0 12px 26px rgba(0,0,0,0.32)", background: "rgba(255,255,255,0.04)" }}>
+                <div className="relative overflow-hidden rounded-full" style={{ width: 44, height: 44, border: `3px solid ${entry.ringColor}`, boxShadow: "0 10px 22px rgba(0,0,0,0.28)", background: "rgba(255,255,255,0.04)" }}>
                   {entry.user_id ? (
                     <img src={`/users/${entry.user_id}.png`} alt={entry.displayLabel} className="h-full w-full object-cover" />
                   ) : (
-                    <div className="h-full w-full flex items-center justify-center text-[13px] font-extrabold text-white/90">{entry.shortCode}</div>
+                    <div className="h-full w-full flex items-center justify-center text-[11px] font-extrabold text-white/90">{entry.shortCode}</div>
                   )}
-                  <div style={{ position: "absolute", right: 3, bottom: 3, width: 10, height: 10, borderRadius: 999, backgroundColor: entry.ringColor, boxShadow: "0 0 0 2px rgba(0,0,0,0.65)" }} />
+                  <div style={{ position: "absolute", right: 2, bottom: 2, width: 8, height: 8, borderRadius: 999, backgroundColor: entry.ringColor, boxShadow: "0 0 0 2px rgba(0,0,0,0.65)" }} />
                 </div>
                 <div className={`px-3 py-1.5 rounded-full text-sm font-semibold ${active ? "border border-white bg-white text-black" : "border border-white/10 bg-black/25 text-white/90"}`}>{entry.displayLabel}</div>
               </button>
@@ -168,17 +168,120 @@ function AdminTenantAvatarPicker({
       </div>
     </div>
   );
+
+}
+
+function DesktopCustomersAvatarCompactMenu({
+  current,
+  options,
+  action,
+}: {
+  current: string;
+  options: { tenant_id: string; label: string; user_id: string | null }[];
+  action: (formData: FormData) => Promise<void>;
+}) {
+  const orderedOptions = [...options]
+    .map((option) => ({
+      ...option,
+      displayLabel: getTenantDisplayLabel(option.label),
+      shortCode: getUserShortCode(option.label),
+      ringColor: getTenantAvatarRing(option.label),
+      sortKey: normalizeTenantSortKey(option.label),
+    }))
+    .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+
+  const items = [
+    { tenant_id: "all", label: "Alle", displayLabel: "Alle", shortCode: "AL", ringColor: "rgba(255,255,255,0.55)", user_id: null as string | null },
+    ...orderedOptions,
+  ];
+  const active = items.find((item) => item.tenant_id === current) ?? items[0];
+  const ringColors = ["#d6c3a3", ...orderedOptions.map((item) => item.ringColor)];
+  const step = 100 / Math.max(1, ringColors.length);
+  const ringBackground = `conic-gradient(${ringColors.map((color, index) => `${color} ${Math.round(index * step)}% ${Math.round((index + 1) * step)}%`).join(", ")})`;
+
+  return (
+    <div id="desktop-customers-avatar-compact">
+      <button
+        type="button"
+        popoverTarget="customers-desktop-avatar-menu"
+        popoverTargetAction="toggle"
+        className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
+        aria-label="Behandler auswählen"
+        style={{
+          background: ringBackground,
+          boxShadow: "0 0 0 2px rgba(11,11,12,0.95), 0 10px 28px rgba(0,0,0,0.34)",
+        }}
+      >
+        <span className="flex h-[37px] w-[37px] items-center justify-center overflow-hidden rounded-full border-2 border-[#111216] bg-[#0f1013] text-[11px] font-extrabold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+          {active.tenant_id === "all" ? (
+            <span className="flex h-full w-full items-center justify-center rounded-full bg-white text-black">Alle</span>
+          ) : active.user_id ? (
+            <img src={`/users/${active.user_id}.png`} alt={active.displayLabel} className="h-full w-full object-cover" />
+          ) : (
+            active.shortCode
+          )}
+        </span>
+        <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#2563eb] px-1 text-[10px] font-extrabold text-white shadow-[0_0_0_2px_rgba(11,11,12,0.92)]">
+          {active.tenant_id === "all" ? items.length : "1"}
+        </span>
+      </button>
+
+      <div
+        id="customers-desktop-avatar-menu"
+        popover="auto"
+        className="fixed right-28 top-[230px] z-[2147483647] m-0 w-[320px] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl"
+      >
+        <div className="px-1 pb-2">
+          <div className="text-sm font-semibold text-white">Behandler wählen</div>
+          <div className="mt-0.5 text-xs text-white/45">Kunden filtern</div>
+        </div>
+        <div className="grid gap-2">
+          {items.map((item) => {
+            const selected = item.tenant_id === current;
+            return (
+              <form key={`desktop-customer-avatar-${item.tenant_id}`} action={action}>
+                <input type="hidden" name="tenant" value={item.tenant_id} />
+                <button
+                  type="submit"
+                  className="flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left"
+                  style={{
+                    borderColor: selected ? `${item.ringColor}66` : "rgba(255,255,255,0.10)",
+                    backgroundColor: selected ? `${item.ringColor}22` : "rgba(255,255,255,0.04)",
+                  }}
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 bg-[#111216] text-sm font-extrabold text-white" style={{ borderColor: item.tenant_id === "all" ? "rgba(255,255,255,0.55)" : item.ringColor }}>
+                      {item.tenant_id === "all" ? (
+                        <span className="flex h-full w-full items-center justify-center rounded-full bg-white text-black">Alle</span>
+                      ) : item.user_id ? (
+                        <img src={`/users/${item.user_id}.png`} alt={item.displayLabel} className="h-full w-full object-cover" />
+                      ) : (
+                        item.shortCode
+                      )}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-white">{item.displayLabel}</div>
+                      <div className="truncate text-xs text-white/50">{item.tenant_id === "all" ? "Alle Behandler" : item.label}</div>
+                    </div>
+                  </div>
+                  {selected ? <span className="pl-3 text-xs font-semibold text-[var(--primary)]">Aktiv</span> : null}
+                </button>
+              </form>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function SummaryCard({ label, value, subtext }: { label: string; value: number; subtext: string }) {
   return (
-    <Card className="border-[var(--border)] bg-[var(--surface)] transition hover:border-white/15 hover:bg-white/[0.035]">
-      <CardContent className="min-h-[132px] p-5">
-        <div className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">{label}</div>
-        <div className="mt-4 text-[32px] font-semibold leading-none tracking-tight text-[var(--text)]">{value}</div>
-        <div className="mt-3 text-sm text-white/50">{subtext}</div>
-      </CardContent>
-    </Card>
+    <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3">
+      <div className="text-xs uppercase tracking-wide text-white/45">{label}</div>
+      <div className="mt-2 text-2xl font-bold text-white">{value}</div>
+      <div className="mt-1 text-xs text-white/55">{subtext}</div>
+    </div>
   );
 }
 
@@ -196,6 +299,201 @@ function parseStatus(notesInternal: string | null): AppointmentStatus | null {
   if (raw === "cancelled") return "cancelled";
   if (raw === "no_show") return "no_show";
   return "scheduled";
+}
+
+function statusLinkClass(isActive: boolean) {
+  return [
+    "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition whitespace-nowrap",
+    isActive
+      ? "border-white bg-white text-black shadow-[0_10px_24px_rgba(255,255,255,0.10)]"
+      : "border-white/10 bg-black/20 text-white hover:bg-white/10",
+  ].join(" ");
+}
+
+function statusCountClass(isActive: boolean) {
+  return [
+    "inline-flex min-w-[28px] items-center justify-center rounded-full px-2 py-0.5 text-xs font-bold",
+    isActive ? "bg-black/10 text-black" : "bg-white/10 text-white/90",
+  ].join(" ");
+}
+
+
+function buildCustomersHref({ qRaw, only }: { qRaw?: string; only?: string }) {
+  const params = new URLSearchParams();
+  if (qRaw?.trim()) params.set('q', qRaw.trim());
+  if (only && only !== 'all') params.set('only', only);
+  const query = params.toString();
+  return query ? `/customers?${query}` : '/customers';
+}
+
+function MobileCustomersFilterMenu({
+  qRaw,
+  only,
+  counts,
+}: {
+  qRaw: string;
+  only: string;
+  counts: { all: number; noFollowUp: number };
+}) {
+  const items = [
+    { key: 'all', label: 'Alle', count: counts.all },
+    { key: 'no-followup', label: 'Ohne Folgetermin', count: counts.noFollowUp },
+  ];
+  const activeCount = items.find((item) => item.key === only)?.count ?? counts.all;
+
+  return (
+    <>
+      <button
+        type="button"
+        popoverTarget="customers-filter-menu"
+        popoverTargetAction="toggle"
+        className="relative flex h-12 w-12 cursor-pointer list-none items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/85 shadow-[0_0_0_2px_rgba(11,11,12,0.95),0_10px_28px_rgba(0,0,0,0.30)] md:hidden"
+        aria-label="Kundenfilter öffnen"
+      >
+        <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <path d="M4 7h16" />
+          <path d="M4 12h16" />
+          <path d="M4 17h16" />
+        </svg>
+        <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#2563eb] px-1 text-[10px] font-extrabold text-white shadow-[0_0_0_2px_rgba(11,11,12,0.92)]">
+          {activeCount}
+        </span>
+      </button>
+
+      <div
+        id="customers-filter-menu"
+        popover="auto"
+        className="md:hidden fixed left-[116px] top-[332px] z-[2147483647] m-0 w-[224px] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.995)_0%,rgba(12,13,16,0.995)_100%)] p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.62)] backdrop-blur-xl"
+      >
+        <div className="px-1 pb-2">
+          <div className="text-sm font-semibold text-white">Filter wählen</div>
+          <div className="mt-0.5 text-xs text-white/45">Kunden filtern</div>
+        </div>
+        <div className="grid gap-2">
+          {items.map((item) => {
+            const selected = only === item.key;
+            return (
+              <Link
+                key={item.key}
+                href={buildCustomersHref({ qRaw, only: item.key })}
+                className="flex items-center justify-between rounded-2xl border px-3 py-3 text-left"
+                style={{
+                  borderColor: selected ? 'rgba(214,195,163,0.28)' : 'rgba(255,255,255,0.10)',
+                  backgroundColor: selected ? 'rgba(214,195,163,0.14)' : 'rgba(255,255,255,0.04)',
+                }}
+              >
+                <span className="text-sm font-semibold text-white">{item.label}</span>
+                <span className="inline-flex min-w-[28px] items-center justify-center rounded-full bg-white/10 px-2 py-0.5 text-xs font-bold text-white/90">
+                  {item.count}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function MobileCustomersAvatarMenu({
+  current,
+  options,
+}: {
+  current: string;
+  options: { tenant_id: string; label: string; user_id: string | null }[];
+}) {
+  const orderedOptions = [...options]
+    .map((option) => ({
+      ...option,
+      displayLabel: getTenantDisplayLabel(option.label),
+      shortCode: getUserShortCode(option.label),
+      ringColor: getTenantAvatarRing(option.label),
+      sortKey: normalizeTenantSortKey(option.label),
+    }))
+    .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+
+  const items = [
+    { tenant_id: 'all', label: 'Alle', displayLabel: 'Alle', shortCode: 'AL', ringColor: 'rgba(255,255,255,0.55)', user_id: null },
+    ...orderedOptions,
+  ];
+  const active = items.find((item) => item.tenant_id === current) ?? items[0];
+  const ringColors = ['#d6c3a3', ...orderedOptions.map((item) => item.ringColor)];
+  const step = 100 / Math.max(1, ringColors.length);
+  const ringBackground = `conic-gradient(${ringColors.map((color, index) => `${color} ${Math.round(index * step)}% ${Math.round((index + 1) * step)}%`).join(', ')})`;
+
+  return (
+    <>
+      <button
+        type="button"
+        popoverTarget="customers-avatar-menu"
+        popoverTargetAction="toggle"
+        className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full md:hidden"
+        aria-label="Behandler auswählen"
+        style={{
+          background: ringBackground,
+          boxShadow: '0 0 0 2px rgba(11,11,12,0.95), 0 10px 28px rgba(0,0,0,0.34)',
+        }}
+      >
+        <span className="flex h-[42px] w-[42px] items-center justify-center overflow-hidden rounded-full border-2 border-[#111216] bg-[#0f1013] text-[12px] font-extrabold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+          {active?.tenant_id === 'all' ? (
+            <span className="flex h-full w-full items-center justify-center rounded-full bg-white text-black">Alle</span>
+          ) : active?.user_id ? (
+            <img src={`/users/${active.user_id}.png`} alt={active.displayLabel} className="h-full w-full object-cover" />
+          ) : (
+            active?.shortCode ?? 'AL'
+          )}
+        </span>
+        <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#2563eb] px-1 text-[10px] font-extrabold text-white shadow-[0_0_0_2px_rgba(11,11,12,0.92)]">
+          {active?.tenant_id === 'all' ? items.length : '1'}
+        </span>
+      </button>
+
+      <div
+        id="customers-avatar-menu"
+        popover="auto"
+        className="md:hidden fixed right-4 top-[332px] z-[2147483647] m-0 w-[min(640px,calc(100vw-24px))] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl"
+      >
+        <div className="px-1 pb-2">
+          <div className="text-sm font-semibold text-white">Behandler wählen</div>
+          <div className="mt-0.5 text-xs text-white/45">Kunden filtern</div>
+        </div>
+        <div className="grid gap-2">
+          {items.map((item) => {
+            const selected = item.tenant_id === current;
+            const href = item.tenant_id === 'all' ? '/admin?tenant=all' : `/admin?tenant=${encodeURIComponent(item.tenant_id)}`;
+            return (
+              <Link
+                key={`mobile-customer-avatar-${item.tenant_id}`}
+                href={href}
+                className="flex items-center justify-between rounded-2xl border px-3 py-3 text-left"
+                style={{
+                  borderColor: selected ? `${item.ringColor}66` : 'rgba(255,255,255,0.10)',
+                  backgroundColor: selected ? `${item.ringColor}22` : 'rgba(255,255,255,0.04)',
+                }}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 bg-[#111216] text-sm font-extrabold text-white" style={{ borderColor: item.tenant_id === 'all' ? 'rgba(255,255,255,0.55)' : item.ringColor }}>
+                    {item.tenant_id === 'all' ? (
+                      <span className="flex h-full w-full items-center justify-center rounded-full bg-white text-black">Alle</span>
+                    ) : item.user_id ? (
+                      <img src={`/users/${item.user_id}.png`} alt={item.displayLabel} className="h-full w-full object-cover" />
+                    ) : (
+                      item.shortCode
+                    )}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-white">{item.displayLabel}</div>
+                    <div className="truncate text-xs text-white/50">{item.tenant_id === 'all' ? 'Alle Behandler' : item.label}</div>
+                  </div>
+                </div>
+                {selected ? <span className="pl-3 text-xs font-semibold text-[var(--primary)]">Aktiv</span> : null}
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
 }
 
 export default async function CustomersPage({
@@ -352,9 +650,7 @@ export default async function CustomersPage({
     analyticsByCustomerId.set(row.id, { visitCount, lastVisitAt, nextAppointmentAt, noShowCount, isWithoutFollowUp });
   }
 
-  const filteredRows = rows.filter((row) => {
-    const analytics = analyticsByCustomerId.get(row.id);
-    if (onlyNoFollowUp && !analytics?.isWithoutFollowUp) return false;
+  const searchScopedRows = rows.filter((row) => {
     if (!q) return true;
     const person = firstJoin(row.person);
     const tenant = firstJoin(row.tenant);
@@ -365,46 +661,249 @@ export default async function CustomersPage({
     return name.includes(q) || phone.includes(q) || email.includes(q) || tenantLabel.includes(q);
   });
 
+  const filteredRows = searchScopedRows.filter((row) => {
+    const analytics = analyticsByCustomerId.get(row.id);
+    if (onlyNoFollowUp && !analytics?.isWithoutFollowUp) return false;
+    return true;
+  });
+
   const adminMissingOwnTenant = role === "ADMIN" && currentAdminTenant === "all" && !profile?.tenant_id;
   const resetHref = "/customers";
 
   return (
-    <main className="mx-auto max-w-7xl py-1 px-0 md:p-6 xl:p-8">
+    <main className="mx-auto max-w-7xl p-4 md:p-6 xl:p-8">
       <section>
         <Card className="overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
-          <CardContent className="px-3 py-2 md:p-6 xl:p-8">
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-              <div className="min-w-0">
-                <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">Magnifique Beauty Institut Kundenbereich</div>
-                <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">Kunden</h1>
-                <p className="mt-2 text-sm text-[var(--text-muted)]">Eingeloggt als {profile?.full_name ?? user.email} ({profile?.role ?? "—"})</p>
-                {role === "ADMIN" ? (
-                  <div className="mt-5 space-y-3">
-                    <AdminTenantAvatarPicker current={currentAdminTenant} options={tenantOptions} action={setAdminTenant} />
-                    {adminMissingOwnTenant && <div className="text-xs text-red-300">Dein ADMIN-Profil hat aktuell kein tenant_id.</div>}
+          <CardContent className="p-5 md:p-6 xl:p-8">
+            <div className="md:hidden">
+              <div
+                className="overflow-visible rounded-[28px] border p-5"
+                style={{
+                  background: "linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015))",
+                  borderColor: "rgba(255,255,255,0.08)",
+                }}
+              >
+                <div className="flex flex-col gap-6">
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)] whitespace-nowrap">
+                      Clientique Backoffice
+                    </div>
+                    <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">Kunden</h1>
                   </div>
-                ) : null}
-              </div>
 
-              <div className="flex w-full max-w-[640px] flex-col gap-3 sm:flex-row">
-                <form action="/customers" method="get" className="flex-1">
-                  {onlyNoFollowUp ? <input type="hidden" name="only" value="no-followup" /> : null}
-                  <div className="flex h-11 items-center rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
-                    <input type="text" name="q" defaultValue={qRaw} placeholder="Name, Telefon, E-Mail oder Behandler suchen" className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/35" />
+                  <div className="md:hidden flex items-center justify-between gap-3">
+                    <MobileCustomersFilterMenu
+                      qRaw={qRaw}
+                      only={onlyNoFollowUp ? 'no-followup' : 'all'}
+                      counts={{
+                        all: searchScopedRows.length,
+                        noFollowUp: searchScopedRows.filter((row) => analyticsByCustomerId.get(row.id)?.isWithoutFollowUp).length,
+                      }}
+                    />
+
+                    <Link
+                      href="/customers/new"
+                      aria-label="Neuen Kunden anlegen"
+                      className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border md:hidden"
+                      style={{
+                        color: '#0b0b0c',
+                        background: 'linear-gradient(180deg, rgba(214,195,163,0.96) 0%, rgba(214,195,163,0.88) 100%)',
+                        borderColor: 'rgba(214,195,163,0.28)',
+                        boxShadow: '0 12px 28px rgba(214,195,163,0.22), 0 0 0 2px rgba(11,11,12,0.95)',
+                      }}
+                    >
+                      <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M12 5v14" />
+                        <path d="M5 12h14" />
+                      </svg>
+                    </Link>
+
+                    {role === 'ADMIN' ? (
+                      <MobileCustomersAvatarMenu current={currentAdminTenant} options={tenantOptions} />
+                    ) : null}
                   </div>
-                </form>
-                <Link href="/customers/new" className="sm:shrink-0"><Button className="h-11 w-full sm:w-auto">+ Neuer Kunde</Button></Link>
+
+                  <div className="md:hidden flex flex-col gap-3">
+                    <form action="/customers" method="get" className="w-full">
+                      {onlyNoFollowUp ? <input type="hidden" name="only" value="no-followup" /> : null}
+                      <div className="flex h-11 items-center rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
+                        <span className="mr-3 inline-flex h-4 w-4 shrink-0 items-center justify-center text-white/35">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                            <circle cx="11" cy="11" r="7" />
+                            <path d="m20 20-3.5-3.5" />
+                          </svg>
+                        </span>
+                        <input type="text" name="q" defaultValue={qRaw} placeholder="Name, Telefon, E-Mail oder Behandler suchen" className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/35" />
+                        {qRaw ? (
+                          <Link href={buildCustomersHref({ only: onlyNoFollowUp ? 'no-followup' : 'all' })} aria-label="Suche löschen" className="ml-3 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/55 transition hover:bg-white/[0.08] hover:text-white">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                              <path d="M6 6l12 12" />
+                              <path d="M18 6 6 18" />
+                            </svg>
+                          </Link>
+                        ) : null}
+                      </div>
+                    </form>
+                  </div>
+
+                  {(error || appointmentsError || errorMsg) ? (
+                    <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+                      {error?.message || appointmentsError?.message || errorMsg}
+                    </div>
+                  ) : null}
+
+                  <div className="md:hidden grid grid-cols-3 gap-2">
+                    <div className="rounded-[18px] border border-white/10 bg-black/20 px-2.5 py-3">
+                      <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Gesamt</div>
+                      <div className="mt-1 text-[11px] font-semibold leading-tight text-white">{totalCustomers}</div>
+                    </div>
+                    <div className="rounded-[18px] border border-white/10 bg-black/20 px-2.5 py-3">
+                      <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Aktiv 30</div>
+                      <div className="mt-1 text-[11px] font-semibold leading-tight text-white">{activeCustomers30Days}</div>
+                    </div>
+                    <div className="rounded-[18px] border border-white/10 bg-black/20 px-2.5 py-3">
+                      <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Ohne Termin</div>
+                      <div className="mt-1 text-[11px] font-semibold leading-tight text-white">{withoutFollowUp}</div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {(error || appointmentsError || errorMsg) && <div className="mt-5 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{error?.message || appointmentsError?.message || errorMsg}</div>}
+            <div className="hidden md:block">
+              <div id="desktop-customers-header" className="relative pr-[360px] xl:pr-[520px]">
+                <div className="absolute right-0 top-0 z-30 flex items-start justify-end gap-3">
+                  {role === "ADMIN" ? (
+                    <>
+                      <div id="desktop-customers-avatar-strip" className="max-w-[520px] overflow-hidden">
+                        <AdminTenantAvatarPicker current={currentAdminTenant} options={tenantOptions} action={setAdminTenant} />
+                      </div>
+                      <DesktopCustomersAvatarCompactMenu current={currentAdminTenant} options={tenantOptions} action={setAdminTenant} />
+                    </>
+                  ) : null}
 
-            <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <SummaryCard label="Kunden gesamt" value={totalCustomers} subtext="Alle sichtbaren Kundenprofile" />
-              <SummaryCard label="Aktiv 30 Tage" value={activeCustomers30Days} subtext="Mit gekommenem Besuch in den letzten 30 Tagen" />
-              <SummaryCard label="Inaktiv 60 Tage" value={inactiveCustomers60Days} subtext="Länger ohne gekommenen Besuch und ohne Folgetermin" />
-              <SummaryCard label="Ohne Folgetermin" value={withoutFollowUp} subtext="Bereits gekommen, aber aktuell nichts geplant" />
+                  <div id="desktop-customers-search-wrap" className="relative">
+                    <button
+                      id="desktop-customers-search-toggle"
+                      type="button"
+                      aria-label="Suche öffnen"
+                      title="Suche"
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/85 shadow-[0_10px_28px_rgba(0,0,0,0.28)] transition hover:bg-white/[0.08]"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-[18px] w-[18px]">
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="m20 20-3.5-3.5" />
+                      </svg>
+                    </button>
+
+                    <div
+                      id="desktop-customers-search-stack"
+                      className={`${qRaw ? "pointer-events-auto opacity-100 translate-y-0 scale-100" : "pointer-events-none opacity-0 translate-y-1 scale-95"} absolute right-0 top-[calc(100%+28px)] z-20 transition duration-200`}
+                      style={{ width: "420px", maxWidth: "620px" }}
+                      aria-hidden={qRaw ? "false" : "true"}
+                    >
+                      <div
+                        id="desktop-customers-search-panel"
+                        className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.985)_0%,rgba(12,13,16,0.985)_100%)] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-xl"
+                      >
+                        <form id="desktop-customers-search-form" action="/customers" method="get" className="w-full">
+                          {onlyNoFollowUp ? <input type="hidden" name="only" value="no-followup" /> : null}
+                          <div className="flex h-12 items-center rounded-[18px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
+                            <span className="mr-3 inline-flex h-4 w-4 shrink-0 items-center justify-center text-white/35">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                                <circle cx="11" cy="11" r="7" />
+                                <path d="m20 20-3.5-3.5" />
+                              </svg>
+                            </span>
+                            <input
+                              id="desktop-customers-search-input"
+                              type="text"
+                              name="q"
+                              defaultValue={qRaw}
+                              placeholder="Name, Telefon, E-Mail oder Behandler suchen"
+                              autoComplete="off"
+                              className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/35"
+                            />
+                            <button
+                              id="desktop-customers-search-clear"
+                              type="button"
+                              aria-label="Suche löschen"
+                              title="Suche löschen"
+                              className="ml-3 inline-flex h-8 w-8 min-h-8 min-w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] p-0 text-white/55 transition hover:bg-white/[0.08] hover:text-white"
+                              style={{ opacity: qRaw ? 1 : 0, pointerEvents: qRaw ? "auto" : "none" }}
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                                <path d="M6 6l12 12" />
+                                <path d="M18 6 6 18" />
+                              </svg>
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Link
+                    href="/customers/new"
+                    aria-label="Neuen Kunden anlegen"
+                    title="Neuer Kunde"
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--primary)] bg-[var(--primary)] text-black shadow-[0_12px_26px_rgba(214,195,163,0.18)] transition hover:opacity-90"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-[18px] w-[18px]"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 5v14" />
+                      <path d="M5 12h14" />
+                    </svg>
+                  </Link>
+                </div>
+
+                <div className="min-w-0">
+                  <div id="desktop-customers-kicker" className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">Magnifique Beauty Institut Kundenbereich</div>
+                  <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">Kunden</h1>
+                  <p className="mt-2 text-sm text-[var(--text-muted)]">Eingeloggt als {profile?.full_name ?? user.email} ({profile?.role ?? "—"})</p>
+                  {role === "ADMIN" && adminMissingOwnTenant ? (
+                    <div className="mt-5 text-xs text-red-300">Dein ADMIN-Profil hat aktuell kein tenant_id.</div>
+                  ) : null}
+                </div>
+              </div>
+
+              {(error || appointmentsError || errorMsg) ? (
+                <div className="mt-5 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+                  {error?.message || appointmentsError?.message || errorMsg}
+                </div>
+              ) : null}
+
+              <div className="mt-6 flex items-center gap-2 md:flex-wrap">
+                {[
+                  ["all", "Alle", searchScopedRows.length],
+                  ["no-followup", "Ohne Folgetermin", searchScopedRows.filter((row) => analyticsByCustomerId.get(row.id)?.isWithoutFollowUp).length],
+                ].map(([key, label, count]) => {
+                  const active = (onlyNoFollowUp ? "no-followup" : "all") === key;
+                  return (
+                    <Link key={String(key)} href={key === "all" ? "/customers" : `/customers?only=no-followup${qRaw ? `&q=${encodeURIComponent(qRaw)}` : ""}`} className={statusLinkClass(active)}>
+                      <span>{label}</span>
+                      <span className={statusCountClass(active)}>{count}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+
+              <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <SummaryCard label="Kunden gesamt" value={totalCustomers} subtext="Alle sichtbaren Kundenprofile" />
+                <SummaryCard label="Aktiv 30 Tage" value={activeCustomers30Days} subtext="Mit gekommenem Besuch in den letzten 30 Tagen" />
+                <SummaryCard label="Inaktiv 60 Tage" value={inactiveCustomers60Days} subtext="Länger ohne gekommenen Besuch und ohne Folgetermin" />
+                <SummaryCard label="Ohne Folgetermin" value={withoutFollowUp} subtext="Bereits gekommen, aber aktuell nichts geplant" />
+              </div>
             </div>
+
           </CardContent>
         </Card>
       </section>
@@ -449,9 +948,9 @@ export default async function CustomersPage({
                             </div>
                           </div>
                           <div className="mt-4 grid grid-cols-3 gap-2">
-                            <div className="rounded-2xl border border-white/8 bg-black/20 px-3 py-2"><div className="text-[11px] uppercase tracking-[0.12em] text-white/40">Besuche</div><div className="mt-1 text-sm font-semibold text-white">{analytics?.visitCount ?? 0}</div>{(analytics?.noShowCount ?? 0) > 0 ? <div className="mt-1 text-[11px] text-orange-300">{analytics?.noShowCount} No-Show</div> : null}</div>
-                            <div className="rounded-2xl border border-white/8 bg-black/20 px-3 py-2"><div className="text-[11px] uppercase tracking-[0.12em] text-white/40">Letzter</div><div className="mt-1 text-sm font-medium text-white/75">{formatShortDate(analytics?.lastVisitAt)}</div></div>
-                            <div className="rounded-2xl border border-white/8 bg-black/20 px-3 py-2"><div className="text-[11px] uppercase tracking-[0.12em] text-white/40">Nächster</div><div className="mt-1 text-sm font-medium text-white/75">{formatShortDate(analytics?.nextAppointmentAt)}</div></div>
+                            <div className="rounded-2xl border border-white/8 bg-black/20 px-3 py-2"><div className="text-[10px] uppercase tracking-[0.12em] text-white/40">Besuche</div><div className="mt-1 text-[10px] font-semibold text-white">{analytics?.visitCount ?? 0}</div>{(analytics?.noShowCount ?? 0) > 0 ? <div className="mt-1 text-[11px] text-orange-300">{analytics?.noShowCount} No-Show</div> : null}</div>
+                            <div className="rounded-2xl border border-white/8 bg-black/20 px-3 py-2"><div className="text-[10px] uppercase tracking-[0.12em] text-white/40">Letzter</div><div className="mt-1 text-[10px] font-medium text-white/75">{formatShortDate(analytics?.lastVisitAt)}</div></div>
+                            <div className="rounded-2xl border border-white/8 bg-black/20 px-3 py-2"><div className="text-[10px] uppercase tracking-[0.12em] text-white/40">Nächster</div><div className="mt-1 text-[10px] font-medium text-white/75">{formatShortDate(analytics?.nextAppointmentAt)}</div></div>
                           </div>
                           {analytics?.isWithoutFollowUp ? <div className="mt-3 inline-flex rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-200">Ohne Folgetermin</div> : null}
                           <div className="mt-3 text-xs text-white/40">Erstellt: {formatShortDate(row.created_at)}</div>
@@ -495,6 +994,123 @@ export default async function CustomersPage({
           </CardContent>
         </Card>
       </section>
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media (min-width: 768px) {
+          #desktop-customers-avatar-strip { display: block; }
+          #desktop-customers-avatar-compact { display: none; }
+        }
+        @media (min-width: 768px) and (max-width: 1120px) {
+          #desktop-customers-avatar-strip { display: none; }
+          #desktop-customers-avatar-compact { display: block; }
+        }
+      ` }} />
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+            (() => {
+              const wrap = document.getElementById("desktop-customers-search-wrap");
+              const toggle = document.getElementById("desktop-customers-search-toggle");
+              const stack = document.getElementById("desktop-customers-search-stack");
+              const input = document.getElementById("desktop-customers-search-input");
+              const clearButton = document.getElementById("desktop-customers-search-clear");
+              const form = document.getElementById("desktop-customers-search-form");
+              const header = document.getElementById("desktop-customers-header");
+              if (!wrap || !toggle || !stack || !input || !form || !header || !clearButton) return;
+
+              let submitTimer = null;
+              const shouldStartOpen = ${qRaw ? "true" : "false"};
+
+              const updateClearButton = () => {
+                const hasValue = String(input.value || "").trim().length > 0;
+                clearButton.style.opacity = hasValue ? "1" : "0";
+                clearButton.style.pointerEvents = hasValue ? "auto" : "none";
+              };
+
+              const setPanelWidth = () => {
+                const wrapRect = wrap.getBoundingClientRect();
+                const headerRect = header.getBoundingClientRect();
+                const innerGap = 8;
+                const minWidth = 280;
+                const maxWidth = 620;
+                const availableWidth = Math.floor(wrapRect.right - headerRect.left - innerGap);
+                const targetWidth = Math.max(minWidth, Math.min(maxWidth, availableWidth));
+                stack.style.width = targetWidth + "px";
+              };
+
+              const openPanel = (focusInput = true) => {
+                setPanelWidth();
+                stack.classList.remove("pointer-events-none", "opacity-0", "translate-y-1", "scale-95");
+                stack.classList.add("pointer-events-auto", "opacity-100", "translate-y-0", "scale-100");
+                stack.setAttribute("aria-hidden", "false");
+                if (focusInput) {
+                  window.requestAnimationFrame(() => {
+                    input.focus();
+                    const length = input.value.length;
+                    input.setSelectionRange(length, length);
+                    updateClearButton();
+                  });
+                } else {
+                  updateClearButton();
+                }
+              };
+
+              const closePanel = () => {
+                stack.classList.add("pointer-events-none", "opacity-0", "translate-y-1", "scale-95");
+                stack.classList.remove("pointer-events-auto", "opacity-100", "translate-y-0", "scale-100");
+                stack.setAttribute("aria-hidden", "true");
+              };
+
+              const isOpen = () => stack.getAttribute("aria-hidden") === "false";
+
+              toggle.addEventListener("click", (event) => {
+                event.preventDefault();
+                if (isOpen()) closePanel();
+                else openPanel();
+              });
+
+              input.addEventListener("input", () => {
+                updateClearButton();
+                if (!isOpen()) openPanel(false);
+                if (submitTimer) window.clearTimeout(submitTimer);
+                submitTimer = window.setTimeout(() => {
+                  form.requestSubmit();
+                }, 260);
+              });
+
+              clearButton.addEventListener("click", (event) => {
+                event.preventDefault();
+                input.value = "";
+                updateClearButton();
+                input.focus();
+                if (submitTimer) window.clearTimeout(submitTimer);
+                form.requestSubmit();
+              });
+
+              input.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  closePanel();
+                  toggle.focus();
+                }
+              });
+
+              document.addEventListener("click", (event) => {
+                if (!isOpen()) return;
+                if (wrap.contains(event.target)) return;
+                closePanel();
+              });
+
+              window.addEventListener("resize", () => {
+                if (isOpen()) setPanelWidth();
+              });
+
+              updateClearButton();
+              if (shouldStartOpen) openPanel(false);
+              else closePanel();
+            })();
+          `,
+        }}
+      />
     </main>
   );
 }
