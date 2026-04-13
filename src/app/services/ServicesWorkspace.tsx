@@ -81,7 +81,7 @@ function fieldClassName() {
 
 function badgeClassName(active: boolean) {
   return [
-    "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold",
+    "inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold",
     active
       ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
       : "border-white/10 bg-white/5 text-white/70",
@@ -244,6 +244,7 @@ export default function ServicesWorkspace({
   const [createShown, setCreateShown] = useState(false);
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
   const [editShown, setEditShown] = useState(false);
+  const [expandedMobileServiceId, setExpandedMobileServiceId] = useState<string | null>(null);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -365,6 +366,7 @@ export default function ServicesWorkspace({
               const borderColor = withAlpha(accent, 0.7);
               const softGlow = withAlpha(accent, 0.18);
               const fillGlow = withAlpha(accent, 0.08);
+              const isExpandedMobile = expandedMobileServiceId === service.id;
 
               return (
                 <article
@@ -384,7 +386,73 @@ export default function ServicesWorkspace({
                     }}
                   />
 
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedMobileServiceId((current) => current === service.id ? null : service.id)}
+                    className="flex w-full items-start justify-between gap-3 pr-1 text-left md:hidden"
+                    aria-expanded={isExpandedMobile}
+                  >
+                    <div className="min-w-0 flex-1 pl-2">
+                      <h3 className="text-[12px] font-semibold leading-[1.25] text-white break-words">
+                        {service.name ?? "Unbenannte Dienstleistung"}
+                      </h3>
+
+                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-white/70">
+                        <span>Dauer: {service.duration_minutes ?? 0} Min</span>
+                        <span>Preis: {euroFromCents(service.default_price_cents)} €</span>
+                      </div>
+                    </div>
+
+                    <div className="flex shrink-0 flex-col items-center gap-2">
+                      <span
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/70"
+                        aria-hidden="true"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          className={`h-4 w-4 transition-transform duration-200 ${isExpandedMobile ? "rotate-180" : ""}`}
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="m6 9 6 6 6-6" />
+                        </svg>
+                      </span>
+
+                      <span className={badgeClassName(active)}>{active ? "Aktiv" : "Inaktiv"}</span>
+                    </div>
+                  </button>
+
+                  <div className={`${isExpandedMobile ? "mt-4 block" : "hidden"} md:hidden`}>
+                    {service.description ? (
+                      <p className="pl-2 text-sm text-white/55">{service.description}</p>
+                    ) : null}
+
+                    <div className="mt-4 flex w-full flex-col gap-2">
+                      <form action={toggleServiceActive} className="w-full">
+                        <input type="hidden" name="service_id" value={service.id} />
+                        <input type="hidden" name="next_active" value={active ? "0" : "1"} />
+                        <button
+                          type="submit"
+                          className="inline-flex h-10 w-full items-center justify-center rounded-[16px] border border-white/15 bg-white/5 px-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                        >
+                          {active ? "Deaktivieren" : "Aktivieren"}
+                        </button>
+                      </form>
+
+                      <button
+                        type="button"
+                        onClick={() => setEditingServiceId(service.id)}
+                        className="inline-flex h-10 w-full items-center justify-center rounded-[16px] bg-white px-3 text-sm font-semibold text-black transition hover:opacity-90"
+                      >
+                        Bearbeiten
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="hidden md:flex md:flex-col md:gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="min-w-0 pl-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="truncate text-lg font-semibold text-white">
