@@ -530,12 +530,12 @@ function DailyAgendaPanel({
                 className="relative flex items-center gap-2.5 rounded-[12px] border border-white/8 bg-white/[0.03] px-1 py-1 pl-4"
               >
                 <div
-                  className="absolute left-[6px] top-[6px] bottom-[6px] w-[3px] rounded-full"
+                  className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-full"
                   style={{
-                    backgroundColor: theme.ring,
-                    boxShadow: `0 0 0 1px ${theme.ring}, 0 0 10px ${theme.ring}55`,
+                    background: theme.ring,
+                    boxShadow: `2 0 12px ${theme.ring}55`,
                   }}
-                  aria-hidden="true"
+                  aria-hidden="false"
                 />
 
                 <div className="shrink-0 text-[13px] font-semibold text-white/92">
