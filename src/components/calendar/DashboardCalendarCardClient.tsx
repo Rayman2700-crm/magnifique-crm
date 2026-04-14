@@ -875,7 +875,7 @@ function DesktopHeaderLegend({
           <button
             key={user.userId}
             type="button"
-            onClick={() => onSelect(user.filterTenantId)}
+            onClick={() => onSelect(user.filterTenantId || user.tenantId)}
             className="flex shrink-0 flex-col items-center gap-1.5"
             title={user.fullName ?? user.tenantDisplayName ?? "Behandler"}
           >
@@ -1074,7 +1074,7 @@ function MobileLegendPicker({
                         key={user.userId}
                         type="button"
                         onClick={() => {
-                          onSelect(user.filterTenantId);
+                          onSelect(user.filterTenantId || user.tenantId);
                           setOpen(false);
                         }}
                         className="flex items-center justify-between rounded-2xl border px-3 py-3 text-left"
@@ -1705,6 +1705,13 @@ export default function DashboardCalendarCardClient({
     if (!q) return items;
 
     return items.filter((item) => {
+      const legendName =
+        legendUsers.find(
+          (user) =>
+            user.tenantId === item.tenantId ||
+            user.filterTenantId === item.tenantId
+        )?.fullName ?? "";
+
       const haystack = [
         item.title,
         item.note,
@@ -1712,13 +1719,14 @@ export default function DashboardCalendarCardClient({
         item.customerPhone,
         item.customerEmail,
         item.tenantName,
+        legendName,
       ]
         .map((value) => String(value ?? "").toLowerCase())
         .join(" ");
 
       return haystack.includes(q);
     });
-  }, [desktopSearchQuery, items]);
+  }, [desktopSearchQuery, items, legendUsers]);
 
   return (
     <Card className="overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
