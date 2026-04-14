@@ -530,10 +530,10 @@ function DailyAgendaPanel({
                 className="relative flex items-center gap-2.5 rounded-[12px] border border-white/8 bg-white/[0.03] px-1 py-1 pl-4"
               >
                 <div
-                  className="absolute left-[6px] top-[6px] bottom-[6px] w-[3px] rounded-full"
+                  className="absolute left-[4px] top-[4px] bottom-[4px] z-10 w-[4px] rounded-full"
                   style={{
                     backgroundColor: theme.ring,
-                    boxShadow: `0 0 0 1px ${theme.ring}, 0 0 10px ${theme.ring}55`,
+                    boxShadow: `0 0 0 1px ${theme.ring}, 0 0 12px ${theme.ring}66`,
                   }}
                   aria-hidden="true"
                 />
@@ -1919,50 +1919,6 @@ export default function DashboardCalendarCardClient({
 
               <div className="flex flex-col gap-5">
                 <div className="flex min-w-0 flex-1 flex-col gap-4">
-                  <div className="hidden md:flex md:items-center md:min-w-0">
-                    <div className="flex min-w-0 flex-1 items-center">
-                      <div className="flex shrink-0 items-center gap-3">
-                        <DesktopHeaderPillButton
-                          className="px-4 text-sm font-semibold"
-                          onClick={() => handleToday()}
-                        >
-                          Heute
-                        </DesktopHeaderPillButton>
-
-                        <DesktopHeaderPillButton
-                          className="w-11"
-                          onClick={() => handlePrev()}
-                          ariaLabel="Zurück"
-                        >
-                          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="m15 18-6-6 6-6" />
-                          </svg>
-                        </DesktopHeaderPillButton>
-
-                        <DesktopHeaderPillButton
-                          className="w-11"
-                          onClick={() => handleNext()}
-                          ariaLabel="Weiter"
-                        >
-                          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="m9 18 6-6-6-6" />
-                          </svg>
-                        </DesktopHeaderPillButton>
-                      </div>
-
-                      <div className="w-5 shrink-0 sm:w-6 lg:w-8" aria-hidden="true" />
-
-                      <div className="min-w-0 text-base font-bold text-white sm:text-lg lg:text-xl">
-                        {headerText.left}
-                        {headerText.right ? (
-                          <span className="ml-2 text-sm font-semibold text-white/55">{headerText.right}</span>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <ViewSwitch value={view} onChange={handleChangeView} />
-                  </div>
-
                   <div className="flex flex-wrap items-center gap-2 min-w-0 md:hidden">
                       <Button
                         type="button"
@@ -2040,6 +1996,50 @@ export default function DashboardCalendarCardClient({
                         panelHeight={miniMonthCardHeight}
                       />
                     </div>
+                  </div>
+
+                  <div className="hidden md:flex md:items-center md:min-w-0">
+                    <div className="flex min-w-0 flex-1 items-center">
+                      <div className="flex shrink-0 items-center gap-3">
+                        <DesktopHeaderPillButton
+                          className="px-4 text-sm font-semibold"
+                          onClick={() => handleToday()}
+                        >
+                          Heute
+                        </DesktopHeaderPillButton>
+
+                        <DesktopHeaderPillButton
+                          className="w-11"
+                          onClick={() => handlePrev()}
+                          ariaLabel="Zurück"
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="m15 18-6-6 6-6" />
+                          </svg>
+                        </DesktopHeaderPillButton>
+
+                        <DesktopHeaderPillButton
+                          className="w-11"
+                          onClick={() => handleNext()}
+                          ariaLabel="Weiter"
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="m9 18 6-6-6-6" />
+                          </svg>
+                        </DesktopHeaderPillButton>
+                      </div>
+
+                      <div className="w-5 shrink-0 sm:w-6 lg:w-8" aria-hidden="true" />
+
+                      <div className="min-w-0 text-base font-bold text-white sm:text-lg lg:text-xl">
+                        {headerText.left}
+                        {headerText.right ? (
+                          <span className="ml-2 text-sm font-semibold text-white/55">{headerText.right}</span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <ViewSwitch value={view} onChange={handleChangeView} />
                   </div>
                 </div>
               </div>
