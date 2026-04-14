@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Script from "next/script";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { setAdminTenant } from "@/app/admin/actions";
@@ -497,7 +498,6 @@ export default async function CustomersPage({
 }) {
   const sp = searchParams ? await searchParams : undefined;
   const qRaw = (sp?.q ?? "").toString();
-  const q = qRaw.trim().toLowerCase();
   const errorMsg = (sp?.error ?? "").toString();
   const only = (sp?.only ?? "").toString();
   const onlyNoFollowUp = only === "no-followup";
@@ -642,16 +642,7 @@ export default async function CustomersPage({
     analyticsByCustomerId.set(row.id, { visitCount, lastVisitAt, nextAppointmentAt, noShowCount, isWithoutFollowUp });
   }
 
-  const searchScopedRows = rows.filter((row) => {
-    if (!q) return true;
-    const person = firstJoin(row.person);
-    const tenant = firstJoin(row.tenant);
-    const name = (person?.full_name ?? "").toLowerCase();
-    const phone = (person?.phone ?? "").toLowerCase();
-    const email = (person?.email ?? "").toLowerCase();
-    const tenantLabel = (tenant?.display_name ?? "").toLowerCase();
-    return name.includes(q) || phone.includes(q) || email.includes(q) || tenantLabel.includes(q);
-  });
+  const searchScopedRows = rows;
 
   const filteredRows = searchScopedRows.filter((row) => {
     const analytics = analyticsByCustomerId.get(row.id);
@@ -774,32 +765,29 @@ export default async function CustomersPage({
                     </>
                   ) : null}
 
-                  <div id="desktop-customers-search-wrap" className="relative">
-                    <button
+                  <details id="desktop-customers-search-wrap" className="relative">
+                    <summary
                       id="desktop-customers-search-toggle"
-                      type="button"
+                      className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/85 shadow-[0_10px_28px_rgba(0,0,0,0.28)] transition hover:bg-white/[0.08]"
                       aria-label="Suche öffnen"
                       title="Suche"
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/85 shadow-[0_10px_28px_rgba(0,0,0,0.28)] transition hover:bg-white/[0.08]"
                     >
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-[18px] w-[18px]">
                         <circle cx="11" cy="11" r="7" />
                         <path d="m20 20-3.5-3.5" />
                       </svg>
-                    </button>
+                    </summary>
 
                     <div
                       id="desktop-customers-search-stack"
-                      className={`${qRaw ? "pointer-events-auto opacity-100 translate-y-0 scale-100" : "pointer-events-none opacity-0 translate-y-1 scale-95"} absolute right-0 top-[calc(100%+28px)] z-20 transition duration-200`}
+                      className="absolute right-0 top-[calc(100%+28px)] z-20"
                       style={{ width: "420px", maxWidth: "620px" }}
-                      aria-hidden={qRaw ? "false" : "true"}
                     >
                       <div
                         id="desktop-customers-search-panel"
                         className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.985)_0%,rgba(12,13,16,0.985)_100%)] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-xl"
                       >
-                        <form id="desktop-customers-search-form" action="/customers" method="get" className="w-full">
-                          {onlyNoFollowUp ? <input type="hidden" name="only" value="no-followup" /> : null}
+                        <form id="desktop-customers-search-form" role="search" className="w-full">
                           <div className="flex h-12 items-center rounded-[18px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
                             <span className="mr-3 inline-flex h-4 w-4 shrink-0 items-center justify-center text-white/35">
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
@@ -810,7 +798,6 @@ export default async function CustomersPage({
                             <input
                               id="desktop-customers-search-input"
                               type="text"
-                              name="q"
                               defaultValue={qRaw}
                               placeholder="Name, Telefon, E-Mail oder Behandler suchen"
                               autoComplete="off"
@@ -822,7 +809,6 @@ export default async function CustomersPage({
                               aria-label="Suche löschen"
                               title="Suche löschen"
                               className="ml-3 inline-flex h-8 w-8 min-h-8 min-w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] p-0 text-white/55 transition hover:bg-white/[0.08] hover:text-white"
-                              style={{ opacity: qRaw ? 1 : 0, pointerEvents: qRaw ? "auto" : "none" }}
                             >
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                                 <path d="M6 6l12 12" />
@@ -833,7 +819,7 @@ export default async function CustomersPage({
                         </form>
                       </div>
                     </div>
-                  </div>
+                  </details>
 
                   <Link
                     href="/customers/new"
@@ -907,7 +893,7 @@ export default async function CustomersPage({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="text-lg font-semibold text-[var(--text)]">{onlyNoFollowUp ? "Kunden ohne Folgetermin" : "Kundenliste"}</div>
-                  <div className="mt-1 text-sm text-[var(--text-muted)]">{filteredRows.length} Ergebnis(se)</div>
+                  <div id="customers-results-count" suppressHydrationWarning className="mt-1 text-sm text-[var(--text-muted)]">{filteredRows.length} Ergebnis(se)</div>
                 </div>
                 <div className="flex items-center gap-2">
                   {onlyNoFollowUp ? <span className="inline-flex rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-200">Filter aktiv</span> : null}
@@ -920,7 +906,7 @@ export default async function CustomersPage({
               {filteredRows.length === 0 ? (
                 <div className="rounded-[20px] border border-white/8 bg-white/[0.02] px-4 py-6 text-sm text-white/55">Keine Kunden gefunden.</div>
               ) : (
-                <div className="space-y-3">
+                <div id="customers-mobile-list" className="space-y-3">
                   {filteredRows.map((row) => {
                     const person = firstJoin(row.person);
                     const tenant = firstJoin(row.tenant);
@@ -929,7 +915,12 @@ export default async function CustomersPage({
                     const analytics = analyticsByCustomerId.get(row.id);
                     const shortCode = getUserShortCode(tenantLabel);
                     return (
-                      <div key={row.id} className="rounded-[22px] border border-white/8 bg-white/[0.02] px-4 py-4 transition hover:bg-white/[0.035]">
+                      <div
+                        key={row.id}
+                        data-customer-entry="mobile"
+                        data-search-text={`${person?.full_name ?? ""} ${(person?.phone ?? "")} ${(person?.email ?? "")} ${tenantLabel}`.toLowerCase()}
+                        className="rounded-[22px] border border-white/8 bg-white/[0.02] px-4 py-4 transition hover:bg-white/[0.035]"
+                      >
                         <Link href={`/customers/${row.id}`} className="block">
                           <div className="flex items-start gap-3">
                             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border text-sm font-semibold" style={{ backgroundColor: theme.pillBg, borderColor: theme.border, color: theme.pillText }}>{shortCode}</div>
@@ -951,6 +942,9 @@ export default async function CustomersPage({
                       </div>
                     );
                   })}
+                                  <div id="customers-mobile-empty" className="hidden rounded-[20px] border border-white/8 bg-white/[0.02] px-4 py-6 text-sm text-white/55">
+                    Keine Kunden gefunden.
+                  </div>
                 </div>
               )}
             </div>
@@ -958,7 +952,7 @@ export default async function CustomersPage({
             <div className="hidden overflow-x-auto lg:block">
               <table className="w-full min-w-[920px] table-auto text-sm">
                 <thead className="bg-white/[0.03]"><tr className="text-left text-white/60"><th className="w-[30%] px-6 py-4 font-semibold">Kunde</th><th className="w-[24%] px-4 py-4 font-semibold">Kontakt</th><th className="w-[8%] px-4 py-4 font-semibold text-center">Besuche</th><th className="w-[13%] px-4 py-4 font-semibold">Letzter Besuch</th><th className="w-[13%] px-4 py-4 font-semibold">Nächster Termin</th><th className="w-[12%] px-4 py-4 font-semibold">Erstellt</th>{role === "ADMIN" && <th className="px-6 py-4 text-right font-semibold">Aktion</th>}</tr></thead>
-                <tbody>
+                <tbody id="customers-desktop-tbody">
                   {filteredRows.length === 0 ? (
                     <tr><td colSpan={role === "ADMIN" ? 7 : 6} className="px-6 py-8 text-sm text-white/55">Keine Kunden gefunden.</td></tr>
                   ) : filteredRows.map((row) => {
@@ -969,7 +963,12 @@ export default async function CustomersPage({
                     const analytics = analyticsByCustomerId.get(row.id);
                     const shortCode = getUserShortCode(tenantLabel);
                     return (
-                      <tr key={row.id} className="border-t border-white/8 transition hover:bg-white/[0.025]">
+                      <tr
+                        key={row.id}
+                        data-customer-entry="desktop"
+                        data-search-text={`${person?.full_name ?? ""} ${(person?.phone ?? "")} ${(person?.email ?? "")} ${tenantLabel}`.toLowerCase()}
+                        className="border-t border-white/8 transition hover:bg-white/[0.025]"
+                      >
                         <td className="px-6 py-4 align-middle"><Link href={`/customers/${row.id}`} className="block"><div className="flex items-center gap-3"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-sm font-semibold" style={{ backgroundColor: theme.pillBg, borderColor: theme.border, color: theme.pillText }}>{shortCode}</div><div className="min-w-0"><div className="truncate font-semibold text-white">{person?.full_name ?? "—"}</div>{analytics?.isWithoutFollowUp ? <div className="mt-1 text-xs text-amber-300">Ohne Folgetermin</div> : null}</div></div></Link></td>
                         <td className="px-4 py-4 align-middle text-white/75"><div className="whitespace-nowrap">{person?.phone ?? "—"}</div><div className="mt-1 max-w-[220px] truncate text-xs text-white/45">{person?.email ?? "—"}</div></td>
                         <td className="px-4 py-4 align-middle text-center font-semibold text-white"><div>{analytics?.visitCount ?? 0}</div>{(analytics?.noShowCount ?? 0) > 0 ? <div className="mt-1 text-[11px] font-medium text-orange-300">{analytics?.noShowCount} No-Show</div> : null}</td>
@@ -980,12 +979,155 @@ export default async function CustomersPage({
                       </tr>
                     );
                   })}
+                                  <tr id="customers-desktop-empty" className="hidden">
+                    <td colSpan={role === "ADMIN" ? 7 : 6} className="px-6 py-8 text-sm text-white/55">Keine Kunden gefunden.</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
           </CardContent>
         </Card>
       </section>
+
+            <Script id="customers-desktop-search-script" strategy="afterInteractive">
+        {`
+          (() => {
+            const init = (tries = 0) => {
+              const wrap = document.getElementById("desktop-customers-search-wrap");
+              const toggle = document.getElementById("desktop-customers-search-toggle");
+              const panel = document.getElementById("desktop-customers-search-panel");
+              const form = document.getElementById("desktop-customers-search-form");
+              const input = document.getElementById("desktop-customers-search-input");
+              const clearButton = document.getElementById("desktop-customers-search-clear");
+              const resultCount = document.getElementById("customers-results-count");
+              const mobileEntries = Array.from(document.querySelectorAll("[data-customer-entry='mobile']"));
+              const desktopEntries = Array.from(document.querySelectorAll("[data-customer-entry='desktop']"));
+              const mobileEmpty = document.getElementById("customers-mobile-empty");
+              const desktopEmpty = document.getElementById("customers-desktop-empty");
+
+              if (!wrap || !toggle || !panel || !input || !clearButton || !resultCount) {
+                if (tries < 40) window.requestAnimationFrame(() => init(tries + 1));
+                return;
+              }
+
+              const normalize = (value) =>
+                String(value ?? "")
+                  .toLowerCase()
+                  .normalize("NFD")
+                  .replace(/[\u0300-\u036f]/g, "")
+                  .trim();
+
+              const getTokens = (value) =>
+                normalize(value)
+                  .split(/\s+/)
+                  .map((token) => token.trim())
+                  .filter(Boolean);
+
+              const desktopMedia = window.matchMedia("(min-width: 1024px)");
+
+              const getVisibleEntries = () => (desktopMedia.matches ? desktopEntries : mobileEntries);
+
+              const setOpen = (nextOpen) => {
+                if (nextOpen) wrap.setAttribute("open", "");
+                else wrap.removeAttribute("open");
+              };
+
+              const applyFilter = () => {
+                const tokens = getTokens(input.value);
+
+                const applyTo = (entries) => {
+                  entries.forEach((entry) => {
+                    const haystack = normalize(entry.getAttribute("data-search-text"));
+                    const matches = tokens.length === 0
+                      ? true
+                      : tokens.every((token) => haystack.includes(token));
+                    entry.style.display = matches ? "" : "none";
+                  });
+                };
+
+                applyTo(mobileEntries);
+                applyTo(desktopEntries);
+
+                const visible = getVisibleEntries().filter((entry) => entry.style.display !== "none").length;
+                resultCount.textContent = visible + " Ergebnis(se)";
+
+                if (mobileEmpty) {
+                  mobileEmpty.classList.toggle("hidden", desktopMedia.matches || visible !== 0);
+                }
+                if (desktopEmpty) {
+                  desktopEmpty.classList.toggle("hidden", !desktopMedia.matches || visible !== 0);
+                }
+              };
+
+              const focusInputToEnd = () => {
+                input.focus();
+                const len = input.value.length;
+                try { input.setSelectionRange(len, len); } catch (_) {}
+              };
+
+              toggle.addEventListener("click", (event) => {
+                event.preventDefault();
+                const nextOpen = !wrap.hasAttribute("open");
+                setOpen(nextOpen);
+                if (nextOpen) window.requestAnimationFrame(focusInputToEnd);
+              });
+
+              input.addEventListener("input", () => {
+                if (!wrap.hasAttribute("open")) setOpen(true);
+                applyFilter();
+              });
+
+              input.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  setOpen(false);
+                  toggle.focus();
+                  return;
+                }
+
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  applyFilter();
+                }
+              });
+
+              form.addEventListener("submit", (event) => {
+                event.preventDefault();
+                applyFilter();
+              });
+
+              clearButton.addEventListener("click", (event) => {
+                event.preventDefault();
+                input.value = "";
+                applyFilter();
+                const url = new URL(window.location.href);
+                url.searchParams.delete("q");
+                window.history.replaceState({}, "", url.pathname + (url.searchParams.toString() ? "?" + url.searchParams.toString() : ""));
+                focusInputToEnd();
+              });
+
+              document.addEventListener("mousedown", (event) => {
+                const target = event.target;
+                if (!wrap.hasAttribute("open")) return;
+                if (wrap.contains(target)) return;
+                setOpen(false);
+              });
+
+              desktopMedia.addEventListener?.("change", applyFilter);
+              window.addEventListener("resize", applyFilter);
+
+              // initialize from current input / query param immediately
+              applyFilter();
+
+              if (input.value.trim()) {
+                setOpen(true);
+              }
+            };
+
+            init();
+          })();
+        `}
+      </Script>
 
       <style dangerouslySetInnerHTML={{ __html: `
         @media (min-width: 768px) {
@@ -999,114 +1141,15 @@ export default async function CustomersPage({
 
         details > summary { list-style: none; }
         details > summary::-webkit-details-marker { display: none; }
+
+        #desktop-customers-search-wrap > #desktop-customers-search-stack {
+          display: none;
+        }
+        #desktop-customers-search-wrap[open] > #desktop-customers-search-stack {
+          display: block;
+        }
       ` }} />
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-            (() => {
-              const wrap = document.getElementById("desktop-customers-search-wrap");
-              const toggle = document.getElementById("desktop-customers-search-toggle");
-              const stack = document.getElementById("desktop-customers-search-stack");
-              const input = document.getElementById("desktop-customers-search-input");
-              const clearButton = document.getElementById("desktop-customers-search-clear");
-              const form = document.getElementById("desktop-customers-search-form");
-              const header = document.getElementById("desktop-customers-header");
-              if (!wrap || !toggle || !stack || !input || !form || !header || !clearButton) return;
 
-              let submitTimer = null;
-              const shouldStartOpen = ${qRaw ? "true" : "false"};
-
-              const updateClearButton = () => {
-                const hasValue = String(input.value || "").trim().length > 0;
-                clearButton.style.opacity = hasValue ? "1" : "0";
-                clearButton.style.pointerEvents = hasValue ? "auto" : "none";
-              };
-
-              const setPanelWidth = () => {
-                const wrapRect = wrap.getBoundingClientRect();
-                const headerRect = header.getBoundingClientRect();
-                const innerGap = 8;
-                const minWidth = 280;
-                const maxWidth = 620;
-                const availableWidth = Math.floor(wrapRect.right - headerRect.left - innerGap);
-                const targetWidth = Math.max(minWidth, Math.min(maxWidth, availableWidth));
-                stack.style.width = targetWidth + "px";
-              };
-
-              const openPanel = (focusInput = true) => {
-                setPanelWidth();
-                stack.classList.remove("pointer-events-none", "opacity-0", "translate-y-1", "scale-95");
-                stack.classList.add("pointer-events-auto", "opacity-100", "translate-y-0", "scale-100");
-                stack.setAttribute("aria-hidden", "false");
-                if (focusInput) {
-                  window.requestAnimationFrame(() => {
-                    input.focus();
-                    const length = input.value.length;
-                    input.setSelectionRange(length, length);
-                    updateClearButton();
-                  });
-                } else {
-                  updateClearButton();
-                }
-              };
-
-              const closePanel = () => {
-                stack.classList.add("pointer-events-none", "opacity-0", "translate-y-1", "scale-95");
-                stack.classList.remove("pointer-events-auto", "opacity-100", "translate-y-0", "scale-100");
-                stack.setAttribute("aria-hidden", "true");
-              };
-
-              const isOpen = () => stack.getAttribute("aria-hidden") === "false";
-
-              toggle.addEventListener("click", (event) => {
-                event.preventDefault();
-                if (isOpen()) closePanel();
-                else openPanel();
-              });
-
-              input.addEventListener("input", () => {
-                updateClearButton();
-                if (!isOpen()) openPanel(false);
-                if (submitTimer) window.clearTimeout(submitTimer);
-                submitTimer = window.setTimeout(() => {
-                  form.requestSubmit();
-                }, 260);
-              });
-
-              clearButton.addEventListener("click", (event) => {
-                event.preventDefault();
-                input.value = "";
-                updateClearButton();
-                input.focus();
-                if (submitTimer) window.clearTimeout(submitTimer);
-                form.requestSubmit();
-              });
-
-              input.addEventListener("keydown", (event) => {
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  closePanel();
-                  toggle.focus();
-                }
-              });
-
-              document.addEventListener("click", (event) => {
-                if (!isOpen()) return;
-                if (wrap.contains(event.target)) return;
-                closePanel();
-              });
-
-              window.addEventListener("resize", () => {
-                if (isOpen()) setPanelWidth();
-              });
-
-              updateClearButton();
-              if (shouldStartOpen) openPanel(false);
-              else closePanel();
-            })();
-          `,
-        }}
-      />
     </main>
   );
 }
