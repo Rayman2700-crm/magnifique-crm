@@ -200,9 +200,12 @@ function DesktopCustomersAvatarCompactMenu({
   const ringBackground = `conic-gradient(${ringColors.map((color, index) => `${color} ${Math.round(index * step)}% ${Math.round((index + 1) * step)}%`).join(", ")})`;
 
   return (
-    <details id="desktop-customers-avatar-compact" className="relative">
-      <summary
-        className="relative inline-flex h-11 w-11 shrink-0 cursor-pointer list-none items-center justify-center rounded-full"
+    <div id="desktop-customers-avatar-compact">
+      <button
+        type="button"
+        popoverTarget="customers-desktop-avatar-menu"
+        popoverTargetAction="toggle"
+        className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
         aria-label="Behandler auswählen"
         style={{
           background: ringBackground,
@@ -221,10 +224,12 @@ function DesktopCustomersAvatarCompactMenu({
         <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#2563eb] px-1 text-[10px] font-extrabold text-white shadow-[0_0_0_2px_rgba(11,11,12,0.92)]">
           {active.tenant_id === "all" ? items.length : "1"}
         </span>
-      </summary>
+      </button>
 
       <div
-        className="absolute right-0 top-[calc(100%+16px)] z-[2147483647] w-[320px] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl"
+        id="customers-desktop-avatar-menu"
+        popover="auto"
+        className="fixed right-28 top-[230px] z-[2147483647] m-0 w-[320px] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl"
       >
         <div className="px-1 pb-2">
           <div className="text-sm font-semibold text-white">Behandler wählen</div>
@@ -266,10 +271,9 @@ function DesktopCustomersAvatarCompactMenu({
           })}
         </div>
       </div>
-    </details>
+    </div>
   );
 }
-
 
 function SummaryCard({ label, value, subtext }: { label: string; value: number; subtext: string }) {
   return (
@@ -418,9 +422,12 @@ function MobileCustomersAvatarMenu({
   const ringBackground = `conic-gradient(${ringColors.map((color, index) => `${color} ${Math.round(index * step)}% ${Math.round((index + 1) * step)}%`).join(', ')})`;
 
   return (
-    <details className="relative md:hidden">
-      <summary
-        className="relative inline-flex h-12 w-12 shrink-0 cursor-pointer list-none items-center justify-center rounded-full"
+    <>
+      <button
+        type="button"
+        popoverTarget="customers-avatar-menu"
+        popoverTargetAction="toggle"
+        className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full md:hidden"
         aria-label="Behandler auswählen"
         style={{
           background: ringBackground,
@@ -439,10 +446,12 @@ function MobileCustomersAvatarMenu({
         <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#2563eb] px-1 text-[10px] font-extrabold text-white shadow-[0_0_0_2px_rgba(11,11,12,0.92)]">
           {active?.tenant_id === 'all' ? items.length : '1'}
         </span>
-      </summary>
+      </button>
 
       <div
-        className="absolute right-0 top-[calc(100%+16px)] z-[2147483647] w-[min(640px,calc(100vw-24px))] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl"
+        id="customers-avatar-menu"
+        popover="auto"
+        className="md:hidden fixed right-4 top-[332px] z-[2147483647] m-0 w-[min(640px,calc(100vw-24px))] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl"
       >
         <div className="px-1 pb-2">
           <div className="text-sm font-semibold text-white">Behandler wählen</div>
@@ -483,10 +492,9 @@ function MobileCustomersAvatarMenu({
           })}
         </div>
       </div>
-    </details>
+    </>
   );
 }
-
 
 export default async function CustomersPage({
   searchParams,
@@ -986,7 +994,6 @@ export default async function CustomersPage({
           </CardContent>
         </Card>
       </section>
-
       <style dangerouslySetInnerHTML={{ __html: `
         @media (min-width: 768px) {
           #desktop-customers-avatar-strip { display: block; }
@@ -996,9 +1003,6 @@ export default async function CustomersPage({
           #desktop-customers-avatar-strip { display: none; }
           #desktop-customers-avatar-compact { display: block; }
         }
-
-        details > summary { list-style: none; }
-        details > summary::-webkit-details-marker { display: none; }
       ` }} />
       <script
         dangerouslySetInnerHTML={{
