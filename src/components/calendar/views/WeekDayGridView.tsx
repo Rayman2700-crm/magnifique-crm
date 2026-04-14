@@ -314,7 +314,8 @@ export default function WeekDayGridView(props: {
     onOpenCreate,
   } = props;
 
-  const totalHeight = (endHour - startHour + 1) * pxPerHour;
+  const DISPLAY_START_OFFSET_PX = pxPerHour / 2;
+  const totalHeight = (endHour - startHour + 1) * pxPerHour + DISPLAY_START_OFFSET_PX;
   const pxPerMin = pxPerHour / 60;
   const DRAG_THRESHOLD_PX = 6;
   const TIME_COL_WIDTH = 84;
@@ -573,7 +574,7 @@ export default function WeekDayGridView(props: {
     const payload = dragging.payload as Positioned;
     const previewHeight = Math.max(payload._height ?? 62, 62);
     const rawTop = (payload._top ?? 0) + dragging.deltaY;
-    const maxTop = Math.max(0, totalHeight - previewHeight);
+    const maxTop = Math.max(0, totalHeight - DISPLAY_START_OFFSET_PX - previewHeight);
     const previewTop = Math.max(0, Math.min(maxTop, rawTop));
 
     return {
@@ -586,42 +587,13 @@ export default function WeekDayGridView(props: {
       timeLine: payload._timeLine,
       reminderSentAt: payload.reminderSentAt,
     };
-  }, [dragging, totalHeight]);
+  }, [DISPLAY_START_OFFSET_PX, dragging, totalHeight]);
 
   return (
     <>
       {view === "week" || view === "day" ? (
         <div ref={containerRef} className="relative mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black/30">
-          {view === "week" && (
-            <button
-              type="button"
-              aria-label="Neuen Termin erstellen"
-              onClick={() => {
-                onOpenCreate?.();
-              }}
-              style={{
-                position: "absolute",
-                left: 18,
-                top: 12,
-                zIndex: 70,
-                width: 50,
-                height: 50,
-                borderRadius: 999,
-                background: "linear-gradient(180deg, #3b82f6 0%, #2563eb 100%)",
-                color: "#ffffff",
-                fontSize: 26,
-                fontWeight: 900,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "0 14px 32px rgba(37,99,235,0.34)",
-                border: "1px solid rgba(255,255,255,0.16)",
-                cursor: "pointer",
-              }}
-            >
-              +
-            </button>
-          )}
+
 
           <div
             className="week-grid-scroll overflow-auto"
@@ -640,7 +612,7 @@ export default function WeekDayGridView(props: {
               }}
             >
               <div
-                className="grid sticky top-0 z-20 bg-[#111214]/95 backdrop-blur"
+                className="grid sticky top-0 z-20 overflow-hidden rounded-t-2xl bg-[#111214]/95 backdrop-blur"
                 style={{
                   gridTemplateColumns: view === "week" ? `84px repeat(7, minmax(0, 1fr))` : `84px minmax(0, 1fr)`,
                   borderBottom: "1px solid rgba(255,255,255,0.10)",
@@ -652,14 +624,23 @@ export default function WeekDayGridView(props: {
                   return (
                     <div
                       key={d.iso}
-                      className="px-3 py-3"
+                      className="px-3 py-2"
                       style={{
                         borderLeft: "1px solid rgba(255,255,255,0.10)",
                         backgroundColor: d.isToday ? "rgba(255,255,255,0.04)" : "transparent",
                       }}
                     >
-                      <div className="text-xs font-semibold uppercase tracking-wide text-white/45">{head.dow}</div>
-                      <div className="mt-1 text-lg font-extrabold text-white">{head.day}</div>
+                      <div
+                        className="flex items-center justify-center gap-2 whitespace-nowrap"
+                        style={{ minHeight: 28 }}
+                      >
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-white/45">
+                          {head.dow}
+                        </span>
+                        <span className="text-[15px] font-extrabold leading-none text-white">
+                          {head.day}
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
@@ -673,22 +654,21 @@ export default function WeekDayGridView(props: {
               >
                 <div className="relative" style={{ height: totalHeight }}>
                   {Array.from({ length: endHour - startHour + 1 }).map((_, i) => {
-                    const h = startHour + i;
-                    const isFirst = i === 0;
+                    const hour = startHour + i;
                     return (
                       <div
-                        key={h}
+                        key={`${hour}:00`}
                         className="absolute left-0 w-full text-right text-xs text-white/45"
                         style={{
-                          top: i * pxPerHour,
-                          transform: isFirst ? "translateY(6px)" : "translateY(-50%)",
+                          top: DISPLAY_START_OFFSET_PX + i * pxPerHour,
+                          transform: "translateY(-50%)",
                           paddingRight: 14,
                           paddingLeft: 10,
                           lineHeight: 1,
                           pointerEvents: "none",
                         }}
                       >
-                        {pad2(h)}:00
+                        {`${pad2(hour)}:00`}
                       </div>
                     );
                   })}
@@ -730,7 +710,7 @@ export default function WeekDayGridView(props: {
                             position: "absolute",
                             left: 0,
                             right: 0,
-                            top: nowInfo.top,
+                            top: nowInfo.top + DISPLAY_START_OFFSET_PX,
                             height: 2,
                             backgroundColor: "#ff3b30",
                             zIndex: 10,
@@ -772,7 +752,7 @@ export default function WeekDayGridView(props: {
                             <div
                               style={{
                                 position: "absolute",
-                                top: draggingPreview.top,
+                                top: draggingPreview.top + DISPLAY_START_OFFSET_PX,
                                 left: 8,
                                 width: "calc(100% - 16px)",
                                 height: draggingPreview.height,
@@ -874,7 +854,12 @@ export default function WeekDayGridView(props: {
                         const topLine = cluster.events[0]?._timeLine ?? "Parallel";
                         const accentColors = uniqueTenants.map((tenantName) => luxuryTheme(tenantTheme(tenantName)).accent);
                         const clusterTheme = clusterCardTheme(accentColors);
-                        const displayHeight = getClusterDisplayHeight(cluster.events.length, cluster.height);
+                        const preferredDisplayHeight = getClusterDisplayHeight(cluster.events.length, cluster.height);
+                        const availableClusterHeight = Math.max(
+                          52,
+                          totalHeight - (cluster.top + DISPLAY_START_OFFSET_PX) - 2
+                        );
+                        const displayHeight = Math.min(preferredDisplayHeight, availableClusterHeight);
                         const compactCluster = displayHeight <= 80;
                         const clusterInitials = cluster.events.map((x) => initialsFromName(x._customer));
                         const visibleClusterEvents = cluster.events.slice(0, 4);
@@ -897,7 +882,7 @@ export default function WeekDayGridView(props: {
                             onMouseLeave={() => setHoveredClusterId((current) => (current === cluster.id ? null : current))}
                             style={{
                               position: "absolute",
-                              top: cluster.top,
+                              top: cluster.top + DISPLAY_START_OFFSET_PX,
                               left: 6,
                               width: "calc(100% - 12px)",
                               height: displayHeight,
@@ -1152,17 +1137,34 @@ export default function WeekDayGridView(props: {
                           const isSaving = moveSavingId === ev.id;
 
                           const eventWidthPx = Math.max(16, dayColumnWidthPx / ev._cols - 6);
-                          const eventHeightPx = Math.max(28, ev._height);
+                          const rawEventHeightPx = Math.max(28, ev._height);
+                          const preferredEventHeight = Math.max(
+                            ev._height,
+                            eventWidthPx < 80 || rawEventHeightPx < 38
+                              ? 30
+                              : eventWidthPx < 152 || rawEventHeightPx < 68
+                                ? 48
+                                : rawEventHeightPx >= 120
+                                  ? 120
+                                  : 62
+                          );
+                          const availableEventHeight = Math.max(
+                            24,
+                            totalHeight - (ev._top + DISPLAY_START_OFFSET_PX) - 2
+                          );
+                          const eventHeightPx = Math.min(preferredEventHeight, availableEventHeight);
+                          const isBottomClipped = eventHeightPx < preferredEventHeight - 1;
                           const isTiny = eventWidthPx < 80 || eventHeightPx < 38;
                           const isCompact = !isTiny && (eventWidthPx < 152 || eventHeightPx < 68);
                           const isMedium = !isTiny && !isCompact && (eventWidthPx < 190 || eventHeightPx < 104);
+                          const isLongCard = !isTiny && !isCompact && eventHeightPx >= 120;
                           const tooltipOpen = hoveredTinyId === ev.id && !dragging;
 
                           const titleText = isTiny
                             ? initialsFromName(ev._customer)
                             : isCompact
                               ? clampText(shortCustomerName(ev._customer), 16)
-                              : clampText(ev._customer, isMedium ? 22 : 30);
+                              : clampText(ev._customer, isLongCard ? 24 : isMedium ? 22 : 30);
 
                           const compactTimeText = getSmartCompactTime(ev._timeLine, eventWidthPx);
                           const timeText = isCompact ? fmtShortTime(ev._timeLine) : ev._timeLine;
@@ -1229,15 +1231,15 @@ export default function WeekDayGridView(props: {
                               title={undefined}
                               style={{
                                 position: "absolute",
-                                top: ev._top,
-                                height: Math.max(ev._height, isTiny ? 30 : isCompact ? 48 : 62),
+                                top: ev._top + DISPLAY_START_OFFSET_PX,
+                                height: eventHeightPx,
                                 left: `calc(${leftPct}% + 4px)`,
                                 width: `calc(${widthPct}% - 8px)`,
                                 background: theme.cardBg,
                                 color: theme.cardText,
                                 border: `1px solid ${isDragging ? theme.accentLine : "rgba(255,255,255,0.11)"}`,
                                 borderRadius: isTiny ? 12 : 18,
-                                padding: isTiny ? "4px 7px 4px 13px" : isCompact ? "8px 9px 8px 15px" : "10px 11px 10px 16px",
+                                padding: isTiny ? "4px 7px 4px 13px" : isCompact ? "8px 9px 8px 15px" : isLongCard ? "10px 11px 12px 16px" : "10px 11px 10px 16px",
                                 textAlign: "left",
                                 overflow: "visible",
                                 zIndex: tooltipOpen ? 30 : isDragging ? 20 : 1,
@@ -1253,9 +1255,9 @@ export default function WeekDayGridView(props: {
                                 touchAction: "none",
                                 display: "flex",
                                 flexDirection: "column",
-                                justifyContent: isTiny ? "center" : "space-between",
+                                justifyContent: isTiny ? "center" : isLongCard ? "flex-start" : "space-between",
                                 alignItems: isTiny ? "center" : "stretch",
-                                gap: isTiny ? 0 : 7,
+                                gap: isTiny ? 0 : isLongCard ? 10 : 7,
                                 backdropFilter: "blur(10px)",
                               }}
                               onClick={(e) => {
@@ -1290,10 +1292,28 @@ export default function WeekDayGridView(props: {
                                   }}
                                 />
                               ) : null}
+
+                              {isBottomClipped ? (
+                                <span
+                                  style={{
+                                    position: "absolute",
+                                    left: 12,
+                                    right: 12,
+                                    bottom: 0,
+                                    height: 28,
+                                    background: "linear-gradient(180deg, rgba(10,11,14,0) 0%, rgba(10,11,14,0.88) 100%)",
+                                    borderBottomLeftRadius: isTiny ? 12 : 18,
+                                    borderBottomRightRadius: isTiny ? 12 : 18,
+                                    pointerEvents: "none",
+                                    zIndex: 2,
+                                  }}
+                                />
+                              ) : null}
+
                               <div
                                 style={{
                                   position: "absolute",
-                                  top: 6,
+                                  top: isLongCard ? 8 : 6,
                                   right: 6,
                                   display: "flex",
                                   alignItems: "center",
@@ -1500,7 +1520,7 @@ export default function WeekDayGridView(props: {
                                         fontWeight: 900,
                                         lineHeight: 1.08,
                                         color: theme.cardText,
-                                        whiteSpace: isMedium ? "nowrap" : "normal",
+                                        whiteSpace: isLongCard ? "nowrap" : isMedium ? "nowrap" : "normal",
                                         overflow: "hidden",
                                         textOverflow: "ellipsis",
                                         display: "-webkit-box",
@@ -1508,6 +1528,7 @@ export default function WeekDayGridView(props: {
                                         WebkitBoxOrient: "vertical",
                                         letterSpacing: "-0.01em",
                                         textShadow: "0 1px 0 rgba(0,0,0,0.25)",
+                                        maxWidth: "100%",
                                       }}
                                     >
                                       {titleText}
@@ -1517,10 +1538,12 @@ export default function WeekDayGridView(props: {
                                   <div
                                     style={{
                                       display: "flex",
-                                      alignItems: "center",
+                                      alignItems: isLongCard ? "flex-start" : "center",
                                       justifyContent: "space-between",
                                       gap: 6,
-                                      minHeight: 18,
+                                      minHeight: isLongCard ? 0 : 18,
+                                      marginTop: isLongCard ? 2 : 0,
+                                      opacity: isLongCard ? 0.82 : 1,
                                     }}
                                   >
                                     {showTenant ? (
@@ -1555,7 +1578,7 @@ export default function WeekDayGridView(props: {
                                             textOverflow: "ellipsis",
                                           }}
                                         >
-                                          {clampText(ev.tenantName, isMedium ? 12 : 16)}
+                                          {clampText(ev.tenantName, isLongCard ? 12 : isMedium ? 12 : 16)}
                                         </span>
                                       </div>
                                     ) : (
