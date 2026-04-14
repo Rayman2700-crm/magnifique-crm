@@ -970,115 +970,6 @@ function getLegendInitials(name: string | null | undefined) {
   return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
 }
 
-function inferLegendUserId(name: string | null | undefined) {
-  const n = String(name ?? "").trim().toLowerCase();
-
-  if (n.includes("radu")) return "radu";
-  if (n.includes("raluca")) return "raluca";
-  if (n.includes("alexandra")) return "alexandra";
-  if (n.includes("barbara")) return "barbara";
-
-  const first = n
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s-]/g, " ")
-    .trim()
-    .split(/\s+/)[0];
-
-  return first || "user";
-}
-
-function buildEffectiveLegendUsers(
-  legendUsers: LegendUser[],
-  tenants: TenantRow[],
-  creatorTenantId: string | null
-) {
-  const byKey = new Map<string, LegendUser>();
-
-  for (const user of legendUsers) {
-    const normalized: LegendUser = {
-      tenantId: user.tenantId,
-      filterTenantId: user.filterTenantId || user.tenantId,
-      userId: user.userId || inferLegendUserId(user.fullName ?? user.tenantDisplayName),
-      fullName: user.fullName ?? user.tenantDisplayName,
-      tenantDisplayName: user.tenantDisplayName || user.fullName || "Behandler",
-    };
-
-    byKey.set(`tenant:${normalized.tenantId}`, normalized);
-    byKey.set(`filter:${normalized.filterTenantId}`, normalized);
-    byKey.set(`name:${String(normalized.tenantDisplayName).toLowerCase()}`, normalized);
-  }
-
-  for (const tenant of tenants) {
-    const display = tenant.display_name?.trim();
-    if (!display) continue;
-
-    const existing =
-      byKey.get(`tenant:${tenant.id}`) ??
-      byKey.get(`name:${display.toLowerCase()}`) ??
-      null;
-
-    const normalized: LegendUser = {
-      tenantId: existing?.tenantId || tenant.id,
-      filterTenantId: existing?.filterTenantId || tenant.id,
-      userId: existing?.userId || inferLegendUserId(display),
-      fullName: existing?.fullName || display,
-      tenantDisplayName: existing?.tenantDisplayName || display,
-    };
-
-    byKey.set(`tenant:${normalized.tenantId}`, normalized);
-    byKey.set(`filter:${normalized.filterTenantId}`, normalized);
-    byKey.set(`name:${String(normalized.tenantDisplayName).toLowerCase()}`, normalized);
-  }
-
-  const deduped = Array.from(
-    new Map(
-      Array.from(byKey.values()).map((user) => [
-        `${user.tenantId}:${user.filterTenantId}:${String(user.tenantDisplayName).toLowerCase()}`,
-        user,
-      ])
-    ).values()
-  );
-
-  const priority = ["radu", "raluca", "alexandra", "barbara"];
-
-  deduped.sort((a, b) => {
-    const aName = String(a.fullName ?? a.tenantDisplayName).toLowerCase();
-    const bName = String(b.fullName ?? b.tenantDisplayName).toLowerCase();
-    const aIndex = priority.findIndex((entry) => aName.includes(entry));
-    const bIndex = priority.findIndex((entry) => bName.includes(entry));
-
-    if (aIndex !== -1 || bIndex !== -1) {
-      if (aIndex === -1) return 1;
-      if (bIndex === -1) return -1;
-      return aIndex - bIndex;
-    }
-
-    return aName.localeCompare(bName, "de");
-  });
-
-  if (creatorTenantId) {
-    const hasCreator = deduped.some(
-      (user) => user.tenantId === creatorTenantId || user.filterTenantId === creatorTenantId
-    );
-
-    if (!hasCreator) {
-      const creatorTenant = tenants.find((tenant) => tenant.id === creatorTenantId);
-      if (creatorTenant?.display_name) {
-        deduped.push({
-          tenantId: creatorTenant.id,
-          filterTenantId: creatorTenant.id,
-          userId: inferLegendUserId(creatorTenant.display_name),
-          fullName: creatorTenant.display_name,
-          tenantDisplayName: creatorTenant.display_name,
-        });
-      }
-    }
-  }
-
-  return deduped;
-}
-
 
 function DesktopHeaderLegend({
   users,
@@ -1743,20 +1634,15 @@ export default function DashboardCalendarCardClient({
   const view = calendarState.view;
   const anchorISO = calendarState.anchorISO;
 
-  const effectiveLegendUsers = useMemo(
-    () => buildEffectiveLegendUsers(legendUsers, tenants, creatorTenantId),
-    [creatorTenantId, legendUsers, tenants]
-  );
-
   const currentLegendUser = useMemo(() => {
     if (!creatorTenantId) return null;
 
     return (
-      effectiveLegendUsers.find(
+      legendUsers.find(
         (u) => u.tenantId === creatorTenantId || u.filterTenantId === creatorTenantId
       ) ?? null
     );
-  }, [creatorTenantId, effectiveLegendUsers]);
+  }, [creatorTenantId, legendUsers]);
 
   const currentTenantDisplayName =
     currentLegendUser?.tenantDisplayName ??
@@ -1765,9 +1651,15 @@ export default function DashboardCalendarCardClient({
 
   const isAdmin = useMemo(() => {
     if (typeof isAdminProp === "boolean") return isAdminProp;
-    if (effectiveLegendUsers.length > 1) return true;
+    if (legendUsers.length > 1) return true;
     return isAdminTenantName(currentTenantDisplayName);
-  }, [currentTenantDisplayName, effectiveLegendUsers.length, isAdminProp]);
+  }, [currentTenantDisplayName, isAdminProp, legendUsers.length]);
+
+  useEffect(() => {
+    if (isAdmin) return;
+
+    setSelectedTenantId(null);
+  }, [isAdmin]);
 
   const weekStartISO = useMemo(() => {
     return toLocalISODate(startOfWeekMondayLocal(new Date(`${anchorISO}T12:00:00`)));
@@ -2044,14 +1936,14 @@ export default function DashboardCalendarCardClient({
     const queryTokens = q.split(/\s+/).map((token) => token.trim()).filter(Boolean);
 
     return items.filter((item) => {
-      if (!matchesSelectedTenant(item, selectedTenantId, effectiveLegendUsers)) {
+      if (!matchesSelectedTenant(item, selectedTenantId, legendUsers)) {
         return false;
       }
 
       if (!queryTokens.length) return true;
 
       const legendUser =
-        effectiveLegendUsers.find(
+        legendUsers.find(
           (user) =>
             user.tenantId === item.tenantId ||
             user.filterTenantId === item.tenantId ||
@@ -2079,7 +1971,7 @@ export default function DashboardCalendarCardClient({
 
       return queryTokens.some((token) => haystack.includes(token));
     });
-  }, [desktopSearchQuery, items, effectiveLegendUsers, selectedTenantId]);
+  }, [desktopSearchQuery, items, legendUsers, selectedTenantId]);
 
   return (
     <Card className="overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
@@ -2144,12 +2036,12 @@ export default function DashboardCalendarCardClient({
         <div className="hidden md:block">
           <div id="dashboard-calendar-header-shell" className="relative pr-[360px] xl:pr-[520px]">
             <div id="dashboard-calendar-header-actions" className="absolute right-0 top-0 z-30 flex items-start justify-end gap-3">
-              {effectiveLegendUsers.length > 0 ? (
+              {isAdmin ? (
                 <div className="max-w-[520px] overflow-hidden">
                   <div className="max-w-full overflow-x-auto">
                     <div className="min-w-max">
                       <DesktopHeaderLegend
-                        users={effectiveLegendUsers}
+                        users={legendUsers}
                         activeTenantId={selectedTenantId}
                         onSelect={setSelectedTenantId}
                       />
@@ -2298,9 +2190,9 @@ export default function DashboardCalendarCardClient({
                 <span className="text-[26px] font-semibold leading-none">+</span>
               </MobileCircleActionButton>
               <MobileViewPicker value={view} onChange={handleChangeView} anchorISO={anchorISO} />
-              {effectiveLegendUsers.length > 0 ? (
+              {isAdmin ? (
                 <MobileLegendPicker
-                  users={effectiveLegendUsers}
+                  users={legendUsers}
                   activeTenantId={selectedTenantId}
                   onSelect={setSelectedTenantId}
                 />
@@ -2392,7 +2284,7 @@ export default function DashboardCalendarCardClient({
                       <DailyAgendaPanel
                         selectedISO={anchorISO}
                         items={visibleItems}
-                        legendUsers={effectiveLegendUsers}
+                        legendUsers={legendUsers}
                         searchQuery={desktopSearchQuery}
                       />
                     </div>
@@ -2410,7 +2302,7 @@ export default function DashboardCalendarCardClient({
                       <DailyAgendaPanel
                         selectedISO={anchorISO}
                         items={visibleItems}
-                        legendUsers={effectiveLegendUsers}
+                        legendUsers={legendUsers}
                         panelHeight={miniMonthCardHeight}
                         searchQuery={desktopSearchQuery}
                       />
