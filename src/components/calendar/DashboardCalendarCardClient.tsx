@@ -2327,109 +2327,107 @@ return (
           </div>
         </div>
 
-        <div id="dashboard-calendar-mobile-shell" className="md:hidden flex min-w-0 flex-col gap-4 lg:gap-6">
-<div id="dashboard-calendar-mobile-toolbar" className="md:hidden flex min-w-0 flex-col gap-3">
-  <div className="min-w-0">
-    <div className="truncate text-lg font-semibold text-white">Kalender</div>
-    <div className="truncate text-sm text-white/60">Team-Übersicht</div>
+<div id="dashboard-calendar-mobile-shell" className="md:hidden flex min-w-0 flex-col gap-4 lg:gap-6">
+  <div id="dashboard-calendar-mobile-toolbar" className="md:hidden flex min-w-0 flex-col gap-3">
+    <div className="min-w-0">
+      <div className="truncate text-lg font-semibold text-white">Kalender</div>
+      <div className="truncate text-sm text-white/60">Team-Übersicht</div>
+    </div>
+
+    <div id="dashboard-calendar-mobile-toolbar-actions" className="flex w-full items-center justify-end gap-2">
+      <button
+        ref={desktopSearchButtonRef}
+        type="button"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setDesktopSearchOpen((current) => !current);
+        }}
+        className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border md:hidden"
+        aria-label="Suche öffnen"
+        style={{
+          borderColor: "rgba(255,255,255,0.10)",
+          background: "rgba(255,255,255,0.04)",
+          color: "rgba(255,255,255,0.88)",
+          boxShadow: "0 0 0 2px rgba(11,11,12,0.95), 0 10px 28px rgba(0,0,0,0.30)",
+        }}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-[18px] w-[18px]">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.5-3.5" />
+        </svg>
+      </button>
+
+      <MobileCircleActionButton
+        label="Neuen Termin erstellen"
+        variant="primary"
+        onClick={() => setCreateOpen(true)}
+      >
+        <span className="text-[26px] font-semibold leading-none">+</span>
+      </MobileCircleActionButton>
+
+      <MobileViewPicker value={view} onChange={handleChangeView} anchorISO={anchorISO} />
+
+      {effectiveLegendUsers.length > 0 ? (
+        <MobileLegendPicker
+          users={effectiveLegendUsers}
+          activeTenantId={selectedTenantId}
+          onSelect={setSelectedTenantId}
+        />
+      ) : null}
+    </div>
   </div>
 
-  <div
-    id="dashboard-calendar-mobile-toolbar-actions"
-    className="flex w-full items-center justify-end gap-2"
-  >
-              <button
-                ref={desktopSearchButtonRef}
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setDesktopSearchOpen((current) => !current);
-                }}
-                className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border md:hidden"
-                aria-label="Suche öffnen"
-                style={{
-                  borderColor: "rgba(255,255,255,0.10)",
-                  background: "rgba(255,255,255,0.04)",
-                  color: "rgba(255,255,255,0.88)",
-                  boxShadow: "0 0 0 2px rgba(11,11,12,0.95), 0 10px 28px rgba(0,0,0,0.30)",
-                }}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-[18px] w-[18px]">
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="m20 20-3.5-3.5" />
-                </svg>
-              </button>
+  {currentLegendUser && !isAdmin ? (
+    <div className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/80 lg:inline-flex lg:w-fit">
+      {currentLegendUser.fullName ?? currentLegendUser.tenantDisplayName}
+    </div>
+  ) : null}
 
-              <MobileCircleActionButton
-                label="Neuen Termin erstellen"
-                variant="primary"
-                onClick={() => setCreateOpen(true)}
-              >
-                <span className="text-[26px] font-semibold leading-none">+</span>
-              </MobileCircleActionButton>
-
-              <MobileViewPicker value={view} onChange={handleChangeView} anchorISO={anchorISO} />
-
-              {effectiveLegendUsers.length > 0 ? (
-                <MobileLegendPicker
-                  users={effectiveLegendUsers}
-                  activeTenantId={selectedTenantId}
-                  onSelect={setSelectedTenantId}
-                />
-              ) : null}
-            </div>
-          </div>
-
-          {currentLegendUser && !isAdmin ? (
-            <div className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/80 lg:inline-flex lg:w-fit">
-              {currentLegendUser.fullName ?? currentLegendUser.tenantDisplayName}
-            </div>
-          ) : null}
-
-          {desktopSearchOpen ? (
-            <div
-              ref={desktopSearchPanelRef}
-              className="md:hidden rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.985)_0%,rgba(12,13,16,0.985)_100%)] p-3 shadow-[0_20px_50px_rgba(0,0,0,0.36)] backdrop-blur-xl" id="dashboard-calendar-mobile-search"
-            >
-              <div className="flex h-12 items-center rounded-[18px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
-                <span className="mr-3 inline-flex h-4 w-4 shrink-0 items-center justify-center text-white/35">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-                    <circle cx="11" cy="11" r="7" />
-                    <path d="m20 20-3.5-3.5" />
-                  </svg>
-                </span>
-                <input
-                  type="text"
-                  value={desktopSearchQuery}
-                  onChange={(e) => setDesktopSearchQuery(e.target.value)}
-                  placeholder="Termin, Kunde, E-Mail, Telefon"
-                  autoFocus
-                  className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/35"
-                />
-                {desktopSearchQuery ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDesktopSearchQuery("");
-                    }}
-                    className="ml-3 inline-flex h-8 w-8 min-h-8 min-w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] p-0 text-white/55 transition hover:bg-white/[0.08] hover:text-white"
-                    aria-label="Suche löschen"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-                      <path d="M6 6l12 12" />
-                      <path d="M18 6 6 18" />
-                    </svg>
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-        </div>
+  {desktopSearchOpen ? (
+    <div
+      ref={desktopSearchPanelRef}
+      className="md:hidden rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.985)_0%,rgba(12,13,16,0.985)_100%)] p-3 shadow-[0_20px_50px_rgba(0,0,0,0.36)] backdrop-blur-xl"
+      id="dashboard-calendar-mobile-search"
+    >
+      <div className="flex h-12 items-center rounded-[18px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
+        <span className="mr-3 inline-flex h-4 w-4 shrink-0 items-center justify-center text-white/35">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+        </span>
+        <input
+          type="text"
+          value={desktopSearchQuery}
+          onChange={(e) => setDesktopSearchQuery(e.target.value)}
+          placeholder="Termin, Kunde, E-Mail, Telefon"
+          autoFocus
+          className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/35"
+        />
+        {desktopSearchQuery ? (
+          <button
+            type="button"
+            onClick={() => {
+              setDesktopSearchQuery("");
+            }}
+            className="ml-3 inline-flex h-8 w-8 min-h-8 min-w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] p-0 text-white/55 transition hover:bg-white/[0.08] hover:text-white"
+            aria-label="Suche löschen"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+              <path d="M6 6l12 12" />
+              <path d="M18 6 6 18" />
+            </svg>
+          </button>
+        ) : null}
+      </div>
+    </div>
+  ) : null}
+</div>
 
         <div className="mt-5 lg:mt-7">
           {errorText ? (
