@@ -21,6 +21,7 @@ type ApptRow = {
   reminder_sent_at: string | null;
   tenant_id: string;
   person_id: string;
+  google_calendar_id?: string | null;
   tenant?: TenantJoin | TenantJoin[] | null;
   person?: PersonJoin | PersonJoin[] | null;
 };
@@ -99,6 +100,89 @@ function parseNotes(notes: string | null) {
 
   return { title, note, status };
 }
+
+function calendarSourceMeta(calendarId: string | null | undefined) {
+  const raw = String(calendarId ?? "").trim();
+  const lower = raw.toLowerCase();
+
+  if (!raw) {
+    return {
+      id: "",
+      label: "Google",
+      shortLabel: "Google",
+      color: "#64748b",
+    };
+  }
+
+  if (lower.includes("holiday")) {
+    return {
+      id: raw,
+      label: "Feiertage",
+      shortLabel: "Feiertage",
+      color: "#ef4444",
+    };
+  }
+
+  if (lower.includes("family")) {
+    return {
+      id: raw,
+      label: "Familie",
+      shortLabel: "Familie",
+      color: "#10b981",
+    };
+  }
+
+  if (lower.includes("weeknum") || lower.includes("kalenderwoche")) {
+    return {
+      id: raw,
+      label: "Kalenderwochen",
+      shortLabel: "KW",
+      color: "#f59e0b",
+    };
+  }
+
+  if (lower.includes("realist") || lower.includes("internet")) {
+    return {
+      id: raw,
+      label: "Internetkalender",
+      shortLabel: "Internet",
+      color: "#8b5cf6",
+    };
+  }
+
+  if (raw.includes("@")) {
+    const localPart = raw.split("@")[0] ?? "";
+    const words = localPart
+      .replace(/[._-]+/g, " ")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    const title = words
+      .map((word) => word.slice(0, 1).toUpperCase() + word.slice(1))
+      .join(" ")
+      .trim();
+
+    const finalLabel = title || raw;
+
+    return {
+      id: raw,
+      label: finalLabel,
+      shortLabel: finalLabel.split(/\s+/)[0] || finalLabel,
+      color: "#3b82f6",
+    };
+  }
+
+  const safeLabel = raw.length > 28 ? `${raw.slice(0, 28).trim()}…` : raw;
+
+  return {
+    id: raw,
+    label: safeLabel,
+    shortLabel: safeLabel.split(/\s+/)[0] || safeLabel,
+    color: "#3b82f6",
+  };
+}
+
 
 function toLocalISODate(d: Date) {
   const y = d.getFullYear();
@@ -585,6 +669,32 @@ function DailyAgendaPanel({
                   )}
                   <span className="text-white/45"> · </span>
                   <span>{item.title || "Dienstleistung unbekannt"}</span>
+                  {(item as any).googleCalendarLabel ? (
+                    <>
+                      <span className="text-white/35"> · </span>
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold"
+                        style={{
+                          borderColor: `${String((item as any).googleCalendarColor ?? "#64748b")}55`,
+                          background: `${String((item as any).googleCalendarColor ?? "#64748b")}1f`,
+                          color: "rgba(255,255,255,0.88)",
+                        }}
+                        title={String((item as any).googleCalendarLabel)}
+                      >
+                        <span
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: 999,
+                            backgroundColor: String((item as any).googleCalendarColor ?? "#64748b"),
+                            boxShadow: `0 0 8px ${String((item as any).googleCalendarColor ?? "#64748b")}88`,
+                            flexShrink: 0,
+                          }}
+                        />
+                        {String((item as any).googleCalendarShortLabel ?? (item as any).googleCalendarLabel)}
+                      </span>
+                    </>
+                  ) : null}
                 </div>
 
                 <div
@@ -1832,7 +1942,7 @@ export default function DashboardCalendarCardClient({
       .from("appointments")
       .select(
         `
-        id,start_at,end_at,notes_internal,reminder_sent_at,tenant_id,person_id,
+        id,start_at,end_at,notes_internal,reminder_sent_at,tenant_id,person_id,google_calendar_id,
         tenant:tenants ( display_name ),
         person:persons ( full_name, phone, email )
       `
@@ -1889,6 +1999,8 @@ export default function DashboardCalendarCardClient({
 
       const canManageCustomerActions = isAdmin || (!!creatorTenantId && a.tenant_id === creatorTenantId);
 
+      const sourceMeta = calendarSourceMeta(a.google_calendar_id ?? null);
+
       return {
         id: a.id,
         start_at: a.start_at,
@@ -1906,7 +2018,11 @@ export default function DashboardCalendarCardClient({
         canOpenCustomerProfile: canManageCustomerActions,
         canCreateFollowUp: canManageCustomerActions,
         canDeleteAppointment: canManageCustomerActions,
-      };
+        googleCalendarId: sourceMeta.id,
+        googleCalendarLabel: sourceMeta.label,
+        googleCalendarShortLabel: sourceMeta.shortLabel,
+        googleCalendarColor: sourceMeta.color,
+      } as Item;
     });
 
     if (seq !== loadSeq.current) return;

@@ -9,6 +9,10 @@ type Positioned = {
   id: string;
   tenantName: string;
   reminderSentAt?: string | null;
+  googleCalendarId?: string | null;
+  googleCalendarLabel?: string | null;
+  googleCalendarShortLabel?: string | null;
+  googleCalendarColor?: string | null;
   _top: number;
   _height: number;
   _col: number;
@@ -1405,6 +1409,7 @@ export default function WeekDayGridView(props: {
                                       fontSize: 10,
                                       fontWeight: 700,
                                       color: theme.cardMuted,
+                                      flexWrap: "wrap",
                                     }}
                                   >
                                     <span
@@ -1417,6 +1422,20 @@ export default function WeekDayGridView(props: {
                                       }}
                                     />
                                     {ev.tenantName}
+                                    {ev.googleCalendarLabel ? (
+                                      <span
+                                        title={String(ev.googleCalendarLabel)}
+                                        style={{
+                                          width: 8,
+                                          height: 8,
+                                          borderRadius: 999,
+                                          backgroundColor: String(ev.googleCalendarColor ?? "#64748b"),
+                                          boxShadow: `0 0 10px ${String(ev.googleCalendarColor ?? "#64748b")}88`,
+                                          display: "inline-block",
+                                          flexShrink: 0,
+                                        }}
+                                      />
+                                    ) : null}
                                   </div>
                                   <div
                                     style={{
@@ -1450,27 +1469,52 @@ export default function WeekDayGridView(props: {
                                     paddingRight: chrome.rightReserve,
                                   }}
                                 >
-                                  <span
+                                  <div
                                     style={{
                                       display: "inline-flex",
+                                      flexDirection: "column",
                                       alignItems: "center",
-                                      borderRadius: 999,
-                                      padding: "2px 6px",
-                                      background: theme.labelBg,
-                                      border: `1px solid ${theme.labelBorder}`,
-                                      color: theme.cardSubtle,
-                                      fontSize: 9,
-                                      fontWeight: 700,
-                                      lineHeight: 1,
-                                      whiteSpace: "nowrap",
+                                      justifyContent: "center",
                                       flexShrink: 0,
                                       maxWidth: "100%",
-                                      overflow: "hidden",
-                                      textOverflow: "ellipsis",
                                     }}
                                   >
-                                    {headerTimeText}
-                                  </span>
+                                    <span
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        borderRadius: 999,
+                                        padding: "2px 6px",
+                                        background: theme.labelBg,
+                                        border: `1px solid ${theme.labelBorder}`,
+                                        color: theme.cardSubtle,
+                                        fontSize: 9,
+                                        fontWeight: 700,
+                                        lineHeight: 1,
+                                        whiteSpace: "nowrap",
+                                        flexShrink: 0,
+                                        maxWidth: "100%",
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                      }}
+                                    >
+                                      {headerTimeText}
+                                    </span>
+                                    {ev.googleCalendarLabel ? (
+                                      <span
+                                        title={String(ev.googleCalendarLabel)}
+                                        style={{
+                                          marginTop: 4,
+                                          width: 8,
+                                          height: 8,
+                                          borderRadius: 999,
+                                          backgroundColor: String(ev.googleCalendarColor ?? "#64748b"),
+                                          boxShadow: `0 0 10px ${String(ev.googleCalendarColor ?? "#64748b")}88`,
+                                          display: "inline-block",
+                                        }}
+                                      />
+                                    ) : null}
+                                  </div>
                                   {customerChip}
                                 </div>
                               ) : (
@@ -1479,7 +1523,7 @@ export default function WeekDayGridView(props: {
                                     <div
                                       style={{
                                         display: "inline-flex",
-                                        alignItems: "center",
+                                        alignItems: "flex-start",
                                         gap: chrome.headerGap,
                                         minWidth: 0,
                                         maxWidth: "100%",
@@ -1488,27 +1532,53 @@ export default function WeekDayGridView(props: {
                                       <div
                                         style={{
                                           display: "inline-flex",
+                                          flexDirection: "column",
                                           alignItems: "center",
-                                          width: "fit-content",
-                                          maxWidth: "100%",
-                                          minWidth: 0,
-                                          borderRadius: 999,
-                                          padding: "2px 6px",
-                                          background: theme.labelBg,
-                                          border: `1px solid ${theme.labelBorder}`,
-                                          fontSize: 9,
-                                          fontWeight: 700,
-                                          color: theme.cardSubtle,
-                                          lineHeight: 1.05,
-                                          whiteSpace: "nowrap",
-                                          overflow: "hidden",
-                                          textOverflow: "ellipsis",
-                                          letterSpacing: "0.02em",
-                                          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+                                          justifyContent: "flex-start",
                                           flexShrink: 0,
+                                          minWidth: 0,
                                         }}
                                       >
-                                        {headerTimeText}
+                                        <div
+                                          style={{
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            width: "fit-content",
+                                            maxWidth: "100%",
+                                            minWidth: 0,
+                                            borderRadius: 999,
+                                            padding: "2px 6px",
+                                            background: theme.labelBg,
+                                            border: `1px solid ${theme.labelBorder}`,
+                                            fontSize: 9,
+                                            fontWeight: 700,
+                                            color: theme.cardSubtle,
+                                            lineHeight: 1.05,
+                                            whiteSpace: "nowrap",
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            letterSpacing: "0.02em",
+                                            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+                                            flexShrink: 0,
+                                          }}
+                                        >
+                                          {headerTimeText}
+                                        </div>
+                                        {ev.googleCalendarLabel ? (
+                                          <span
+                                            title={String(ev.googleCalendarLabel)}
+                                            style={{
+                                              marginTop: 4,
+                                              width: 8,
+                                              height: 8,
+                                              borderRadius: 999,
+                                              backgroundColor: String(ev.googleCalendarColor ?? "#64748b"),
+                                              boxShadow: `0 0 10px ${String(ev.googleCalendarColor ?? "#64748b")}88`,
+                                              display: "inline-block",
+                                              flexShrink: 0,
+                                            }}
+                                          />
+                                        ) : null}
                                       </div>
                                       {customerChip}
                                     </div>

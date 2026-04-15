@@ -13,6 +13,8 @@ type CalendarListItem = {
   accessRole?: string;
 };
 
+const EMPTY_IDS: string[] = [];
+
 function Button({
   children,
   variant = "primary",
@@ -49,13 +51,23 @@ function MessageCard({
   return <div className={className}>{children}</div>;
 }
 
+function sameStringArray(a: string[], b: string[]) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 export default function GoogleCalendarSetupSlideover({
   calendars,
   savedDefault,
+  savedEnabled,
   loadError,
 }: {
   calendars: CalendarListItem[];
   savedDefault: string | null;
+  savedEnabled?: string[] | null;
   loadError: string | null;
 }) {
   const pathname = usePathname();
@@ -64,6 +76,8 @@ export default function GoogleCalendarSetupSlideover({
 
   const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(false);
+  const [selectedDefault, setSelectedDefault] = useState<string>(savedDefault ?? "");
+  const [enabledIds, setEnabledIds] = useState<string[]>(EMPTY_IDS);
 
   const open = searchParams?.get("openGoogleSetup") === "1";
   const error = searchParams?.get("error");
@@ -76,7 +90,41 @@ export default function GoogleCalendarSetupSlideover({
     return `${pathname}${params.toString() ? `?${params.toString()}` : ""}`;
   }, [pathname, searchParams]);
 
+  const normalizedSavedEnabled = useMemo(() => {
+    const base = Array.isArray(savedEnabled) ? savedEnabled : EMPTY_IDS;
+    const merged = new Set<string>();
+    for (const id of base) {
+      const clean = String(id ?? "").trim();
+      if (clean) merged.add(clean);
+    }
+    const cleanDefault = String(savedDefault ?? "").trim();
+    if (cleanDefault) merged.add(cleanDefault);
+    return Array.from(merged);
+  }, [savedDefault, savedEnabled]);
+
+  const sortedCalendars = useMemo(() => {
+    return [...calendars].sort(
+      (a, b) =>
+        Number(!!b.primary) - Number(!!a.primary) ||
+        String(a.summary ?? a.id).localeCompare(String(b.summary ?? b.id), "de")
+    );
+  }, [calendars]);
+
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    const nextDefault = String(savedDefault ?? "").trim();
+    const fallbackDefault = nextDefault || sortedCalendars[0]?.id || "";
+    const nextEnabled =
+      normalizedSavedEnabled.length > 0
+        ? normalizedSavedEnabled
+        : fallbackDefault
+          ? [fallbackDefault]
+          : EMPTY_IDS;
+
+    setSelectedDefault((current) => (current === fallbackDefault ? current : fallbackDefault));
+    setEnabledIds((current) => (sameStringArray(current, nextEnabled) ? current : nextEnabled));
+  }, [normalizedSavedEnabled, savedDefault, sortedCalendars]);
 
   useEffect(() => {
     if (!open) {
@@ -111,6 +159,25 @@ export default function GoogleCalendarSetupSlideover({
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     }, 160);
   }
+
+  function toggleEnabled(calendarId: string) {
+    setEnabledIds((current) => {
+      const cleanId = String(calendarId ?? "").trim();
+      if (!cleanId) return current;
+      if (cleanId === selectedDefault) return Array.from(new Set([...current, cleanId]));
+      return current.includes(cleanId)
+        ? current.filter((id) => id !== cleanId)
+        : [...current, cleanId];
+    });
+  }
+
+  function handleDefaultChange(calendarId: string) {
+    const cleanId = String(calendarId ?? "").trim();
+    setSelectedDefault(cleanId);
+    setEnabledIds((current) => Array.from(new Set([...current, cleanId])));
+  }
+
+  const activeCalendarCount = enabledIds.length;
 
   if (!mounted || !open || typeof document === "undefined") return null;
 
@@ -215,33 +282,72 @@ export default function GoogleCalendarSetupSlideover({
               <div className="grid gap-5 xl:grid-cols-2">
                 <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
                   <div className="text-sm text-white/60">
-                    Gespeicherter Standard-Kalender:{" "}
+                    Standard-Kalender:{" "}
                     <span className="font-medium text-white">
-                      {savedDefault ? savedDefault : "— noch keiner —"}
+                      {selectedDefault
+                        ? (sortedCalendars.find((calendar) => calendar.id === selectedDefault)?.summary ?? selectedDefault)
+                        : "— noch keiner —"}
                     </span>
+                  </div>
+                  <div className="mt-2 text-sm text-white/45">
+                    Aktive Zusatz-Kalender: <span className="font-medium text-white">{activeCalendarCount}</span>
                   </div>
 
                   <form action={setDefaultCalendar} className="mt-5 space-y-4">
                     <input type="hidden" name="returnTo" value={returnTo} />
-                    <div className="text-sm font-medium text-white">
-                      Standard-Kalender auswählen
+                    <input type="hidden" name="calendarId" value={selectedDefault} />
+                    {enabledIds.map((calendarId) => (
+                      <input key={calendarId} type="hidden" name="enabledCalendarIds" value={calendarId} />
+                    ))}
+
+                    <div className="text-sm font-medium text-white">Kalender auswählen</div>
+
+                    <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                      {sortedCalendars.map((calendar) => {
+                        const isDefault = selectedDefault === calendar.id;
+                        const isEnabled = enabledIds.includes(calendar.id);
+                        return (
+                          <label
+                            key={calendar.id}
+                            className="flex items-start justify-between gap-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white"
+                          >
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-white break-words">
+                                {(calendar.primary ? "⭐ " : "") + (calendar.summary ?? calendar.id)}
+                              </div>
+                              <div className="mt-1 text-xs text-white/45 break-all">
+                                {calendar.id}
+                                {calendar.accessRole ? ` · ${calendar.accessRole}` : ""}
+                              </div>
+                            </div>
+
+                            <div className="flex shrink-0 flex-col items-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleDefaultChange(calendar.id)}
+                                className={`inline-flex h-9 items-center justify-center rounded-xl px-3 text-xs font-semibold transition ${isDefault ? "border border-[#d6c3a3]/40 bg-[#d6c3a3] text-black" : "border border-white/10 bg-white/5 text-white hover:bg-white/10"}`}
+                              >
+                                {isDefault ? "Standard" : "Als Standard"}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => toggleEnabled(calendar.id)}
+                                className={`inline-flex h-9 items-center justify-center rounded-xl px-3 text-xs font-semibold transition ${isEnabled ? "border border-emerald-500/35 bg-emerald-500/15 text-emerald-200" : "border border-white/10 bg-white/5 text-white hover:bg-white/10"}`}
+                              >
+                                {isEnabled ? (isDefault ? "Aktiv · Standard" : "Aktiv") : "Zuschalten"}
+                              </button>
+                            </div>
+                          </label>
+                        );
+                      })}
                     </div>
 
-                    <select
-                      name="calendarId"
-                      defaultValue={savedDefault ?? ""}
-                      className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none ring-0 transition focus:border-white/20"
-                    >
-                      <option value="">— Bitte wählen —</option>
-                      {calendars.map((calendar) => (
-                        <option key={calendar.id} value={calendar.id}>
-                          {(calendar.primary ? "⭐ " : "") + (calendar.summary ?? calendar.id)}
-                          {calendar.accessRole ? ` (${calendar.accessRole})` : ""}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/60">
+                      Neue CRM-Termine werden weiter nur in den <span className="font-medium text-white">Standard-Kalender</span> geschrieben. Zusätzliche Kalender sind für Anzeige und Sync.
+                    </div>
 
-                    <Button type="submit">Speichern</Button>
+                    <Button type="submit">Kalender speichern</Button>
                   </form>
                 </div>
 
@@ -252,11 +358,12 @@ export default function GoogleCalendarSetupSlideover({
                     <input type="hidden" name="returnTo" value={returnTo} />
                     <select
                       name="calendarId"
-                      defaultValue={savedDefault ?? ""}
+                      value={selectedDefault}
+                      onChange={(e) => handleDefaultChange(e.target.value)}
                       className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none ring-0 transition focus:border-white/20"
                     >
                       <option value="">— Bitte wählen —</option>
-                      {calendars.map((calendar) => (
+                      {sortedCalendars.map((calendar) => (
                         <option key={calendar.id} value={calendar.id}>
                           {(calendar.primary ? "⭐ " : "") + (calendar.summary ?? calendar.id)}
                         </option>

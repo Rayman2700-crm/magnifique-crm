@@ -357,6 +357,37 @@ export async function connectGoogleCalendar() {
   redirect("/calendar/google");
 }
 
+
+type GoogleTokenSelectionRow = {
+  user_id: string | null;
+  default_calendar_id: string | null;
+  enabled_calendar_ids: string[] | null;
+};
+
+function sanitizeCalendarIdList(values: Array<string | null | undefined>) {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function resolveEnabledCalendarIds(tokenRow: GoogleTokenSelectionRow | null | undefined) {
+  const defaultCalendarId = String(tokenRow?.default_calendar_id ?? "").trim();
+  const rawEnabled = Array.isArray(tokenRow?.enabled_calendar_ids) ? tokenRow!.enabled_calendar_ids! : [];
+  const enabledIds = sanitizeCalendarIdList([
+    ...rawEnabled,
+    defaultCalendarId,
+  ]);
+
+  return {
+    defaultCalendarId: defaultCalendarId || null,
+    enabledIds,
+  };
+}
+
 export async function setDefaultCalendar(formData: FormData) {
   const supabase = await supabaseServer();
   const { data } = await supabase.auth.getUser();
@@ -365,20 +396,37 @@ export async function setDefaultCalendar(formData: FormData) {
 
   const returnTo = safeReturnTo(String(formData.get("returnTo") ?? "/calendar/google"));
   const calendarId = String(formData.get("calendarId") ?? "").trim();
+  const enabledCalendarIds = sanitizeCalendarIdList(
+    formData
+      .getAll("enabledCalendarIds")
+      .map((value) => String(value ?? "").trim())
+  );
+
   if (!calendarId) {
-    redirect(buildRedirectUrl(returnTo, "error", "Bitte einen Kalender auswählen."));
+    redirect(buildRedirectUrl(returnTo, "error", "Bitte einen Standard-Kalender auswählen."));
   }
+
+  const nextEnabledCalendarIds = sanitizeCalendarIdList([calendarId, ...enabledCalendarIds]);
 
   const { error } = await supabase
     .from("google_oauth_tokens")
-    .update({ default_calendar_id: calendarId })
+    .update({
+      default_calendar_id: calendarId,
+      enabled_calendar_ids: nextEnabledCalendarIds,
+    })
     .eq("user_id", user.id);
 
   if (error) {
-    redirect(buildRedirectUrl(returnTo, "error", "Konnte Standard-Kalender nicht speichern: " + error.message));
+    redirect(buildRedirectUrl(returnTo, "error", "Konnte Kalender-Auswahl nicht speichern: " + error.message));
   }
 
-  redirect(buildRedirectUrl(returnTo, "success", "Standard-Kalender gespeichert ✅"));
+  redirect(
+    buildRedirectUrl(
+      returnTo,
+      "success",
+      `Kalender gespeichert ✅ (${nextEnabledCalendarIds.length} aktiv)`
+    )
+  );
 }
 
 export async function createTestEvent(formData?: FormData) {
@@ -388,10 +436,11 @@ export async function createTestEvent(formData?: FormData) {
   if (!user) redirect("/login");
 
   const returnTo = safeReturnTo(String(formData?.get("returnTo") ?? "/calendar/google"));
+  const requestedCalendarId = String(formData?.get("calendarId") ?? "").trim();
 
   const { data: tok, error: tokErr } = await supabase
     .from("google_oauth_tokens")
-    .select("default_calendar_id")
+    .select("default_calendar_id, enabled_calendar_ids")
     .eq("user_id", user.id)
     .single();
 
@@ -399,9 +448,14 @@ export async function createTestEvent(formData?: FormData) {
     redirect(buildRedirectUrl(returnTo, "error", "Token DB Fehler: " + tokErr.message));
   }
 
-  const calendarId = (tok as any)?.default_calendar_id as string | null;
+  const tokenSelection = resolveEnabledCalendarIds((tok ?? null) as GoogleTokenSelectionRow | null);
+  const calendarId = requestedCalendarId || tokenSelection.defaultCalendarId;
   if (!calendarId) {
     redirect(buildRedirectUrl(returnTo, "error", "Bitte zuerst einen Standard-Kalender speichern."));
+  }
+
+  if (tokenSelection.enabledIds.length > 0 && !tokenSelection.enabledIds.includes(calendarId)) {
+    redirect(buildRedirectUrl(returnTo, "error", "Dieser Kalender ist aktuell nicht aktiviert."));
   }
 
   const now = new Date();
@@ -527,7 +581,7 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
 
   const { data: tokenRows, error: tokenError } = await admin
     .from("google_oauth_tokens")
-    .select("user_id, default_calendar_id")
+    .select("user_id, default_calendar_id, enabled_calendar_ids")
     .in("user_id", ownerUserIds);
 
   if (tokenError) {
@@ -536,10 +590,9 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
 
   const ownerByCalendarId = new Map<string, { tenantId: string; ownerLabel: string }>();
 
-  for (const tokenRow of (tokenRows ?? []) as Array<{ user_id: string | null; default_calendar_id: string | null }>) {
-    const calendarId = String(tokenRow.default_calendar_id ?? "").trim();
+  for (const tokenRow of (tokenRows ?? []) as GoogleTokenSelectionRow[]) {
     const ownerUserId = String(tokenRow.user_id ?? "").trim();
-    if (!calendarId || !ownerUserId) continue;
+    if (!ownerUserId) continue;
 
     const ownerProfile = ownerRows.find((row) => String(row.user_id ?? "").trim() === ownerUserId);
     if (!ownerProfile) continue;
@@ -547,10 +600,14 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
     const tenantId = String(ownerProfile.calendar_tenant_id ?? ownerProfile.tenant_id ?? "").trim();
     if (!tenantId) continue;
 
-    ownerByCalendarId.set(calendarId, {
-      tenantId,
-      ownerLabel: String(ownerProfile.full_name ?? "").trim() || "Google Kalender",
-    });
+    const tokenSelection = resolveEnabledCalendarIds(tokenRow);
+
+    for (const calendarId of tokenSelection.enabledIds) {
+      ownerByCalendarId.set(calendarId, {
+        tenantId,
+        ownerLabel: String(ownerProfile.full_name ?? "").trim() || "Google Kalender",
+      });
+    }
   }
 
   const calendarIds = Array.from(ownerByCalendarId.keys());
