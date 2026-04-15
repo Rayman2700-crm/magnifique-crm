@@ -2082,8 +2082,8 @@ export default function DashboardCalendarCardClient({
   }, [desktopSearchQuery, items, effectiveLegendUsers, selectedTenantId]);
 
   return (
-    <Card className="overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
-      <CardContent className="p-5 md:p-6 xl:p-8">
+    <Card className="min-w-0 overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+      <CardContent className="min-w-0 px-3 py-4 sm:p-5 md:p-6 xl:p-8">
         <style jsx global>{`
           .calendar-desktop-pill:hover {
             background: rgba(255,255,255,0.08) !important;
@@ -2119,6 +2119,40 @@ export default function DashboardCalendarCardClient({
             background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important;
             border-color: rgba(255,255,255,0.20) !important;
             box-shadow: 0 10px 22px rgba(37,99,235,0.28) !important;
+          }
+
+          @media (max-width: 767px) {
+            #dashboard-calendar-mobile-shell {
+              width: 100%;
+              min-width: 0;
+              overflow: hidden;
+            }
+
+            #dashboard-calendar-mobile-toolbar {
+              width: 100%;
+              min-width: 0;
+              gap: 10px;
+            }
+
+            #dashboard-calendar-mobile-toolbar-actions {
+              display: flex;
+              flex-wrap: wrap;
+              justify-content: flex-end;
+              gap: 8px;
+              max-width: min(212px, 100%);
+              flex-shrink: 0;
+            }
+
+            #dashboard-calendar-mobile-toolbar-actions > * {
+              flex: 0 0 auto;
+            }
+
+            #dashboard-calendar-mobile-search,
+            #dashboard-calendar-mobile-content,
+            #dashboard-calendar-mobile-content > * {
+              width: 100%;
+              min-width: 0;
+            }
           }
 
           @media (min-width: 768px) and (max-width: 1020px) {
@@ -2255,14 +2289,14 @@ export default function DashboardCalendarCardClient({
           </div>
         </div>
 
-        <div className="md:hidden flex flex-col gap-4 lg:gap-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="text-lg font-semibold text-white">Kalender</div>
+        <div id="dashboard-calendar-mobile-shell" className="md:hidden flex min-w-0 flex-col gap-4 lg:gap-6">
+          <div id="dashboard-calendar-mobile-toolbar" className="flex min-w-0 items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-lg font-semibold text-white">Kalender</div>
               <div className="text-sm text-white/60">Team-Übersicht</div>
             </div>
 
-            <div className="flex items-center gap-2 md:hidden">
+            <div id="dashboard-calendar-mobile-toolbar-actions" className="flex items-center gap-2 md:hidden">
               <button
                 ref={desktopSearchButtonRef}
                 type="button"
@@ -2317,7 +2351,7 @@ export default function DashboardCalendarCardClient({
           {desktopSearchOpen ? (
             <div
               ref={desktopSearchPanelRef}
-              className="md:hidden rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.985)_0%,rgba(12,13,16,0.985)_100%)] p-3 shadow-[0_20px_50px_rgba(0,0,0,0.36)] backdrop-blur-xl"
+              className="md:hidden rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.985)_0%,rgba(12,13,16,0.985)_100%)] p-3 shadow-[0_20px_50px_rgba(0,0,0,0.36)] backdrop-blur-xl" id="dashboard-calendar-mobile-search"
             >
               <div className="flex h-12 items-center rounded-[18px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
                 <span className="mr-3 inline-flex h-4 w-4 shrink-0 items-center justify-center text-white/35">
@@ -2372,7 +2406,7 @@ export default function DashboardCalendarCardClient({
                 </div>
               )}
 
-              <div className="flex flex-col gap-5">
+              <div id="dashboard-calendar-mobile-content" className="flex min-w-0 flex-col gap-5">
                 <div className="flex min-w-0 flex-1 flex-col gap-4">
                   <div className="hidden md:hidden" />
 
