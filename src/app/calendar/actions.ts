@@ -434,6 +434,269 @@ export async function createTestEvent(formData?: FormData) {
   redirect(successUrl.pathname + (successUrl.search ? successUrl.search : ""));
 }
 
+
+function parseGoogleEventDate(raw: { dateTime?: string | null; date?: string | null } | null | undefined, fallbackHour = 9) {
+  const dateTime = String(raw?.dateTime ?? "").trim();
+  if (dateTime) {
+    const parsed = new Date(dateTime);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+
+  const dateOnly = String(raw?.date ?? "").trim();
+  if (dateOnly) {
+    const parsed = new Date(`${dateOnly}T${pad2(fallbackHour)}:00:00`);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+
+  return null;
+}
+
+async function ensurePersonIdForGoogleMirror(admin: any, tenantId: string, summary: string) {
+  const cleanSummary = String(summary ?? "").trim() || "Google Termin";
+
+  const { data: existingProfiles } = await admin
+    .from("customer_profiles")
+    .select(`id, person_id, person:persons ( id, full_name )`)
+    .eq("tenant_id", tenantId)
+    .limit(500);
+
+  const existingProfile = (Array.isArray(existingProfiles) ? existingProfiles : []).find((row: any) => {
+    const personJoin = Array.isArray(row?.person) ? row.person[0] : row?.person;
+    return String(personJoin?.full_name ?? "").trim().toLowerCase() === cleanSummary.toLowerCase();
+  });
+
+  if (existingProfile?.person_id) {
+    return String(existingProfile.person_id);
+  }
+
+  const { data: insertedPerson, error: personError } = await admin
+    .from("persons")
+    .insert({ full_name: cleanSummary })
+    .select("id")
+    .single();
+
+  if (personError || !insertedPerson?.id) {
+    throw new Error("Google-Termin konnte keiner Person zugeordnet werden.");
+  }
+
+  await admin
+    .from("customer_profiles")
+    .insert({ tenant_id: tenantId, person_id: insertedPerson.id });
+
+  return String(insertedPerson.id);
+}
+
+export async function syncGoogleCalendarRangeToAppointments(input: { startISO: string; endISO: string }) {
+  const supabase = await supabaseServer();
+  const admin = supabaseAdmin();
+  const { data: authData } = await supabase.auth.getUser();
+  const user = authData.user;
+
+  if (!user) {
+    return { ok: false, synced: 0, deleted: 0, reason: "not_authenticated" };
+  }
+
+  const startISO = String(input?.startISO ?? "").trim();
+  const endISO = String(input?.endISO ?? "").trim();
+
+  if (!startISO || !endISO) {
+    return { ok: false, synced: 0, deleted: 0, reason: "missing_range" };
+  }
+
+  const { data: ownerProfiles, error: ownerProfilesError } = await admin
+    .from("user_profiles")
+    .select("user_id, full_name, tenant_id, calendar_tenant_id")
+    .not("user_id", "is", null);
+
+  if (ownerProfilesError) {
+    throw new Error("Behandler-Profile konnten nicht geladen werden: " + ownerProfilesError.message);
+  }
+
+  const ownerRows = (ownerProfiles ?? []) as Array<{
+    user_id: string | null;
+    full_name: string | null;
+    tenant_id: string | null;
+    calendar_tenant_id: string | null;
+  }>;
+
+  const ownerUserIds = ownerRows.map((row) => String(row.user_id ?? "").trim()).filter(Boolean);
+
+  if (ownerUserIds.length === 0) {
+    return { ok: true, synced: 0, deleted: 0 };
+  }
+
+  const { data: tokenRows, error: tokenError } = await admin
+    .from("google_oauth_tokens")
+    .select("user_id, default_calendar_id")
+    .in("user_id", ownerUserIds);
+
+  if (tokenError) {
+    throw new Error("Google-Kalender konnten nicht geladen werden: " + tokenError.message);
+  }
+
+  const ownerByCalendarId = new Map<string, { tenantId: string; ownerLabel: string }>();
+
+  for (const tokenRow of (tokenRows ?? []) as Array<{ user_id: string | null; default_calendar_id: string | null }>) {
+    const calendarId = String(tokenRow.default_calendar_id ?? "").trim();
+    const ownerUserId = String(tokenRow.user_id ?? "").trim();
+    if (!calendarId || !ownerUserId) continue;
+
+    const ownerProfile = ownerRows.find((row) => String(row.user_id ?? "").trim() === ownerUserId);
+    if (!ownerProfile) continue;
+
+    const tenantId = String(ownerProfile.calendar_tenant_id ?? ownerProfile.tenant_id ?? "").trim();
+    if (!tenantId) continue;
+
+    ownerByCalendarId.set(calendarId, {
+      tenantId,
+      ownerLabel: String(ownerProfile.full_name ?? "").trim() || "Google Kalender",
+    });
+  }
+
+  const calendarIds = Array.from(ownerByCalendarId.keys());
+
+  if (calendarIds.length === 0) {
+    return { ok: true, synced: 0, deleted: 0 };
+  }
+
+  const { data: existingAppointments, error: existingError } = await admin
+    .from("appointments")
+    .select("id, tenant_id, person_id, start_at, end_at, notes_internal, google_calendar_id, google_event_id")
+    .in("google_calendar_id", calendarIds)
+    .gte("start_at", startISO)
+    .lt("start_at", endISO);
+
+  if (existingError) {
+    throw new Error("Lokale Termine konnten nicht geladen werden: " + existingError.message);
+  }
+
+  const existingByGoogleKey = new Map<string, any>();
+  for (const row of Array.isArray(existingAppointments) ? existingAppointments : []) {
+    const calendarId = String((row as any).google_calendar_id ?? "").trim();
+    const eventId = String((row as any).google_event_id ?? "").trim();
+    if (!calendarId || !eventId) continue;
+    existingByGoogleKey.set(`${calendarId}:${eventId}`, row);
+  }
+
+  const seenGoogleKeys = new Set<string>();
+  let synced = 0;
+  let deleted = 0;
+
+  for (const calendarId of calendarIds) {
+    const ownerInfo = ownerByCalendarId.get(calendarId);
+    if (!ownerInfo?.tenantId) continue;
+
+    let googleEvents: any[] = [];
+
+    try {
+      const response = await googleFetch(
+        `/calendars/${encodeURIComponent(calendarId)}/events?singleEvents=true&orderBy=startTime&showDeleted=true&timeMin=${encodeURIComponent(startISO)}&timeMax=${encodeURIComponent(endISO)}&maxResults=2500`
+      );
+      googleEvents = Array.isArray(response?.items) ? response.items : [];
+    } catch (error: any) {
+      console.error(`Google Sync für Kalender ${calendarId} fehlgeschlagen`, error?.message ?? error);
+      continue;
+    }
+
+    for (const event of googleEvents) {
+      const googleEventId = String(event?.id ?? "").trim();
+      if (!googleEventId) continue;
+
+      const googleKey = `${calendarId}:${googleEventId}`;
+      const existing = existingByGoogleKey.get(googleKey) ?? null;
+      const eventStatus = String(event?.status ?? "confirmed").trim().toLowerCase();
+
+      if (eventStatus === "cancelled") {
+        seenGoogleKeys.add(googleKey);
+        if (existing?.id) {
+          await admin.from("appointment_open_slots").delete().eq("appointment_id", existing.id);
+          await admin.from("appointments").delete().eq("id", existing.id);
+          deleted += 1;
+        }
+        continue;
+      }
+
+      const start = parseGoogleEventDate(event?.start, 9);
+      const end = parseGoogleEventDate(event?.end, 10);
+      if (!start || !end) continue;
+
+      seenGoogleKeys.add(googleKey);
+
+      const title = String(event?.summary ?? "").trim() || `Google Termin · ${ownerInfo.ownerLabel}`;
+      const notes = String(event?.description ?? "").trim();
+      const personId = existing?.person_id ? String(existing.person_id) : await ensurePersonIdForGoogleMirror(admin, ownerInfo.tenantId, title);
+      const notesInternal = buildNotesInternal({
+        existing: existing?.notes_internal ?? null,
+        title,
+        notes,
+        status: "scheduled",
+        preserveRest: true,
+      });
+
+      if (existing?.id) {
+        const updErr = await updateAppointmentBestEffort(
+          admin,
+          String(existing.id),
+          {
+            tenant_id: ownerInfo.tenantId,
+            person_id: personId,
+            start_at: start.toISOString(),
+            end_at: end.toISOString(),
+            reminder_at: buildReminderAt(start).toISOString(),
+            reminder_sent_at: null,
+            notes_internal: notesInternal || null,
+            google_calendar_id: calendarId,
+            google_event_id: googleEventId,
+          },
+          "scheduled"
+        );
+
+        if (!updErr) synced += 1;
+        continue;
+      }
+
+      const insErr = await insertAppointmentBestEffort(
+        admin,
+        {
+          tenant_id: ownerInfo.tenantId,
+          person_id: personId,
+          service_id: null,
+          service_name_snapshot: null,
+          service_price_cents_snapshot: null,
+          service_duration_minutes_snapshot: null,
+          service_buffer_minutes_snapshot: null,
+          start_at: start.toISOString(),
+          end_at: end.toISOString(),
+          reminder_at: buildReminderAt(start).toISOString(),
+          reminder_sent_at: null,
+          notes_internal: notesInternal || null,
+          google_calendar_id: calendarId,
+          google_event_id: googleEventId,
+        },
+        "scheduled"
+      );
+
+      if (!insErr) synced += 1;
+    }
+  }
+
+  for (const row of Array.isArray(existingAppointments) ? existingAppointments : []) {
+    const calendarId = String((row as any).google_calendar_id ?? "").trim();
+    const eventId = String((row as any).google_event_id ?? "").trim();
+    const appointmentId = String((row as any).id ?? "").trim();
+    if (!calendarId || !eventId || !appointmentId) continue;
+
+    const key = `${calendarId}:${eventId}`;
+    if (seenGoogleKeys.has(key)) continue;
+
+    await admin.from("appointment_open_slots").delete().eq("appointment_id", appointmentId);
+    await admin.from("appointments").delete().eq("id", appointmentId);
+    deleted += 1;
+  }
+
+  return { ok: true, synced, deleted };
+}
+
 export async function createAppointmentQuick(formData: FormData) {
   const supabase = await supabaseServer();
   const admin = supabaseAdmin();

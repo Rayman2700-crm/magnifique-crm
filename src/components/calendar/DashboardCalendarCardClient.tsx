@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import DashboardWeekGridClient from "@/components/calendar/DashboardWeekGridClient";
 import TenantLegendClient from "@/components/calendar/TenantLegendClient";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { syncGoogleCalendarRangeToAppointments } from "@/app/calendar/actions";
 import type { AppointmentStatus, Item, ViewMode } from "@/components/calendar/types";
 
 type TenantJoin = { display_name: string | null };
@@ -1742,6 +1743,7 @@ export default function DashboardCalendarCardClient({
   const loadSeq = useRef(0);
   const hasLoadedOnceRef = useRef(false);
   const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastGoogleSyncAtRef = useRef(0);
 
   const view = calendarState.view;
   const anchorISO = calendarState.anchorISO;
@@ -1811,6 +1813,21 @@ export default function DashboardCalendarCardClient({
     setErrorText(null);
 
     try {
+      const nowMs = Date.now();
+      const shouldRunGoogleSync = nowMs - lastGoogleSyncAtRef.current > 20_000;
+
+      if (shouldRunGoogleSync) {
+        try {
+          await syncGoogleCalendarRangeToAppointments({
+            startISO: range.startISO,
+            endISO: range.endISO,
+          });
+          lastGoogleSyncAtRef.current = nowMs;
+        } catch (syncError: any) {
+          console.error("Google-Kalender Sync fehlgeschlagen", syncError);
+        }
+      }
+
       let apptQuery = supabase
       .from("appointments")
       .select(
@@ -1920,6 +1937,15 @@ export default function DashboardCalendarCardClient({
 
   useEffect(() => {
     loadAppointments();
+  }, [loadAppointments]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      loadAppointments();
+    }, 30000);
+
+    return () => window.clearInterval(interval);
   }, [loadAppointments]);
 
   useEffect(() => {

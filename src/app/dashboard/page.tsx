@@ -104,6 +104,7 @@ type DashboardCustomerRow = {
   id: string;
   tenant_id: string | null;
   person_id: string | null;
+  created_at: string | null;
   person:
     | {
         id: string | null;
@@ -174,6 +175,46 @@ function formatCurrentTime(date: Date) {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+  }).format(date);
+}
+
+
+function isDateWithinNextDays(date: Date, days: number) {
+  const now = new Date();
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + days + 1);
+  return date >= start && date < end;
+}
+
+function getNextBirthdayDate(value: string | null | undefined) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  const now = new Date();
+  const next = new Date(now.getFullYear(), parsed.getMonth(), parsed.getDate());
+  next.setHours(0, 0, 0, 0);
+
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+
+  if (next < today) {
+    next.setFullYear(next.getFullYear() + 1);
+  }
+
+  return next;
+}
+
+function formatCompactCustomerDate(value: string | null | undefined) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return new Intl.DateTimeFormat("de-AT", {
+    day: "2-digit",
+    month: "2-digit",
   }).format(date);
 }
 
@@ -317,10 +358,8 @@ function DashboardActionPill({
 }) {
   return (
     <span
-      className={`inline-flex items-center justify-center border ${
-        compact
-          ? "h-9 w-9 rounded-full px-0"
-          : "h-8 rounded-[16px] px-2.5 text-[10px] sm:h-9 sm:px-3 sm:text-[11px]"
+      className={`inline-flex items-center justify-center rounded-[16px] border ${
+        compact ? "h-8 w-8 px-0 sm:h-9 sm:w-9" : "h-8 px-2.5 text-[10px] sm:h-9 sm:px-3 sm:text-[11px]"
       } font-semibold uppercase tracking-[0.12em]`}
       style={{
         color: accentColor ?? "var(--primary)",
@@ -348,11 +387,11 @@ function DashboardStatCard({
 }) {
   const card = (
     <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-      <CardContent className="p-3.5 sm:p-4">
+      <CardContent className="flex min-h-[112px] flex-col p-3.5 sm:min-h-[124px] sm:p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex flex-1 items-start gap-3">
             <div
-              className="shrink-0 text-[30px] font-semibold leading-none tracking-tight sm:text-[32px]"
+              className="shrink-0 text-[28px] font-semibold leading-none tracking-tight sm:text-[30px] lg:text-[34px]"
               style={{ color: accentColor ?? "var(--text)" }}
             >
               {value}
@@ -384,8 +423,8 @@ function AppointmentsOverviewCard({
 }) {
   return (
     <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-      <CardContent className="p-3.5 sm:p-4">
-        <div className="flex flex-col gap-3">
+      <CardContent className="flex min-h-[112px] flex-col p-3.5 sm:min-h-[124px] sm:p-4">
+        <div className="flex h-full flex-col justify-between gap-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex flex-1 items-start gap-3">
               <div className="shrink-0 text-[30px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[32px]">
@@ -429,6 +468,20 @@ function AppointmentsOverviewCard({
               </div>
             </div>
           </div>
+
+          <div className="rounded-[16px] border border-white/10 bg-black/20 px-3 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Kalenderstatus</div>
+                <div className="mt-1 truncate text-[12px] font-medium text-white/82 sm:text-[13px]">
+                  {todayCount} heute · {weekCount} diese Woche
+                </div>
+              </div>
+              <div className="shrink-0 rounded-full border border-[rgba(214,195,163,0.20)] bg-[rgba(214,195,163,0.08)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#d6c3a3]">
+                Live
+              </div>
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -438,32 +491,72 @@ function AppointmentsOverviewCard({
 function CustomerOverviewCard({
   value,
   subtext,
+  newThisWeek,
+  birthdaysNext7Days,
+  latestCustomerName,
+  latestCustomerDateLabel,
 }: {
   value: string;
   subtext?: string;
+  newThisWeek: string;
+  birthdaysNext7Days: string;
+  latestCustomerName: string;
+  latestCustomerDateLabel: string;
 }) {
   return (
     <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-      <CardContent className="p-3.5 sm:p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex flex-1 items-start gap-3">
-            <div className="shrink-0 text-[30px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[32px]">
-              {value}
+      <CardContent className="flex min-h-[112px] flex-col p-3.5 sm:min-h-[124px] sm:p-4">
+        <div className="flex h-full flex-col justify-between gap-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex flex-1 items-start gap-3">
+              <div className="shrink-0 text-[30px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[32px]">
+                {value}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[13px] font-medium leading-5 text-[var(--text-muted)] sm:text-sm">Kunden gesamt</div>
+                {subtext ? <div className="mt-0.5 text-[11px] leading-4 text-white/45 sm:text-xs">{subtext}</div> : null}
+              </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[13px] font-medium leading-5 text-[var(--text-muted)] sm:text-sm">Kunden gesamt</div>
-              {subtext ? <div className="mt-0.5 text-[11px] leading-4 text-white/45 sm:text-xs">{subtext}</div> : null}
+
+            <div className="flex shrink-0 items-center gap-2">
+              <Link href="/customers/new" className="shrink-0" aria-label="Neuer Kunde">
+                <DashboardActionPill icon={<PlusCircleIcon />} compact accentColor="#d6c3a3" />
+              </Link>
+
+              <Link href="/customers" className="shrink-0" aria-label="Kunden öffnen">
+                <DashboardActionPill icon={<OpenIcon />} compact accentColor="#d6c3a3" />
+              </Link>
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
-            <Link href="/customers/new" className="shrink-0" aria-label="Neuer Kunde">
-              <DashboardActionPill icon={<PlusCircleIcon />} compact accentColor="#d6c3a3" />
-            </Link>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-[16px] border border-white/10 bg-black/20 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Neu 7 Tage</div>
+              <div className="mt-1 text-[20px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[22px]">
+                {newThisWeek}
+              </div>
+            </div>
 
-            <Link href="/customers" className="shrink-0" aria-label="Kunden öffnen">
-              <DashboardActionPill icon={<OpenIcon />} compact accentColor="#d6c3a3" />
-            </Link>
+            <div className="rounded-[16px] border border-white/10 bg-black/20 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Geburtstage</div>
+              <div className="mt-1 text-[20px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[22px]">
+                {birthdaysNext7Days}
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[16px] border border-white/10 bg-black/20 px-3 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Zuletzt hinzugefügt</div>
+                <div className="mt-1 truncate text-[12px] font-medium text-white/82 sm:text-[13px]">
+                  {latestCustomerName}
+                </div>
+              </div>
+              <div className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/70">
+                {latestCustomerDateLabel}
+              </div>
+            </div>
           </div>
         </div>
       </CardContent>
@@ -821,6 +914,7 @@ export default async function DashboardPage() {
       id,
       tenant_id,
       person_id,
+      created_at,
       person:persons (
         id,
         full_name,
@@ -1119,6 +1213,24 @@ export default async function DashboardPage() {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
+  const newCustomers7Days = dashboardCustomerRows.filter((row) => {
+    if (!row.created_at) return false;
+    const createdAt = new Date(row.created_at);
+    return !Number.isNaN(createdAt.getTime()) && isDateWithinNextDays(createdAt, 6);
+  }).length;
+
+  const birthdaysNext7Days = dashboardCustomerRows.filter((row) => {
+    const person = firstJoin(row.person);
+    const nextBirthday = getNextBirthdayDate(person?.birthday ?? null);
+    return Boolean(nextBirthday && isDateWithinNextDays(nextBirthday, 6));
+  }).length;
+
+  const latestCustomerRow = dashboardCustomerRows[0] ?? null;
+  const latestCustomerPerson = firstJoin(latestCustomerRow?.person ?? null);
+  const latestCustomerName =
+    String(latestCustomerPerson?.full_name ?? "").trim() || "Kein neuer Kunde";
+  const latestCustomerDateLabel = formatCompactCustomerDate(latestCustomerRow?.created_at ?? null);
+
   const currentDateLabel = formatShortDate(now);
   const currentTimeLabel = formatCurrentTime(now);
   const profileTheme = tenantTheme(tenantDisplayName ?? displayName);
@@ -1200,7 +1312,14 @@ export default async function DashboardPage() {
               />
 
               <AppointmentsOverviewCard todayCount={String(todayCount)} weekCount={String(weekCount)} nextAppointmentLabel={nextAppointmentLabel} />
-              <CustomerOverviewCard value={String(customersCount)} subtext="Gespeicherte Profile" />
+              <CustomerOverviewCard
+                value={String(customersCount)}
+                subtext="Gespeicherte Profile"
+                newThisWeek={String(newCustomers7Days)}
+                birthdaysNext7Days={String(birthdaysNext7Days)}
+                latestCustomerName={latestCustomerName}
+                latestCustomerDateLabel={latestCustomerDateLabel}
+              />
 
               <DashboardServicesCard
                 activeCount={activeServicesCountResult?.count ?? 0}
@@ -1214,11 +1333,11 @@ export default async function DashboardPage() {
               />
 
               <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-                <CardContent className="p-3.5 sm:p-4">
+                <CardContent className="flex min-h-[112px] flex-col p-3.5 sm:min-h-[124px] sm:p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex flex-1 items-start gap-3">
                       <div
-                        className="shrink-0 text-[30px] font-semibold leading-none tracking-tight sm:text-[32px]"
+                        className="shrink-0 text-[28px] font-semibold leading-none tracking-tight sm:text-[30px] lg:text-[34px]"
                         style={{ color: waitlistItems.length === 0 ? "#34d399" : "#a855f7" }}
                       >
                         {String(waitlistItems.length)}
