@@ -49,7 +49,7 @@ function ServicesActionPill({
 }) {
   return (
     <span
-      className="inline-flex h-10 w-10 items-center justify-center rounded-[16px] border"
+      className="inline-flex h-8 w-8 items-center justify-center rounded-[16px] border sm:h-9 sm:w-9"
       style={{
         color: accentColor,
         backgroundColor: `${accentColor}14`,
@@ -314,14 +314,14 @@ export default function DashboardServicesCard({
   return (
     <>
       <Card className="h-full min-w-0 border-[var(--border)] bg-[var(--surface)] transition hover:border-white/20 hover:bg-white/[0.03]">
-        <CardContent className="flex min-h-[132px] flex-col p-4 sm:min-h-[144px] sm:p-5">
+        <CardContent className="flex min-h-[112px] flex-col p-3.5 sm:min-h-[124px] sm:p-4">
           <div className="flex h-full flex-col justify-between gap-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium leading-5 text-[var(--text-muted)] sm:text-[15px]">
+                <div className="text-[13px] font-medium leading-5 text-[var(--text-muted)] sm:text-sm">
                   Services
                 </div>
-                <div className="mt-1 truncate text-xs leading-5 text-white/45 sm:text-[13px]">
+                <div className="mt-0.5 truncate text-[11px] leading-4 text-white/45 sm:text-xs">
                   {tenantName ?? "Behandler"}
                 </div>
               </div>
@@ -337,7 +337,7 @@ export default function DashboardServicesCard({
               </div>
             </div>
 
-            <div className="text-[32px] font-semibold leading-none tracking-tight text-white sm:text-[36px] lg:text-[40px]">
+            <div className="text-[28px] font-semibold leading-none tracking-tight text-white sm:text-[30px] lg:text-[34px]">
               {activeCount}
             </div>
           </div>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Script from "next/script";
 import type { ReactNode } from "react";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -2258,7 +2259,7 @@ export default async function RechnungenPage({
       : normalizePractitionerKey(item.providerName) === practitionerFilter
   );
 
-  const searchScopedItems = practitionerScopedItems.filter((item) => matchesReceiptSearch(item, qRaw));
+  const searchScopedItems = practitionerScopedItems;
 
   const filteredItems = searchScopedItems.filter((item) => {
     const issued = item.issuedAt ?? item.createdAt;
@@ -2399,8 +2400,6 @@ export default async function RechnungenPage({
     !createdReceipt
   );
 
-  const desktopSearchHasActiveQuery = !isCheckoutFlow && Boolean(qRaw);
-  const desktopSearchPreviewItems = filteredItems.slice(0, 6);
 
   return (
     <main className="mx-auto max-w-7xl p-4 md:p-6 xl:p-8 text-white">
@@ -2476,9 +2475,10 @@ export default async function RechnungenPage({
                   </div>
 
                   <div className="md:hidden flex flex-col gap-3">
-                    <form action="/rechnungen" method="get" className="w-full">
+                    <form id="mobile-rechnungen-search-form" action="/rechnungen" method="get" className="w-full">
                       {currentFilter !== "all" ? <input type="hidden" name="filter" value={currentFilter} /> : null}
                       {practitionerFilter !== "all" ? <input type="hidden" name="practitioner" value={practitionerFilter} /> : null}
+                      {closingDate ? <input type="hidden" name="closingDate" value={closingDate} /> : null}
                       <div className="flex h-11 items-center rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
                         <span className="mr-3 inline-flex h-4 w-4 shrink-0 items-center justify-center text-white/35">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
@@ -2487,28 +2487,26 @@ export default async function RechnungenPage({
                           </svg>
                         </span>
                         <input
+                          id="mobile-rechnungen-search-input"
                           type="text"
                           name="q"
                           defaultValue={qRaw}
                           placeholder="Belegnummer, Kundenname, Kundenmail, Kundentelefonnummer, Kundenadresse, Payment oder Status"
                           className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/35"
                         />
-                        {qRaw ? (
-                          <Link
-                            href={buildRechnungenHref({
-                              filter: currentFilter,
-                              practitioner: practitionerFilter,
-                              closingDate,
-                            })}
-                            aria-label="Suche löschen"
-                            className="ml-3 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/55 transition hover:bg-white/[0.08] hover:text-white"
-                          >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-                              <path d="M6 6l12 12" />
-                              <path d="M18 6 6 18" />
-                            </svg>
-                          </Link>
-                        ) : null}
+                        <button
+                          id="mobile-rechnungen-search-clear"
+                          type="button"
+                          aria-label="Suche löschen"
+                          title="Suche löschen"
+                          className="ml-3 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/55 transition hover:bg-white/[0.08] hover:text-white"
+                          style={{ opacity: qRaw ? 1 : 0, pointerEvents: qRaw ? "auto" : "none" }}
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                            <path d="M6 6l12 12" />
+                            <path d="M18 6 6 18" />
+                          </svg>
+                        </button>
                       </div>
                     </form>
                   </div>
@@ -2642,9 +2640,9 @@ export default async function RechnungenPage({
 
                     <div
                       id="desktop-rechnungen-search-stack"
-                      className={`${desktopSearchHasActiveQuery ? "pointer-events-auto opacity-100 translate-y-0 scale-100" : "pointer-events-none opacity-0 translate-y-1 scale-95"} absolute right-0 top-[calc(100%+28px)] z-20 transition duration-200`}
+                      className="pointer-events-none opacity-0 translate-y-1 scale-95 absolute right-0 top-[calc(100%+28px)] z-20 transition duration-200"
                       style={{ width: "420px", maxWidth: "620px" }}
-                      aria-hidden={desktopSearchHasActiveQuery ? "false" : "true"}
+                      aria-hidden="true"
                     >
                       <div
                         id="desktop-rechnungen-search-panel"
@@ -2687,76 +2685,6 @@ export default async function RechnungenPage({
                         </form>
                       </div>
 
-                      {desktopSearchHasActiveQuery ? (
-                        <div
-                          id="desktop-rechnungen-search-preview"
-                          className="mt-3 overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.985)_0%,rgba(12,13,16,0.985)_100%)] shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-xl"
-                        >
-                          <div className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-3">
-                            <div className="min-w-0">
-                              <div className="text-sm text-white/75">
-                                Suche aktiv für <span className="font-semibold text-white">„{qRaw}“</span>
-                              </div>
-                              <div className="mt-1 text-xs text-white/50">{countTotal} Treffer</div>
-                            </div>
-                            <Link
-                              href="/rechnungen"
-                              className="inline-flex h-8 items-center rounded-full border border-white/10 bg-white/10 px-3 text-xs font-medium text-white hover:bg-white/15"
-                            >
-                              Zurücksetzen
-                            </Link>
-                          </div>
-
-                          {desktopSearchPreviewItems.length > 0 ? (
-                            <div className="max-h-[320px] overflow-y-auto">
-                              {desktopSearchPreviewItems.map((item) => {
-                                const detailParams = new URLSearchParams();
-                                if (qRaw) detailParams.set("q", qRaw);
-                                if (currentFilter !== "all") detailParams.set("filter", currentFilter);
-                                if (practitionerFilter !== "all") detailParams.set("practitioner", practitionerFilter);
-                                detailParams.set("receipt", item.id);
-
-                                return (
-                                  <Link
-                                    key={`desktop-search-preview-${item.id}`}
-                                    href={`/rechnungen?${detailParams.toString()}`}
-                                    className="flex items-center justify-between gap-4 border-b border-white/6 px-4 py-3 transition last:border-b-0 hover:bg-white/[0.04]"
-                                  >
-                                    <div className="min-w-0">
-                                      <div className="truncate text-sm font-semibold text-white">
-                                        {item.customerName?.trim() || "Unbekannter Kunde"}
-                                      </div>
-                                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/50">
-                                        <span>{item.receiptNumber}</span>
-                                        <span>•</span>
-                                        <span>{formatDateTime(item.createdAt)}</span>
-                                      </div>
-                                    </div>
-                                    <div className="shrink-0 text-right">
-                                      <div className="text-sm font-semibold text-white">
-                                        {euroFromCents(item.turnoverValueCents, item.currencyCode)}
-                                      </div>
-                                      <div className="mt-1 text-xs text-white/50">
-                                        {formatPaymentStatus(item.paymentStatus)}
-                                      </div>
-                                    </div>
-                                  </Link>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div className="px-4 py-5 text-sm text-white/60">
-                              Keine Treffer für diese Suche.
-                            </div>
-                          )}
-
-                          {countTotal > desktopSearchPreviewItems.length ? (
-                            <div className="border-t border-white/8 px-4 py-3 text-xs text-white/50">
-                              Weitere Treffer findest du direkt in der Belegliste unten.
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
                     </div>
                   </div>
 
@@ -3487,7 +3415,7 @@ export default async function RechnungenPage({
             <CardContent className="p-0">
               <div className="border-b border-white/8 px-5 py-4 md:px-6">
                 <div className="text-lg font-semibold text-[var(--text)]">Belegliste</div>
-                <div className="mt-1 text-sm text-[var(--text-muted)]">{filteredItems.length} Ergebnis(se)</div>
+                <div id="rechnungen-results-count" suppressHydrationWarning className="mt-1 text-sm text-[var(--text-muted)]">{filteredItems.length} Ergebnis(se)</div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[1040px] table-auto text-sm">
@@ -3500,9 +3428,9 @@ export default async function RechnungenPage({
                       <th className="w-[28%] px-6 py-4 font-semibold text-right text-white/60">Aktion</th>
                     </tr>
                   </thead>
-                  <tbody suppressHydrationWarning={true}>
+                  <tbody id="rechnungen-desktop-tbody" suppressHydrationWarning={true}>
                     {filteredItems.length === 0 ? (
-                      <tr>
+                      <tr id="rechnungen-desktop-empty-server">
                         <td colSpan={5} className="px-6 py-10 text-center text-white/45">Keine Fiscal-Receipts gefunden.</td>
                       </tr>
                     ) : (
@@ -3519,7 +3447,27 @@ export default async function RechnungenPage({
                         detailParams.set("receipt", item.id);
 
                         return (
-                          <tr key={item.id} className="border-t border-white/8 transition hover:bg-white/[0.025]">
+                          <tr
+                            key={item.id}
+                            data-rechnung-entry="desktop"
+                            data-search-text={[
+                              item.receiptNumber,
+                              customerName,
+                              item.customerEmail,
+                              item.customerPhone,
+                              item.customerAddress,
+                              item.providerName,
+                              item.paymentId,
+                              item.paymentMethodLabel,
+                              item.paymentStatus,
+                              item.status,
+                              item.verificationStatus,
+                              latestEventLabel,
+                              item.latestEventType,
+                              formatDateTime(item.createdAt),
+                            ].map((entry) => String(entry ?? "").trim().toLowerCase()).filter(Boolean).join(" ")}
+                            className="border-t border-white/8 transition hover:bg-white/[0.025]"
+                          >
                             <td className="px-6 py-4 align-middle">
                               <div className="flex items-center gap-3">
                                 <Link
@@ -3613,6 +3561,9 @@ export default async function RechnungenPage({
                         );
                       })
                     )}
+                    <tr id="rechnungen-desktop-empty" className="hidden">
+                      <td colSpan={5} className="px-6 py-10 text-center text-white/45">Keine Fiscal-Receipts gefunden.</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -3657,119 +3608,198 @@ export default async function RechnungenPage({
         }}
       />
 
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-            (() => {
+      <Script id="rechnungen-desktop-search-script" strategy="afterInteractive">
+        {`
+          (() => {
+            const init = (tries = 0) => {
               const wrap = document.getElementById("desktop-rechnungen-search-wrap");
               const toggle = document.getElementById("desktop-rechnungen-search-toggle");
               const stack = document.getElementById("desktop-rechnungen-search-stack");
-              const input = document.getElementById("desktop-rechnungen-search-input");
-              const clearButton = document.getElementById("desktop-rechnungen-search-clear");
-              const form = document.getElementById("desktop-rechnungen-search-form");
-              const header = document.getElementById("desktop-rechnungen-header");
-              if (!wrap || !toggle || !stack || !input || !form || !header || !clearButton) return;
+              const desktopForm = document.getElementById("desktop-rechnungen-search-form");
+              const desktopInput = document.getElementById("desktop-rechnungen-search-input");
+              const desktopClearButton = document.getElementById("desktop-rechnungen-search-clear");
+              const mobileForm = document.getElementById("mobile-rechnungen-search-form");
+              const mobileInput = document.getElementById("mobile-rechnungen-search-input");
+              const mobileClearButton = document.getElementById("mobile-rechnungen-search-clear");
+              const resultCount = document.getElementById("rechnungen-results-count");
+              const desktopEntries = Array.from(document.querySelectorAll("[data-rechnung-entry='desktop']"));
+              const desktopEmpty = document.getElementById("rechnungen-desktop-empty");
+              const desktopEmptyServer = document.getElementById("rechnungen-desktop-empty-server");
 
-              let submitTimer = null;
-              const shouldStartOpen = ${desktopSearchHasActiveQuery ? "true" : "false"};
+              if (!wrap || !toggle || !stack || !desktopForm || !desktopInput || !desktopClearButton || !mobileForm || !mobileInput || !mobileClearButton || !resultCount) {
+                if (tries < 40) window.requestAnimationFrame(() => init(tries + 1));
+                return;
+              }
 
-              const updateClearButton = () => {
-                const hasValue = String(input.value || "").trim().length > 0;
-                clearButton.style.opacity = hasValue ? "1" : "0";
-                clearButton.style.pointerEvents = hasValue ? "auto" : "none";
-              };
+              const normalize = (value) =>
+                String(value ?? "")
+                  .toLowerCase()
+                  .normalize("NFD")
+                  .replace(/[\u0300-\u036f]/g, "")
+                  .trim();
+
+              const getTokens = (value) =>
+                normalize(value)
+                  .split(/\s+/)
+                  .map((token) => token.trim())
+                  .filter(Boolean);
 
               const setPanelWidth = () => {
-                const wrapRect = wrap.getBoundingClientRect();
-                const headerRect = header.getBoundingClientRect();
-                const innerGap = 8;
-                const minWidth = 280;
                 const maxWidth = 620;
-                const availableWidth = Math.floor(wrapRect.right - headerRect.left - innerGap);
-                const targetWidth = Math.max(minWidth, Math.min(maxWidth, availableWidth));
+                const minWidth = 280;
+                const targetWidth = Math.max(minWidth, Math.min(maxWidth, 420));
                 stack.style.width = targetWidth + "px";
               };
 
-              const openPanel = (focusInput = true) => {
-                setPanelWidth();
-                stack.classList.remove("pointer-events-none", "opacity-0", "translate-y-1", "scale-95");
-                stack.classList.add("pointer-events-auto", "opacity-100", "translate-y-0", "scale-100");
-                stack.setAttribute("aria-hidden", "false");
-                if (focusInput) {
-                  window.requestAnimationFrame(() => {
-                    input.focus();
-                    const length = input.value.length;
-                    input.setSelectionRange(length, length);
-                    updateClearButton();
-                  });
+              const setOpen = (nextOpen) => {
+                if (nextOpen) {
+                  setPanelWidth();
+                  stack.classList.remove("pointer-events-none", "opacity-0", "translate-y-1", "scale-95");
+                  stack.classList.add("pointer-events-auto", "opacity-100", "translate-y-0", "scale-100");
+                  stack.setAttribute("aria-hidden", "false");
                 } else {
-                  updateClearButton();
+                  stack.classList.add("pointer-events-none", "opacity-0", "translate-y-1", "scale-95");
+                  stack.classList.remove("pointer-events-auto", "opacity-100", "translate-y-0", "scale-100");
+                  stack.setAttribute("aria-hidden", "true");
                 }
               };
 
-              const closePanel = () => {
-                stack.classList.add("pointer-events-none", "opacity-0", "translate-y-1", "scale-95");
-                stack.classList.remove("pointer-events-auto", "opacity-100", "translate-y-0", "scale-100");
-                stack.setAttribute("aria-hidden", "true");
+              const syncInputs = (value) => {
+                if (desktopInput.value !== value) desktopInput.value = value;
+                if (mobileInput.value !== value) mobileInput.value = value;
               };
 
-              const isOpen = () => stack.getAttribute("aria-hidden") === "false";
+              const updateClearButtons = () => {
+                const hasValue = String(desktopInput.value || mobileInput.value || "").trim().length > 0;
+                [desktopClearButton, mobileClearButton].forEach((button) => {
+                  button.style.opacity = hasValue ? "1" : "0";
+                  button.style.pointerEvents = hasValue ? "auto" : "none";
+                });
+              };
+
+              const writeUrl = (value) => {
+                const url = new URL(window.location.href);
+                const nextValue = String(value || "").trim();
+                if (nextValue) url.searchParams.set("q", nextValue);
+                else url.searchParams.delete("q");
+                ["receipt", "appointmentId", "salesOrder", "payment", "success", "error", "invoice"].forEach((key) => {
+                  url.searchParams.delete(key);
+                });
+                window.history.replaceState({}, "", url.pathname + (url.searchParams.toString() ? "?" + url.searchParams.toString() : ""));
+              };
+
+              const applyFilter = () => {
+                const tokens = getTokens(desktopInput.value || mobileInput.value || "");
+                let visible = 0;
+
+                desktopEntries.forEach((entry) => {
+                  const haystack = normalize(entry.getAttribute("data-search-text"));
+                  const matches = tokens.length === 0 ? true : tokens.every((token) => haystack.includes(token));
+                  entry.style.display = matches ? "" : "none";
+                  if (matches) visible += 1;
+                });
+
+                resultCount.textContent = visible + " Ergebnis(se)";
+                if (desktopEmpty) desktopEmpty.classList.toggle("hidden", visible !== 0);
+                if (desktopEmptyServer) desktopEmptyServer.classList.toggle("hidden", visible !== 0);
+              };
+
+              const emitQuery = (value) => {
+                syncInputs(value);
+                updateClearButtons();
+                writeUrl(value);
+                applyFilter();
+              };
+
+              const focusDesktopInputToEnd = () => {
+                desktopInput.focus();
+                const len = desktopInput.value.length;
+                try { desktopInput.setSelectionRange(len, len); } catch (_) {}
+              };
 
               toggle.addEventListener("click", (event) => {
                 event.preventDefault();
-                if (isOpen()) {
-                  closePanel();
-                } else {
-                  openPanel();
-                }
+                const nextOpen = stack.getAttribute("aria-hidden") !== "false";
+                setOpen(nextOpen);
+                if (nextOpen) window.requestAnimationFrame(focusDesktopInputToEnd);
               });
 
-              input.addEventListener("input", () => {
-                updateClearButton();
-                if (!isOpen()) openPanel(false);
-                if (submitTimer) window.clearTimeout(submitTimer);
-                submitTimer = window.setTimeout(() => {
-                  form.requestSubmit();
-                }, 260);
-              });
+              const handleInput = (event) => {
+                const value = event.target.value;
+                if (event.target === desktopInput && stack.getAttribute("aria-hidden") !== "false") setOpen(true);
+                emitQuery(value);
+              };
 
-              clearButton.addEventListener("click", (event) => {
-                event.preventDefault();
-                input.value = "";
-                updateClearButton();
-                input.focus();
-                if (submitTimer) window.clearTimeout(submitTimer);
-                form.requestSubmit();
-              });
+              desktopInput.addEventListener("input", handleInput);
+              mobileInput.addEventListener("input", handleInput);
 
-              input.addEventListener("keydown", (event) => {
+              desktopInput.addEventListener("keydown", (event) => {
                 if (event.key === "Escape") {
                   event.preventDefault();
-                  closePanel();
+                  setOpen(false);
                   toggle.focus();
+                  return;
+                }
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  emitQuery(desktopInput.value);
                 }
               });
 
-              document.addEventListener("click", (event) => {
-                if (!isOpen()) return;
+              mobileInput.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  mobileInput.blur();
+                  return;
+                }
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  emitQuery(mobileInput.value);
+                }
+              });
+
+              desktopForm.addEventListener("submit", (event) => {
+                event.preventDefault();
+                emitQuery(desktopInput.value);
+              });
+
+              mobileForm.addEventListener("submit", (event) => {
+                event.preventDefault();
+                emitQuery(mobileInput.value);
+              });
+
+              const clearQuery = (target) => {
+                target.addEventListener("click", (event) => {
+                  event.preventDefault();
+                  emitQuery("");
+                  if (target === desktopClearButton) focusDesktopInputToEnd();
+                  else mobileInput.focus();
+                });
+              };
+
+              clearQuery(desktopClearButton);
+              clearQuery(mobileClearButton);
+
+              document.addEventListener("mousedown", (event) => {
+                if (stack.getAttribute("aria-hidden") !== "false") return;
                 if (wrap.contains(event.target)) return;
-                closePanel();
+                setOpen(false);
               });
 
               window.addEventListener("resize", () => {
-                if (isOpen()) setPanelWidth();
+                if (stack.getAttribute("aria-hidden") === "false") setPanelWidth();
+                applyFilter();
               });
 
-              updateClearButton();
-              if (shouldStartOpen) {
-                openPanel(false);
-              } else {
-                closePanel();
-              }
-            })();
-          `,
-        }}
-      />
+              updateClearButtons();
+              applyFilter();
+              setOpen(Boolean(desktopInput.value.trim()));
+            };
+
+            init();
+          })();
+        `}
+      </Script>
     </main>
   );
 }

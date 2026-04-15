@@ -30,6 +30,13 @@ type ReminderCountRow = {
   notes_internal: string | null;
 };
 
+type NextAppointmentRow = {
+  id: string;
+  start_at: string | null;
+  tenant_id: string | null;
+  notes_internal: string | null;
+};
+
 type OpenSlotRow = {
   id: string;
   appointment_id: string;
@@ -170,6 +177,37 @@ function formatCurrentTime(date: Date) {
   }).format(date);
 }
 
+function formatNextAppointmentLabel(value: string | null | undefined) {
+  if (!value) return "Kein Termin";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Kein Termin";
+
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+  const dayAfterTomorrowStart = new Date(tomorrowStart);
+  dayAfterTomorrowStart.setDate(dayAfterTomorrowStart.getDate() + 1);
+
+  const timeLabel = new Intl.DateTimeFormat("de-AT", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+
+  if (date >= todayStart && date < tomorrowStart) return `Heute · ${timeLabel}`;
+  if (date >= tomorrowStart && date < dayAfterTomorrowStart) return `Morgen · ${timeLabel}`;
+
+  const dayLabel = new Intl.DateTimeFormat("de-AT", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+  }).format(date);
+
+  return `${dayLabel} · ${timeLabel}`;
+}
+
 function immediateCandidateScore(row: {
   short_notice_ok?: boolean | null;
   reachable_today?: boolean | null;
@@ -280,7 +318,7 @@ function DashboardActionPill({
   return (
     <span
       className={`inline-flex items-center justify-center rounded-[16px] border ${
-        compact ? "h-9 w-9 px-0 sm:h-10 sm:w-10" : "h-9 px-3 text-[10px] sm:h-10 sm:px-4 sm:text-[11px]"
+        compact ? "h-8 w-8 px-0 sm:h-9 sm:w-9" : "h-8 px-2.5 text-[10px] sm:h-9 sm:px-3 sm:text-[11px]"
       } font-semibold uppercase tracking-[0.12em]`}
       style={{
         color: accentColor ?? "var(--primary)",
@@ -308,18 +346,18 @@ function DashboardStatCard({
 }) {
   const card = (
     <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-      <CardContent className="flex min-h-[132px] flex-col p-4 sm:min-h-[144px] sm:p-5">
+      <CardContent className="flex min-h-[112px] flex-col p-3.5 sm:min-h-[124px] sm:p-4">
         <div className="flex h-full flex-col justify-between gap-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium leading-5 text-[var(--text-muted)] sm:text-[15px]">{label}</div>
-              {subtext ? <div className="mt-1 text-xs leading-5 text-white/45 sm:text-[13px]">{subtext}</div> : null}
+              <div className="text-[13px] font-medium leading-5 text-[var(--text-muted)] sm:text-sm">{label}</div>
+              {subtext ? <div className="mt-0.5 text-[11px] leading-4 text-white/45 sm:text-xs">{subtext}</div> : null}
             </div>
             {href ? <DashboardActionPill icon={<OpenIcon />} compact accentColor={accentColor} /> : null}
           </div>
 
           <div
-            className="text-[32px] font-semibold leading-none tracking-tight sm:text-[36px] lg:text-[40px]"
+            className="text-[28px] font-semibold leading-none tracking-tight sm:text-[30px] lg:text-[34px]"
             style={{ color: accentColor ?? "var(--text)" }}
           >
             {value}
@@ -337,35 +375,51 @@ function DashboardStatCard({
 function AppointmentsOverviewCard({
   todayCount,
   weekCount,
+  nextAppointmentLabel,
 }: {
   todayCount: string;
   weekCount: string;
+  nextAppointmentLabel: string;
 }) {
   return (
     <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-      <CardContent className="flex min-h-[132px] flex-col p-4 sm:min-h-[144px] sm:p-5">
+      <CardContent className="flex min-h-[112px] flex-col p-3.5 sm:min-h-[124px] sm:p-4">
         <div className="flex h-full flex-col justify-between gap-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium leading-5 text-[var(--text-muted)] sm:text-[15px]">Termine</div>
-              <div className="mt-1 text-xs leading-5 text-white/45 sm:text-[13px]">Heute im Plan und diese Woche</div>
+              <div className="text-[13px] font-medium leading-5 text-[var(--text-muted)] sm:text-sm">Termine</div>
+              <div className="mt-0.5 text-[11px] leading-4 text-white/45 sm:text-xs">Heute, Woche und nächster Slot</div>
             </div>
 
-            <OpenCreateAppointmentButton accentColor="#d6c3a3" />
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="shrink-0 scale-[0.9] sm:scale-100 origin-top-right">
+                <OpenCreateAppointmentButton accentColor="#d6c3a3" />
+              </div>
+              <Link href="/calendar" className="shrink-0" aria-label="Kalender öffnen">
+                <DashboardActionPill icon={<OpenIcon />} compact accentColor="#d6c3a3" />
+              </Link>
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-[16px] border border-white/10 bg-black/20 px-3 py-2.5">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Heute</div>
-              <div className="mt-1 text-[32px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[36px]">
+              <div className="mt-1 text-[28px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[30px]">
                 {todayCount}
               </div>
             </div>
 
-            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
+            <div className="rounded-[16px] border border-white/10 bg-black/20 px-3 py-2.5">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Woche</div>
-              <div className="mt-1 text-[32px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[36px]">
+              <div className="mt-1 text-[28px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[30px]">
                 {weekCount}
+              </div>
+            </div>
+
+            <div className="rounded-[16px] border border-white/10 bg-black/20 px-3 py-2.5">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Nächster</div>
+              <div className="mt-1 text-[13px] font-semibold leading-tight text-[var(--text)] sm:text-sm">
+                {nextAppointmentLabel}
               </div>
             </div>
           </div>
@@ -384,12 +438,12 @@ function CustomerOverviewCard({
 }) {
   return (
     <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-      <CardContent className="flex min-h-[132px] flex-col p-4 sm:min-h-[144px] sm:p-5">
+      <CardContent className="flex min-h-[112px] flex-col p-3.5 sm:min-h-[124px] sm:p-4">
         <div className="flex h-full flex-col justify-between gap-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium leading-5 text-[var(--text-muted)] sm:text-[15px]">Kunden gesamt</div>
-              {subtext ? <div className="mt-1 text-xs leading-5 text-white/45 sm:text-[13px]">{subtext}</div> : null}
+              <div className="text-[13px] font-medium leading-5 text-[var(--text-muted)] sm:text-sm">Kunden gesamt</div>
+              {subtext ? <div className="mt-0.5 text-[11px] leading-4 text-white/45 sm:text-xs">{subtext}</div> : null}
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
@@ -403,7 +457,7 @@ function CustomerOverviewCard({
             </div>
           </div>
 
-          <div className="text-[32px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[36px] lg:text-[40px]">
+          <div className="text-[28px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[30px] lg:text-[34px]">
             {value}
           </div>
         </div>
@@ -440,12 +494,12 @@ function InvoiceCreateCard({
 
   return (
     <Card className="h-full border-[var(--border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035] lg:col-span-2 xl:col-span-2 2xl:col-span-2">
-      <CardContent className="flex min-h-[132px] flex-col p-4 sm:min-h-[144px] sm:p-5">
-        <div className="flex h-full flex-col gap-4">
+      <CardContent className="flex min-h-[112px] flex-col p-3.5 sm:min-h-[124px] sm:p-4">
+        <div className="flex h-full flex-col gap-3.5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="text-sm font-medium text-[var(--text-muted)] sm:text-[15px]">Rechnungen</div>
-              <div className="mt-1 text-xs leading-5 text-white/45 sm:text-[13px]">
+              <div className="mt-0.5 text-[11px] leading-4 text-white/45 sm:text-xs">
                 Abrechnen, prüfen und direkt weitermachen
               </div>
             </div>
@@ -461,49 +515,49 @@ function InvoiceCreateCard({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
-            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-2.5 pt-3">
+            <div className="rounded-[16px] border border-white/10 bg-black/20 px-3 py-2.5">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Heute</div>
-              <div className="mt-1 text-sm font-semibold text-white">{formatMoney(todayRevenueCents)}</div>
+              <div className="mt-1 text-[15px] font-semibold text-white">{formatMoney(todayRevenueCents)}</div>
               <div className="mt-0.5 text-[11px] text-white/40">{todayReceiptCount} Belege</div>
             </div>
 
-            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
+            <div className="rounded-[16px] border border-white/10 bg-black/20 px-3 py-2.5">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Woche</div>
-              <div className="mt-1 text-sm font-semibold text-white">{formatMoney(weekRevenueCents)}</div>
+              <div className="mt-1 text-[15px] font-semibold text-white">{formatMoney(weekRevenueCents)}</div>
               <div className="mt-0.5 text-[11px] text-white/40">laufender Stand</div>
             </div>
 
-            <div className="rounded-[18px] border border-white/10 bg-black/20 px-3 py-3">
+            <div className="rounded-[16px] border border-white/10 bg-black/20 px-3 py-2.5">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Monat</div>
-              <div className="mt-1 text-sm font-semibold text-white">{formatMoney(monthRevenueCents)}</div>
+              <div className="mt-1 text-[15px] font-semibold text-white">{formatMoney(monthRevenueCents)}</div>
               <div className="mt-0.5 text-[11px] text-white/40">aktueller Monat</div>
             </div>
           </div>
 
-          <div className="mt-auto space-y-2">
-            <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-4">
+          <div className="mt-auto pt-3 space-y-1.5">
+            <div className="grid gap-1.5 sm:grid-cols-2 2xl:grid-cols-4">
               <Link
                 href={`/rechnungen?closingDate=${encodeURIComponent(closingDateKey)}&closingPanel=day`}
-                className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
+                className="inline-flex h-9 w-full items-center justify-center whitespace-nowrap rounded-[14px] border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
               >
                 Tagesabschluss
               </Link>
               <Link
                 href={`/rechnungen?closingDate=${encodeURIComponent(closingDateKey)}&closingPanel=month`}
-                className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
+                className="inline-flex h-9 w-full items-center justify-center whitespace-nowrap rounded-[14px] border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
               >
                 Monatsabschluss
               </Link>
               <Link
                 href={`/rechnungen?closingDate=${encodeURIComponent(closingDateKey)}&closingPanel=year`}
-                className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
+                className="inline-flex h-9 w-full items-center justify-center whitespace-nowrap rounded-[14px] border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
               >
                 Jahresabschluss
               </Link>
               <Link
                 href="/dashboard?invoice=1"
-                className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] bg-[var(--primary)] px-3 text-sm font-medium text-[var(--primary-foreground)] shadow-[0_4px_20px_rgba(214,195,163,0.18)] transition hover:opacity-90"
+                className="inline-flex h-9 w-full items-center justify-center whitespace-nowrap rounded-[14px] bg-[var(--primary)] px-3 text-sm font-medium text-[var(--primary-foreground)] shadow-[0_4px_20px_rgba(214,195,163,0.18)] transition hover:opacity-90"
               >
                 + Rechnung
               </Link>
@@ -512,7 +566,7 @@ function InvoiceCreateCard({
             {openReceiptCount > 0 ? (
               <Link
                 href="/rechnungen?filter=open"
-                className="inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
+                className="inline-flex h-9 w-full items-center justify-center whitespace-nowrap rounded-[14px] border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text)] transition hover:bg-white/10"
               >
                 Offen prüfen ({openReceiptCount})
               </Link>
@@ -652,6 +706,17 @@ export default async function DashboardPage() {
     weekCountQuery = weekCountQuery.eq("tenant_id", effectiveReminderTenantId);
   }
 
+  let nextAppointmentQuery = supabase
+    .from("appointments")
+    .select("id, start_at, tenant_id, notes_internal")
+    .gte("start_at", now.toISOString())
+    .order("start_at", { ascending: true })
+    .limit(16);
+
+  if (!isAdmin && effectiveReminderTenantId) {
+    nextAppointmentQuery = nextAppointmentQuery.eq("tenant_id", effectiveReminderTenantId);
+  }
+
   const customersCountQuery =
     isAdmin || !effectiveCustomerTenantId
       ? admin.from("customer_profiles").select("id", { count: "exact", head: true })
@@ -775,6 +840,7 @@ export default async function DashboardPage() {
     todayCountResult,
     weekCountResult,
     customersCountResult,
+    nextAppointmentResult,
     activeServicesCountResult,
     reminderCountResult,
     openSlotsResult,
@@ -786,6 +852,7 @@ export default async function DashboardPage() {
     todayCountQuery,
     weekCountQuery,
     customersCountQuery,
+    nextAppointmentQuery,
     activeServicesCountQuery,
     reminderCountQuery,
     openSlotsQuery,
@@ -922,6 +989,13 @@ export default async function DashboardPage() {
     return status !== "cancelled" && status !== "completed" && status !== "no_show";
   }).length;
 
+  const nextAppointmentRows = (nextAppointmentResult.data ?? []) as NextAppointmentRow[];
+  const nextAppointment = nextAppointmentRows.find((row) => {
+    const status = parseStatus(row.notes_internal);
+    return status !== "cancelled" && status !== "completed" && status !== "no_show";
+  }) ?? null;
+  const nextAppointmentLabel = formatNextAppointmentLabel(nextAppointment?.start_at);
+
   const todayCount = todayCountResult.count ?? 0;
   const weekCount = weekCountResult.count ?? 0;
   const customersCount = customersCountResult.count ?? 0;
@@ -1048,7 +1122,7 @@ export default async function DashboardPage() {
     <div className="space-y-4 lg:space-y-8">
       <section>
         <Card className="overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
-          <CardContent className="px-1 py-2 sm:p-5 md:p-7 xl:p-8">
+          <CardContent className="px-1 py-2 sm:p-4 md:p-6 xl:p-7">
             <div className="hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 sm:p-5 md:block md:p-7">
               <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
                 <div className="flex min-w-0 items-center gap-4 sm:gap-5">
@@ -1109,7 +1183,7 @@ export default async function DashboardPage() {
               </div>
             </div>
 
-            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 lg:mt-6 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4">
+            <div className="mt-3 grid grid-cols-1 gap-2.5 md:grid-cols-2 lg:mt-5 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4">
               <InvoiceCreateCard
                 todayRevenueCents={todayRevenueCents}
                 todayReceiptCount={todayReceiptCount}
@@ -1120,7 +1194,7 @@ export default async function DashboardPage() {
                 closingDateKey={closingDateKey}
               />
 
-              <AppointmentsOverviewCard todayCount={String(todayCount)} weekCount={String(weekCount)} />
+              <AppointmentsOverviewCard todayCount={String(todayCount)} weekCount={String(weekCount)} nextAppointmentLabel={nextAppointmentLabel} />
               <CustomerOverviewCard value={String(customersCount)} subtext="Gespeicherte Profile" />
 
               <DashboardServicesCard
@@ -1135,12 +1209,12 @@ export default async function DashboardPage() {
               />
 
               <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-                <CardContent className="flex min-h-[132px] flex-col p-4 sm:min-h-[144px] sm:p-5">
+                <CardContent className="flex min-h-[112px] flex-col p-3.5 sm:min-h-[124px] sm:p-4">
                   <div className="flex h-full flex-col justify-between gap-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium leading-5 text-[var(--text-muted)] sm:text-[15px]">Aktive Warteliste</div>
-                        <div className="mt-1 text-xs leading-5 text-white/45 sm:text-[13px]">Kunden warten</div>
+                        <div className="text-[13px] font-medium leading-5 text-[var(--text-muted)] sm:text-sm">Aktive Warteliste</div>
+                        <div className="mt-0.5 text-[11px] leading-4 text-white/45 sm:text-xs">Kunden warten</div>
                       </div>
 
                       <div className="flex shrink-0 items-center gap-2">
@@ -1155,7 +1229,7 @@ export default async function DashboardPage() {
                     </div>
 
                     <div
-                      className="text-[32px] font-semibold leading-none tracking-tight sm:text-[36px] lg:text-[40px]"
+                      className="text-[28px] font-semibold leading-none tracking-tight sm:text-[30px] lg:text-[34px]"
                       style={{ color: waitlistItems.length === 0 ? "#34d399" : "#a855f7" }}
                     >
                       {String(waitlistItems.length)}

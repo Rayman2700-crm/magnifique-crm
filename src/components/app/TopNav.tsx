@@ -10,6 +10,7 @@ import { tenantTheme } from "@/lib/theme/tenantTheme";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", key: "dashboard" },
+  { href: "/calendar", label: "Kalender", key: "calendar" },
   { href: "/customers", label: "Kunden", key: "customers" },
   { href: "/services", label: "Dienstleistungen", key: "services" },
   { href: "/rechnungen", label: "Rechnungen", key: "receipts" },
@@ -29,6 +30,8 @@ function getNavIcon(key: string) {
   switch (key) {
     case "dashboard":
       return <HomeIcon />;
+    case "calendar":
+      return <CalendarIcon />;
     case "customers":
       return <UsersIcon />;
     case "services":
@@ -76,6 +79,21 @@ function HomeIcon() {
     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 10.5 12 3l9 7.5" />
       <path d="M5 9.5V20h14V9.5" />
+    </svg>
+  );
+}
+
+
+function CalendarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4.5" width="18" height="16" rx="2.5" />
+      <path d="M8 2.5v4" />
+      <path d="M16 2.5v4" />
+      <path d="M3 9.5h18" />
+      <path d="M8 13h3" />
+      <path d="M13 13h3" />
+      <path d="M8 17h3" />
     </svg>
   );
 }
@@ -358,7 +376,7 @@ function MobileNavDrawer({ open, shown, onClose, pathname, remindersOpen, waitli
           <button type="button" onClick={onClose} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/80" aria-label="Menü schließen">✕</button>
         </div>
         <div className="flex-1 space-y-3 overflow-y-auto p-4">
-          {nav.slice(0, 4).map((item) => (
+          {nav.slice(0, 5).map((item) => (
             <DrawerLink
               key={item.key}
               href={item.href}
@@ -623,6 +641,7 @@ return (
     <div className="clientique-scrollbar flex-1 overflow-y-auto pr-1">
       <div className="space-y-1">
         <SidebarItem icon={<HomeIcon />} label="Dashboard" href={isMobile ? undefined : "/dashboard"} onClick={isMobile ? toggleMobileDrawer : undefined} active={isActive("/dashboard")} expanded={expanded} />
+        <SidebarItem icon={<CalendarIcon />} label="Kalender" href={isMobile ? undefined : "/calendar"} onClick={isMobile ? toggleMobileDrawer : undefined} active={isActive("/calendar")} expanded={expanded} />
         <SidebarItem icon={<UsersIcon />} label="Kunden" href={isMobile ? undefined : "/customers"} onClick={isMobile ? toggleMobileDrawer : undefined} active={isActive("/customers")} expanded={expanded} />
         <SidebarItem icon={<ServicesIcon />} label="Dienstleistungen" href={isMobile ? undefined : "/services"} onClick={isMobile ? toggleMobileDrawer : undefined} active={isActive("/services")} expanded={expanded} />
         <SidebarItem icon={<ReceiptIcon />} label="Rechnungen" href={isMobile ? undefined : "/rechnungen"} onClick={isMobile ? toggleMobileDrawer : undefined} active={isActive("/rechnungen")} expanded={expanded} />
@@ -641,7 +660,7 @@ return (
     <div className="clientique-topbar fixed left-[64px] right-0 top-0 z-40 border-b border-white/10 md:left-[64px]">
       <div className="relative flex h-[60px] items-center justify-between px-1.5 pr-2 sm:px-4 lg:px-6 md:h-[60px]">
         <nav className="hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto md:flex">
-          {nav.slice(0, 5).map((item) => {
+          {nav.slice(0, 6).map((item) => {
             const isChat = item.href === "/dashboard/chat";
             const active = isChat
               ? pathname?.startsWith("/dashboard/chat") || searchParams?.get("openChat") === "1"
