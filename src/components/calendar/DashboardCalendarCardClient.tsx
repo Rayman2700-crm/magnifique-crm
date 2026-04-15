@@ -491,6 +491,7 @@ function DailyAgendaPanel({
     <div
       style={{
         width: "100%",
+        maxWidth: "100%",
         height: cardHeight,
         minHeight: cardHeight,
         maxHeight: cardHeight,
@@ -663,7 +664,9 @@ function DesktopMiniMonthPicker({
     <div
       style={{
         width: "100%",
+        maxWidth: "100%",
         borderRadius: 16,
+        overflow: "hidden",
         border: "1px solid rgba(255,255,255,0.08)",
         background: "rgba(255,255,255,0.02)",
         padding: 12,
@@ -2255,14 +2258,14 @@ export default function DashboardCalendarCardClient({
           </div>
         </div>
 
-        <div className="md:hidden flex flex-col gap-4 lg:gap-6">
-          <div className="flex items-start justify-between gap-4">
+        <div className="md:hidden flex flex-col gap-4 lg:gap-6 min-w-0">
+          <div className="flex min-w-0 flex-col gap-3">
             <div>
               <div className="text-lg font-semibold text-white">Kalender</div>
               <div className="text-sm text-white/60">Team-Übersicht</div>
             </div>
 
-            <div className="flex items-center gap-2 md:hidden">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 md:hidden">
               <button
                 ref={desktopSearchButtonRef}
                 type="button"
@@ -2376,8 +2379,8 @@ export default function DashboardCalendarCardClient({
                 <div className="flex min-w-0 flex-1 flex-col gap-4">
                   <div className="hidden md:hidden" />
 
-                  <div className="grid gap-4 md:hidden">
-                    <div>
+                  <div className="grid gap-4 md:hidden min-w-0">
+                    <div className="min-w-0">
                       <DesktopMiniMonthPicker
                         valueISO={anchorISO}
                         view={view}
@@ -2388,7 +2391,7 @@ export default function DashboardCalendarCardClient({
                       />
                     </div>
 
-                    <div>
+                    <div className="min-w-0">
                       <DailyAgendaPanel
                         selectedISO={anchorISO}
                         items={visibleItems}
