@@ -49,7 +49,7 @@ function ServicesActionPill({
 }) {
   return (
     <span
-      className="inline-flex h-8 w-8 items-center justify-center rounded-[16px] border sm:h-9 sm:w-9"
+      className="inline-flex h-9 w-9 items-center justify-center rounded-full border"
       style={{
         color: accentColor,
         backgroundColor: `${accentColor}14`,
@@ -314,9 +314,13 @@ export default function DashboardServicesCard({
   return (
     <>
       <Card className="h-full min-w-0 border-[var(--border)] bg-[var(--surface)] transition hover:border-white/20 hover:bg-white/[0.03]">
-        <CardContent className="flex min-h-[112px] flex-col p-3.5 sm:min-h-[124px] sm:p-4">
-          <div className="flex h-full flex-col justify-between gap-4">
-            <div className="flex items-start justify-between gap-3">
+        <CardContent className="p-3.5 sm:p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex flex-1 items-start gap-3">
+              <div className="shrink-0 text-[28px] font-semibold leading-none tracking-tight text-white sm:text-[30px]">
+                {activeCount}
+              </div>
+
               <div className="min-w-0 flex-1">
                 <div className="text-[13px] font-medium leading-5 text-[var(--text-muted)] sm:text-sm">
                   Services
@@ -325,20 +329,16 @@ export default function DashboardServicesCard({
                   {tenantName ?? "Behandler"}
                 </div>
               </div>
-
-              <div className="flex shrink-0 items-center gap-2">
-                <button type="button" onClick={() => setOpen(true)} className="shrink-0" aria-label="Neue Dienstleistung">
-                  <ServicesActionPill icon={<PlusCircleIcon />} />
-                </button>
-
-                <Link href="/services" className="shrink-0" aria-label="Services öffnen">
-                  <ServicesActionPill icon={<OpenIcon />} />
-                </Link>
-              </div>
             </div>
 
-            <div className="text-[28px] font-semibold leading-none tracking-tight text-white sm:text-[30px] lg:text-[34px]">
-              {activeCount}
+            <div className="flex shrink-0 items-center gap-2">
+              <button type="button" onClick={() => setOpen(true)} className="shrink-0" aria-label="Neue Dienstleistung">
+                <ServicesActionPill icon={<PlusCircleIcon />} />
+              </button>
+
+              <Link href="/services" className="shrink-0" aria-label="Services öffnen">
+                <ServicesActionPill icon={<OpenIcon />} />
+              </Link>
             </div>
           </div>
         </CardContent>

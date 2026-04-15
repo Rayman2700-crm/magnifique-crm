@@ -317,8 +317,10 @@ function DashboardActionPill({
 }) {
   return (
     <span
-      className={`inline-flex items-center justify-center rounded-[16px] border ${
-        compact ? "h-8 w-8 px-0 sm:h-9 sm:w-9" : "h-8 px-2.5 text-[10px] sm:h-9 sm:px-3 sm:text-[11px]"
+      className={`inline-flex items-center justify-center border ${
+        compact
+          ? "h-9 w-9 rounded-full px-0"
+          : "h-8 rounded-[16px] px-2.5 text-[10px] sm:h-9 sm:px-3 sm:text-[11px]"
       } font-semibold uppercase tracking-[0.12em]`}
       style={{
         color: accentColor ?? "var(--primary)",
@@ -346,22 +348,21 @@ function DashboardStatCard({
 }) {
   const card = (
     <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-      <CardContent className="flex min-h-[112px] flex-col p-3.5 sm:min-h-[124px] sm:p-4">
-        <div className="flex h-full flex-col justify-between gap-4">
-          <div className="flex items-start justify-between gap-3">
+      <CardContent className="p-3.5 sm:p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex flex-1 items-start gap-3">
+            <div
+              className="shrink-0 text-[30px] font-semibold leading-none tracking-tight sm:text-[32px]"
+              style={{ color: accentColor ?? "var(--text)" }}
+            >
+              {value}
+            </div>
             <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-medium leading-5 text-[var(--text-muted)] sm:text-sm">{label}</div>
+              <div className="truncate text-[13px] font-medium leading-5 text-[var(--text-muted)] sm:text-sm">{label}</div>
               {subtext ? <div className="mt-0.5 text-[11px] leading-4 text-white/45 sm:text-xs">{subtext}</div> : null}
             </div>
-            {href ? <DashboardActionPill icon={<OpenIcon />} compact accentColor={accentColor} /> : null}
           </div>
-
-          <div
-            className="text-[28px] font-semibold leading-none tracking-tight sm:text-[30px] lg:text-[34px]"
-            style={{ color: accentColor ?? "var(--text)" }}
-          >
-            {value}
-          </div>
+          {href ? <DashboardActionPill icon={<OpenIcon />} compact accentColor={accentColor} /> : null}
         </div>
       </CardContent>
     </Card>
@@ -383,18 +384,23 @@ function AppointmentsOverviewCard({
 }) {
   return (
     <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-      <CardContent className="flex min-h-[112px] flex-col p-3.5 sm:min-h-[124px] sm:p-4">
-        <div className="flex h-full flex-col justify-between gap-4">
+      <CardContent className="p-3.5 sm:p-4">
+        <div className="flex flex-col gap-3">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-medium leading-5 text-[var(--text-muted)] sm:text-sm">Termine</div>
-              <div className="mt-0.5 text-[11px] leading-4 text-white/45 sm:text-xs">Heute, Woche und nächster Slot</div>
+            <div className="min-w-0 flex flex-1 items-start gap-3">
+              <div className="shrink-0 text-[30px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[32px]">
+                {todayCount}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-medium leading-5 text-[var(--text-muted)] sm:text-sm">Termine</div>
+                <div className="mt-0.5 text-[11px] leading-4 text-white/45 sm:text-xs">Heute, Woche und nächster Slot</div>
+              </div>
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
-              <div className="shrink-0 scale-[0.9] sm:scale-100 origin-top-right">
+              <span className="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#d6c3a34d] bg-[#d6c3a314] text-[#d6c3a3] shadow-none transition hover:bg-[#d6c3a314] [&_*]:!shadow-none [&_button]:!m-0 [&_button]:!inline-flex [&_button]:!h-9 [&_button]:!w-9 [&_button]:!items-center [&_button]:!justify-center [&_button]:!rounded-full [&_button]:!border-0 [&_button]:!bg-transparent [&_button]:!p-0 [&_button]:!text-[#d6c3a3] [&_button]:!shadow-none [&_button:hover]:!bg-transparent [&_svg]:!h-4 [&_svg]:!w-4]">
                 <OpenCreateAppointmentButton accentColor="#d6c3a3" />
-              </div>
+              </span>
               <Link href="/calendar" className="shrink-0" aria-label="Kalender öffnen">
                 <DashboardActionPill icon={<OpenIcon />} compact accentColor="#d6c3a3" />
               </Link>
@@ -402,21 +408,21 @@ function AppointmentsOverviewCard({
           </div>
 
           <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-[16px] border border-white/10 bg-black/20 px-3 py-2.5">
+            <div className="rounded-[16px] border border-white/10 bg-black/20 px-3 py-2">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Heute</div>
-              <div className="mt-1 text-[28px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[30px]">
+              <div className="mt-1 text-[24px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[26px]">
                 {todayCount}
               </div>
             </div>
 
-            <div className="rounded-[16px] border border-white/10 bg-black/20 px-3 py-2.5">
+            <div className="rounded-[16px] border border-white/10 bg-black/20 px-3 py-2">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Woche</div>
-              <div className="mt-1 text-[28px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[30px]">
+              <div className="mt-1 text-[24px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[26px]">
                 {weekCount}
               </div>
             </div>
 
-            <div className="rounded-[16px] border border-white/10 bg-black/20 px-3 py-2.5">
+            <div className="rounded-[16px] border border-white/10 bg-black/20 px-3 py-2">
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/45">Nächster</div>
               <div className="mt-1 text-[13px] font-semibold leading-tight text-[var(--text)] sm:text-sm">
                 {nextAppointmentLabel}
@@ -438,27 +444,26 @@ function CustomerOverviewCard({
 }) {
   return (
     <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-      <CardContent className="flex min-h-[112px] flex-col p-3.5 sm:min-h-[124px] sm:p-4">
-        <div className="flex h-full flex-col justify-between gap-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-medium leading-5 text-[var(--text-muted)] sm:text-sm">Kunden gesamt</div>
-              {subtext ? <div className="mt-0.5 text-[11px] leading-4 text-white/45 sm:text-xs">{subtext}</div> : null}
+      <CardContent className="p-3.5 sm:p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex flex-1 items-start gap-3">
+            <div className="shrink-0 text-[30px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[32px]">
+              {value}
             </div>
-
-            <div className="flex shrink-0 items-center gap-2">
-              <Link href="/customers/new" className="shrink-0" aria-label="Neuer Kunde">
-                <DashboardActionPill icon={<PlusCircleIcon />} compact accentColor="#d6c3a3" />
-              </Link>
-
-              <Link href="/customers" className="shrink-0" aria-label="Kunden öffnen">
-                <DashboardActionPill icon={<OpenIcon />} compact accentColor="#d6c3a3" />
-              </Link>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[13px] font-medium leading-5 text-[var(--text-muted)] sm:text-sm">Kunden gesamt</div>
+              {subtext ? <div className="mt-0.5 text-[11px] leading-4 text-white/45 sm:text-xs">{subtext}</div> : null}
             </div>
           </div>
 
-          <div className="text-[28px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[30px] lg:text-[34px]">
-            {value}
+          <div className="flex shrink-0 items-center gap-2">
+            <Link href="/customers/new" className="shrink-0" aria-label="Neuer Kunde">
+              <DashboardActionPill icon={<PlusCircleIcon />} compact accentColor="#d6c3a3" />
+            </Link>
+
+            <Link href="/customers" className="shrink-0" aria-label="Kunden öffnen">
+              <DashboardActionPill icon={<OpenIcon />} compact accentColor="#d6c3a3" />
+            </Link>
           </div>
         </div>
       </CardContent>
@@ -1209,30 +1214,29 @@ export default async function DashboardPage() {
               />
 
               <Card className="h-full border-[var(--border)] bg-[var(--surface)] transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.035]">
-                <CardContent className="flex min-h-[112px] flex-col p-3.5 sm:min-h-[124px] sm:p-4">
-                  <div className="flex h-full flex-col justify-between gap-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[13px] font-medium leading-5 text-[var(--text-muted)] sm:text-sm">Aktive Warteliste</div>
-                        <div className="mt-0.5 text-[11px] leading-4 text-white/45 sm:text-xs">Kunden warten</div>
+                <CardContent className="p-3.5 sm:p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex flex-1 items-start gap-3">
+                      <div
+                        className="shrink-0 text-[30px] font-semibold leading-none tracking-tight sm:text-[32px]"
+                        style={{ color: waitlistItems.length === 0 ? "#34d399" : "#a855f7" }}
+                      >
+                        {String(waitlistItems.length)}
                       </div>
-
-                      <div className="flex shrink-0 items-center gap-2">
-                        <Link href="/dashboard?openWaitlist=1&waitlistAdd=1" className="shrink-0" aria-label="Kunden zur Warteliste hinzufügen">
-                          <DashboardActionPill icon={<PlusCircleIcon />} compact accentColor="#a855f7" />
-                        </Link>
-
-                        <Link href="/dashboard?openWaitlist=1" className="shrink-0" aria-label="Warteliste öffnen">
-                          <DashboardActionPill icon={<OpenIcon />} compact accentColor="#a855f7" />
-                        </Link>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[13px] font-medium leading-5 text-[var(--text-muted)] sm:text-sm">Aktive Warteliste</div>
+                        <div className="mt-0.5 text-[11px] leading-4 text-white/45 sm:text-xs">Kunden warten</div>
                       </div>
                     </div>
 
-                    <div
-                      className="text-[28px] font-semibold leading-none tracking-tight sm:text-[30px] lg:text-[34px]"
-                      style={{ color: waitlistItems.length === 0 ? "#34d399" : "#a855f7" }}
-                    >
-                      {String(waitlistItems.length)}
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Link href="/dashboard?openWaitlist=1&waitlistAdd=1" className="shrink-0" aria-label="Kunden zur Warteliste hinzufügen">
+                        <DashboardActionPill icon={<PlusCircleIcon />} compact accentColor="#a855f7" />
+                      </Link>
+
+                      <Link href="/dashboard?openWaitlist=1" className="shrink-0" aria-label="Warteliste öffnen">
+                        <DashboardActionPill icon={<OpenIcon />} compact accentColor="#a855f7" />
+                      </Link>
                     </div>
                   </div>
                 </CardContent>
