@@ -493,6 +493,8 @@ function DailyAgendaPanel({
     <div
       style={{
         width: "100%",
+        minWidth: 0,
+        maxWidth: "100%",
         height: cardHeight,
         minHeight: cardHeight,
         maxHeight: cardHeight,
@@ -2138,10 +2140,12 @@ export default function DashboardCalendarCardClient({
 
             #dashboard-calendar-mobile-toolbar-actions {
               display: flex;
-              flex-wrap: wrap;
+              flex-wrap: nowrap;
+              align-items: center;
               justify-content: flex-end;
               gap: 8px;
-              max-width: min(212px, 100%);
+              width: 216px;
+              max-width: 216px;
               flex-shrink: 0;
             }
 
@@ -2333,7 +2337,9 @@ export default function DashboardCalendarCardClient({
               >
                 <span className="text-[26px] font-semibold leading-none">+</span>
               </MobileCircleActionButton>
+
               <MobileViewPicker value={view} onChange={handleChangeView} anchorISO={anchorISO} />
+
               {effectiveLegendUsers.length > 0 ? (
                 <MobileLegendPicker
                   users={effectiveLegendUsers}
