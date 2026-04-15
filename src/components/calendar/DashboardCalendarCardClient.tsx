@@ -433,12 +433,14 @@ function DailyAgendaPanel({
   legendUsers,
   panelHeight,
   searchQuery,
+  isMobileCompact = false,
 }: {
   selectedISO: string;
   items: Item[];
   legendUsers: LegendUser[];
   panelHeight?: number | null;
   searchQuery?: string;
+  isMobileCompact?: boolean;
 }) {
   const [contactPhone, setContactPhone] = useState<string | null>(null);
   const [contactName, setContactName] = useState<string | null>(null);
@@ -497,7 +499,7 @@ function DailyAgendaPanel({
         borderRadius: 16,
         border: "1px solid rgba(255,255,255,0.08)",
         background: "rgba(255,255,255,0.02)",
-        padding: 12,
+        padding: isMobileCompact ? 8 : 12,
         boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
         overflow: "hidden",
       }}
@@ -676,7 +678,7 @@ function DesktopMiniMonthPicker({
           alignItems: "center",
           justifyContent: "space-between",
           gap: 12,
-          marginBottom: 10,
+          marginBottom: isMobileCompact ? 8 : 10,
         }}
       >
         {isMobileCompact ? (
@@ -818,11 +820,11 @@ function DesktopMiniMonthPicker({
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-          gap: 4,
+          gap: isMobileCompact ? 3 : 4,
           textAlign: "center",
-          fontSize: 10,
+          fontSize: isMobileCompact ? 9 : 10,
           color: "rgba(255,255,255,0.42)",
-          marginBottom: 4,
+          marginBottom: isMobileCompact ? 3 : 4,
         }}
       >
         {["M", "D", "M", "D", "F", "S", "S"].map((label, index) => (
@@ -836,7 +838,7 @@ function DesktopMiniMonthPicker({
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-          gap: 4,
+          gap: isMobileCompact ? 3 : 4,
         }}
       >
         {cells.map((cell) => {
@@ -853,9 +855,9 @@ function DesktopMiniMonthPicker({
               className="calendar-mini-day"
               data-selected={isSelected ? "true" : "false"}
               style={{
-                height: 30,
+                height: isMobileCompact ? 28 : 30,
                 minWidth: 0,
-                borderRadius: 8,
+                borderRadius: isMobileCompact ? 7 : 8,
                 border: isSelected
                   ? "1px solid rgba(255,255,255,0.16)"
                   : "1px solid transparent",
@@ -870,7 +872,7 @@ function DesktopMiniMonthPicker({
                     ? "rgba(255,255,255,0.08)"
                     : "rgba(255,255,255,0.03)",
                 boxShadow: isSelected ? "0 8px 18px rgba(37,99,235,0.20)" : "none",
-                fontSize: 12,
+                fontSize: isMobileCompact ? 11 : 12,
                 fontWeight: 700,
                 cursor: "pointer",
                 position: "relative",
@@ -884,17 +886,17 @@ function DesktopMiniMonthPicker({
                 aria-hidden="true"
                 style={{
                   position: "absolute",
-                  top: -5,
-                  right: -5,
-                  minWidth: count > 9 ? 18 : 16,
-                  height: count > 9 ? 18 : 16,
-                  padding: count > 9 ? "0 4px" : "0 0",
+                  top: isMobileCompact ? -3 : -5,
+                  right: isMobileCompact ? -2 : -5,
+                  minWidth: isMobileCompact ? (count > 9 ? 16 : 14) : (count > 9 ? 18 : 16),
+                  height: isMobileCompact ? (count > 9 ? 16 : 14) : (count > 9 ? 18 : 16),
+                  padding: isMobileCompact ? (count > 9 ? "0 3px" : "0 0") : (count > 9 ? "0 4px" : "0 0"),
                   borderRadius: 999,
                   background: count > 0 ? "#2563eb" : "rgba(255,255,255,0.18)",
                   color: count > 0 ? "#fff" : "rgba(255,255,255,0.80)",
-                  fontSize: 10,
+                  fontSize: isMobileCompact ? 9 : 10,
                   fontWeight: 800,
-                  lineHeight: count > 9 ? "18px" : "16px",
+                  lineHeight: isMobileCompact ? (count > 9 ? "16px" : "14px") : (count > 9 ? "18px" : "16px"),
                   boxShadow: count > 0
                     ? "0 0 0 2px rgba(11,11,12,0.92), 0 0 10px rgba(37,99,235,0.38)"
                     : "0 0 0 2px rgba(11,11,12,0.92)",
@@ -2428,6 +2430,7 @@ export default function DashboardCalendarCardClient({
                         items={visibleItems}
                         legendUsers={effectiveLegendUsers}
                         searchQuery={desktopSearchQuery}
+                        isMobileCompact
                       />
                     </div>
                   </div>
