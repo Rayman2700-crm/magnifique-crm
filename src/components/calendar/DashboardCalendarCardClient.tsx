@@ -2085,102 +2085,134 @@ export default function DashboardCalendarCardClient({
     });
   }, [desktopSearchQuery, items, effectiveLegendUsers, selectedTenantId]);
 
-  return (
-    <Card className="min-w-0 overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
-      <CardContent className="min-w-0 px-3 py-4 sm:p-5 md:p-6 xl:p-8">
-        <style jsx global>{`
-          .calendar-desktop-pill:hover {
-            background: rgba(255,255,255,0.08) !important;
-            border-color: rgba(255,255,255,0.16) !important;
-            color: rgba(255,255,255,0.98) !important;
+return (
+  <Card className="min-w-0 overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+    <CardContent className="min-w-0 px-3 py-4 sm:p-5 md:p-6 xl:p-8">
+      <style jsx global>{`
+        .calendar-desktop-pill:hover {
+          background: rgba(255,255,255,0.08) !important;
+          border-color: rgba(255,255,255,0.16) !important;
+          color: rgba(255,255,255,0.98) !important;
+        }
+
+        .calendar-desktop-pill[data-active="true"]:hover {
+          background: rgba(255,255,255,0.14) !important;
+          border-color: rgba(255,255,255,0.22) !important;
+        }
+
+        .calendar-mini-chevron {
+          transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+        }
+
+        .calendar-mini-chevron:hover {
+          background: rgba(255,255,255,0.08) !important;
+          border-color: rgba(255,255,255,0.16) !important;
+          color: rgba(255,255,255,0.98) !important;
+          transform: translateY(-1px);
+        }
+
+        .calendar-mini-day:hover {
+          background: rgba(255,255,255,0.08) !important;
+          border-color: rgba(255,255,255,0.16) !important;
+          color: rgba(255,255,255,0.98) !important;
+          transform: translateY(-1px);
+          box-shadow: 0 10px 18px rgba(0,0,0,0.20);
+        }
+
+        .calendar-mini-day[data-selected="true"]:hover {
+          background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important;
+          border-color: rgba(255,255,255,0.20) !important;
+          box-shadow: 0 10px 22px rgba(37,99,235,0.28) !important;
+        }
+
+        @media (max-width: 767px) {
+          #dashboard-calendar-mobile-shell {
+            width: 100%;
+            min-width: 0;
+            overflow: hidden;
           }
 
-          .calendar-desktop-pill[data-active="true"]:hover {
-            background: rgba(255,255,255,0.14) !important;
-            border-color: rgba(255,255,255,0.22) !important;
+          #dashboard-calendar-mobile-toolbar {
+            width: 100%;
+            min-width: 0;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+            justify-content: flex-start !important;
+            gap: 12px !important;
           }
 
-          .calendar-mini-chevron {
-            transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+          #dashboard-calendar-mobile-toolbar > :first-child {
+            min-width: 0;
+            width: 100%;
+            flex: 0 0 auto !important;
           }
 
-          .calendar-mini-chevron:hover {
-            background: rgba(255,255,255,0.08) !important;
-            border-color: rgba(255,255,255,0.16) !important;
-            color: rgba(255,255,255,0.98) !important;
-            transform: translateY(-1px);
+          #dashboard-calendar-mobile-toolbar > :first-child > div:first-child {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
 
-          .calendar-mini-day:hover {
-            background: rgba(255,255,255,0.08) !important;
-            border-color: rgba(255,255,255,0.16) !important;
-            color: rgba(255,255,255,0.98) !important;
-            transform: translateY(-1px);
-            box-shadow: 0 10px 18px rgba(0,0,0,0.20);
+          #dashboard-calendar-mobile-toolbar > :first-child > div:last-child {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
 
-          .calendar-mini-day[data-selected="true"]:hover {
-            background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important;
-            border-color: rgba(255,255,255,0.20) !important;
-            box-shadow: 0 10px 22px rgba(37,99,235,0.28) !important;
+          #dashboard-calendar-mobile-toolbar-actions {
+            display: flex !important;
+            flex-wrap: nowrap !important;
+            align-items: center !important;
+            justify-content: flex-end !important;
+            gap: 8px !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            flex: 0 0 auto !important;
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding-bottom: 2px;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
           }
 
-          @media (max-width: 767px) {
-            #dashboard-calendar-mobile-shell {
-              width: 100%;
-              min-width: 0;
-              overflow: hidden;
-            }
-
-            #dashboard-calendar-mobile-toolbar {
-              width: 100%;
-              min-width: 0;
-              gap: 10px;
-            }
-
-            #dashboard-calendar-mobile-toolbar-actions {
-              display: flex;
-              flex-wrap: nowrap;
-              align-items: center;
-              justify-content: flex-end;
-              gap: 8px;
-              width: 216px;
-              max-width: 216px;
-              flex-shrink: 0;
-            }
-
-            #dashboard-calendar-mobile-toolbar-actions > * {
-              flex: 0 0 auto;
-            }
-
-            #dashboard-calendar-mobile-search,
-            #dashboard-calendar-mobile-content,
-            #dashboard-calendar-mobile-content > * {
-              width: 100%;
-              min-width: 0;
-            }
+          #dashboard-calendar-mobile-toolbar-actions::-webkit-scrollbar {
+            display: none;
           }
 
-          @media (min-width: 768px) and (max-width: 1020px) {
-            #dashboard-calendar-header-shell {
-              padding-right: 560px !important;
-            }
-
-            #dashboard-calendar-header-actions {
-              gap: 10px !important;
-            }
-
-            #dashboard-calendar-header-legend { gap: 10px; }
-            #dashboard-calendar-header-legend > button > div:first-child {
-              width: 40px !important;
-              height: 40px !important;
-            }
-            #dashboard-calendar-header-legend > button > div:last-child {
-              font-size: 11px !important;
-              padding: 4px 9px !important;
-            }
+          #dashboard-calendar-mobile-toolbar-actions > * {
+            flex: 0 0 auto !important;
           }
-        `}</style>
+
+          #dashboard-calendar-mobile-search,
+          #dashboard-calendar-mobile-content,
+          #dashboard-calendar-mobile-content > * {
+            width: 100%;
+            min-width: 0;
+          }
+        }
+
+        @media (min-width: 768px) and (max-width: 1020px) {
+          #dashboard-calendar-header-shell {
+            padding-right: 560px !important;
+          }
+
+          #dashboard-calendar-header-actions {
+            gap: 10px !important;
+          }
+
+          #dashboard-calendar-header-legend { gap: 10px; }
+          #dashboard-calendar-header-legend > button > div:first-child {
+            width: 40px !important;
+            height: 40px !important;
+          }
+          #dashboard-calendar-header-legend > button > div:last-child {
+            font-size: 11px !important;
+            padding: 4px 9px !important;
+          }
+        }
+      `}</style>
         <div className="hidden md:block">
           <div id="dashboard-calendar-header-shell" className="relative pr-[360px] xl:pr-[520px]">
             <div id="dashboard-calendar-header-actions" className="absolute right-0 top-0 z-30 flex items-start justify-end gap-3">
@@ -2296,13 +2328,16 @@ export default function DashboardCalendarCardClient({
         </div>
 
         <div id="dashboard-calendar-mobile-shell" className="md:hidden flex min-w-0 flex-col gap-4 lg:gap-6">
-          <div id="dashboard-calendar-mobile-toolbar" className="flex min-w-0 items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-lg font-semibold text-white">Kalender</div>
-              <div className="text-sm text-white/60">Team-Übersicht</div>
-            </div>
+<div id="dashboard-calendar-mobile-toolbar" className="md:hidden flex min-w-0 flex-col gap-3">
+  <div className="min-w-0">
+    <div className="truncate text-lg font-semibold text-white">Kalender</div>
+    <div className="truncate text-sm text-white/60">Team-Übersicht</div>
+  </div>
 
-            <div id="dashboard-calendar-mobile-toolbar-actions" className="flex items-center gap-2 md:hidden">
+  <div
+    id="dashboard-calendar-mobile-toolbar-actions"
+    className="flex w-full items-center justify-end gap-2"
+  >
               <button
                 ref={desktopSearchButtonRef}
                 type="button"
