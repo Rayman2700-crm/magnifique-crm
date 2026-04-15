@@ -41,6 +41,7 @@ type Props = {
   tenantName: string | null;
   services: ServiceRow[];
   initialCreateOpen?: boolean;
+  initialQuery?: string;
   tenantOptions?: TenantOption[];
   isAdmin?: boolean;
 };
@@ -91,6 +92,22 @@ function badgeClassName(active: boolean) {
 function firstJoin<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
   return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+
+function normalizeSearchValue(value: string | null | undefined) {
+  return String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function searchTokens(value: string) {
+  return normalizeSearchValue(value)
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
 }
 
 function tenantAccentColor(label: string | null | undefined) {
@@ -235,6 +252,7 @@ export default function ServicesWorkspace({
   tenantName,
   services,
   initialCreateOpen = false,
+  initialQuery = "",
   tenantOptions = [],
   isAdmin = false,
 }: Props) {
@@ -245,6 +263,7 @@ export default function ServicesWorkspace({
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
   const [editShown, setEditShown] = useState(false);
   const [expandedMobileServiceId, setExpandedMobileServiceId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -252,6 +271,23 @@ export default function ServicesWorkspace({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    setSearchQuery(initialQuery);
+  }, [initialQuery]);
+
+  useEffect(() => {
+    const handleSearch = (event: Event) => {
+      const detail = (event as CustomEvent<string>).detail ?? "";
+      setSearchQuery(String(detail));
+    };
+
+    window.addEventListener("services-search-query", handleSearch as EventListener);
+    return () => {
+      window.removeEventListener("services-search-query", handleSearch as EventListener);
+    };
+  }, []);
+
 
   useEffect(() => {
     setCreateOpen(initialCreateOpen);
@@ -340,6 +376,29 @@ export default function ServicesWorkspace({
   const shouldShowTenantSelect = availableTenantOptions.length > 0;
   const selectedCreateTenantId = selectedTenantId !== "all" ? selectedTenantId : "";
 
+  const filteredServices = useMemo(() => {
+    const tokens = searchTokens(searchQuery);
+
+    if (tokens.length === 0) return services;
+
+    return services.filter((service) => {
+      const tenant = firstJoin(service.tenant);
+      const haystack = normalizeSearchValue(
+        [
+          service.name ?? "",
+          service.description ?? "",
+          euroFromCents(service.default_price_cents),
+          String(service.duration_minutes ?? ""),
+          String(service.buffer_minutes ?? ""),
+          String(service.tenant_id ?? ""),
+          String(tenant?.display_name ?? ""),
+        ].join(" ")
+      );
+
+      return tokens.every((token) => haystack.includes(token));
+    });
+  }, [searchQuery, services]);
+
   return (
     <>
       <section className="mt-6 rounded-[28px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] md:p-5">
@@ -347,19 +406,19 @@ export default function ServicesWorkspace({
           <div className="hidden md:block">
             <h2 className="text-xl font-semibold text-[var(--text)]">Dienstleistungen</h2>
             <p className="mt-1 text-sm text-[var(--text-muted)]">
-              Kompakte Liste mit schnellen Aktionen für <span className="text-[var(--text)]">{tenantName ?? "aktuellen Behandler"}</span>.
+              {filteredServices.length} Ergebnis(se) für <span className="text-[var(--text)]">{tenantName ?? "aktuellen Behandler"}</span>.
             </p>
           </div>
 
         </div>
 
-        {services.length === 0 ? (
+        {filteredServices.length === 0 ? (
           <div className="rounded-[24px] border border-dashed border-white/10 bg-black/20 p-8 text-center text-sm text-white/65">
             Keine Dienstleistungen gefunden. Passe Suche oder Statusfilter an.
           </div>
         ) : (
           <div className="space-y-3 relative z-0">
-            {services.map((service) => {
+            {filteredServices.map((service) => {
               const active = Boolean(service.is_active);
               const tenant = firstJoin(service.tenant);
               const accent = tenantAccentColor(tenant?.display_name ?? service.tenant_id);

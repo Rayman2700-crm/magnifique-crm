@@ -395,9 +395,11 @@ function MobileCustomersFilterMenu({
 function MobileCustomersAvatarMenu({
   current,
   options,
+  action,
 }: {
   current: string;
   options: { tenant_id: string; label: string; user_id: string | null }[];
+  action: (formData: FormData) => Promise<void>;
 }) {
   const orderedOptions = [...options]
     .map((option) => ({
@@ -410,7 +412,7 @@ function MobileCustomersAvatarMenu({
     .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
 
   const items = [
-    { tenant_id: 'all', label: 'Alle', displayLabel: 'Alle', shortCode: 'AL', ringColor: 'rgba(255,255,255,0.55)', user_id: null },
+    { tenant_id: 'all', label: 'Alle', displayLabel: 'Alle', shortCode: 'AL', ringColor: 'rgba(255,255,255,0.55)', user_id: null as string | null },
     ...orderedOptions,
   ];
   const active = items.find((item) => item.tenant_id === current) ?? items[0];
@@ -419,9 +421,12 @@ function MobileCustomersAvatarMenu({
   const ringBackground = `conic-gradient(${ringColors.map((color, index) => `${color} ${Math.round(index * step)}% ${Math.round((index + 1) * step)}%`).join(', ')})`;
 
   return (
-    <details className="relative md:hidden">
-      <summary
-        className="relative inline-flex h-12 w-12 shrink-0 cursor-pointer list-none items-center justify-center rounded-full"
+    <>
+      <button
+        type="button"
+        popoverTarget="mobile-customers-avatar-menu"
+        popoverTargetAction="toggle"
+        className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full md:hidden"
         aria-label="Behandler auswählen"
         style={{
           background: ringBackground,
@@ -429,21 +434,23 @@ function MobileCustomersAvatarMenu({
         }}
       >
         <span className="flex h-[42px] w-[42px] items-center justify-center overflow-hidden rounded-full border-2 border-[#111216] bg-[#0f1013] text-[12px] font-extrabold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-          {active?.tenant_id === 'all' ? (
+          {active.tenant_id === 'all' ? (
             <span className="flex h-full w-full items-center justify-center rounded-full bg-white text-black">Alle</span>
-          ) : active?.user_id ? (
+          ) : active.user_id ? (
             <img src={`/users/${active.user_id}.png`} alt={active.displayLabel} className="h-full w-full object-cover" />
           ) : (
-            active?.shortCode ?? 'AL'
+            active.shortCode
           )}
         </span>
         <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#2563eb] px-1 text-[10px] font-extrabold text-white shadow-[0_0_0_2px_rgba(11,11,12,0.92)]">
-          {active?.tenant_id === 'all' ? items.length : '1'}
+          {active.tenant_id === 'all' ? items.length : '1'}
         </span>
-      </summary>
+      </button>
 
       <div
-        className="absolute right-0 top-[calc(100%+16px)] z-[2147483647] w-[min(640px,calc(100vw-24px))] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl"
+        id="mobile-customers-avatar-menu"
+        popover="auto"
+        className="md:hidden fixed left-[84px] right-4 top-[332px] z-[2147483647] m-0 max-h-[60vh] overflow-y-auto rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl"
       >
         <div className="px-1 pb-2">
           <div className="text-sm font-semibold text-white">Behandler wählen</div>
@@ -452,42 +459,42 @@ function MobileCustomersAvatarMenu({
         <div className="grid gap-2">
           {items.map((item) => {
             const selected = item.tenant_id === current;
-            const href = item.tenant_id === 'all' ? '/admin?tenant=all' : `/admin?tenant=${encodeURIComponent(item.tenant_id)}`;
             return (
-              <Link
-                key={`mobile-customer-avatar-${item.tenant_id}`}
-                href={href}
-                className="flex items-center justify-between rounded-2xl border px-3 py-3 text-left"
-                style={{
-                  borderColor: selected ? `${item.ringColor}66` : 'rgba(255,255,255,0.10)',
-                  backgroundColor: selected ? `${item.ringColor}22` : 'rgba(255,255,255,0.04)',
-                }}
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 bg-[#111216] text-sm font-extrabold text-white" style={{ borderColor: item.tenant_id === 'all' ? 'rgba(255,255,255,0.55)' : item.ringColor }}>
-                    {item.tenant_id === 'all' ? (
-                      <span className="flex h-full w-full items-center justify-center rounded-full bg-white text-black">Alle</span>
-                    ) : item.user_id ? (
-                      <img src={`/users/${item.user_id}.png`} alt={item.displayLabel} className="h-full w-full object-cover" />
-                    ) : (
-                      item.shortCode
-                    )}
-                  </span>
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-white">{item.displayLabel}</div>
-                    <div className="truncate text-xs text-white/50">{item.tenant_id === 'all' ? 'Alle Behandler' : item.label}</div>
+              <form key={`mobile-customer-avatar-${item.tenant_id}`} action={action}>
+                <input type="hidden" name="tenant" value={item.tenant_id} />
+                <button
+                  type="submit"
+                  className="flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left"
+                  style={{
+                    borderColor: selected ? `${item.ringColor}66` : 'rgba(255,255,255,0.10)',
+                    backgroundColor: selected ? `${item.ringColor}22` : 'rgba(255,255,255,0.04)',
+                  }}
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 bg-[#111216] text-sm font-extrabold text-white" style={{ borderColor: item.tenant_id === 'all' ? 'rgba(255,255,255,0.55)' : item.ringColor }}>
+                      {item.tenant_id === 'all' ? (
+                        <span className="flex h-full w-full items-center justify-center rounded-full bg-white text-black">Alle</span>
+                      ) : item.user_id ? (
+                        <img src={`/users/${item.user_id}.png`} alt={item.displayLabel} className="h-full w-full object-cover" />
+                      ) : (
+                        item.shortCode
+                      )}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-white">{item.displayLabel}</div>
+                      <div className="truncate text-xs text-white/50">{item.tenant_id === 'all' ? 'Alle Behandler' : item.label}</div>
+                    </div>
                   </div>
-                </div>
-                {selected ? <span className="pl-3 text-xs font-semibold text-[var(--primary)]">Aktiv</span> : null}
-              </Link>
+                  {selected ? <span className="pl-3 text-xs font-semibold text-[var(--primary)]">Aktiv</span> : null}
+                </button>
+              </form>
             );
           })}
         </div>
       </div>
-    </details>
+    </>
   );
 }
-
 
 export default async function CustomersPage({
   searchParams,
@@ -702,13 +709,12 @@ export default async function CustomersPage({
                     </Link>
 
                     {role === 'ADMIN' ? (
-                      <MobileCustomersAvatarMenu current={currentAdminTenant} options={tenantOptions} />
+                      <MobileCustomersAvatarMenu current={currentAdminTenant} options={tenantOptions} action={setAdminTenant} />
                     ) : null}
                   </div>
 
                   <div className="md:hidden flex flex-col gap-3">
-                    <form action="/customers" method="get" className="w-full">
-                      {onlyNoFollowUp ? <input type="hidden" name="only" value="no-followup" /> : null}
+                    <form id="mobile-customers-search-form" role="search" className="w-full">
                       <div className="flex h-11 items-center rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
                         <span className="mr-3 inline-flex h-4 w-4 shrink-0 items-center justify-center text-white/35">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
@@ -716,15 +722,25 @@ export default async function CustomersPage({
                             <path d="m20 20-3.5-3.5" />
                           </svg>
                         </span>
-                        <input type="text" name="q" defaultValue={qRaw} placeholder="Name, Telefon, E-Mail oder Behandler suchen" className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/35" />
-                        {qRaw ? (
-                          <Link href={buildCustomersHref({ only: onlyNoFollowUp ? 'no-followup' : 'all' })} aria-label="Suche löschen" className="ml-3 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/55 transition hover:bg-white/[0.08] hover:text-white">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-                              <path d="M6 6l12 12" />
-                              <path d="M18 6 6 18" />
-                            </svg>
-                          </Link>
-                        ) : null}
+                        <input
+                          id="mobile-customers-search-input"
+                          type="text"
+                          defaultValue={qRaw}
+                          placeholder="Name, Telefon, E-Mail oder Behandler suchen"
+                          className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/35"
+                        />
+                        <button
+                          id="mobile-customers-search-clear"
+                          type="button"
+                          aria-label="Suche löschen"
+                          title="Suche löschen"
+                          className="ml-3 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/55 transition hover:bg-white/[0.08] hover:text-white"
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                            <path d="M6 6l12 12" />
+                            <path d="M18 6 6 18" />
+                          </svg>
+                        </button>
                       </div>
                     </form>
                   </div>
@@ -996,16 +1012,21 @@ export default async function CustomersPage({
               const wrap = document.getElementById("desktop-customers-search-wrap");
               const toggle = document.getElementById("desktop-customers-search-toggle");
               const panel = document.getElementById("desktop-customers-search-panel");
-              const form = document.getElementById("desktop-customers-search-form");
-              const input = document.getElementById("desktop-customers-search-input");
-              const clearButton = document.getElementById("desktop-customers-search-clear");
+              const desktopForm = document.getElementById("desktop-customers-search-form");
+              const desktopInput = document.getElementById("desktop-customers-search-input");
+              const desktopClearButton = document.getElementById("desktop-customers-search-clear");
+
+              const mobileForm = document.getElementById("mobile-customers-search-form");
+              const mobileInput = document.getElementById("mobile-customers-search-input");
+              const mobileClearButton = document.getElementById("mobile-customers-search-clear");
+
               const resultCount = document.getElementById("customers-results-count");
               const mobileEntries = Array.from(document.querySelectorAll("[data-customer-entry='mobile']"));
               const desktopEntries = Array.from(document.querySelectorAll("[data-customer-entry='desktop']"));
               const mobileEmpty = document.getElementById("customers-mobile-empty");
               const desktopEmpty = document.getElementById("customers-desktop-empty");
 
-              if (!wrap || !toggle || !panel || !input || !clearButton || !resultCount) {
+              if (!wrap || !toggle || !panel || !desktopForm || !desktopInput || !desktopClearButton || !mobileForm || !mobileInput || !mobileClearButton || !resultCount) {
                 if (tries < 40) window.requestAnimationFrame(() => init(tries + 1));
                 return;
               }
@@ -1024,7 +1045,6 @@ export default async function CustomersPage({
                   .filter(Boolean);
 
               const desktopMedia = window.matchMedia("(min-width: 1024px)");
-
               const getVisibleEntries = () => (desktopMedia.matches ? desktopEntries : mobileEntries);
 
               const setOpen = (nextOpen) => {
@@ -1032,15 +1052,26 @@ export default async function CustomersPage({
                 else wrap.removeAttribute("open");
               };
 
+              const syncInputs = (value) => {
+                if (desktopInput.value !== value) desktopInput.value = value;
+                if (mobileInput.value !== value) mobileInput.value = value;
+              };
+
+              const updateClearButtons = () => {
+                const hasValue = String(desktopInput.value || mobileInput.value || "").trim().length > 0;
+                [desktopClearButton, mobileClearButton].forEach((button) => {
+                  button.style.opacity = hasValue ? "1" : "0";
+                  button.style.pointerEvents = hasValue ? "auto" : "none";
+                });
+              };
+
               const applyFilter = () => {
-                const tokens = getTokens(input.value);
+                const tokens = getTokens(desktopInput.value || mobileInput.value || "");
 
                 const applyTo = (entries) => {
                   entries.forEach((entry) => {
                     const haystack = normalize(entry.getAttribute("data-search-text"));
-                    const matches = tokens.length === 0
-                      ? true
-                      : tokens.every((token) => haystack.includes(token));
+                    const matches = tokens.length === 0 ? true : tokens.every((token) => haystack.includes(token));
                     entry.style.display = matches ? "" : "none";
                   });
                 };
@@ -1059,52 +1090,91 @@ export default async function CustomersPage({
                 }
               };
 
-              const focusInputToEnd = () => {
-                input.focus();
-                const len = input.value.length;
-                try { input.setSelectionRange(len, len); } catch (_) {}
+              const writeUrl = (value) => {
+                const url = new URL(window.location.href);
+                if (String(value || "").trim()) url.searchParams.set("q", String(value).trim());
+                else url.searchParams.delete("q");
+                window.history.replaceState({}, "", url.pathname + (url.searchParams.toString() ? "?" + url.searchParams.toString() : ""));
+              };
+
+              const emitQuery = (value) => {
+                syncInputs(value);
+                updateClearButtons();
+                writeUrl(value);
+                applyFilter();
+              };
+
+              const focusDesktopInputToEnd = () => {
+                desktopInput.focus();
+                const len = desktopInput.value.length;
+                try { desktopInput.setSelectionRange(len, len); } catch (_) {}
               };
 
               toggle.addEventListener("click", (event) => {
                 event.preventDefault();
                 const nextOpen = !wrap.hasAttribute("open");
                 setOpen(nextOpen);
-                if (nextOpen) window.requestAnimationFrame(focusInputToEnd);
+                if (nextOpen) window.requestAnimationFrame(focusDesktopInputToEnd);
               });
 
-              input.addEventListener("input", () => {
-                if (!wrap.hasAttribute("open")) setOpen(true);
-                applyFilter();
-              });
+              const handleInput = (event) => {
+                const value = event.target.value;
+                if (event.target === desktopInput && !wrap.hasAttribute("open")) setOpen(true);
+                emitQuery(value);
+              };
 
-              input.addEventListener("keydown", (event) => {
+              desktopInput.addEventListener("input", handleInput);
+              mobileInput.addEventListener("input", handleInput);
+
+              desktopInput.addEventListener("keydown", (event) => {
                 if (event.key === "Escape") {
                   event.preventDefault();
                   setOpen(false);
                   toggle.focus();
                   return;
                 }
-
                 if (event.key === "Enter") {
                   event.preventDefault();
-                  applyFilter();
+                  emitQuery(desktopInput.value);
                 }
               });
 
-              form.addEventListener("submit", (event) => {
-                event.preventDefault();
-                applyFilter();
+              mobileInput.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  mobileInput.blur();
+                  return;
+                }
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  emitQuery(mobileInput.value);
+                }
               });
 
-              clearButton.addEventListener("click", (event) => {
+              desktopForm.addEventListener("submit", (event) => {
                 event.preventDefault();
-                input.value = "";
-                applyFilter();
-                const url = new URL(window.location.href);
-                url.searchParams.delete("q");
-                window.history.replaceState({}, "", url.pathname + (url.searchParams.toString() ? "?" + url.searchParams.toString() : ""));
-                focusInputToEnd();
+                emitQuery(desktopInput.value);
               });
+
+              mobileForm.addEventListener("submit", (event) => {
+                event.preventDefault();
+                emitQuery(mobileInput.value);
+              });
+
+              const clearQuery = (target) => {
+                target.addEventListener("click", (event) => {
+                  event.preventDefault();
+                  emitQuery("");
+                  if (target === desktopClearButton) {
+                    focusDesktopInputToEnd();
+                  } else {
+                    mobileInput.focus();
+                  }
+                });
+              };
+
+              clearQuery(desktopClearButton);
+              clearQuery(mobileClearButton);
 
               document.addEventListener("mousedown", (event) => {
                 const target = event.target;
@@ -1116,10 +1186,10 @@ export default async function CustomersPage({
               desktopMedia.addEventListener?.("change", applyFilter);
               window.addEventListener("resize", applyFilter);
 
-              // initialize from current input / query param immediately
+              updateClearButtons();
               applyFilter();
 
-              if (input.value.trim()) {
+              if (desktopInput.value.trim()) {
                 setOpen(true);
               }
             };

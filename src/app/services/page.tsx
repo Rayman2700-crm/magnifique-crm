@@ -1,10 +1,12 @@
 import Link from "next/link";
+import Script from "next/script";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getEffectiveTenantId } from "@/lib/effectiveTenant";
 import ServicesWorkspace from "./ServicesWorkspace";
 import ServiceTenantSelect from "./ServiceTenantSelect";
+import { setAdminTenant } from "@/app/admin/actions";
 
 type UserProfileRow = {
   role: string | null;
@@ -217,16 +219,18 @@ function MobileCreateButton({
 }
 
 
-function buildAdminTenantHref(tenantId: string) {
-  return tenantId === "all" ? "/admin?tenant=all" : `/admin?tenant=${encodeURIComponent(tenantId)}`;
-}
-
-function DesktopServicesTenantCompactMenu({
+function MobileServicesTenantPicker({
   current,
   options,
+  qRaw,
+  statusFilter,
+  createOpen = false,
 }: {
   current: string;
   options: TenantAvatarOption[];
+  qRaw: string;
+  statusFilter: StatusFilter;
+  createOpen?: boolean;
 }) {
   const items = [
     {
@@ -241,26 +245,28 @@ function DesktopServicesTenantCompactMenu({
   ];
 
   const active = items.find((item) => item.id === current) ?? items[0];
+  const activeRingColor = active.id === "all" ? "rgba(255,255,255,0.55)" : active.ringColor;
   const ringColors = ["#d6c3a3", ...options.map((item) => item.ringColor)];
   const step = 100 / Math.max(1, ringColors.length);
-  const ringBackground = `conic-gradient(${ringColors
+  const allRingBackground = `conic-gradient(${ringColors
     .map((color, index) => `${color} ${Math.round(index * step)}% ${Math.round((index + 1) * step)}%`)
     .join(", ")})`;
+  const ringBackground = active.id === "all" ? allRingBackground : activeRingColor;
 
   return (
-    <div id="desktop-services-tenant-compact">
+    <>
       <button
         type="button"
-        popoverTarget="services-desktop-tenant-menu"
+        popoverTarget="services-mobile-tenant-menu"
         popoverTargetAction="toggle"
-        className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
+        className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full md:hidden"
         aria-label="Behandler auswählen"
         style={{
           background: ringBackground,
           boxShadow: "0 0 0 2px rgba(11,11,12,0.95), 0 10px 28px rgba(0,0,0,0.34)",
         }}
       >
-        <span className="flex h-[37px] w-[37px] items-center justify-center overflow-hidden rounded-full border-2 border-[#111216] bg-[#0f1013] text-[11px] font-extrabold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+        <span className="flex h-[42px] w-[42px] items-center justify-center overflow-hidden rounded-full border-2 border-[#111216] bg-[#0f1013] text-[12px] font-extrabold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
           {active.id === "all" ? (
             <span className="flex h-full w-full items-center justify-center rounded-full bg-white text-black">Alle</span>
           ) : active.user_id ? (
@@ -269,15 +275,16 @@ function DesktopServicesTenantCompactMenu({
             active.shortLabel
           )}
         </span>
+
         <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#2563eb] px-1 text-[10px] font-extrabold text-white shadow-[0_0_0_2px_rgba(11,11,12,0.92)]">
           {active.id === "all" ? items.length : "1"}
         </span>
       </button>
 
       <div
-        id="services-desktop-tenant-menu"
+        id="services-mobile-tenant-menu"
         popover="auto"
-        className="fixed right-28 top-[230px] z-[2147483647] m-0 w-[320px] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl"
+        className="md:hidden fixed left-[84px] right-4 top-[412px] z-[2147483647] m-0 max-h-[60vh] overflow-y-auto rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl"
       >
         <div className="px-1 pb-2">
           <div className="text-sm font-semibold text-white">Behandler wählen</div>
@@ -288,10 +295,11 @@ function DesktopServicesTenantCompactMenu({
           {items.map((item) => {
             const selected = item.id === current;
             const ringColor = item.id === "all" ? "rgba(255,255,255,0.55)" : item.ringColor;
+
             return (
               <Link
-                key={`desktop-services-tenant-${item.id}`}
-                href={buildAdminTenantHref(item.id)}
+                key={`mobile-services-tenant-${item.id}`}
+                href={buildServicesTenantHref(item.id, qRaw, statusFilter, createOpen)}
                 className="flex items-center justify-between rounded-2xl border px-3 py-3 text-left"
                 style={{
                   borderColor: selected ? `${ringColor}66` : "rgba(255,255,255,0.10)",
@@ -324,14 +332,132 @@ function DesktopServicesTenantCompactMenu({
           })}
         </div>
       </div>
-    </div>
+    </>
+  );
+}
+
+
+function buildServicesTenantHref(tenantId: string, q: string, status: StatusFilter, createOpen = false) {
+  const params = new URLSearchParams();
+  if (tenantId !== "all") params.set("tenant", tenantId);
+  if (q.trim()) params.set("q", q.trim());
+  if (status !== "active") params.set("status", status);
+  if (createOpen) params.set("create", "1");
+  return `/services?${params.toString()}`;
+}
+
+function buildAdminTenantHref(tenantId: string) {
+  return tenantId === "all" ? "/admin?tenant=all" : `/admin?tenant=${encodeURIComponent(tenantId)}`;
+}
+
+function DesktopServicesTenantCompactMenu({
+  current,
+  options,
+  action,
+}: {
+  current: string;
+  options: TenantAvatarOption[];
+  action: (formData: FormData) => void | Promise<void>;
+}) {
+  const items = [
+    {
+      id: "all",
+      display_name: "Alle",
+      user_id: null as string | null,
+      shortLabel: "AL",
+      ringColor: "rgba(255,255,255,0.55)",
+      displayLabel: "Alle",
+    },
+    ...options,
+  ];
+
+  const active = items.find((item) => item.id === current) ?? items[0];
+  const ringColors = ["#d6c3a3", ...options.map((item) => item.ringColor)];
+  const step = 100 / Math.max(1, ringColors.length);
+  const ringBackground = `conic-gradient(${ringColors
+    .map((color, index) => `${color} ${Math.round(index * step)}% ${Math.round((index + 1) * step)}%`)
+    .join(", ")})`;
+
+  return (
+    <details id="desktop-services-tenant-compact" className="relative">
+      <summary
+        className="relative inline-flex h-11 w-11 shrink-0 cursor-pointer list-none items-center justify-center rounded-full"
+        aria-label="Behandler auswählen"
+        style={{
+          background: ringBackground,
+          boxShadow: "0 0 0 2px rgba(11,11,12,0.95), 0 10px 28px rgba(0,0,0,0.34)",
+        }}
+      >
+        <span className="flex h-[37px] w-[37px] items-center justify-center overflow-hidden rounded-full border-2 border-[#111216] bg-[#0f1013] text-[11px] font-extrabold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+          {active.id === "all" ? (
+            <span className="flex h-full w-full items-center justify-center rounded-full bg-white text-black">Alle</span>
+          ) : active.user_id ? (
+            <img src={`/users/${active.user_id}.png`} alt={active.displayLabel} className="h-full w-full object-cover" />
+          ) : (
+            active.shortLabel
+          )}
+        </span>
+        <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#2563eb] px-1 text-[10px] font-extrabold text-white shadow-[0_0_0_2px_rgba(11,11,12,0.92)]">
+          {active.id === "all" ? items.length : "1"}
+        </span>
+      </summary>
+
+      <div className="absolute right-0 top-[calc(100%+16px)] z-[2147483647] w-[320px] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 text-white shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl">
+        <div className="px-1 pb-2">
+          <div className="text-sm font-semibold text-white">Behandler wählen</div>
+          <div className="mt-0.5 text-xs text-white/45">Dienstleistungen filtern</div>
+        </div>
+
+        <div className="grid gap-2">
+          {items.map((item) => {
+            const selected = item.id === current;
+            const ringColor = item.id === "all" ? "rgba(255,255,255,0.55)" : item.ringColor;
+            return (
+              <form key={`desktop-services-tenant-${item.id}`} action={action}>
+                <input type="hidden" name="tenant" value={item.id} />
+                <button
+                  type="submit"
+                  className="flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left"
+                  style={{
+                    borderColor: selected ? `${ringColor}66` : "rgba(255,255,255,0.10)",
+                    backgroundColor: selected ? `${ringColor}22` : "rgba(255,255,255,0.04)",
+                  }}
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span
+                      className="inline-flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 bg-[#111216] text-sm font-extrabold text-white"
+                      style={{ borderColor: ringColor }}
+                    >
+                      {item.id === "all" ? (
+                        <span className="flex h-full w-full items-center justify-center rounded-full bg-white text-black">Alle</span>
+                      ) : item.user_id ? (
+                        <img src={`/users/${item.user_id}.png`} alt={item.displayLabel} className="h-full w-full object-cover" />
+                      ) : (
+                        item.shortLabel
+                      )}
+                    </span>
+
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-white">{item.displayLabel}</div>
+                      <div className="truncate text-xs text-white/50">{item.id === "all" ? "Alle Behandler" : item.display_name ?? item.id}</div>
+                    </div>
+                  </div>
+
+                  {selected ? <span className="pl-3 text-xs font-semibold text-[var(--primary)]">Aktiv</span> : null}
+                </button>
+              </form>
+            );
+          })}
+        </div>
+      </div>
+    </details>
   );
 }
 
 export default async function ServicesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ q?: string; status?: string; create?: string }>;
+  searchParams?: Promise<{ q?: string; status?: string; create?: string; tenant?: string }>;
 }) {
   const supabase = await supabaseServer();
   const admin = supabaseAdmin();
@@ -351,7 +477,7 @@ export default async function ServicesPage({
   const typedProfile = profile as UserProfileRow;
   const sp = (await searchParams) ?? {};
   const qRaw = String(sp.q ?? "");
-  const q = qRaw.trim().toLowerCase();
+  const explicitTenantParam = String(sp.tenant ?? "").trim();
   const statusFilter = (["active", "inactive", "all"].includes(String(sp.status))
     ? String(sp.status)
     : "active") as StatusFilter;
@@ -360,11 +486,18 @@ export default async function ServicesPage({
   const role = String(typedProfile.role ?? "PRACTITIONER").toUpperCase();
   const isAdmin = role === "ADMIN";
 
-  const selectedTenantId = await getEffectiveTenantId({
+  const effectiveTenantId = await getEffectiveTenantId({
     role: typedProfile.role ?? "PRACTITIONER",
     tenant_id: typedProfile.tenant_id ?? null,
     calendar_tenant_id: typedProfile.calendar_tenant_id ?? null,
   });
+
+  const selectedTenantId =
+    isAdmin
+      ? explicitTenantParam
+        ? explicitTenantParam
+        : null
+      : effectiveTenantId;
 
   let tenantOptions: TenantOption[] = [];
   let tenantName: string | null = null;
@@ -451,26 +584,7 @@ export default async function ServicesPage({
 
   const filteredServices = services.filter((service) => {
     const active = Boolean(service.is_active);
-    const matchesStatus =
-      statusFilter === "all" ? true : statusFilter === "active" ? active : !active;
-
-    const haystack = [
-      service.name ?? "",
-      service.description ?? "",
-      ((service.default_price_cents ?? 0) / 100).toFixed(2).replace(".", ","),
-      String(service.duration_minutes ?? ""),
-      String(service.tenant_id ?? ""),
-      String(
-        Array.isArray(service.tenant)
-          ? service.tenant[0]?.display_name ?? ""
-          : service.tenant?.display_name ?? ""
-      ),
-    ]
-      .join(" ")
-      .toLowerCase();
-
-    const matchesQuery = !q || haystack.includes(q);
-    return matchesStatus && matchesQuery;
+    return statusFilter === "all" ? true : statusFilter === "active" ? active : !active;
   });
 
   const searchPlaceholder = shouldShowAllServices ? "Name, Beschreibung, Preis, Dauer, Tenant" : "Name, Beschreibung, Preis, Dauer";
@@ -501,17 +615,17 @@ export default async function ServicesPage({
                 <div className="flex items-center justify-between gap-3 md:hidden">
                   <MobileStatusMenu qRaw={qRaw} statusFilter={statusFilter} counts={counts} />
                   <MobileCreateButton qRaw={qRaw} statusFilter={statusFilter} />
-                  <ServiceTenantSelect
-                    tenantOptions={tenantAvatarOptions}
-                    selectedTenantId={selectedTenantId}
-                    isAdmin={isAdmin}
-                    fallbackLabel={tenantName ?? "nicht gewählt"}
+                  <MobileServicesTenantPicker
+                    current={currentDesktopTenant}
+                    options={tenantAvatarOptions}
+                    qRaw={qRaw}
+                    statusFilter={statusFilter}
+                    createOpen={createOpen}
                   />
                 </div>
 
                 <div className="md:hidden flex flex-col gap-3">
-                  <form action="/services" method="get" className="w-full">
-                    <input type="hidden" name="status" value={statusFilter} />
+                  <form id="mobile-services-search-form" role="search" className="w-full">
                     <div className="flex h-11 items-center rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
                       <span className="mr-3 inline-flex h-4 w-4 shrink-0 items-center justify-center text-white/35">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
@@ -520,12 +634,24 @@ export default async function ServicesPage({
                         </svg>
                       </span>
                       <input
+                        id="mobile-services-search-input"
                         type="text"
-                        name="q"
                         defaultValue={qRaw}
                         placeholder={searchPlaceholder}
                         className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/35"
                       />
+                      <button
+                        id="mobile-services-search-clear"
+                        type="button"
+                        aria-label="Suche löschen"
+                        title="Suche löschen"
+                        className="ml-3 inline-flex h-8 w-8 min-h-8 min-w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] p-0 text-white/55 transition hover:bg-white/[0.08] hover:text-white"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                          <path d="M6 6l12 12" />
+                          <path d="M18 6 6 18" />
+                        </svg>
+                      </button>
                     </div>
                   </form>
                 </div>
@@ -548,7 +674,11 @@ export default async function ServicesPage({
                             </div>
                           </div>
                         </div>
-                        <DesktopServicesTenantCompactMenu current={currentDesktopTenant} options={tenantAvatarOptions} />
+                        <DesktopServicesTenantCompactMenu
+                          current={currentDesktopTenant}
+                          options={tenantAvatarOptions}
+                          action={setAdminTenant}
+                        />
                       </>
                     ) : (
                       <div id="desktop-services-tenant-strip" className="max-w-[640px] overflow-hidden">
@@ -565,32 +695,29 @@ export default async function ServicesPage({
                       </div>
                     )}
 
-                    <div id="desktop-services-search-wrap" className="relative">
-                      <button
+                    <details id="desktop-services-search-wrap" className="relative">
+                      <summary
                         id="desktop-services-search-toggle"
-                        type="button"
+                        className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/85 shadow-[0_10px_28px_rgba(0,0,0,0.28)] transition hover:bg-white/[0.08]"
                         aria-label="Suche öffnen"
                         title="Suche"
-                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/85 shadow-[0_10px_28px_rgba(0,0,0,0.28)] transition hover:bg-white/[0.08]"
                       >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-[18px] w-[18px]">
                           <circle cx="11" cy="11" r="7" />
                           <path d="m20 20-3.5-3.5" />
                         </svg>
-                      </button>
+                      </summary>
 
                       <div
                         id="desktop-services-search-stack"
-                        className={`${qRaw ? "pointer-events-auto opacity-100 translate-y-0 scale-100" : "pointer-events-none opacity-0 translate-y-1 scale-95"} absolute right-0 top-[calc(100%+28px)] z-20 transition duration-200`}
+                        className="absolute right-0 top-[calc(100%+28px)] z-20"
                         style={{ width: "420px", maxWidth: "620px" }}
-                        aria-hidden={qRaw ? "false" : "true"}
                       >
                         <div
                           id="desktop-services-search-panel"
                           className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.985)_0%,rgba(12,13,16,0.985)_100%)] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-xl"
                         >
-                          <form id="desktop-services-search-form" action="/services" method="get" className="w-full">
-                            <input type="hidden" name="status" value={statusFilter} />
+                          <form id="desktop-services-search-form" role="search" className="w-full">
                             <div className="flex h-12 items-center rounded-[18px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
                               <span className="mr-3 inline-flex h-4 w-4 shrink-0 items-center justify-center text-white/35">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
@@ -601,7 +728,6 @@ export default async function ServicesPage({
                               <input
                                 id="desktop-services-search-input"
                                 type="text"
-                                name="q"
                                 defaultValue={qRaw}
                                 placeholder={searchPlaceholder}
                                 autoComplete="off"
@@ -613,7 +739,6 @@ export default async function ServicesPage({
                                 aria-label="Suche löschen"
                                 title="Suche löschen"
                                 className="ml-3 inline-flex h-8 w-8 min-h-8 min-w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] p-0 text-white/55 transition hover:bg-white/[0.08] hover:text-white"
-                                style={{ opacity: qRaw ? 1 : 0, pointerEvents: qRaw ? "auto" : "none" }}
                               >
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                                   <path d="M6 6l12 12" />
@@ -624,7 +749,7 @@ export default async function ServicesPage({
                           </form>
                         </div>
                       </div>
-                    </div>
+                    </details>
 
                     <Link
                       href="/services?create=1"
@@ -691,10 +816,149 @@ export default async function ServicesPage({
               tenantName={tenantName}
               services={filteredServices}
               initialCreateOpen={createOpen}
+              initialQuery={qRaw}
             />
           )}
         </div>
       </section>
+
+      <Script id="services-desktop-search-script" strategy="afterInteractive">
+        {`
+          (() => {
+            const init = (tries = 0) => {
+              const desktopWrap = document.getElementById("desktop-services-search-wrap");
+              const desktopToggle = document.getElementById("desktop-services-search-toggle");
+              const desktopForm = document.getElementById("desktop-services-search-form");
+              const desktopInput = document.getElementById("desktop-services-search-input");
+              const desktopClearButton = document.getElementById("desktop-services-search-clear");
+
+              const mobileForm = document.getElementById("mobile-services-search-form");
+              const mobileInput = document.getElementById("mobile-services-search-input");
+              const mobileClearButton = document.getElementById("mobile-services-search-clear");
+
+              if (!desktopWrap || !desktopToggle || !desktopForm || !desktopInput || !desktopClearButton || !mobileForm || !mobileInput || !mobileClearButton) {
+                if (tries < 40) window.requestAnimationFrame(() => init(tries + 1));
+                return;
+              }
+
+              const desktopIsOpen = () => desktopWrap.hasAttribute("open");
+              const setDesktopOpen = (nextOpen) => {
+                if (nextOpen) desktopWrap.setAttribute("open", "");
+                else desktopWrap.removeAttribute("open");
+              };
+
+              const syncInputs = (value) => {
+                if (desktopInput.value !== value) desktopInput.value = value;
+                if (mobileInput.value !== value) mobileInput.value = value;
+              };
+
+              const updateClearButtons = () => {
+                const hasValue = String(desktopInput.value || mobileInput.value || "").trim().length > 0;
+                [desktopClearButton, mobileClearButton].forEach((button) => {
+                  button.style.opacity = hasValue ? "1" : "0";
+                  button.style.pointerEvents = hasValue ? "auto" : "none";
+                });
+              };
+
+              const emitQuery = (value) => {
+                const nextValue = String(value || "");
+                syncInputs(nextValue);
+                updateClearButtons();
+                window.dispatchEvent(new CustomEvent("services-search-query", { detail: nextValue }));
+                const url = new URL(window.location.href);
+                if (nextValue.trim()) url.searchParams.set("q", nextValue.trim());
+                else url.searchParams.delete("q");
+                window.history.replaceState({}, "", url.pathname + (url.searchParams.toString() ? "?" + url.searchParams.toString() : ""));
+              };
+
+              const focusDesktopInputToEnd = () => {
+                desktopInput.focus();
+                const len = desktopInput.value.length;
+                try { desktopInput.setSelectionRange(len, len); } catch (_) {}
+              };
+
+              desktopToggle.addEventListener("click", (event) => {
+                event.preventDefault();
+                const nextOpen = !desktopIsOpen();
+                setDesktopOpen(nextOpen);
+                if (nextOpen) window.requestAnimationFrame(focusDesktopInputToEnd);
+              });
+
+              const handleInput = (event) => {
+                const value = event.target.value;
+                if (event.target === desktopInput && !desktopIsOpen()) setDesktopOpen(true);
+                emitQuery(value);
+              };
+
+              desktopInput.addEventListener("input", handleInput);
+              mobileInput.addEventListener("input", handleInput);
+
+              desktopInput.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  setDesktopOpen(false);
+                  desktopToggle.focus();
+                  return;
+                }
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  emitQuery(desktopInput.value);
+                }
+              });
+
+              mobileInput.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  mobileInput.blur();
+                  return;
+                }
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  emitQuery(mobileInput.value);
+                }
+              });
+
+              desktopForm.addEventListener("submit", (event) => {
+                event.preventDefault();
+                emitQuery(desktopInput.value);
+              });
+
+              mobileForm.addEventListener("submit", (event) => {
+                event.preventDefault();
+                emitQuery(mobileInput.value);
+              });
+
+              const clearQuery = (target) => {
+                target.addEventListener("click", (event) => {
+                  event.preventDefault();
+                  emitQuery("");
+                  if (target === desktopClearButton) {
+                    focusDesktopInputToEnd();
+                  } else {
+                    mobileInput.focus();
+                  }
+                });
+              };
+
+              clearQuery(desktopClearButton);
+              clearQuery(mobileClearButton);
+
+              document.addEventListener("mousedown", (event) => {
+                if (!desktopIsOpen()) return;
+                if (desktopWrap.contains(event.target)) return;
+                setDesktopOpen(false);
+              });
+
+              emitQuery(desktopInput.value || mobileInput.value || "");
+              if (String(desktopInput.value || "").trim()) {
+                setDesktopOpen(true);
+              }
+            };
+
+            init();
+          })();
+        `}
+      </Script>
 
       <style dangerouslySetInnerHTML={{ __html: `
         @media (min-width: 768px) {
@@ -705,115 +969,18 @@ export default async function ServicesPage({
           #desktop-services-tenant-strip { display: none; }
           #desktop-services-tenant-compact { display: block; }
         }
+
+        details > summary { list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
+
+        #desktop-services-search-wrap > #desktop-services-search-stack {
+          display: none;
+        }
+        #desktop-services-search-wrap[open] > #desktop-services-search-stack {
+          display: block;
+        }
       ` }} />
 
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-            (() => {
-              const wrap = document.getElementById("desktop-services-search-wrap");
-              const toggle = document.getElementById("desktop-services-search-toggle");
-              const stack = document.getElementById("desktop-services-search-stack");
-              const input = document.getElementById("desktop-services-search-input");
-              const clearButton = document.getElementById("desktop-services-search-clear");
-              const form = document.getElementById("desktop-services-search-form");
-              const header = document.getElementById("desktop-services-header");
-              if (!wrap || !toggle || !stack || !input || !form || !header || !clearButton) return;
-
-              let submitTimer = null;
-              const shouldStartOpen = ${qRaw ? "true" : "false"};
-
-              const updateClearButton = () => {
-                const hasValue = String(input.value || "").trim().length > 0;
-                clearButton.style.opacity = hasValue ? "1" : "0";
-                clearButton.style.pointerEvents = hasValue ? "auto" : "none";
-              };
-
-              const setPanelWidth = () => {
-                const wrapRect = wrap.getBoundingClientRect();
-                const headerRect = header.getBoundingClientRect();
-                const innerGap = 8;
-                const minWidth = 280;
-                const maxWidth = 620;
-                const availableWidth = Math.floor(wrapRect.right - headerRect.left - innerGap);
-                const targetWidth = Math.max(minWidth, Math.min(maxWidth, availableWidth));
-                stack.style.width = targetWidth + "px";
-              };
-
-              const openPanel = (focusInput = true) => {
-                setPanelWidth();
-                stack.classList.remove("pointer-events-none", "opacity-0", "translate-y-1", "scale-95");
-                stack.classList.add("pointer-events-auto", "opacity-100", "translate-y-0", "scale-100");
-                stack.setAttribute("aria-hidden", "false");
-                if (focusInput) {
-                  window.requestAnimationFrame(() => {
-                    input.focus();
-                    const length = input.value.length;
-                    input.setSelectionRange(length, length);
-                    updateClearButton();
-                  });
-                } else {
-                  updateClearButton();
-                }
-              };
-
-              const closePanel = () => {
-                stack.classList.add("pointer-events-none", "opacity-0", "translate-y-1", "scale-95");
-                stack.classList.remove("pointer-events-auto", "opacity-100", "translate-y-0", "scale-100");
-                stack.setAttribute("aria-hidden", "true");
-              };
-
-              const isOpen = () => stack.getAttribute("aria-hidden") === "false";
-
-              toggle.addEventListener("click", (event) => {
-                event.preventDefault();
-                if (isOpen()) closePanel();
-                else openPanel();
-              });
-
-              input.addEventListener("input", () => {
-                updateClearButton();
-                if (!isOpen()) openPanel(false);
-                if (submitTimer) window.clearTimeout(submitTimer);
-                submitTimer = window.setTimeout(() => {
-                  form.requestSubmit();
-                }, 260);
-              });
-
-              clearButton.addEventListener("click", (event) => {
-                event.preventDefault();
-                input.value = "";
-                updateClearButton();
-                input.focus();
-                if (submitTimer) window.clearTimeout(submitTimer);
-                form.requestSubmit();
-              });
-
-              input.addEventListener("keydown", (event) => {
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  closePanel();
-                  toggle.focus();
-                }
-              });
-
-              document.addEventListener("click", (event) => {
-                if (!isOpen()) return;
-                if (wrap.contains(event.target)) return;
-                closePanel();
-              });
-
-              window.addEventListener("resize", () => {
-                if (isOpen()) setPanelWidth();
-              });
-
-              updateClearButton();
-              if (shouldStartOpen) openPanel(false);
-              else closePanel();
-            })();
-          `,
-        }}
-      />
     </main>
   );
 }
