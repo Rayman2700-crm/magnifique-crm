@@ -433,14 +433,12 @@ function DailyAgendaPanel({
   legendUsers,
   panelHeight,
   searchQuery,
-  isMobileCompact = false,
 }: {
   selectedISO: string;
   items: Item[];
   legendUsers: LegendUser[];
   panelHeight?: number | null;
   searchQuery?: string;
-  isMobileCompact?: boolean;
 }) {
   const [contactPhone, setContactPhone] = useState<string | null>(null);
   const [contactName, setContactName] = useState<string | null>(null);
@@ -493,15 +491,13 @@ function DailyAgendaPanel({
     <div
       style={{
         width: "100%",
-        minWidth: 0,
-        maxWidth: "100%",
         height: cardHeight,
         minHeight: cardHeight,
         maxHeight: cardHeight,
         borderRadius: 16,
         border: "1px solid rgba(255,255,255,0.08)",
         background: "rgba(255,255,255,0.02)",
-        padding: isMobileCompact ? 8 : 12,
+        padding: 12,
         boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
         overflow: "hidden",
       }}
@@ -680,7 +676,7 @@ function DesktopMiniMonthPicker({
           alignItems: "center",
           justifyContent: "space-between",
           gap: 12,
-          marginBottom: isMobileCompact ? 8 : 10,
+          marginBottom: 10,
         }}
       >
         {isMobileCompact ? (
@@ -822,11 +818,11 @@ function DesktopMiniMonthPicker({
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-          gap: isMobileCompact ? 3 : 4,
+          gap: 4,
           textAlign: "center",
-          fontSize: isMobileCompact ? 9 : 10,
+          fontSize: 10,
           color: "rgba(255,255,255,0.42)",
-          marginBottom: isMobileCompact ? 3 : 4,
+          marginBottom: 4,
         }}
       >
         {["M", "D", "M", "D", "F", "S", "S"].map((label, index) => (
@@ -840,7 +836,7 @@ function DesktopMiniMonthPicker({
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-          gap: isMobileCompact ? 3 : 4,
+          gap: 4,
         }}
       >
         {cells.map((cell) => {
@@ -857,9 +853,9 @@ function DesktopMiniMonthPicker({
               className="calendar-mini-day"
               data-selected={isSelected ? "true" : "false"}
               style={{
-                height: isMobileCompact ? 28 : 30,
+                height: 30,
                 minWidth: 0,
-                borderRadius: isMobileCompact ? 7 : 8,
+                borderRadius: 8,
                 border: isSelected
                   ? "1px solid rgba(255,255,255,0.16)"
                   : "1px solid transparent",
@@ -874,7 +870,7 @@ function DesktopMiniMonthPicker({
                     ? "rgba(255,255,255,0.08)"
                     : "rgba(255,255,255,0.03)",
                 boxShadow: isSelected ? "0 8px 18px rgba(37,99,235,0.20)" : "none",
-                fontSize: isMobileCompact ? 11 : 12,
+                fontSize: 12,
                 fontWeight: 700,
                 cursor: "pointer",
                 position: "relative",
@@ -888,17 +884,17 @@ function DesktopMiniMonthPicker({
                 aria-hidden="true"
                 style={{
                   position: "absolute",
-                  top: isMobileCompact ? -3 : -5,
-                  right: isMobileCompact ? -2 : -5,
-                  minWidth: isMobileCompact ? (count > 9 ? 16 : 14) : (count > 9 ? 18 : 16),
-                  height: isMobileCompact ? (count > 9 ? 16 : 14) : (count > 9 ? 18 : 16),
-                  padding: isMobileCompact ? (count > 9 ? "0 3px" : "0 0") : (count > 9 ? "0 4px" : "0 0"),
+                  top: -5,
+                  right: -5,
+                  minWidth: count > 9 ? 18 : 16,
+                  height: count > 9 ? 18 : 16,
+                  padding: count > 9 ? "0 4px" : "0 0",
                   borderRadius: 999,
                   background: count > 0 ? "#2563eb" : "rgba(255,255,255,0.18)",
                   color: count > 0 ? "#fff" : "rgba(255,255,255,0.80)",
-                  fontSize: isMobileCompact ? 9 : 10,
+                  fontSize: 10,
                   fontWeight: 800,
-                  lineHeight: isMobileCompact ? (count > 9 ? "16px" : "14px") : (count > 9 ? "18px" : "16px"),
+                  lineHeight: count > 9 ? "18px" : "16px",
                   boxShadow: count > 0
                     ? "0 0 0 2px rgba(11,11,12,0.92), 0 0 10px rgba(37,99,235,0.38)"
                     : "0 0 0 2px rgba(11,11,12,0.92)",
@@ -1555,7 +1551,7 @@ function MobileViewPicker({
               />
 
               <div
-                className="fixed z-[121] w-[min(260px,calc(100vw-24px))] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl md:hidden"
+                className="fixed z-[121] w-[min(120px,calc(100vw-24px))] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl md:hidden"
                 style={{ top: panelTop, right: panelRight }}
               >
                 <div className="flex items-center justify-between px-1 pb-2">
@@ -2085,134 +2081,66 @@ export default function DashboardCalendarCardClient({
     });
   }, [desktopSearchQuery, items, effectiveLegendUsers, selectedTenantId]);
 
-return (
-  <Card className="min-w-0 overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
-    <CardContent className="min-w-0 px-3 py-4 sm:p-5 md:p-6 xl:p-8">
-      <style jsx global>{`
-        .calendar-desktop-pill:hover {
-          background: rgba(255,255,255,0.08) !important;
-          border-color: rgba(255,255,255,0.16) !important;
-          color: rgba(255,255,255,0.98) !important;
-        }
-
-        .calendar-desktop-pill[data-active="true"]:hover {
-          background: rgba(255,255,255,0.14) !important;
-          border-color: rgba(255,255,255,0.22) !important;
-        }
-
-        .calendar-mini-chevron {
-          transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
-        }
-
-        .calendar-mini-chevron:hover {
-          background: rgba(255,255,255,0.08) !important;
-          border-color: rgba(255,255,255,0.16) !important;
-          color: rgba(255,255,255,0.98) !important;
-          transform: translateY(-1px);
-        }
-
-        .calendar-mini-day:hover {
-          background: rgba(255,255,255,0.08) !important;
-          border-color: rgba(255,255,255,0.16) !important;
-          color: rgba(255,255,255,0.98) !important;
-          transform: translateY(-1px);
-          box-shadow: 0 10px 18px rgba(0,0,0,0.20);
-        }
-
-        .calendar-mini-day[data-selected="true"]:hover {
-          background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important;
-          border-color: rgba(255,255,255,0.20) !important;
-          box-shadow: 0 10px 22px rgba(37,99,235,0.28) !important;
-        }
-
-        @media (max-width: 767px) {
-          #dashboard-calendar-mobile-shell {
-            width: 100%;
-            min-width: 0;
-            overflow: hidden;
+  return (
+    <Card className="overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+      <CardContent className="p-5 md:p-6 xl:p-8">
+        <style jsx global>{`
+          .calendar-desktop-pill:hover {
+            background: rgba(255,255,255,0.08) !important;
+            border-color: rgba(255,255,255,0.16) !important;
+            color: rgba(255,255,255,0.98) !important;
           }
 
-          #dashboard-calendar-mobile-toolbar {
-            width: 100%;
-            min-width: 0;
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: stretch !important;
-            justify-content: flex-start !important;
-            gap: 12px !important;
+          .calendar-desktop-pill[data-active="true"]:hover {
+            background: rgba(255,255,255,0.14) !important;
+            border-color: rgba(255,255,255,0.22) !important;
           }
 
-          #dashboard-calendar-mobile-toolbar > :first-child {
-            min-width: 0;
-            width: 100%;
-            flex: 0 0 auto !important;
+          .calendar-mini-chevron {
+            transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
           }
 
-          #dashboard-calendar-mobile-toolbar > :first-child > div:first-child {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+          .calendar-mini-chevron:hover {
+            background: rgba(255,255,255,0.08) !important;
+            border-color: rgba(255,255,255,0.16) !important;
+            color: rgba(255,255,255,0.98) !important;
+            transform: translateY(-1px);
           }
 
-          #dashboard-calendar-mobile-toolbar > :first-child > div:last-child {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+          .calendar-mini-day:hover {
+            background: rgba(255,255,255,0.08) !important;
+            border-color: rgba(255,255,255,0.16) !important;
+            color: rgba(255,255,255,0.98) !important;
+            transform: translateY(-1px);
+            box-shadow: 0 10px 18px rgba(0,0,0,0.20);
           }
 
-          #dashboard-calendar-mobile-toolbar-actions {
-            display: flex !important;
-            flex-wrap: nowrap !important;
-            align-items: center !important;
-            justify-content: flex-end !important;
-            gap: 8px !important;
-            width: 100% !important;
-            max-width: 100% !important;
-            min-width: 0 !important;
-            flex: 0 0 auto !important;
-            overflow-x: auto;
-            overflow-y: hidden;
-            padding-bottom: 2px;
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: none;
+          .calendar-mini-day[data-selected="true"]:hover {
+            background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important;
+            border-color: rgba(255,255,255,0.20) !important;
+            box-shadow: 0 10px 22px rgba(37,99,235,0.28) !important;
           }
 
-          #dashboard-calendar-mobile-toolbar-actions::-webkit-scrollbar {
-            display: none;
-          }
+          @media (min-width: 768px) and (max-width: 1020px) {
+            #dashboard-calendar-header-shell {
+              padding-right: 560px !important;
+            }
 
-          #dashboard-calendar-mobile-toolbar-actions > * {
-            flex: 0 0 auto !important;
-          }
+            #dashboard-calendar-header-actions {
+              gap: 10px !important;
+            }
 
-          #dashboard-calendar-mobile-search,
-          #dashboard-calendar-mobile-content,
-          #dashboard-calendar-mobile-content > * {
-            width: 100%;
-            min-width: 0;
+            #dashboard-calendar-header-legend { gap: 10px; }
+            #dashboard-calendar-header-legend > button > div:first-child {
+              width: 40px !important;
+              height: 40px !important;
+            }
+            #dashboard-calendar-header-legend > button > div:last-child {
+              font-size: 11px !important;
+              padding: 4px 9px !important;
+            }
           }
-        }
-
-        @media (min-width: 768px) and (max-width: 1020px) {
-          #dashboard-calendar-header-shell {
-            padding-right: 560px !important;
-          }
-
-          #dashboard-calendar-header-actions {
-            gap: 10px !important;
-          }
-
-          #dashboard-calendar-header-legend { gap: 10px; }
-          #dashboard-calendar-header-legend > button > div:first-child {
-            width: 40px !important;
-            height: 40px !important;
-          }
-          #dashboard-calendar-header-legend > button > div:last-child {
-            font-size: 11px !important;
-            padding: 4px 9px !important;
-          }
-        }
-      `}</style>
+        `}</style>
         <div className="hidden md:block">
           <div id="dashboard-calendar-header-shell" className="relative pr-[360px] xl:pr-[520px]">
             <div id="dashboard-calendar-header-actions" className="absolute right-0 top-0 z-30 flex items-start justify-end gap-3">
@@ -2327,107 +2255,104 @@ return (
           </div>
         </div>
 
-<div id="dashboard-calendar-mobile-shell" className="md:hidden flex min-w-0 flex-col gap-4 lg:gap-6">
-  <div id="dashboard-calendar-mobile-toolbar" className="md:hidden flex min-w-0 flex-col gap-3">
-    <div className="min-w-0">
-      <div className="truncate text-lg font-semibold text-white">Kalender</div>
-      <div className="truncate text-sm text-white/60">Team-Übersicht</div>
-    </div>
+        <div className="md:hidden flex flex-col gap-4 lg:gap-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-lg font-semibold text-white">Kalender</div>
+              <div className="text-sm text-white/60">Team-Übersicht</div>
+            </div>
 
-    <div id="dashboard-calendar-mobile-toolbar-actions" className="flex w-full items-center justify-end gap-2">
-      <button
-        ref={desktopSearchButtonRef}
-        type="button"
-        onMouseDown={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }}
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setDesktopSearchOpen((current) => !current);
-        }}
-        className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border md:hidden"
-        aria-label="Suche öffnen"
-        style={{
-          borderColor: "rgba(255,255,255,0.10)",
-          background: "rgba(255,255,255,0.04)",
-          color: "rgba(255,255,255,0.88)",
-          boxShadow: "0 0 0 2px rgba(11,11,12,0.95), 0 10px 28px rgba(0,0,0,0.30)",
-        }}
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-[18px] w-[18px]">
-          <circle cx="11" cy="11" r="7" />
-          <path d="m20 20-3.5-3.5" />
-        </svg>
-      </button>
+            <div className="flex items-center gap-2 md:hidden">
+              <button
+                ref={desktopSearchButtonRef}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDesktopSearchOpen((current) => !current);
+                }}
+                className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border md:hidden"
+                aria-label="Suche öffnen"
+                style={{
+                  borderColor: "rgba(255,255,255,0.10)",
+                  background: "rgba(255,255,255,0.04)",
+                  color: "rgba(255,255,255,0.88)",
+                  boxShadow: "0 0 0 2px rgba(11,11,12,0.95), 0 10px 28px rgba(0,0,0,0.30)",
+                }}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-[18px] w-[18px]">
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.5-3.5" />
+                </svg>
+              </button>
 
-      <MobileCircleActionButton
-        label="Neuen Termin erstellen"
-        variant="primary"
-        onClick={() => setCreateOpen(true)}
-      >
-        <span className="text-[26px] font-semibold leading-none">+</span>
-      </MobileCircleActionButton>
+              <MobileCircleActionButton
+                label="Neuen Termin erstellen"
+                variant="primary"
+                onClick={() => setCreateOpen(true)}
+              >
+                <span className="text-[26px] font-semibold leading-none">+</span>
+              </MobileCircleActionButton>
+              <MobileViewPicker value={view} onChange={handleChangeView} anchorISO={anchorISO} />
+              {effectiveLegendUsers.length > 0 ? (
+                <MobileLegendPicker
+                  users={effectiveLegendUsers}
+                  activeTenantId={selectedTenantId}
+                  onSelect={setSelectedTenantId}
+                />
+              ) : null}
+            </div>
+          </div>
 
-      <MobileViewPicker value={view} onChange={handleChangeView} anchorISO={anchorISO} />
+          {currentLegendUser && !isAdmin ? (
+            <div className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/80 lg:inline-flex lg:w-fit">
+              {currentLegendUser.fullName ?? currentLegendUser.tenantDisplayName}
+            </div>
+          ) : null}
 
-      {effectiveLegendUsers.length > 0 ? (
-        <MobileLegendPicker
-          users={effectiveLegendUsers}
-          activeTenantId={selectedTenantId}
-          onSelect={setSelectedTenantId}
-        />
-      ) : null}
-    </div>
-  </div>
-
-  {currentLegendUser && !isAdmin ? (
-    <div className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white/80 lg:inline-flex lg:w-fit">
-      {currentLegendUser.fullName ?? currentLegendUser.tenantDisplayName}
-    </div>
-  ) : null}
-
-  {desktopSearchOpen ? (
-    <div
-      ref={desktopSearchPanelRef}
-      className="md:hidden rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.985)_0%,rgba(12,13,16,0.985)_100%)] p-3 shadow-[0_20px_50px_rgba(0,0,0,0.36)] backdrop-blur-xl"
-      id="dashboard-calendar-mobile-search"
-    >
-      <div className="flex h-12 items-center rounded-[18px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
-        <span className="mr-3 inline-flex h-4 w-4 shrink-0 items-center justify-center text-white/35">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-        </span>
-        <input
-          type="text"
-          value={desktopSearchQuery}
-          onChange={(e) => setDesktopSearchQuery(e.target.value)}
-          placeholder="Termin, Kunde, E-Mail, Telefon"
-          autoFocus
-          className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/35"
-        />
-        {desktopSearchQuery ? (
-          <button
-            type="button"
-            onClick={() => {
-              setDesktopSearchQuery("");
-            }}
-            className="ml-3 inline-flex h-8 w-8 min-h-8 min-w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] p-0 text-white/55 transition hover:bg-white/[0.08] hover:text-white"
-            aria-label="Suche löschen"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-              <path d="M6 6l12 12" />
-              <path d="M18 6 6 18" />
-            </svg>
-          </button>
-        ) : null}
-      </div>
-    </div>
-  ) : null}
-</div>
+          {desktopSearchOpen ? (
+            <div
+              ref={desktopSearchPanelRef}
+              className="md:hidden rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.985)_0%,rgba(12,13,16,0.985)_100%)] p-3 shadow-[0_20px_50px_rgba(0,0,0,0.36)] backdrop-blur-xl"
+            >
+              <div className="flex h-12 items-center rounded-[18px] border border-[var(--border)] bg-[var(--surface-2)] px-4">
+                <span className="mr-3 inline-flex h-4 w-4 shrink-0 items-center justify-center text-white/35">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                    <circle cx="11" cy="11" r="7" />
+                    <path d="m20 20-3.5-3.5" />
+                  </svg>
+                </span>
+                <input
+                  type="text"
+                  value={desktopSearchQuery}
+                  onChange={(e) => setDesktopSearchQuery(e.target.value)}
+                  placeholder="Termin, Kunde, E-Mail, Telefon"
+                  autoFocus
+                  className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/35"
+                />
+                {desktopSearchQuery ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDesktopSearchQuery("");
+                    }}
+                    className="ml-3 inline-flex h-8 w-8 min-h-8 min-w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] p-0 text-white/55 transition hover:bg-white/[0.08] hover:text-white"
+                    aria-label="Suche löschen"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                      <path d="M6 6l12 12" />
+                      <path d="M18 6 6 18" />
+                    </svg>
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </div>
 
         <div className="mt-5 lg:mt-7">
           {errorText ? (
@@ -2447,7 +2372,7 @@ return (
                 </div>
               )}
 
-              <div id="dashboard-calendar-mobile-content" className="flex min-w-0 flex-col gap-5">
+              <div className="flex flex-col gap-5">
                 <div className="flex min-w-0 flex-1 flex-col gap-4">
                   <div className="hidden md:hidden" />
 
@@ -2469,7 +2394,6 @@ return (
                         items={visibleItems}
                         legendUsers={effectiveLegendUsers}
                         searchQuery={desktopSearchQuery}
-                        isMobileCompact
                       />
                     </div>
                   </div>
