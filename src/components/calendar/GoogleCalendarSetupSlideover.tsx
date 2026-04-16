@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { createTestEvent, setDefaultCalendar } from "@/app/calendar/actions";
+import { setDefaultCalendar } from "@/app/calendar/actions";
 
 type CalendarListItem = {
   id: string;
@@ -14,6 +14,7 @@ type CalendarListItem = {
 };
 
 const EMPTY_IDS: string[] = [];
+const STUDIO_DEFAULT_CALENDAR_ID = "radu.craus@gmail.com";
 
 function Button({
   children,
@@ -59,16 +60,28 @@ function sameStringArray(a: string[], b: string[]) {
   return true;
 }
 
+function sanitizeCalendarIds(values: Array<string | null | undefined>) {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
 export default function GoogleCalendarSetupSlideover({
   calendars,
   savedDefault,
   savedEnabled,
   loadError,
+  isAdmin = false,
 }: {
   calendars: CalendarListItem[];
   savedDefault: string | null;
   savedEnabled?: string[] | null;
   loadError: string | null;
+  isAdmin?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -76,31 +89,17 @@ export default function GoogleCalendarSetupSlideover({
 
   const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(false);
-  const [selectedDefault, setSelectedDefault] = useState<string>(savedDefault ?? "");
   const [enabledIds, setEnabledIds] = useState<string[]>(EMPTY_IDS);
 
   const open = searchParams?.get("openGoogleSetup") === "1";
   const error = searchParams?.get("error");
   const success = searchParams?.get("success");
-  const link = searchParams?.get("link");
 
   const returnTo = useMemo(() => {
     const params = new URLSearchParams(searchParams?.toString() ?? "");
     params.set("openGoogleSetup", "1");
     return `${pathname}${params.toString() ? `?${params.toString()}` : ""}`;
   }, [pathname, searchParams]);
-
-  const normalizedSavedEnabled = useMemo(() => {
-    const base = Array.isArray(savedEnabled) ? savedEnabled : EMPTY_IDS;
-    const merged = new Set<string>();
-    for (const id of base) {
-      const clean = String(id ?? "").trim();
-      if (clean) merged.add(clean);
-    }
-    const cleanDefault = String(savedDefault ?? "").trim();
-    if (cleanDefault) merged.add(cleanDefault);
-    return Array.from(merged);
-  }, [savedDefault, savedEnabled]);
 
   const sortedCalendars = useMemo(() => {
     return [...calendars].sort(
@@ -110,21 +109,33 @@ export default function GoogleCalendarSetupSlideover({
     );
   }, [calendars]);
 
+  const studioCalendar = useMemo(() => {
+    return (
+      sortedCalendars.find((calendar) => String(calendar.id).trim() === STUDIO_DEFAULT_CALENDAR_ID) ??
+      sortedCalendars.find((calendar) => String(calendar.summary ?? "").trim() === STUDIO_DEFAULT_CALENDAR_ID) ?? {
+        id: STUDIO_DEFAULT_CALENDAR_ID,
+        summary: STUDIO_DEFAULT_CALENDAR_ID,
+        accessRole: "owner",
+      }
+    );
+  }, [sortedCalendars]);
+
+  const normalizedSavedEnabled = useMemo(() => {
+    if (!isAdmin) return [studioCalendar.id];
+    return sanitizeCalendarIds([...(Array.isArray(savedEnabled) ? savedEnabled : EMPTY_IDS), studioCalendar.id]);
+  }, [isAdmin, savedEnabled, studioCalendar.id]);
+
+  const extraCalendars = useMemo(() => {
+    if (!isAdmin) return [];
+    return sortedCalendars.filter((calendar) => calendar.id !== studioCalendar.id);
+  }, [isAdmin, sortedCalendars, studioCalendar.id]);
+
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
-    const nextDefault = String(savedDefault ?? "").trim();
-    const fallbackDefault = nextDefault || sortedCalendars[0]?.id || "";
-    const nextEnabled =
-      normalizedSavedEnabled.length > 0
-        ? normalizedSavedEnabled
-        : fallbackDefault
-          ? [fallbackDefault]
-          : EMPTY_IDS;
-
-    setSelectedDefault((current) => (current === fallbackDefault ? current : fallbackDefault));
+    const nextEnabled = normalizedSavedEnabled.length > 0 ? normalizedSavedEnabled : [studioCalendar.id];
     setEnabledIds((current) => (sameStringArray(current, nextEnabled) ? current : nextEnabled));
-  }, [normalizedSavedEnabled, savedDefault, sortedCalendars]);
+  }, [normalizedSavedEnabled, studioCalendar.id]);
 
   useEffect(() => {
     if (!open) {
@@ -161,23 +172,16 @@ export default function GoogleCalendarSetupSlideover({
   }
 
   function toggleEnabled(calendarId: string) {
+    if (!isAdmin) return;
+
     setEnabledIds((current) => {
       const cleanId = String(calendarId ?? "").trim();
-      if (!cleanId) return current;
-      if (cleanId === selectedDefault) return Array.from(new Set([...current, cleanId]));
+      if (!cleanId || cleanId === studioCalendar.id) return current;
       return current.includes(cleanId)
-        ? current.filter((id) => id !== cleanId)
-        : [...current, cleanId];
+        ? [studioCalendar.id, ...current.filter((id) => id !== cleanId && id !== studioCalendar.id)]
+        : sanitizeCalendarIds([...current, cleanId, studioCalendar.id]);
     });
   }
-
-  function handleDefaultChange(calendarId: string) {
-    const cleanId = String(calendarId ?? "").trim();
-    setSelectedDefault(cleanId);
-    setEnabledIds((current) => Array.from(new Set([...current, cleanId])));
-  }
-
-  const activeCalendarCount = enabledIds.length;
 
   if (!mounted || !open || typeof document === "undefined") return null;
 
@@ -244,22 +248,7 @@ export default function GoogleCalendarSetupSlideover({
           {success ? (
             <div className={error ? "mt-4" : ""}>
               <MessageCard tone="success">
-                <div className="text-sm text-emerald-200">
-                  {decodeURIComponent(success)}
-                  {link ? (
-                    <>
-                      {" "}
-                      <a
-                        className="underline underline-offset-4"
-                        href={decodeURIComponent(link)}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        (in Google Kalender öffnen)
-                      </a>
-                    </>
-                  ) : null}
-                </div>
+                <div className="text-sm text-emerald-200">{decodeURIComponent(success)}</div>
               </MessageCard>
             </div>
           ) : null}
@@ -279,105 +268,93 @@ export default function GoogleCalendarSetupSlideover({
                 </div>
               </MessageCard>
             ) : (
-              <div className="grid gap-5 xl:grid-cols-2">
+              <div className="grid gap-5">
                 <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
                   <div className="text-sm text-white/60">
-                    Standard-Kalender:{" "}
-                    <span className="font-medium text-white">
-                      {selectedDefault
-                        ? (sortedCalendars.find((calendar) => calendar.id === selectedDefault)?.summary ?? selectedDefault)
-                        : "— noch keiner —"}
-                    </span>
-                  </div>
-                  <div className="mt-2 text-sm text-white/45">
-                    Aktive Zusatz-Kalender: <span className="font-medium text-white">{activeCalendarCount}</span>
+                    Gespeicherter Standard-Kalender:{" "}
+                    <span className="font-medium text-white">{STUDIO_DEFAULT_CALENDAR_ID}</span>
                   </div>
 
                   <form action={setDefaultCalendar} className="mt-5 space-y-4">
                     <input type="hidden" name="returnTo" value={returnTo} />
-                    <input type="hidden" name="calendarId" value={selectedDefault} />
-                    {enabledIds.map((calendarId) => (
-                      <input key={calendarId} type="hidden" name="enabledCalendarIds" value={calendarId} />
-                    ))}
+                    <input type="hidden" name="calendarId" value={studioCalendar.id} />
+                    <input type="hidden" name="enabledCalendarIds" value={studioCalendar.id} />
+                    {isAdmin
+                      ? enabledIds
+                          .filter((calendarId) => calendarId !== studioCalendar.id)
+                          .map((calendarId) => (
+                            <input key={calendarId} type="hidden" name="enabledCalendarIds" value={calendarId} />
+                          ))
+                      : null}
 
-                    <div className="text-sm font-medium text-white">Kalender auswählen</div>
+                    <div className="text-sm font-medium text-white">Standard-Kalender</div>
 
-                    <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
-                      {sortedCalendars.map((calendar) => {
-                        const isDefault = selectedDefault === calendar.id;
-                        const isEnabled = enabledIds.includes(calendar.id);
-                        return (
-                          <label
-                            key={calendar.id}
-                            className="flex items-start justify-between gap-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white"
-                          >
-                            <div className="min-w-0">
-                              <div className="text-sm font-semibold text-white break-words">
-                                {(calendar.primary ? "⭐ " : "") + (calendar.summary ?? calendar.id)}
-                              </div>
-                              <div className="mt-1 text-xs text-white/45 break-all">
-                                {calendar.id}
-                                {calendar.accessRole ? ` · ${calendar.accessRole}` : ""}
-                              </div>
-                            </div>
-
-                            <div className="flex shrink-0 flex-col items-end gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleDefaultChange(calendar.id)}
-                                className={`inline-flex h-9 items-center justify-center rounded-xl px-3 text-xs font-semibold transition ${isDefault ? "border border-[#d6c3a3]/40 bg-[#d6c3a3] text-black" : "border border-white/10 bg-white/5 text-white hover:bg-white/10"}`}
-                              >
-                                {isDefault ? "Standard" : "Als Standard"}
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => toggleEnabled(calendar.id)}
-                                className={`inline-flex h-9 items-center justify-center rounded-xl px-3 text-xs font-semibold transition ${isEnabled ? "border border-emerald-500/35 bg-emerald-500/15 text-emerald-200" : "border border-white/10 bg-white/5 text-white hover:bg-white/10"}`}
-                              >
-                                {isEnabled ? (isDefault ? "Aktiv · Standard" : "Aktiv") : "Zuschalten"}
-                              </button>
-                            </div>
-                          </label>
-                        );
-                      })}
+                    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white">
+                      <div className="text-sm font-semibold break-words">
+                        {(studioCalendar.primary ? "⭐ " : "") + (studioCalendar.summary ?? studioCalendar.id)}
+                      </div>
+                      <div className="mt-1 text-xs text-white/45 break-all">
+                        {studioCalendar.id}
+                        {studioCalendar.accessRole ? ` · ${studioCalendar.accessRole}` : ""}
+                      </div>
                     </div>
 
                     <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/60">
-                      Neue CRM-Termine werden weiter nur in den <span className="font-medium text-white">Standard-Kalender</span> geschrieben. Zusätzliche Kalender sind für Anzeige und Sync.
+                      Alle Studio-Termine werden weiter in den gemeinsamen Standard-Kalender{" "}
+                      <span className="font-medium text-white">{STUDIO_DEFAULT_CALENDAR_ID}</span> geschrieben.
                     </div>
 
-                    <Button type="submit">Kalender speichern</Button>
+                    {isAdmin ? (
+                      <div className="space-y-3">
+                        <div className="text-sm font-medium text-white">Zusatzkalender nur für Admin</div>
+
+                        <div className="space-y-2">
+                          {extraCalendars.length > 0 ? (
+                            extraCalendars.map((calendar) => {
+                              const checked = enabledIds.includes(calendar.id);
+                              return (
+                                <label
+                                  key={calendar.id}
+                                  className="flex items-start justify-between gap-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white"
+                                >
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-semibold text-white break-words">
+                                      {(calendar.primary ? "⭐ " : "") + (calendar.summary ?? calendar.id)}
+                                    </div>
+                                    <div className="mt-1 text-xs text-white/45 break-all">
+                                      {calendar.id}
+                                      {calendar.accessRole ? ` · ${calendar.accessRole}` : ""}
+                                    </div>
+                                  </div>
+
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => toggleEnabled(calendar.id)}
+                                    className="mt-1 h-4 w-4 rounded border-white/20 bg-black/30"
+                                  />
+                                </label>
+                              );
+                            })
+                          ) : (
+                            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/50">
+                              Keine weiteren Kalender gefunden.
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                          Zusatzkalender sind nur zur Anzeige gedacht und schreiben nichts ins CRM.
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/50">
+                        Weitere Kalender sind nur für Admin sichtbar.
+                      </div>
+                    )}
+
+                    <Button type="submit">Speichern</Button>
                   </form>
-                </div>
-
-                <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
-                  <div className="text-sm font-medium text-white">Testevent</div>
-
-                  <form action={createTestEvent} className="mt-5 space-y-4">
-                    <input type="hidden" name="returnTo" value={returnTo} />
-                    <select
-                      name="calendarId"
-                      value={selectedDefault}
-                      onChange={(e) => handleDefaultChange(e.target.value)}
-                      className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none ring-0 transition focus:border-white/20"
-                    >
-                      <option value="">— Bitte wählen —</option>
-                      {sortedCalendars.map((calendar) => (
-                        <option key={calendar.id} value={calendar.id}>
-                          {(calendar.primary ? "⭐ " : "") + (calendar.summary ?? calendar.id)}
-                        </option>
-                      ))}
-                    </select>
-
-                    <Button variant="secondary" type="submit">
-                      Testevent erstellen
-                    </Button>
-                  </form>
-
-                  <div className="mt-4 text-sm text-white/50">
-                    Tipp: Wenn oben ein Link erscheint, ist die Verbindung korrekt.
-                  </div>
                 </div>
               </div>
             )}

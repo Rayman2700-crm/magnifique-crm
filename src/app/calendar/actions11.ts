@@ -543,18 +543,6 @@ export async function connectGoogleCalendar() {
   redirect("/calendar/google");
 }
 
-const STUDIO_DEFAULT_CALENDAR_ID = "radu.craus@gmail.com";
-
-async function getCurrentUserRoleForCalendarSettings(supabase: Awaited<ReturnType<typeof supabaseServer>>, userId: string) {
-  const { data: profile } = await supabase
-    .from("user_profiles")
-    .select("role")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  return String((profile as any)?.role ?? "").toUpperCase();
-}
-
 export async function setDefaultCalendar(formData: FormData) {
   const supabase = await supabaseServer();
   const { data } = await supabase.auth.getUser();
@@ -562,27 +550,21 @@ export async function setDefaultCalendar(formData: FormData) {
   if (!user) redirect("/login");
 
   const returnTo = safeReturnTo(String(formData.get("returnTo") ?? "/calendar/google"));
-  const requestedCalendarId = String(formData.get("calendarId") ?? "").trim();
-  const requestedEnabledCalendarIds = sanitizeCalendarIdList(
+  const calendarId = String(formData.get("calendarId") ?? "").trim();
+  const enabledCalendarIds = sanitizeCalendarIdList(
     formData.getAll("enabledCalendarIds").map((value) => String(value ?? "").trim())
   );
 
-  const role = await getCurrentUserRoleForCalendarSettings(supabase, user.id);
-  const isAdmin = role === "ADMIN";
-
-  const defaultCalendarId = STUDIO_DEFAULT_CALENDAR_ID;
-  const nextEnabledCalendarIds = isAdmin
-    ? sanitizeCalendarIdList([defaultCalendarId, ...requestedEnabledCalendarIds])
-    : [defaultCalendarId];
-
-  if (requestedCalendarId && requestedCalendarId !== STUDIO_DEFAULT_CALENDAR_ID && !isAdmin) {
-    redirect(buildRedirectUrl(returnTo, "error", "Nur Admin darf weitere Kalender auswählen."));
+  if (!calendarId) {
+    redirect(buildRedirectUrl(returnTo, "error", "Bitte einen Standard-Kalender auswählen."));
   }
+
+  const nextEnabledCalendarIds = sanitizeCalendarIdList([calendarId, ...enabledCalendarIds]);
 
   const { error } = await supabase
     .from("google_oauth_tokens")
     .update({
-      default_calendar_id: defaultCalendarId,
+      default_calendar_id: calendarId,
       enabled_calendar_ids: nextEnabledCalendarIds,
     })
     .eq("user_id", user.id);
@@ -591,11 +573,13 @@ export async function setDefaultCalendar(formData: FormData) {
     redirect(buildRedirectUrl(returnTo, "error", "Konnte Kalender-Auswahl nicht speichern: " + error.message));
   }
 
-  const successText = isAdmin
-    ? `Kalender gespeichert ✅ (${nextEnabledCalendarIds.length} aktiv)`
-    : "Studio-Standardkalender gespeichert ✅";
-
-  redirect(buildRedirectUrl(returnTo, "success", successText));
+  redirect(
+    buildRedirectUrl(
+      returnTo,
+      "success",
+      `Kalender gespeichert ✅ (${nextEnabledCalendarIds.length} aktiv)`
+    )
+  );
 }
 
 export async function createTestEvent(formData?: FormData) {

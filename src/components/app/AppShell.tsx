@@ -1,5 +1,5 @@
 import { Container } from "@/components/ui/page";
-import { TopNav } from "@/components/app/TopNav";
+import { TopNav } from "./TopNav";
 import ChatSlideover from "@/components/chat/ChatSlideover";
 import ReminderSlideover from "@/components/reminders/ReminderSlideover";
 import WaitlistSlideover from "@/components/dashboard/WaitlistSlideover";
