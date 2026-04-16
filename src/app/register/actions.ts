@@ -110,7 +110,7 @@ export async function registerPractitioner(formData: FormData) {
   });
 
   if (profileError) {
-    await admin.from("tenants").delete().eq("id", tenantId).catch(() => undefined);
+    await admin.from("tenants").delete().eq("id", tenantId).match(() => undefined);
     await admin.auth.admin.deleteUser(userId).catch(() => undefined);
     redirect(`/register?error=${encodeURIComponent(profileError.message)}`);
   }
