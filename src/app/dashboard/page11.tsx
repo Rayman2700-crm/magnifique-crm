@@ -21,6 +21,7 @@ type LegendUser = {
   userId: string;
   fullName: string | null;
   tenantDisplayName: string;
+  avatarUrl: string | null;
 };
 
 type ReminderCountRow = {
@@ -178,6 +179,29 @@ function formatCurrentTime(date: Date) {
   }).format(date);
 }
 
+
+function resolveAvatarPublicUrl(rawValue: string | null | undefined, admin: ReturnType<typeof supabaseAdmin>) {
+  const raw = String(rawValue ?? "").trim();
+  if (!raw) return null;
+  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
+  if (raw.startsWith("/users/")) return raw;
+
+  let normalized = raw;
+  const publicPrefix = "/storage/v1/object/public/avatars/";
+  const publicIndex = normalized.indexOf(publicPrefix);
+  if (publicIndex >= 0) {
+    normalized = normalized.slice(publicIndex + publicPrefix.length);
+  }
+  normalized = normalized.replace(/^https?:\/\/[^/]+\//, "");
+  normalized = normalized.replace(/^storage\/v1\/object\/public\/avatars\//, "");
+  normalized = normalized.replace(/^public\/avatars\//, "");
+  normalized = normalized.replace(/^avatars\//, "");
+  normalized = normalized.replace(/^\/+/, "");
+  if (!normalized) return null;
+
+  const { data } = admin.storage.from("avatars").getPublicUrl(normalized);
+  return data?.publicUrl ?? null;
+}
 
 function isDateWithinNextDays(date: Date, days: number) {
   const now = new Date();
@@ -676,16 +700,6 @@ function InvoiceCreateCard({
   );
 }
 
-
-function resolveStorageAvatarUrl(raw: string | null | undefined, admin: ReturnType<typeof supabaseAdmin>) {
-  const value = String(raw ?? "").trim();
-  if (!value) return null;
-  if (/^https?:\/\//i.test(value)) return value;
-  const normalized = value.replace(/^\/+/, "").replace(/^avatars\//i, "");
-  const { data } = admin.storage.from("avatars").getPublicUrl(normalized);
-  return data?.publicUrl ?? null;
-}
-
 export default async function DashboardPage() {
   const supabase = await supabaseServer();
   const admin = supabaseAdmin();
@@ -713,7 +727,7 @@ export default async function DashboardPage() {
     role = profile?.role ?? "PRACTITIONER";
     isAdmin = role === "ADMIN";
 
-    avatarUrl = resolveStorageAvatarUrl(profile?.avatar_path ?? null, admin);
+    avatarUrl = resolveAvatarPublicUrl(profile?.avatar_path, admin);
 
     effectiveCustomerTenantId = await getEffectiveTenantId({
       role: profile?.role ?? "PRACTITIONER",
@@ -746,13 +760,13 @@ export default async function DashboardPage() {
     .order("display_name", { ascending: true });
 
   const legendUsersQuery = isAdmin
-    ? admin.from("user_profiles").select("user_id, tenant_id, calendar_tenant_id, full_name, role, avatar_path")
+    ? admin.from("user_profiles").select("user_id, tenant_id, calendar_tenant_id, full_name, avatar_path, role")
     : user?.id
       ? admin
           .from("user_profiles")
-          .select("user_id, tenant_id, calendar_tenant_id, full_name, role, avatar_path")
+          .select("user_id, tenant_id, calendar_tenant_id, full_name, avatar_path, role")
           .eq("user_id", user.id)
-      : admin.from("user_profiles").select("user_id, tenant_id, calendar_tenant_id, full_name, role, avatar_path").limit(0);
+      : admin.from("user_profiles").select("user_id, tenant_id, calendar_tenant_id, full_name, avatar_path, role").limit(0);
 
   const [{ data: tenantsRaw }, { data: userProfilesRaw }] = await Promise.all([
     tenantsQuery,
@@ -782,7 +796,7 @@ export default async function DashboardPage() {
           tenantNameById.get(resolvedTenantId) ??
           tenantNameById.get(String((p.tenant_id as string | null) ?? "").trim()) ??
           "Behandler",
-        avatarUrl: resolveStorageAvatarUrl((p as any).avatar_path ?? null, admin),
+        avatarUrl: resolveAvatarPublicUrl((p as { avatar_path?: string | null }).avatar_path ?? null, admin),
       };
     });
 
@@ -1267,11 +1281,15 @@ export default async function DashboardPage() {
                     className="flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-[22px] border-[4px] shadow-[0_0_0_2px_rgba(11,11,12,0.9)] sm:h-[80px] sm:w-[80px] md:h-[88px] md:w-[88px]"
                     style={{ borderColor: profileTheme.border, background: profileTheme.bg }}
                   >
-                    <img
-                      src={avatarUrl || `/users/${user?.id}.png`}
-                      alt="Benutzerfoto"
-                      className="h-full w-full object-cover"
-                    />
+                    {avatarUrl || user?.id ? (
+                      <img
+                        src={avatarUrl || `/users/${user?.id}.png`}
+                        alt="Benutzerfoto"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-sm font-semibold text-white">{displayName.slice(0, 1).toUpperCase()}</span>
+                    )}
                   </div>
 
                   <div className="min-w-0">
@@ -1301,11 +1319,15 @@ export default async function DashboardPage() {
                   className="flex h-[18px] w-[18px] shrink-0 items-center justify-center overflow-hidden rounded-[20px] border-[2px] shadow-[0_0_0_2px_rgba(11,11,12,0.9)]"
                   style={{ borderColor: profileTheme.border, background: profileTheme.bg }}
                 >
-                  <img
-                    src={avatarUrl || `/users/${user?.id}.png`}
-                    alt="Benutzerfoto"
-                    className="h-full w-full object-cover"
-                  />
+                  {avatarUrl || user?.id ? (
+                    <img
+                      src={avatarUrl || `/users/${user?.id}.png`}
+                      alt="Benutzerfoto"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-[8px] font-semibold text-white">{displayName.slice(0, 1).toUpperCase()}</span>
+                  )}
                 </div>
 
                 <div className="min-w-0">

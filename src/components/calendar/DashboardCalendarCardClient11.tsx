@@ -107,6 +107,67 @@ function hasExtraGoogleCalendarMarker(notes: string | null | undefined) {
   return String(notes ?? "").toLowerCase().includes("google zusatzkalender: ja");
 }
 
+const EXTRA_CALENDAR_COLOR_PALETTE = [
+  "#3b82f6",
+  "#10b981",
+  "#f59e0b",
+  "#8b5cf6",
+  "#ef4444",
+  "#14b8a6",
+  "#ec4899",
+  "#84cc16",
+  "#f97316",
+  "#06b6d4",
+];
+
+function hashCalendarId(input: string) {
+  let hash = 0;
+  for (let index = 0; index < input.length; index += 1) {
+    hash = (hash * 31 + input.charCodeAt(index)) >>> 0;
+  }
+  return hash;
+}
+
+function colorFromCalendarId(calendarId: string) {
+  const normalized = String(calendarId ?? "").trim().toLowerCase();
+  if (!normalized) return "#64748b";
+
+  if (normalized.includes("holiday")) return "#ef4444";
+  if (normalized.includes("family")) return "#10b981";
+  if (normalized.includes("weeknum") || normalized.includes("kalenderwoche")) return "#f59e0b";
+  if (normalized.includes("realist") || normalized.includes("internet")) return "#8b5cf6";
+
+  return EXTRA_CALENDAR_COLOR_PALETTE[hashCalendarId(normalized) % EXTRA_CALENDAR_COLOR_PALETTE.length] ?? "#3b82f6";
+}
+
+function prettifyCalendarLabel(raw: string) {
+  const safe = String(raw ?? "").trim();
+  if (!safe) return "Google";
+
+  if (safe.includes("@")) {
+    const localPart = safe.split("@")[0] ?? "";
+    const normalized = localPart
+      .replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, "")
+      .replace(/[._-]+/g, " ")
+      .replace(/(calendar|kalender|group)/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (normalized) {
+      return normalized
+        .split(" ")
+        .filter(Boolean)
+        .map((word) => word.slice(0, 1).toUpperCase() + word.slice(1))
+        .join(" ");
+    }
+  }
+
+  return safe
+    .replace(/[._-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function calendarSourceMeta(calendarId: string | null | undefined) {
   const raw = String(calendarId ?? "").trim();
   const lower = raw.toLowerCase();
@@ -156,36 +217,14 @@ function calendarSourceMeta(calendarId: string | null | undefined) {
     };
   }
 
-  if (raw.includes("@")) {
-    const localPart = raw.split("@")[0] ?? "";
-    const words = localPart
-      .replace(/[._-]+/g, " ")
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean);
-
-    const title = words
-      .map((word) => word.slice(0, 1).toUpperCase() + word.slice(1))
-      .join(" ")
-      .trim();
-
-    const finalLabel = title || raw;
-
-    return {
-      id: raw,
-      label: finalLabel,
-      shortLabel: finalLabel.split(/\s+/)[0] || finalLabel,
-      color: "#3b82f6",
-    };
-  }
-
-  const safeLabel = raw.length > 28 ? `${raw.slice(0, 28).trim()}…` : raw;
+  const finalLabel = prettifyCalendarLabel(raw);
+  const shortLabel = finalLabel.split(/\s+/)[0] || finalLabel;
 
   return {
     id: raw,
-    label: safeLabel,
-    shortLabel: safeLabel.split(/\s+/)[0] || safeLabel,
-    color: "#3b82f6",
+    label: finalLabel.length > 32 ? `${finalLabel.slice(0, 32).trim()}…` : finalLabel,
+    shortLabel: shortLabel.length > 14 ? `${shortLabel.slice(0, 14).trim()}…` : shortLabel,
+    color: colorFromCalendarId(raw),
   };
 }
 
@@ -641,21 +680,22 @@ function DailyAgendaPanel({
                 {(item as any).googleCalendarLabel ? (
                   <div
                     className="shrink-0"
-                    title={String((item as any).googleCalendarLabel)}
+                    title={`Zusatzkalender · ${String((item as any).googleCalendarLabel)}`}
                     style={{
-                      width: 10,
+                      width: 18,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                     }}
                   >
                     <span
+                      aria-hidden="true"
                       style={{
                         width: 8,
                         height: 8,
                         borderRadius: 999,
                         backgroundColor: String((item as any).googleCalendarColor ?? "#64748b"),
-                        boxShadow: `0 0 10px ${String((item as any).googleCalendarColor ?? "#64748b")}88`,
+                        boxShadow: `0 0 0 2px rgba(17,18,22,0.92), 0 0 12px ${String((item as any).googleCalendarColor ?? "#64748b")}88`,
                         display: "inline-block",
                         flexShrink: 0,
                       }}
@@ -710,6 +750,22 @@ function DailyAgendaPanel({
                   )}
                   <span className="text-white/45"> · </span>
                   <span className="inline">{item.title || "Dienstleistung unbekannt"}</span>
+                  {(item as any).googleCalendarLabel ? (
+                    <>
+                      <span className="text-white/45"> · </span>
+                      <span
+                        className="inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold"
+                        style={{
+                          borderColor: `${String((item as any).googleCalendarColor ?? "#64748b")}55`,
+                          color: String((item as any).googleCalendarColor ?? "#64748b"),
+                          backgroundColor: `${String((item as any).googleCalendarColor ?? "#64748b")}12`,
+                        }}
+                        title={`Read-only Zusatzkalender: ${String((item as any).googleCalendarLabel)}`}
+                      >
+                        {String((item as any).googleCalendarShortLabel ?? (item as any).googleCalendarLabel)}
+                      </span>
+                    </>
+                  ) : null}
                 </div>
 
                 <div
@@ -722,7 +778,6 @@ function DailyAgendaPanel({
                       src={legendUser.avatarUrl || `/users/${legendUser.userId}.png`}
                       alt={avatarName ?? "Behandler"}
                       className="h-full w-full object-cover"
-                      onError={avatarFallbackHandler(legendUser.userId)}
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-[10px] font-extrabold text-white">
@@ -1144,33 +1199,6 @@ function inferLegendUserId(name: string | null | undefined) {
   return first || "user";
 }
 
-function resolveAvatarUrl(avatarPath: string | null | undefined, userId: string) {
-  const raw = String(avatarPath ?? "").trim();
-  if (raw) {
-    if (/^https?:\/\//i.test(raw)) return raw;
-    const normalized = raw.replace(/^\/+/, "").replace(/^avatars\//i, "");
-    const { data } = supabaseBrowser().storage.from("avatars").getPublicUrl(normalized);
-    if (data?.publicUrl) return data.publicUrl;
-  }
-
-  return `/users/${userId}.png`;
-}
-
-function avatarFallbackHandler(userId: string) {
-  return (event: React.SyntheticEvent<HTMLImageElement>) => {
-    const fallback = `/users/${userId}.png`;
-    if (event.currentTarget.src.endsWith(fallback)) {
-      event.currentTarget.style.display = "none";
-      const parent = event.currentTarget.parentElement;
-      if (parent) {
-        parent.dataset.avatarBroken = "1";
-      }
-      return;
-    }
-    event.currentTarget.src = fallback;
-  };
-}
-
 function buildEffectiveLegendUsers(
   legendUsers: LegendUser[],
   tenants: TenantRow[],
@@ -1185,7 +1213,6 @@ function buildEffectiveLegendUsers(
       userId: user.userId || inferLegendUserId(user.fullName ?? user.tenantDisplayName),
       fullName: user.fullName ?? user.tenantDisplayName,
       tenantDisplayName: user.tenantDisplayName || user.fullName || "Behandler",
-      avatarUrl: user.avatarUrl ?? null,
     };
 
     byKey.set(`tenant:${normalized.tenantId}`, normalized);
@@ -1208,7 +1235,6 @@ function buildEffectiveLegendUsers(
       userId: existing?.userId || inferLegendUserId(display),
       fullName: existing?.fullName || display,
       tenantDisplayName: existing?.tenantDisplayName || display,
-      avatarUrl: existing?.avatarUrl ?? null,
     };
 
     byKey.set(`tenant:${normalized.tenantId}`, normalized);
@@ -1445,7 +1471,6 @@ function MobileLegendPicker({
               src={activeUser.avatarUrl || `/users/${activeUser.userId}.png`}
               alt={activeUser.fullName ?? activeUser.tenantDisplayName ?? "Behandler"}
               className="h-full w-full object-cover"
-                      onError={avatarFallbackHandler(activeUser.userId)}
             />
           ) : (
             <span className="px-1">{avatarLabel}</span>
@@ -1537,7 +1562,6 @@ function MobileLegendPicker({
                               src={user.avatarUrl || `/users/${user.userId}.png`}
                               alt={user.fullName ?? user.tenantDisplayName ?? "Behandler"}
                               className="h-full w-full object-cover"
-                      onError={avatarFallbackHandler(user.userId)}
                             />
                           </span>
                           <div className="min-w-0">
@@ -1936,59 +1960,15 @@ export default function DashboardCalendarCardClient({
     [creatorTenantId, legendUsers, tenants]
   );
 
-  const [avatarUrlByUserId, setAvatarUrlByUserId] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    const userIds = Array.from(new Set(effectiveLegendUsers.map((user) => String(user.userId || "").trim()).filter(Boolean)));
-    if (userIds.length === 0) {
-      setAvatarUrlByUserId({});
-      return;
-    }
-
-    let active = true;
-
-    (async () => {
-      const { data } = await supabase
-        .from("user_profiles")
-        .select("user_id, avatar_path")
-        .in("user_id", userIds);
-
-      if (!active) return;
-
-      const next: Record<string, string> = {};
-
-      for (const user of effectiveLegendUsers) {
-        next[user.userId] = resolveAvatarUrl(undefined, user.userId);
-      }
-
-      for (const row of data ?? []) {
-        const userId = String((row as any)?.user_id ?? "").trim();
-        if (!userId) continue;
-        next[userId] = resolveAvatarUrl((row as any)?.avatar_path ?? null, userId);
-      }
-
-      setAvatarUrlByUserId(next);
-    })();
-
-    return () => {
-      active = false;
-    };
-  }, [effectiveLegendUsers, supabase]);
-
-  const effectiveLegendUsersWithAvatars = useMemo(
-    () => effectiveLegendUsers.map((user) => ({ ...user, avatarUrl: avatarUrlByUserId[user.userId] ?? user.avatarUrl ?? `/users/${user.userId}.png` })),
-    [avatarUrlByUserId, effectiveLegendUsers]
-  );
-
   const currentLegendUser = useMemo(() => {
     if (!creatorTenantId) return null;
 
     return (
-      effectiveLegendUsersWithAvatars.find(
+      effectiveLegendUsers.find(
         (u) => u.tenantId === creatorTenantId || u.filterTenantId === creatorTenantId
       ) ?? null
     );
-  }, [creatorTenantId, effectiveLegendUsersWithAvatars]);
+  }, [creatorTenantId, effectiveLegendUsers]);
 
   const currentTenantDisplayName =
     currentLegendUser?.tenantDisplayName ??
@@ -2332,7 +2312,7 @@ export default function DashboardCalendarCardClient({
       if (!queryTokens.length) return true;
 
       const legendUser =
-        effectiveLegendUsersWithAvatars.find(
+        effectiveLegendUsers.find(
           (user) =>
             user.tenantId === item.tenantId ||
             user.filterTenantId === item.tenantId ||
@@ -2430,7 +2410,7 @@ export default function DashboardCalendarCardClient({
                   <div className="max-w-full overflow-x-auto">
                     <div className="min-w-max">
                       <DesktopHeaderLegend
-                        users={effectiveLegendUsersWithAvatars}
+                        users={effectiveLegendUsers}
                         activeTenantId={selectedTenantId}
                         onSelect={setSelectedTenantId}
                       />
@@ -2581,7 +2561,7 @@ export default function DashboardCalendarCardClient({
               <MobileViewPicker value={view} onChange={handleChangeView} anchorISO={anchorISO} />
               {effectiveLegendUsers.length > 0 ? (
                 <MobileLegendPicker
-                  users={effectiveLegendUsersWithAvatars}
+                  users={effectiveLegendUsers}
                   activeTenantId={selectedTenantId}
                   onSelect={setSelectedTenantId}
                 />
@@ -2673,7 +2653,7 @@ export default function DashboardCalendarCardClient({
                       <DailyAgendaPanel
                         selectedISO={anchorISO}
                         items={visibleItems}
-                        legendUsers={effectiveLegendUsersWithAvatars}
+                        legendUsers={effectiveLegendUsers}
                         searchQuery={desktopSearchQuery}
                       />
                     </div>
@@ -2691,7 +2671,7 @@ export default function DashboardCalendarCardClient({
                       <DailyAgendaPanel
                         selectedISO={anchorISO}
                         items={visibleItems}
-                        legendUsers={effectiveLegendUsersWithAvatars}
+                        legendUsers={effectiveLegendUsers}
                         panelHeight={miniMonthCardHeight}
                         searchQuery={desktopSearchQuery}
                       />
