@@ -32,10 +32,6 @@ function parseTitle(notes: string | null) {
   return titleLine ? titleLine.replace(/^titel:\s*/i, "").trim() || "Termin" : "Termin";
 }
 
-function hasExtraGoogleCalendarMarker(notes: string | null | undefined) {
-  return String(notes ?? "").toLowerCase().includes("google zusatzkalender: ja");
-}
-
 export async function GET(request: NextRequest) {
   try {
     const supabase = await supabaseServer();
@@ -92,12 +88,7 @@ export async function GET(request: NextRequest) {
 
       const count = ((data ?? []) as Array<{ id: string; notes_internal: string | null }>).filter((row) => {
         const status = parseStatus(row.notes_internal);
-        return (
-          !hasExtraGoogleCalendarMarker(row.notes_internal) &&
-          status !== "cancelled" &&
-          status !== "completed" &&
-          status !== "no_show"
-        );
+        return status !== "cancelled" && status !== "completed" && status !== "no_show";
       }).length;
 
       return NextResponse.json({ count });
@@ -136,12 +127,7 @@ export async function GET(request: NextRequest) {
 
     const filtered = ((data ?? []) as Array<any>).filter((row) => {
       const status = parseStatus(row.notes_internal);
-      return (
-        !hasExtraGoogleCalendarMarker(row.notes_internal) &&
-        status !== "cancelled" &&
-        status !== "completed" &&
-        status !== "no_show"
-      );
+      return status !== "cancelled" && status !== "completed" && status !== "no_show";
     });
 
     const items = filtered.map((row) => {

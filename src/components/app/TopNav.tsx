@@ -219,7 +219,23 @@ function BrandBadge({ count, pulse = false }: { count: number; pulse?: boolean }
   );
 }
 
-function UserMenuPopover({ open, shown, onClose, userLabel, userEmail, currentUserId }: { open: boolean; shown: boolean; onClose: () => void; userLabel?: string; userEmail?: string | null; currentUserId: string; }) {
+function UserMenuPopover({
+  open,
+  shown,
+  onClose,
+  userLabel,
+  userEmail,
+  currentUserId,
+  avatarUrl,
+}: {
+  open: boolean;
+  shown: boolean;
+  onClose: () => void;
+  userLabel?: string;
+  userEmail?: string | null;
+  currentUserId: string;
+  avatarUrl?: string | null;
+}) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   useEffect(() => {
@@ -232,12 +248,14 @@ function UserMenuPopover({ open, shown, onClose, userLabel, userEmail, currentUs
   }, [open, onClose]);
   if (!mounted || !open || typeof document === "undefined") return null;
 
+  const avatarSrc = avatarUrl || `/users/${currentUserId}.png`;
+
   return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 1200, isolation: "isolate" }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "transparent" }} />
       <div style={{ position: "absolute", top: 14, right: 16, width: 280, maxWidth: "calc(100vw - 24px)", borderRadius: 22, border: "1px solid rgba(255,255,255,0.10)", background: "linear-gradient(180deg, rgba(28,28,31,0.98) 0%, rgba(18,19,22,0.98) 100%)", boxShadow: "0 24px 70px rgba(0,0,0,0.44)", overflow: "hidden", transform: shown ? "translateY(0) scale(1)" : "translateY(-6px) scale(0.98)", opacity: shown ? 1 : 0, transformOrigin: "top right", transition: "transform 180ms ease, opacity 180ms ease", backdropFilter: "blur(18px)" }}>
         <div style={{ padding: 14, display: "flex", gap: 10, alignItems: "center", background: "rgba(255,255,255,0.04)", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-          <img src={`/users/${currentUserId}.png`} alt="Benutzerfoto" className="shrink-0 rounded-xl border border-white/10 object-cover" style={{ width: 42, height: 42 }} />
+          <img src={avatarSrc} alt="Benutzerfoto" className="shrink-0 rounded-xl border border-white/10 object-cover" style={{ width: 42, height: 42 }} onError={(e) => { const fallback = `/users/${currentUserId}.png`; if (e.currentTarget.src.endsWith(fallback)) { e.currentTarget.style.display = 'none'; } else { e.currentTarget.src = fallback; } }} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.96)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{userLabel ?? "Benutzer"}</div>
             <div style={{ marginTop: 4, fontSize: 13, color: "rgba(247,247,245,0.56)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{userEmail ?? "—"}</div>
@@ -271,6 +289,8 @@ function SettingsMenuPopover({ open, shown, onClose, onOpenGoogleSetup, googleSe
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
   if (!mounted || !open || typeof document === "undefined") return null;
+
+  const avatarSrc = avatarUrl || `/users/${currentUserId}.png`;
 
   return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 1190, isolation: "isolate" }}>
@@ -434,7 +454,27 @@ function SidebarItem({ icon, label, active = false, badgeCount = 0, pulse = fals
   return <button type="button" onClick={onClick} className={cn(className, "w-full")}>{content}</button>;
 }
 
-export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserId, reminderCount = 0, waitlistCount = 0, googleSetupAlertCount = 0 }: { userLabel?: string; userEmail?: string | null; rightSlot?: React.ReactNode; tenantId: string | null; currentUserId: string; reminderCount?: number; waitlistCount?: number; googleSetupAlertCount?: number; }) {
+export function TopNav({
+  userLabel,
+  userEmail,
+  avatarUrl,
+  rightSlot,
+  tenantId,
+  currentUserId,
+  reminderCount = 0,
+  waitlistCount = 0,
+  googleSetupAlertCount = 0,
+}: {
+  userLabel?: string;
+  userEmail?: string | null;
+  avatarUrl?: string | null;
+  rightSlot?: React.ReactNode;
+  tenantId: string | null;
+  currentUserId: string;
+  reminderCount?: number;
+  waitlistCount?: number;
+  googleSetupAlertCount?: number;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -458,6 +498,7 @@ export function TopNav({ userLabel, userEmail, rightSlot, tenantId, currentUserI
   const previousReminderCount = useRef(reminderCount);
   const previousWaitlistCount = useRef(waitlistCount);
   const avatarTheme = getAvatarTheme(userLabel);
+  const avatarSrc = avatarUrl || `/users/${currentUserId}.png`;
   const storageKey = useMemo(() => {
     if (!tenantId || !currentUserId) return null;
     return `team-chat:last-read:${tenantId}:${currentUserId}`;
@@ -735,7 +776,7 @@ return (
             style={{ boxShadow: `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px ${avatarTheme.color}` }}
             aria-label="Benutzermenü öffnen"
           >
-            <span className="block h-full w-full overflow-hidden rounded-full border-2 border-[#111216]"><img src={`/users/${currentUserId}.png`} alt="Benutzerfoto" className="block h-full w-full object-cover" /></span>
+            <span className="block h-full w-full overflow-hidden rounded-full border-2 border-[#111216]"><img src={avatarSrc} alt="Benutzerfoto" className="block h-full w-full object-cover" onError={(e) => { const fallback = `/users/${currentUserId}.png`; if (e.currentTarget.src.endsWith(fallback)) { e.currentTarget.style.display = 'none'; } else { e.currentTarget.src = fallback; } }} /></span>
           </button>
 
           <button
@@ -745,7 +786,7 @@ return (
             style={{ borderColor: "rgba(59,130,246,0.45)", background: "rgba(59,130,246,0.16)" }}
             aria-label="Benutzermenü öffnen"
           >
-            <img src={`/users/${currentUserId}.png`} alt="Benutzerfoto" className="h-full w-full rounded-[11px] object-cover" />
+            <img src={avatarSrc} alt="Benutzerfoto" className="h-full w-full rounded-[11px] object-cover" onError={(e) => { const fallback = `/users/${currentUserId}.png`; if (e.currentTarget.src.endsWith(fallback)) { e.currentTarget.style.display = 'none'; } else { e.currentTarget.src = fallback; } }} />
           </button>
         </div>
       </div>

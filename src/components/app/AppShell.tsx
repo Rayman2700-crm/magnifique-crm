@@ -110,6 +110,16 @@ function parseStatus(notes: string | null) {
   return "scheduled" as const;
 }
 
+
+function resolveStorageAvatarUrl(raw: string | null | undefined, admin: ReturnType<typeof supabaseAdmin>) {
+  const value = String(raw ?? '').trim();
+  if (!value) return null;
+  if (/^https?:\/\//i.test(value)) return value;
+  const normalized = value.replace(/^\/+/, '').replace(/^avatars\//i, '');
+  const { data } = admin.storage.from('avatars').getPublicUrl(normalized);
+  return data?.publicUrl ?? null;
+}
+
 export default async function AppShell({
   children,
   userLabel,
@@ -127,6 +137,26 @@ export default async function AppShell({
   const admin = supabaseAdmin();
 
   const userId = currentUserId;
+
+  let resolvedUserLabel = userLabel ?? null;
+  let resolvedUserEmail: string | null = null;
+  let avatarUrl: string | null = null;
+
+  if (userId) {
+    const [{ data: authUserData }, { data: navProfile }] = await Promise.all([
+      supabase.auth.getUser(),
+      supabase
+        .from("user_profiles")
+        .select("full_name, avatar_path")
+        .eq("user_id", userId)
+        .maybeSingle(),
+    ]);
+
+    resolvedUserEmail = authUserData.user?.email ?? null;
+    resolvedUserLabel = resolvedUserLabel ?? navProfile?.full_name ?? null;
+
+    avatarUrl = resolveStorageAvatarUrl(navProfile?.avatar_path ?? null, admin);
+  }
 
   let googleSetupAlertCount = 0;
   let googleLoadError: string | null = null;
@@ -402,8 +432,9 @@ export default async function AppShell({
   return (
     <div className="clientique-shell">
       <TopNav
-        userLabel={userLabel}
-        userEmail={null}
+        userLabel={resolvedUserLabel ?? undefined}
+        userEmail={resolvedUserEmail}
+        avatarUrl={avatarUrl}
         rightSlot={rightSlot}
         tenantId={tenantId}
         currentUserId={currentUserId}
@@ -419,10 +450,10 @@ export default async function AppShell({
       <ChatSlideover
         tenantId={tenantId}
         currentUserId={currentUserId}
-        currentUserName={userLabel ?? ""}
+        currentUserName={resolvedUserLabel ?? ""}
       />
 
-      <ReminderSlideover items={reminderItems} currentUserEmail={null} />
+      <ReminderSlideover items={reminderItems} currentUserEmail={resolvedUserEmail} />
       <WaitlistSlideover items={waitlistItems} />
       <GoogleCalendarSetupSlideover
         calendars={googleCalendars}

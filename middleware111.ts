@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createServerClient } from "@supabase/ssr";
 
 const PROTECTED_PATHS = [
   "/dashboard",
@@ -17,6 +16,19 @@ function isProtectedPath(pathname: string) {
   return PROTECTED_PATHS.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   );
+}
+
+function hasSupabaseAuthCookie(req: NextRequest) {
+  const cookies = req.cookies.getAll();
+
+  return cookies.some((cookie) => {
+    const name = cookie.name || "";
+
+    return (
+      name.startsWith("sb-") &&
+      (name.includes("auth-token") || name.includes("access-token"))
+    );
+  });
 }
 
 export async function middleware(req: NextRequest) {
@@ -38,38 +50,17 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const response = NextResponse.next();
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return req.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, options);
-          });
-        },
-      },
-    }
-  );
-
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
+  // Lightweight gate only:
+  // no network roundtrip to Supabase Auth here, to avoid /user spam in middleware.
+  // Real auth enforcement still happens server-side in layouts / routes.
+  if (!hasSupabaseAuthCookie(req)) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
 
-  return response;
+  return NextResponse.next();
 }
 
 export const config = {

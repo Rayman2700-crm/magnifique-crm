@@ -1283,6 +1283,23 @@ export default function WeekDayGridView(props: {
                                   boxShadow: `0 0 18px ${theme.accentGlow}`,
                                 }}
                               />
+                              {ev.googleCalendarLabel ? (
+                                <span
+                                  aria-hidden="true"
+                                  title={String(ev.googleCalendarLabel)}
+                                  style={{
+                                    position: "absolute",
+                                    left: isTiny ? 8 : 10,
+                                    top: isTiny ? 9 : 11,
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: 999,
+                                    backgroundColor: String(ev.googleCalendarColor ?? "#64748b"),
+                                    boxShadow: `0 0 10px ${String(ev.googleCalendarColor ?? "#64748b")}88`,
+                                    zIndex: 3,
+                                  }}
+                                />
+                              ) : null}
 
                               {!isTiny ? (
                                 <span
@@ -1422,20 +1439,7 @@ export default function WeekDayGridView(props: {
                                       }}
                                     />
                                     {ev.tenantName}
-                                    {ev.googleCalendarLabel ? (
-                                      <span
-                                        title={String(ev.googleCalendarLabel)}
-                                        style={{
-                                          width: 8,
-                                          height: 8,
-                                          borderRadius: 999,
-                                          backgroundColor: String(ev.googleCalendarColor ?? "#64748b"),
-                                          boxShadow: `0 0 10px ${String(ev.googleCalendarColor ?? "#64748b")}88`,
-                                          display: "inline-block",
-                                          flexShrink: 0,
-                                        }}
-                                      />
-                                    ) : null}
+
                                   </div>
                                   <div
                                     style={{
@@ -1500,20 +1504,7 @@ export default function WeekDayGridView(props: {
                                     >
                                       {headerTimeText}
                                     </span>
-                                    {ev.googleCalendarLabel ? (
-                                      <span
-                                        title={String(ev.googleCalendarLabel)}
-                                        style={{
-                                          marginTop: 4,
-                                          width: 8,
-                                          height: 8,
-                                          borderRadius: 999,
-                                          backgroundColor: String(ev.googleCalendarColor ?? "#64748b"),
-                                          boxShadow: `0 0 10px ${String(ev.googleCalendarColor ?? "#64748b")}88`,
-                                          display: "inline-block",
-                                        }}
-                                      />
-                                    ) : null}
+
                                   </div>
                                   {customerChip}
                                 </div>
@@ -1564,21 +1555,7 @@ export default function WeekDayGridView(props: {
                                         >
                                           {headerTimeText}
                                         </div>
-                                        {ev.googleCalendarLabel ? (
-                                          <span
-                                            title={String(ev.googleCalendarLabel)}
-                                            style={{
-                                              marginTop: 4,
-                                              width: 8,
-                                              height: 8,
-                                              borderRadius: 999,
-                                              backgroundColor: String(ev.googleCalendarColor ?? "#64748b"),
-                                              boxShadow: `0 0 10px ${String(ev.googleCalendarColor ?? "#64748b")}88`,
-                                              display: "inline-block",
-                                              flexShrink: 0,
-                                            }}
-                                          />
-                                        ) : null}
+
                                       </div>
                                       {customerChip}
                                     </div>

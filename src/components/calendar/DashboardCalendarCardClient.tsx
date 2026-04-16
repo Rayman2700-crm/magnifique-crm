@@ -43,6 +43,7 @@ type LegendUser = {
   userId: string;
   fullName: string | null;
   tenantDisplayName: string;
+  avatarUrl?: string | null;
 };
 
 type ServiceOptionInput = {
@@ -101,6 +102,72 @@ function parseNotes(notes: string | null) {
   return { title, note, status };
 }
 
+
+function hasExtraGoogleCalendarMarker(notes: string | null | undefined) {
+  return String(notes ?? "").toLowerCase().includes("google zusatzkalender: ja");
+}
+
+const EXTRA_CALENDAR_COLOR_PALETTE = [
+  "#3b82f6",
+  "#10b981",
+  "#f59e0b",
+  "#8b5cf6",
+  "#ef4444",
+  "#14b8a6",
+  "#ec4899",
+  "#84cc16",
+  "#f97316",
+  "#06b6d4",
+];
+
+function hashCalendarId(input: string) {
+  let hash = 0;
+  for (let index = 0; index < input.length; index += 1) {
+    hash = (hash * 31 + input.charCodeAt(index)) >>> 0;
+  }
+  return hash;
+}
+
+function colorFromCalendarId(calendarId: string) {
+  const normalized = String(calendarId ?? "").trim().toLowerCase();
+  if (!normalized) return "#64748b";
+
+  if (normalized.includes("holiday")) return "#ef4444";
+  if (normalized.includes("family")) return "#10b981";
+  if (normalized.includes("weeknum") || normalized.includes("kalenderwoche")) return "#f59e0b";
+  if (normalized.includes("realist") || normalized.includes("internet")) return "#8b5cf6";
+
+  return EXTRA_CALENDAR_COLOR_PALETTE[hashCalendarId(normalized) % EXTRA_CALENDAR_COLOR_PALETTE.length] ?? "#3b82f6";
+}
+
+function prettifyCalendarLabel(raw: string) {
+  const safe = String(raw ?? "").trim();
+  if (!safe) return "Google";
+
+  if (safe.includes("@")) {
+    const localPart = safe.split("@")[0] ?? "";
+    const normalized = localPart
+      .replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, "")
+      .replace(/[._-]+/g, " ")
+      .replace(/(calendar|kalender|group)/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (normalized) {
+      return normalized
+        .split(" ")
+        .filter(Boolean)
+        .map((word) => word.slice(0, 1).toUpperCase() + word.slice(1))
+        .join(" ");
+    }
+  }
+
+  return safe
+    .replace(/[._-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function calendarSourceMeta(calendarId: string | null | undefined) {
   const raw = String(calendarId ?? "").trim();
   const lower = raw.toLowerCase();
@@ -150,36 +217,14 @@ function calendarSourceMeta(calendarId: string | null | undefined) {
     };
   }
 
-  if (raw.includes("@")) {
-    const localPart = raw.split("@")[0] ?? "";
-    const words = localPart
-      .replace(/[._-]+/g, " ")
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean);
-
-    const title = words
-      .map((word) => word.slice(0, 1).toUpperCase() + word.slice(1))
-      .join(" ")
-      .trim();
-
-    const finalLabel = title || raw;
-
-    return {
-      id: raw,
-      label: finalLabel,
-      shortLabel: finalLabel.split(/\s+/)[0] || finalLabel,
-      color: "#3b82f6",
-    };
-  }
-
-  const safeLabel = raw.length > 28 ? `${raw.slice(0, 28).trim()}…` : raw;
+  const finalLabel = prettifyCalendarLabel(raw);
+  const shortLabel = finalLabel.split(/\s+/)[0] || finalLabel;
 
   return {
     id: raw,
-    label: safeLabel,
-    shortLabel: safeLabel.split(/\s+/)[0] || safeLabel,
-    color: "#3b82f6",
+    label: finalLabel.length > 32 ? `${finalLabel.slice(0, 32).trim()}…` : finalLabel,
+    shortLabel: shortLabel.length > 14 ? `${shortLabel.slice(0, 14).trim()}…` : shortLabel,
+    color: colorFromCalendarId(raw),
   };
 }
 
@@ -632,11 +677,47 @@ function DailyAgendaPanel({
                   aria-hidden="true"
                 />
 
-                <div className="shrink-0 text-[13px] font-semibold text-white/92">
-                  {formatTimeRange(item.start_at, item.end_at)}
+                {(item as any).googleCalendarLabel ? (
+                  <div
+                    className="shrink-0"
+                    title={`Zusatzkalender · ${String((item as any).googleCalendarLabel)}`}
+                    style={{
+                      width: 18,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 999,
+                        backgroundColor: String((item as any).googleCalendarColor ?? "#64748b"),
+                        boxShadow: `0 0 0 2px rgba(17,18,22,0.92), 0 0 12px ${String((item as any).googleCalendarColor ?? "#64748b")}88`,
+                        display: "inline-block",
+                        flexShrink: 0,
+                      }}
+                    />
+                  </div>
+                ) : null}
+
+                <div
+                  className="shrink-0"
+                  style={{
+                    width: 84,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <div className="text-[13px] font-semibold text-white/92">
+                    {formatTimeRange(item.start_at, item.end_at)}
+                  </div>
                 </div>
 
-                <div className="min-w-0 flex-1 truncate text-[11px] text-white/84">
+                <div className="min-w-0 flex-1 text-[11px] text-white/84">
                   <span className="font-semibold text-white">{index + 1}. {item.customerName ?? "Ohne Kundenname"}</span>
                   <span className="text-white/45"> · </span>
                   {item.customerPhone ? (
@@ -668,29 +749,19 @@ function DailyAgendaPanel({
                     </span>
                   )}
                   <span className="text-white/45"> · </span>
-                  <span>{item.title || "Dienstleistung unbekannt"}</span>
+                  <span className="inline">{item.title || "Dienstleistung unbekannt"}</span>
                   {(item as any).googleCalendarLabel ? (
                     <>
-                      <span className="text-white/35"> · </span>
+                      <span className="text-white/45"> · </span>
                       <span
-                        className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold"
+                        className="inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold"
                         style={{
                           borderColor: `${String((item as any).googleCalendarColor ?? "#64748b")}55`,
-                          background: `${String((item as any).googleCalendarColor ?? "#64748b")}1f`,
-                          color: "rgba(255,255,255,0.88)",
+                          color: String((item as any).googleCalendarColor ?? "#64748b"),
+                          backgroundColor: `${String((item as any).googleCalendarColor ?? "#64748b")}12`,
                         }}
-                        title={String((item as any).googleCalendarLabel)}
+                        title={`Read-only Zusatzkalender: ${String((item as any).googleCalendarLabel)}`}
                       >
-                        <span
-                          style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: 999,
-                            backgroundColor: String((item as any).googleCalendarColor ?? "#64748b"),
-                            boxShadow: `0 0 8px ${String((item as any).googleCalendarColor ?? "#64748b")}88`,
-                            flexShrink: 0,
-                          }}
-                        />
                         {String((item as any).googleCalendarShortLabel ?? (item as any).googleCalendarLabel)}
                       </span>
                     </>
@@ -704,7 +775,7 @@ function DailyAgendaPanel({
                 >
                   {legendUser ? (
                     <img
-                      src={`/users/${legendUser.userId}.png`}
+                      src={legendUser.avatarUrl || `/users/${legendUser.userId}.png`}
                       alt={avatarName ?? "Behandler"}
                       className="h-full w-full object-cover"
                     />
@@ -1041,6 +1112,28 @@ function getLegendAvatarTheme(name: string | null | undefined) {
 }
 
 
+
+function getLegendFilterCandidates(user: LegendUser | null | undefined) {
+  if (!user) return [];
+
+  const fullName = String(user.fullName ?? "").trim().toLowerCase();
+  const firstName = fullName.split(/\s+/)[0] ?? "";
+  const tenantDisplayName = String(user.tenantDisplayName ?? "").trim().toLowerCase();
+  const tenantId = String(user.tenantId ?? "").trim().toLowerCase();
+  const filterTenantId = String(user.filterTenantId ?? "").trim().toLowerCase();
+  const userId = String(user.userId ?? "").trim().toLowerCase();
+
+  return Array.from(
+    new Set(
+      [tenantId, filterTenantId, tenantDisplayName, fullName, firstName, userId].filter(Boolean)
+    )
+  );
+}
+
+function getLegendFilterValue(user: LegendUser | null | undefined) {
+  return getLegendFilterCandidates(user)[0] ?? "";
+}
+
 function matchesSelectedTenant(
   item: Item,
   selectedTenantId: string | null,
@@ -1051,26 +1144,30 @@ function matchesSelectedTenant(
   const selected = String(selectedTenantId).trim().toLowerCase();
   if (!selected) return true;
 
-  if (String(item.tenantId ?? "").trim().toLowerCase() === selected) return true;
-  if (String(item.tenantName ?? "").trim().toLowerCase() === selected) return true;
+  const directCandidates = Array.from(
+    new Set(
+      [
+        String(item.tenantId ?? "").trim().toLowerCase(),
+        String(item.tenantName ?? "").trim().toLowerCase(),
+      ].filter(Boolean)
+    )
+  );
 
-  const legendUser =
-    legendUsers.find(
-      (user) =>
-        user.tenantId === item.tenantId ||
-        user.filterTenantId === item.tenantId ||
-        user.tenantDisplayName === item.tenantName
-    ) ?? null;
+  if (directCandidates.includes(selected)) return true;
 
-  if (!legendUser) return false;
+  const matchingLegendUsers = legendUsers.filter((user) => {
+    const candidates = getLegendFilterCandidates(user);
+    return (
+      candidates.includes(String(item.tenantId ?? "").trim().toLowerCase()) ||
+      candidates.includes(String(item.tenantName ?? "").trim().toLowerCase())
+    );
+  });
 
-  const fullName = String(legendUser.fullName ?? "").trim().toLowerCase();
-  const firstName = fullName.split(/\s+/)[0] ?? "";
-  const tenantDisplayName = String(legendUser.tenantDisplayName ?? "").trim().toLowerCase();
-  const tenantId = String(legendUser.tenantId ?? "").trim().toLowerCase();
-  const filterTenantId = String(legendUser.filterTenantId ?? "").trim().toLowerCase();
+  if (matchingLegendUsers.length === 0) {
+    return false;
+  }
 
-  return [tenantId, filterTenantId, fullName, firstName, tenantDisplayName].includes(selected);
+  return matchingLegendUsers.some((user) => getLegendFilterCandidates(user).includes(selected));
 }
 
 function getLegendInitials(name: string | null | undefined) {
@@ -1230,13 +1327,13 @@ function DesktopHeaderLegend({
 
       {users.map((user) => {
         const theme = getLegendAvatarTheme(user.fullName ?? user.tenantDisplayName);
-        const active = activeTenantId === user.filterTenantId || activeTenantId === user.tenantId;
+        const active = getLegendFilterCandidates(user).includes(String(activeTenantId ?? "").trim().toLowerCase());
         const chipLabel = (user.fullName ?? user.tenantDisplayName ?? "Behandler").split(/\s+/)[0] || "Behandler";
         return (
           <button
             key={user.userId}
             type="button"
-            onClick={() => onSelect(user.filterTenantId || user.tenantId)}
+            onClick={() => onSelect(getLegendFilterValue(user))}
             className="flex shrink-0 flex-col items-center gap-1.5"
             title={user.fullName ?? user.tenantDisplayName ?? "Behandler"}
           >
@@ -1251,7 +1348,7 @@ function DesktopHeaderLegend({
               }}
             >
               <img
-                src={`/users/${user.userId}.png`}
+                src={user.avatarUrl || `/users/${user.userId}.png`}
                 alt={user.fullName ?? user.tenantDisplayName ?? "Behandler"}
                 className="h-full w-full object-cover"
               />
@@ -1336,7 +1433,7 @@ function MobileLegendPicker({
   const activeUser =
     activeTenantId === null
       ? null
-      : users.find((user) => user.filterTenantId === activeTenantId || user.tenantId === activeTenantId) ?? null;
+      : users.find((user) => getLegendFilterCandidates(user).includes(String(activeTenantId ?? "").trim().toLowerCase())) ?? null;
 
   const ringColors = ["#d6c3a3", ...users.map((user) => getLegendAvatarTheme(user.fullName ?? user.tenantDisplayName).ring)];
   const ringBackground = useMemo(() => {
@@ -1371,7 +1468,7 @@ function MobileLegendPicker({
         <span className="flex h-[42px] w-[42px] items-center justify-center overflow-hidden rounded-full border-2 border-[#111216] bg-[#0f1013] text-[10px] font-extrabold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
           {activeUser ? (
             <img
-              src={`/users/${activeUser.userId}.png`}
+              src={activeUser.avatarUrl || `/users/${activeUser.userId}.png`}
               alt={activeUser.fullName ?? activeUser.tenantDisplayName ?? "Behandler"}
               className="h-full w-full object-cover"
             />
@@ -1441,13 +1538,13 @@ function MobileLegendPicker({
 
                   {users.map((user) => {
                     const theme = getLegendAvatarTheme(user.fullName ?? user.tenantDisplayName);
-                    const selected = activeTenantId === user.filterTenantId || activeTenantId === user.tenantId;
+                    const selected = getLegendFilterCandidates(user).includes(String(activeTenantId ?? "").trim().toLowerCase());
                     return (
                       <button
                         key={user.userId}
                         type="button"
                         onClick={() => {
-                          onSelect(user.filterTenantId || user.tenantId);
+                          onSelect(getLegendFilterValue(user));
                           setOpen(false);
                         }}
                         className="flex items-center justify-between rounded-2xl border px-3 py-3 text-left"
@@ -1462,7 +1559,7 @@ function MobileLegendPicker({
                             style={{ borderColor: theme.ring }}
                           >
                             <img
-                              src={`/users/${user.userId}.png`}
+                              src={user.avatarUrl || `/users/${user.userId}.png`}
                               alt={user.fullName ?? user.tenantDisplayName ?? "Behandler"}
                               className="h-full w-full object-cover"
                             />
@@ -1913,7 +2010,7 @@ export default function DashboardCalendarCardClient({
     };
   }, [anchorISO, view]);
 
-  const loadAppointments = useCallback(async () => {
+  const loadAppointments = useCallback(async (options?: { skipGoogleSync?: boolean }) => {
     const seq = ++loadSeq.current;
     const hasExistingItems = hasLoadedOnceRef.current;
 
@@ -1922,122 +2019,136 @@ export default function DashboardCalendarCardClient({
 
     setErrorText(null);
 
-    try {
-      const nowMs = Date.now();
-      const shouldRunGoogleSync = nowMs - lastGoogleSyncAtRef.current > 20_000;
+    const loadLocalAppointments = async () => {
+      const apptQuery = supabase
+        .from("appointments")
+        .select(
+          `
+          id,start_at,end_at,notes_internal,reminder_sent_at,tenant_id,person_id,google_calendar_id,
+          tenant:tenants ( display_name ),
+          person:persons ( full_name, phone, email )
+        `
+        )
+        .gte("start_at", range.startISO)
+        .lt("start_at", range.endISO);
 
-      if (shouldRunGoogleSync) {
-        try {
-          await syncGoogleCalendarRangeToAppointments({
-            startISO: range.startISO,
-            endISO: range.endISO,
-          });
-          lastGoogleSyncAtRef.current = nowMs;
-        } catch (syncError: any) {
-          console.error("Google-Kalender Sync fehlgeschlagen", syncError);
+      const { data: apptData, error: apptError } = await apptQuery.order("start_at", { ascending: true });
+
+      if (seq !== loadSeq.current) return false;
+
+      if (apptError) {
+        setErrorText(apptError.message);
+        setIsInitialLoading(false);
+        setIsRefreshing(false);
+        return false;
+      }
+
+      const appts = (apptData ?? []) as ApptRow[];
+
+      const uniquePairs = new Map<string, { tenant_id: string; person_id: string }>();
+      for (const a of appts) {
+        uniquePairs.set(`${a.tenant_id}:${a.person_id}`, {
+          tenant_id: a.tenant_id,
+          person_id: a.person_id,
+        });
+      }
+
+      const cpMap = new Map<string, string>();
+
+      if (uniquePairs.size > 0) {
+        const tenantIds = Array.from(new Set(Array.from(uniquePairs.values()).map((p) => p.tenant_id)));
+        const personIds = Array.from(new Set(Array.from(uniquePairs.values()).map((p) => p.person_id)));
+
+        const { data: cps } = await supabase
+          .from("customer_profiles")
+          .select("id,tenant_id,person_id")
+          .in("tenant_id", tenantIds)
+          .in("person_id", personIds);
+
+        if (seq !== loadSeq.current) return false;
+
+        for (const cp of (cps ?? []) as CustomerProfileRow[]) {
+          cpMap.set(`${cp.tenant_id}:${cp.person_id}`, cp.id);
         }
       }
 
-      let apptQuery = supabase
-      .from("appointments")
-      .select(
-        `
-        id,start_at,end_at,notes_internal,reminder_sent_at,tenant_id,person_id,google_calendar_id,
-        tenant:tenants ( display_name ),
-        person:persons ( full_name, phone, email )
-      `
-      )
-      .gte("start_at", range.startISO)
-      .lt("start_at", range.endISO);
+      const mappedItems: Item[] = appts.map((a) => {
+        const parsed = parseNotes(a.notes_internal);
+        const key = `${a.tenant_id}:${a.person_id}`;
+        const customerProfileId = cpMap.get(key) ?? null;
+        const tenant = firstJoin(a.tenant);
+        const person = firstJoin(a.person);
 
-    const { data: apptData, error: apptError } = await apptQuery.order("start_at", { ascending: true });
+        const isExtraGoogleCalendar = hasExtraGoogleCalendarMarker(a.notes_internal ?? null);
+        const canManageCustomerActions = !isExtraGoogleCalendar && (isAdmin || (!!creatorTenantId && a.tenant_id === creatorTenantId));
+        const sourceMeta = isExtraGoogleCalendar
+          ? calendarSourceMeta(a.google_calendar_id ?? null)
+          : { id: String(a.google_calendar_id ?? "").trim(), label: null, shortLabel: null, color: null };
 
-    if (seq !== loadSeq.current) return;
+        return {
+          id: a.id,
+          start_at: a.start_at,
+          end_at: a.end_at,
+          title: parsed.title ? parsed.title : "Termin",
+          note: parsed.note ?? "",
+          status: parsed.status,
+          tenantId: a.tenant_id,
+          tenantName: tenant?.display_name ?? "Behandler",
+          customerProfileId,
+          customerName: person?.full_name ?? null,
+          customerPhone: person?.phone ?? null,
+          customerEmail: person?.email ?? null,
+          reminderSentAt: a.reminder_sent_at ?? null,
+          canOpenCustomerProfile: canManageCustomerActions,
+          canCreateFollowUp: canManageCustomerActions,
+          canDeleteAppointment: canManageCustomerActions,
+          googleCalendarId: sourceMeta.id,
+          googleCalendarLabel: sourceMeta.label,
+          googleCalendarShortLabel: sourceMeta.shortLabel,
+          googleCalendarColor: sourceMeta.color,
+          isExtraGoogleCalendar,
+        } as Item;
+      });
 
-    if (apptError) {
-      setErrorText(apptError.message);
+      if (seq !== loadSeq.current) return false;
+
+      setItems(mappedItems);
+      hasLoadedOnceRef.current = true;
       setIsInitialLoading(false);
       setIsRefreshing(false);
-      return;
-    }
+      return true;
+    };
 
-    const appts = (apptData ?? []) as ApptRow[];
+    try {
+      const didLoadLocal = await loadLocalAppointments();
+      if (!didLoadLocal) return;
 
-    const uniquePairs = new Map<string, { tenant_id: string; person_id: string }>();
-    for (const a of appts) {
-      uniquePairs.set(`${a.tenant_id}:${a.person_id}`, {
-        tenant_id: a.tenant_id,
-        person_id: a.person_id,
-      });
-    }
+      const nowMs = Date.now();
+      const shouldRunGoogleSync = !options?.skipGoogleSync && nowMs - lastGoogleSyncAtRef.current > 20_000;
 
-    const cpMap = new Map<string, string>();
-
-    if (uniquePairs.size > 0) {
-      const tenantIds = Array.from(new Set(Array.from(uniquePairs.values()).map((p) => p.tenant_id)));
-      const personIds = Array.from(new Set(Array.from(uniquePairs.values()).map((p) => p.person_id)));
-
-      const { data: cps } = await supabase
-        .from("customer_profiles")
-        .select("id,tenant_id,person_id")
-        .in("tenant_id", tenantIds)
-        .in("person_id", personIds);
-
-      if (seq !== loadSeq.current) return;
-
-      for (const cp of (cps ?? []) as CustomerProfileRow[]) {
-        cpMap.set(`${cp.tenant_id}:${cp.person_id}`, cp.id);
+      if (!shouldRunGoogleSync) {
+        return;
       }
-    }
 
-    const mappedItems: Item[] = appts.map((a) => {
-      const parsed = parseNotes(a.notes_internal);
-      const key = `${a.tenant_id}:${a.person_id}`;
-      const customerProfileId = cpMap.get(key) ?? null;
-      const tenant = firstJoin(a.tenant);
-      const person = firstJoin(a.person);
+      lastGoogleSyncAtRef.current = nowMs;
 
-      const canManageCustomerActions = isAdmin || (!!creatorTenantId && a.tenant_id === creatorTenantId);
-
-      const sourceMeta = calendarSourceMeta(a.google_calendar_id ?? null);
-
-      return {
-        id: a.id,
-        start_at: a.start_at,
-        end_at: a.end_at,
-        title: parsed.title ? parsed.title : "Termin",
-        note: parsed.note ?? "",
-        status: parsed.status,
-        tenantId: a.tenant_id,
-        tenantName: tenant?.display_name ?? "Behandler",
-        customerProfileId,
-        customerName: person?.full_name ?? null,
-        customerPhone: person?.phone ?? null,
-        customerEmail: person?.email ?? null,
-        reminderSentAt: a.reminder_sent_at ?? null,
-        canOpenCustomerProfile: canManageCustomerActions,
-        canCreateFollowUp: canManageCustomerActions,
-        canDeleteAppointment: canManageCustomerActions,
-        googleCalendarId: sourceMeta.id,
-        googleCalendarLabel: sourceMeta.label,
-        googleCalendarShortLabel: sourceMeta.shortLabel,
-        googleCalendarColor: sourceMeta.color,
-      } as Item;
-    });
-
-    if (seq !== loadSeq.current) return;
-
-    setItems(mappedItems);
-    hasLoadedOnceRef.current = true;
-    setIsInitialLoading(false);
-    setIsRefreshing(false);
+      syncGoogleCalendarRangeToAppointments({
+        startISO: range.startISO,
+        endISO: range.endISO,
+      })
+        .then(() => {
+          loadAppointments({ skipGoogleSync: true });
+        })
+        .catch((syncError: any) => {
+          console.error("Google-Kalender Sync fehlgeschlagen", syncError);
+        });
     } catch (error: any) {
       if (seq !== loadSeq.current) return;
       setErrorText(error?.message ?? "Kalender konnte nicht geladen werden.");
       setIsInitialLoading(false);
       setIsRefreshing(false);
     }
-  }, [creatorTenantId, isAdmin, range.endISO, range.startISO, selectedTenantId, supabase]);
+  }, [creatorTenantId, isAdmin, range.endISO, range.startISO, supabase]);
 
   const scheduleRefresh = useCallback(() => {
     if (document.visibilityState !== "visible") return;
@@ -2087,7 +2198,7 @@ export default function DashboardCalendarCardClient({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [anchorISO, scheduleRefresh, selectedTenantId, supabase, view]);
+  }, [anchorISO, scheduleRefresh, supabase, view]);
 
   const handleToday = useCallback(() => {
     setCalendarState((prev) => ({
@@ -2189,6 +2300,11 @@ export default function DashboardCalendarCardClient({
     const queryTokens = q.split(/\s+/).map((token) => token.trim()).filter(Boolean);
 
     return items.filter((item) => {
+      const isExtraGoogleCalendar = Boolean((item as any).isExtraGoogleCalendar);
+      if (isExtraGoogleCalendar && creatorTenantId && item.tenantId !== creatorTenantId) {
+        return false;
+      }
+
       if (!matchesSelectedTenant(item, selectedTenantId, effectiveLegendUsers)) {
         return false;
       }
@@ -2224,7 +2340,7 @@ export default function DashboardCalendarCardClient({
 
       return queryTokens.some((token) => haystack.includes(token));
     });
-  }, [desktopSearchQuery, items, effectiveLegendUsers, selectedTenantId]);
+  }, [creatorTenantId, desktopSearchQuery, items, effectiveLegendUsers, selectedTenantId]);
 
   return (
     <Card className="overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
