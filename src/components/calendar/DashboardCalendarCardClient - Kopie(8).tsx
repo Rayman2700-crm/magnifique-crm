@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import DashboardWeekGridClient from "@/components/calendar/DashboardWeekGridClient";
+import DashboardWeekGridClient from "./DashboardWeekGridClient";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { deleteAppointmentFromCalendar, getReadOnlyExtraGoogleCalendarEventsForRange, syncGoogleCalendarRangeToAppointments } from "@/app/calendar/actions";
 import type { AppointmentStatus, Item, ViewMode } from "@/components/calendar/types";
@@ -226,6 +226,50 @@ function calendarSourceMeta(calendarId: string | null | undefined) {
   };
 }
 
+
+type CalendarFilterSource = {
+  id: string;
+  label: string;
+  shortLabel: string;
+  color: string;
+  kind: "studio" | "extra" | "other";
+};
+
+function calendarFilterSourceMeta(item: Item): CalendarFilterSource | null {
+  const rawId = String((item as any).googleCalendarId ?? "").trim();
+  const rawLabel = String((item as any).googleCalendarLabel ?? "").trim();
+  const lowerId = rawId.toLowerCase();
+  const lowerLabel = rawLabel.toLowerCase();
+
+  if (!rawId && !rawLabel) return null;
+
+  if (lowerId === "radu.craus@gmail.com" || lowerLabel.includes("radu")) {
+    return { id: rawId || "radu.craus@gmail.com", label: "Studio Radu", shortLabel: "Radu", color: "#4F7CFF", kind: "studio" };
+  }
+
+  if (lowerId === "raluca.magnifique@gmail.com" || lowerLabel.includes("raluca")) {
+    return { id: rawId || "raluca.magnifique@gmail.com", label: "Studio Raluca", shortLabel: "Raluca", color: "#A855F7", kind: "studio" };
+  }
+
+  const meta = calendarSourceMeta(rawId || rawLabel);
+  return {
+    id: rawId || meta.id,
+    label: rawLabel || meta.label,
+    shortLabel: String((item as any).googleCalendarShortLabel ?? "").trim() || meta.shortLabel,
+    color: String((item as any).googleCalendarColor ?? "").trim() || meta.color,
+    kind: Boolean((item as any).isExtraGoogleCalendar) ? "extra" : "other",
+  };
+}
+
+
+function EyeIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z" />
+      <circle cx="12" cy="12" r="2.75" />
+    </svg>
+  );
+}
 
 function toLocalISODate(d: Date) {
   const y = d.getFullYear();
@@ -666,12 +710,13 @@ function DailyAgendaPanel({
     >
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="min-w-0 flex items-center gap-3">
-          <div className="truncate text-sm font-bold text-white">Tagestermine</div>
-          <div className="truncate text-xs text-white/50">{selectedLabel}</div>
+          <div className="hidden truncate text-sm font-bold text-white md:block">Tagestermine</div>
+          <div className="truncate text-xs text-white/50 md:text-xs">{selectedLabel}</div>
         </div>
 
         <div className="rounded-full border border-white/10 bg-white/[0.03] px-1 py-1 text-xs font-semibold text-white/70">
-          {dayItems.length} {dayItems.length === 1 ? "Termin" : "Termine"}
+          <span className="md:hidden">{dayItems.length}</span>
+          <span className="hidden md:inline">{dayItems.length} {dayItems.length === 1 ? "Termin" : "Termine"}</span>
         </div>
       </div>
 
@@ -696,7 +741,7 @@ function DailyAgendaPanel({
             return (
               <div
                 key={item.id}
-                className="relative flex items-center gap-2.5 rounded-[12px] border border-white/8 bg-white/[0.03] px-1 py-1 pl-4"
+                className="relative flex flex-wrap items-start gap-2.5 rounded-[12px] border border-white/8 bg-white/[0.03] px-1 py-1 pl-4 md:flex-nowrap md:items-center"
               >
                 <div
                   className="absolute left-[4px] top-[4px] bottom-[4px] z-10 w-[4px] rounded-full"
@@ -733,7 +778,7 @@ function DailyAgendaPanel({
                 ) : null}
 
                 <div
-                  className="shrink-0"
+                  className="order-1 shrink-0 self-start md:order-none md:self-center"
                   style={{
                     width: 84,
                     display: "flex",
@@ -741,47 +786,52 @@ function DailyAgendaPanel({
                     justifyContent: "center",
                   }}
                 >
-                  <div className="text-[13px] font-semibold text-white/92">
+                  <div className="text-[13px] font-semibold text-white/92 md:text-[13px]">
                     {formatTimeRange(item.start_at, item.end_at)}
                   </div>
                 </div>
 
-                <div className="min-w-0 flex-1 text-[11px] text-white/84">
-                  <span className="font-semibold text-white">{index + 1}. {item.customerName ?? "Ohne Kundenname"}</span>
-                  <span className="text-white/45"> · </span>
-                  {item.customerPhone ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setContactPhone(item.customerPhone ?? null);
-                        setContactName(item.customerName ?? null);
-                        setContactOpen(true);
-                      }}
-                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-left text-white/92 transition hover:bg-white/[0.08]"
-                      aria-label={`Telefon für ${item.customerName ?? "Kunde"} öffnen`}
-                      title={item.customerPhone}
-                    >
-                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.79.61 2.65a2 2 0 0 1-.45 2.11L8 9.75a16 16 0 0 0 6.25 6.25l1.27-1.27a2 2 0 0 1 2.11-.45c.86.28 1.75.49 2.65.61A2 2 0 0 1 22 16.92z" />
-                      </svg>
-                    </button>
-                  ) : (
-                    <span
-                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-red-500/25 bg-red-500/10 text-red-400"
-                      aria-label="Keine Telefonnummer vorhanden"
-                      title="Keine Telefonnummer vorhanden"
-                    >
-                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.79.61 2.65a2 2 0 0 1-.45 2.11L8 9.75a16 16 0 0 0 6.25 6.25l1.27-1.27a2 2 0 0 1 2.11-.45c.86.28 1.75.49 2.65.61A2 2 0 0 1 22 16.92z" />
-                        <path d="M4 4l16 16" />
-                      </svg>
-                    </span>
-                  )}
-                  <span className="text-white/45"> · </span>
-                  <span className="inline">{item.title || "Dienstleistung unbekannt"}</span>
+                <div className="order-4 min-w-0 basis-full text-[11px] text-white/84 md:order-none md:basis-auto md:flex-1">
+                  <div className="flex min-w-0 flex-col gap-2 md:block">
+                    <div className="pr-2 md:pr-0">
+                      <span className="font-semibold text-white">{index + 1}. {item.customerName ?? "Ohne Kundenname"}</span>
+                      <span className="text-white/45"> · </span>
+                      {item.customerPhone ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setContactPhone(item.customerPhone ?? null);
+                            setContactName(item.customerName ?? null);
+                            setContactOpen(true);
+                          }}
+                          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-left text-white/92 transition hover:bg-white/[0.08]"
+                          aria-label={`Telefon für ${item.customerName ?? "Kunde"} öffnen`}
+                          title={item.customerPhone}
+                        >
+                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.79.61 2.65a2 2 0 0 1-.45 2.11L8 9.75a16 16 0 0 0 6.25 6.25l1.27-1.27a2 2 0 0 1 2.11-.45c.86.28 1.75.49 2.65.61A2 2 0 0 1 22 16.92z" />
+                          </svg>
+                        </button>
+                      ) : (
+                        <span
+                          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-red-500/25 bg-red-500/10 text-red-400"
+                          aria-label="Keine Telefonnummer vorhanden"
+                          title="Keine Telefonnummer vorhanden"
+                        >
+                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.79.61 2.65a2 2 0 0 1-.45 2.11L8 9.75a16 16 0 0 0 6.25 6.25l1.27-1.27a2 2 0 0 1 2.11-.45c.86.28 1.75.49 2.65.61A2 2 0 0 1 22 16.92z" />
+                            <path d="M4 4l16 16" />
+                          </svg>
+                        </span>
+                      )}
+                      <span className="text-white/45"> · </span>
+                      <span className="inline">{item.title || "Dienstleistung unbekannt"}</span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="order-3 ml-auto flex shrink-0 self-end md:order-none md:ml-0 md:self-center">
+                  <div className="flex items-center gap-1">
                   {item.canDeleteAppointment ? (
                     <button
                       type="button"
@@ -873,10 +923,11 @@ function DailyAgendaPanel({
                       </button>
                     </form>
                   ) : null}
+                  </div>
                 </div>
 
                 <div
-                  className="relative h-6 w-6 shrink-0 overflow-hidden rounded-full border-2 bg-[#111216]"
+                  className="order-2 relative h-6 w-6 shrink-0 self-start overflow-hidden rounded-full border-2 bg-[#111216] md:order-none md:self-center"
                   style={{ borderColor: theme.ring }}
                   title={avatarName ?? "Behandler"}
                 >
@@ -929,6 +980,9 @@ function DesktopMiniMonthPicker({
   items,
   onToday,
   isMobileCompact = false,
+  availableCalendarSources = [],
+  selectedCalendarSourceIds = [],
+  setSelectedCalendarSourceIds,
 }: {
   valueISO: string;
   view: ViewMode;
@@ -936,6 +990,9 @@ function DesktopMiniMonthPicker({
   items: Item[];
   onToday?: () => void;
   isMobileCompact?: boolean;
+  availableCalendarSources?: CalendarFilterSource[];
+  selectedCalendarSourceIds?: string[];
+  setSelectedCalendarSourceIds: (next: string[]) => void;
 }) {
   const [monthISO, setMonthISO] = useState(() => toLocalISODate(startOfMonthLocal(new Date(`${valueISO}T12:00:00`))));
 
@@ -1070,6 +1127,14 @@ function DesktopMiniMonthPicker({
         )}
 
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: isMobileCompact ? 12 : "auto", flexShrink: 0 }}>
+          {isMobileCompact ? (
+            <MobileCalendarFilterPicker
+              sources={availableCalendarSources}
+              selectedIds={selectedCalendarSourceIds}
+              onChange={setSelectedCalendarSourceIds}
+              compact
+            />
+          ) : null}
           <button
             type="button"
             onClick={() => setMonthISO((current) => addMonthsLocal(current, -1))}
@@ -1564,7 +1629,8 @@ function MobileLegendPicker({
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [panelTop, setPanelTop] = useState(0);
-  const [panelRight, setPanelRight] = useState(12);
+  const [panelLeft, setPanelLeft] = useState(12);
+  const [panelWidth, setPanelWidth] = useState(320);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
@@ -1581,8 +1647,24 @@ function MobileLegendPicker({
     const updatePosition = () => {
       const rect = buttonRef.current?.getBoundingClientRect();
       if (!rect) return;
-      setPanelTop(Math.round(rect.bottom + 12));
-      setPanelRight(Math.max(12, Math.round(window.innerWidth - rect.right)));
+
+      const viewportPadding = 12;
+      const preferredWidth = Math.min(320, window.innerWidth - viewportPadding * 2);
+      const nextLeft = Math.min(
+        Math.max(viewportPadding, Math.round(rect.right - preferredWidth)),
+        Math.max(viewportPadding, window.innerWidth - preferredWidth - viewportPadding)
+      );
+
+      const availableHeight = window.innerHeight - rect.bottom - viewportPadding;
+      const fallbackTop = Math.max(viewportPadding, Math.round(rect.top - Math.min(420, window.innerHeight - viewportPadding * 2)));
+      const nextTop =
+        availableHeight >= 220
+          ? Math.round(rect.bottom + 12)
+          : fallbackTop;
+
+      setPanelWidth(preferredWidth);
+      setPanelLeft(nextLeft);
+      setPanelTop(nextTop);
     };
 
     updatePosition();
@@ -1665,7 +1747,7 @@ function MobileLegendPicker({
 
               <div
                 className="fixed z-[121] w-[min(320px,calc(100vw-24px))] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(28,28,31,0.98)_0%,rgba(18,19,22,0.98)_100%)] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.44)] backdrop-blur-xl md:hidden"
-                style={{ top: panelTop, right: panelRight, maxHeight: "min(70vh, 520px)" }}
+                style={{ top: panelTop, left: panelLeft, width: panelWidth, maxHeight: "min(70vh, 520px)" }}
               >
                 <div className="flex items-center justify-between px-1 pb-2">
                   <div>
@@ -2078,6 +2160,209 @@ function ViewSwitch({
   );
 }
 
+
+
+function MobileCalendarFilterPicker({
+  sources,
+  selectedIds,
+  onChange,
+  compact = false,
+}: {
+  sources: CalendarFilterSource[];
+  selectedIds: string[];
+  onChange: (next: string[]) => void;
+  compact?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [panelTop, setPanelTop] = useState(0);
+  const [panelLeft, setPanelLeft] = useState(12);
+  const [panelWidth, setPanelWidth] = useState(320);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const allSelected = sources.length > 0 && selectedIds.length === sources.length;
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    const updatePosition = () => {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const viewportPadding = 12;
+      const preferredWidth = Math.min(320, window.innerWidth - viewportPadding * 2);
+      const nextLeft = Math.min(
+        Math.max(viewportPadding, Math.round(rect.right - preferredWidth)),
+        Math.max(viewportPadding, window.innerWidth - preferredWidth - viewportPadding)
+      );
+      const availableBelow = window.innerHeight - rect.bottom - viewportPadding;
+      const fallbackTop = Math.max(
+        viewportPadding,
+        Math.round(rect.top - Math.min(420, window.innerHeight - viewportPadding * 2))
+      );
+      const nextTop = availableBelow >= 220 ? Math.round(rect.bottom + 12) : fallbackTop;
+
+      setPanelWidth(preferredWidth);
+      setPanelLeft(nextLeft);
+      setPanelTop(nextTop);
+    };
+
+    updatePosition();
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className={compact ? "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border md:hidden" : "inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border md:hidden"}
+        aria-label="Kalenderanzeige auswählen"
+        aria-expanded={open}
+        style={{
+          borderColor: allSelected ? "rgba(34,197,94,0.42)" : "rgba(255,255,255,0.10)",
+          background: allSelected ? "rgba(34,197,94,0.16)" : "rgba(255,255,255,0.04)",
+          color: allSelected ? "#86efac" : "rgba(255,255,255,0.88)",
+          boxShadow: compact
+            ? (allSelected ? "0 8px 18px rgba(34,197,94,0.18)" : "0 8px 18px rgba(0,0,0,0.22)")
+            : (allSelected
+                ? "0 0 0 2px rgba(11,11,12,0.95), 0 12px 28px rgba(34,197,94,0.22)"
+                : "0 0 0 2px rgba(11,11,12,0.95), 0 10px 28px rgba(0,0,0,0.30)"),
+        }}
+      >
+        <EyeIcon size={compact ? 14 : 18} />
+      </button>
+
+      {mounted && open
+        ? createPortal(
+            <>
+              <button
+                type="button"
+                aria-label="Kalenderauswahl schließen"
+                className="fixed inset-0 z-[120] bg-[rgba(0,0,0,0.45)] backdrop-blur-[2px] md:hidden"
+                onClick={() => setOpen(false)}
+              />
+
+              <div
+                className="fixed z-[121] w-[min(320px,calc(100vw-24px))] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.985)_0%,rgba(12,13,16,0.985)_100%)] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-xl md:hidden"
+                style={{ top: panelTop, left: panelLeft, width: panelWidth, maxHeight: "min(70vh, 520px)" }}
+              >
+                <div className="flex items-center justify-between px-1 pb-2">
+                  <div>
+                    <div className="text-sm font-semibold text-white">Kalender anzeigen</div>
+                    <div className="mt-0.5 text-xs text-white/45">Studio- und Zusatzkalender wählen</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-lg leading-none text-white/70 transition hover:bg-white/[0.08] hover:text-white"
+                    aria-label="Schließen"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="grid gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onChange(allSelected ? [] : sources.map((source) => source.id))}
+                    className="flex items-center justify-between rounded-2xl border px-3 py-3 text-left transition hover:bg-white/[0.06]"
+                    style={{
+                      borderColor: allSelected ? "rgba(214,195,163,0.28)" : "rgba(255,255,255,0.10)",
+                      backgroundColor: allSelected ? "rgba(214,195,163,0.10)" : "rgba(255,255,255,0.02)",
+                    }}
+                  >
+                    <div>
+                      <div className="text-sm font-semibold text-white">Alle</div>
+                      <div className="mt-0.5 text-xs text-white/45">Alle verfügbaren Kalender ein-/ausblenden</div>
+                    </div>
+                    <span
+                      className="inline-flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-bold"
+                      style={{
+                        borderColor: allSelected ? "rgba(34,197,94,0.45)" : "rgba(255,255,255,0.16)",
+                        background: allSelected ? "rgba(34,197,94,0.16)" : "transparent",
+                        color: allSelected ? "#86efac" : "rgba(255,255,255,0.48)",
+                      }}
+                    >
+                      {allSelected ? "✓" : ""}
+                    </span>
+                  </button>
+
+                  <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
+                    {sources.map((source) => {
+                      const isSelected = selectedIds.includes(source.id);
+                      return (
+                        <button
+                          key={source.id}
+                          type="button"
+                          onClick={() =>
+                            onChange(
+                              isSelected
+                                ? selectedIds.filter((id) => id !== source.id)
+                                : [...selectedIds, source.id]
+                            )
+                          }
+                          className="flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left transition hover:bg-white/[0.06]"
+                          style={{
+                            borderColor: isSelected ? `${source.color}66` : "rgba(255,255,255,0.10)",
+                            backgroundColor: isSelected ? `${source.color}12` : "rgba(255,255,255,0.02)",
+                          }}
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            <span
+                              className="inline-flex h-3.5 w-3.5 shrink-0 rounded-full"
+                              style={{ background: source.color }}
+                            />
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold text-white">{source.label}</div>
+                              <div className="truncate text-xs text-white/45">
+                                {source.kind === "studio" ? "Studio-Kalender" : source.kind === "extra" ? "Zusatzkalender" : "Kalender"}
+                              </div>
+                            </div>
+                          </div>
+                          <span
+                            className="inline-flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-bold"
+                            style={{
+                              borderColor: isSelected ? "rgba(34,197,94,0.45)" : "rgba(255,255,255,0.16)",
+                              background: isSelected ? "rgba(34,197,94,0.16)" : "transparent",
+                              color: isSelected ? "#86efac" : "rgba(255,255,255,0.48)",
+                            }}
+                          >
+                            {isSelected ? "✓" : ""}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </>,
+            document.body
+          )
+        : null}
+    </>
+  );
+}
+
 export default function DashboardCalendarCardClient({
   tenants,
   legendUsers,
@@ -2102,9 +2387,12 @@ export default function DashboardCalendarCardClient({
   );
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [showExtraCalendars, setShowExtraCalendars] = useState(Boolean(isAdminProp));
+  const [calendarFilterOpen, setCalendarFilterOpen] = useState(false);
+  const [selectedCalendarSourceIds, setSelectedCalendarSourceIds] = useState<string[]>([]);
   const [desktopSearchOpen, setDesktopSearchOpen] = useState(false);
   const [desktopSearchQuery, setDesktopSearchQuery] = useState("");
+  const calendarFilterButtonRef = useRef<HTMLDivElement | null>(null);
+  const calendarFilterPanelRef = useRef<HTMLDivElement | null>(null);
   const desktopSearchButtonRef = useRef<HTMLButtonElement | null>(null);
   const desktopSearchPanelRef = useRef<HTMLDivElement | null>(null);
   const miniMonthCardRef = useRef<HTMLDivElement | null>(null);
@@ -2297,7 +2585,7 @@ export default function DashboardCalendarCardClient({
 
       let mergedItems = mappedItems;
 
-      if (showExtraCalendars && isAdmin && creatorTenantId) {
+      if (isAdmin && creatorTenantId) {
         try {
           const extraResult = await getReadOnlyExtraGoogleCalendarEventsForRange({
             startISO: range.startISO,
@@ -2382,7 +2670,7 @@ export default function DashboardCalendarCardClient({
       setIsInitialLoading(false);
       setIsRefreshing(false);
     }
-  }, [creatorTenantId, currentTenantDisplayName, isAdmin, range.endISO, range.startISO, showExtraCalendars, supabase]);
+  }, [creatorTenantId, currentTenantDisplayName, isAdmin, range.endISO, range.startISO, supabase]);
 
   const scheduleRefresh = useCallback(() => {
     if (document.visibilityState !== "visible") return;
@@ -2522,22 +2810,28 @@ export default function DashboardCalendarCardClient({
   }, [anchorISO, view]);
 
   useEffect(() => {
-    if (!desktopSearchOpen) return;
+    if (!desktopSearchOpen && !calendarFilterOpen) return;
 
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node | null;
       if (!target) return;
 
-      const panel = desktopSearchPanelRef.current;
-      const button = desktopSearchButtonRef.current;
+      const searchPanel = desktopSearchPanelRef.current;
+      const searchButton = desktopSearchButtonRef.current;
+      const filterPanel = calendarFilterPanelRef.current;
+      const filterButton = calendarFilterButtonRef.current;
 
-      if (panel?.contains(target) || button?.contains(target)) return;
+      if (searchPanel?.contains(target) || searchButton?.contains(target)) return;
+      if (filterPanel?.contains(target) || filterButton?.contains(target)) return;
+
       setDesktopSearchOpen(false);
+      setCalendarFilterOpen(false);
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setDesktopSearchOpen(false);
+        setCalendarFilterOpen(false);
       }
     };
 
@@ -2548,7 +2842,49 @@ export default function DashboardCalendarCardClient({
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [desktopSearchOpen]);
+  }, [calendarFilterOpen, desktopSearchOpen]);
+
+  const availableCalendarSources = useMemo<CalendarFilterSource[]>(() => {
+    const byId = new Map<string, CalendarFilterSource>();
+    for (const item of items) {
+      const source = calendarFilterSourceMeta(item);
+      if (!source) continue;
+      byId.set(source.id, source);
+    }
+
+    return Array.from(byId.values()).sort((a, b) => {
+      const rank = (value: CalendarFilterSource) => {
+        if (value.label === "Studio Radu") return 0;
+        if (value.label === "Studio Raluca") return 1;
+        if (value.kind === "extra") return 2;
+        return 3;
+      };
+      return rank(a) - rank(b) || a.label.localeCompare(b.label, "de");
+    });
+  }, [items]);
+
+  useEffect(() => {
+    if (!availableCalendarSources.length) {
+      setSelectedCalendarSourceIds([]);
+      return;
+    }
+
+    setSelectedCalendarSourceIds((current) => {
+      const validCurrent = current.filter((id) => availableCalendarSources.some((source) => source.id === id));
+      if (!validCurrent.length) return availableCalendarSources.map((source) => source.id);
+      if (validCurrent.length === current.length) return current;
+      return validCurrent;
+    });
+  }, [availableCalendarSources]);
+
+  const allCalendarSourcesSelected =
+    availableCalendarSources.length > 0 &&
+    selectedCalendarSourceIds.length === availableCalendarSources.length;
+
+  const selectedCalendarSourceIdSet = useMemo(
+    () => new Set(selectedCalendarSourceIds),
+    [selectedCalendarSourceIds]
+  );
 
   const visibleItems = useMemo(() => {
     const q = desktopSearchQuery.trim().toLowerCase();
@@ -2557,6 +2893,11 @@ export default function DashboardCalendarCardClient({
     return items.filter((item) => {
       const isExtraGoogleCalendar = Boolean((item as any).isExtraGoogleCalendar);
       if (isExtraGoogleCalendar && creatorTenantId && item.tenantId !== creatorTenantId) {
+        return false;
+      }
+
+      const calendarSource = calendarFilterSourceMeta(item);
+      if (calendarSource && selectedCalendarSourceIdSet.size > 0 && !selectedCalendarSourceIdSet.has(calendarSource.id)) {
         return false;
       }
 
@@ -2595,7 +2936,7 @@ export default function DashboardCalendarCardClient({
 
       return queryTokens.some((token) => haystack.includes(token));
     });
-  }, [creatorTenantId, desktopSearchQuery, items, effectiveLegendUsers, selectedTenantId]);
+  }, [creatorTenantId, desktopSearchQuery, items, effectiveLegendUsers, selectedCalendarSourceIdSet, selectedTenantId]);
 
   return (
     <Card className="overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
@@ -2675,30 +3016,131 @@ export default function DashboardCalendarCardClient({
               ) : null}
 
               {isAdmin ? (
-                <DesktopHeaderPillButton
-                  active={showExtraCalendars}
-                  ariaLabel={showExtraCalendars ? "Privaten Zusatzkalender ausblenden" : "Privaten Zusatzkalender einblenden"}
-                  title={showExtraCalendars ? "Privaten Zusatzkalender ausblenden" : "Privaten Zusatzkalender einblenden"}
-                  onClick={() => setShowExtraCalendars((current) => !current)}
-                  className="h-11 w-11 shrink-0"
-                  style={
-                    showExtraCalendars
-                      ? {
-                          borderColor: "rgba(34,197,94,0.42)",
-                          background: "rgba(34,197,94,0.16)",
-                          color: "#86efac",
-                          boxShadow: "0 12px 28px rgba(34,197,94,0.22)",
-                        }
-                      : {
-                          color: "rgba(255,255,255,0.72)",
-                        }
-                  }
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-[18px] w-[18px]">
-                    <rect x="6.5" y="10.5" width="11" height="8.5" rx="2" />
-                    <path d="M9 10.5V8.75a3 3 0 0 1 6 0v1.75" strokeLinecap="round" />
-                  </svg>
-                </DesktopHeaderPillButton>
+                <div ref={calendarFilterButtonRef} className="relative">
+                  <DesktopHeaderPillButton
+                    active={allCalendarSourcesSelected}
+                    ariaLabel="Kalenderanzeige auswählen"
+                    title="Kalenderanzeige auswählen"
+                    onClick={() => setCalendarFilterOpen((current) => !current)}
+                    className="h-11 w-11 shrink-0"
+                    style={
+                      allCalendarSourcesSelected
+                        ? {
+                            borderColor: "rgba(34,197,94,0.42)",
+                            background: "rgba(34,197,94,0.16)",
+                            color: "#86efac",
+                            boxShadow: "0 12px 28px rgba(34,197,94,0.22)",
+                          }
+                        : {
+                            color: "rgba(255,255,255,0.72)",
+                          }
+                    }
+                  >
+                    <EyeIcon size={18} />
+                  </DesktopHeaderPillButton>
+
+                  {calendarFilterOpen ? (
+                    <div
+                      ref={calendarFilterPanelRef}
+                      className="absolute right-0 top-[calc(100%+14px)] z-40 w-[320px] max-w-[min(320px,calc(100vw-48px))] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.985)_0%,rgba(12,13,16,0.985)_100%)] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-xl"
+                    >
+                      <div className="flex items-center justify-between px-1 pb-2">
+                        <div>
+                          <div className="text-sm font-semibold text-white">Kalender anzeigen</div>
+                          <div className="mt-0.5 text-xs text-white/45">Studio- und Zusatzkalender wählen</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setCalendarFilterOpen(false)}
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-lg leading-none text-white/70 transition hover:bg-white/[0.08] hover:text-white"
+                          aria-label="Schließen"
+                        >
+                          ×
+                        </button>
+                      </div>
+
+                      <div className="grid gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedCalendarSourceIds((current) =>
+                              current.length === availableCalendarSources.length
+                                ? []
+                                : availableCalendarSources.map((source) => source.id)
+                            )
+                          }
+                          className="flex items-center justify-between rounded-2xl border px-3 py-3 text-left transition hover:bg-white/[0.06]"
+                          style={{
+                            borderColor: allCalendarSourcesSelected ? "rgba(214,195,163,0.28)" : "rgba(255,255,255,0.10)",
+                            backgroundColor: allCalendarSourcesSelected ? "rgba(214,195,163,0.10)" : "rgba(255,255,255,0.02)",
+                          }}
+                        >
+                          <div>
+                            <div className="text-sm font-semibold text-white">Alle</div>
+                            <div className="mt-0.5 text-xs text-white/45">Alle verfügbaren Kalender ein-/ausblenden</div>
+                          </div>
+                          <span
+                            className="inline-flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-bold"
+                            style={{
+                              borderColor: allCalendarSourcesSelected ? "rgba(34,197,94,0.45)" : "rgba(255,255,255,0.16)",
+                              background: allCalendarSourcesSelected ? "rgba(34,197,94,0.16)" : "transparent",
+                              color: allCalendarSourcesSelected ? "#86efac" : "rgba(255,255,255,0.48)",
+                            }}
+                          >
+                            {allCalendarSourcesSelected ? "✓" : ""}
+                          </span>
+                        </button>
+
+                        <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
+                          {availableCalendarSources.map((source) => {
+                            const isSelected = selectedCalendarSourceIds.includes(source.id);
+                            return (
+                              <button
+                                key={source.id}
+                                type="button"
+                                onClick={() =>
+                                  setSelectedCalendarSourceIds((current) =>
+                                    current.includes(source.id)
+                                      ? current.filter((id) => id !== source.id)
+                                      : [...current, source.id]
+                                  )
+                                }
+                                className="flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left transition hover:bg-white/[0.06]"
+                                style={{
+                                  borderColor: isSelected ? "rgba(214,195,163,0.28)" : "rgba(255,255,255,0.10)",
+                                  backgroundColor: isSelected ? "rgba(214,195,163,0.10)" : "rgba(255,255,255,0.02)",
+                                }}
+                              >
+                                <div className="flex min-w-0 items-center gap-3">
+                                  <span
+                                    className="inline-flex h-3.5 w-3.5 shrink-0 rounded-full"
+                                    style={{ background: source.color }}
+                                  />
+                                  <div className="min-w-0">
+                                    <div className="truncate text-sm font-semibold text-white">{source.label}</div>
+                                    <div className="mt-0.5 text-xs text-white/45">
+                                      {source.kind === "extra" ? "Zusatzkalender" : "Studio-Kalender"}
+                                    </div>
+                                  </div>
+                                </div>
+                                <span
+                                  className="inline-flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-bold"
+                                  style={{
+                                    borderColor: isSelected ? "rgba(34,197,94,0.45)" : "rgba(255,255,255,0.16)",
+                                    background: isSelected ? "rgba(34,197,94,0.16)" : "transparent",
+                                    color: isSelected ? "#86efac" : "rgba(255,255,255,0.48)",
+                                  }}
+                                >
+                                  {isSelected ? "✓" : ""}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
 
               <div className="relative">
@@ -2805,25 +3247,8 @@ export default function DashboardCalendarCardClient({
               <div className="text-sm text-white/60">Team-Übersicht</div>
             </div>
 
-            <div className="flex min-w-0 flex-wrap items-center gap-2 md:hidden">
-              {isAdmin ? (
-                <MobileCircleActionButton
-                  label={showExtraCalendars ? "Privaten Zusatzkalender ausblenden" : "Privaten Zusatzkalender einblenden"}
-                  onClick={() => setShowExtraCalendars((current) => !current)}
-                  variant={showExtraCalendars ? "dark" : "dark"}
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke={showExtraCalendars ? "#22c55e" : "currentColor"}
-                    strokeWidth="1.9"
-                    className="h-[18px] w-[18px]"
-                  >
-                    <rect x="6.5" y="10.5" width="11" height="8.5" rx="2" />
-                    <path d="M9 10.5V8.75a3 3 0 0 1 6 0v1.75" strokeLinecap="round" />
-                  </svg>
-                </MobileCircleActionButton>
-              ) : null}
+            <div className="flex min-w-0 items-center gap-2 overflow-x-auto whitespace-nowrap md:hidden">
+              </div>
 
               <button
                 ref={desktopSearchButtonRef}
@@ -2914,7 +3339,7 @@ export default function DashboardCalendarCardClient({
               </div>
             </div>
           ) : null}
-        </div>
+
 
         <div className="mt-5 lg:mt-7">
           {errorText ? (
@@ -2947,6 +3372,9 @@ export default function DashboardCalendarCardClient({
                         items={visibleItems}
                         onToday={handleToday}
                         isMobileCompact
+                        availableCalendarSources={availableCalendarSources}
+                        selectedCalendarSourceIds={selectedCalendarSourceIds}
+                        setSelectedCalendarSourceIds={setSelectedCalendarSourceIds}
                       />
                     </div>
 
@@ -2962,7 +3390,15 @@ export default function DashboardCalendarCardClient({
 
                   <div className="hidden md:grid md:grid-cols-1 md:gap-4 lg:grid-cols-3">
                     <div ref={miniMonthCardRef} className="lg:col-span-1">
-                      <DesktopMiniMonthPicker valueISO={anchorISO} view={view} onSelect={handleSetDate} items={visibleItems} />
+                      <DesktopMiniMonthPicker
+                        valueISO={anchorISO}
+                        view={view}
+                        onSelect={handleSetDate}
+                        items={visibleItems}
+                        availableCalendarSources={availableCalendarSources}
+                        selectedCalendarSourceIds={selectedCalendarSourceIds}
+                        setSelectedCalendarSourceIds={setSelectedCalendarSourceIds}
+                      />
                     </div>
 
                     <div

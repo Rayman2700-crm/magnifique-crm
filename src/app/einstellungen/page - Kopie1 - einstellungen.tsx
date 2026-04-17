@@ -204,7 +204,7 @@ export default async function EinstellungenPage() {
               <div className="mt-6">
                 <Link
                   href="/profile"
-                  className="inline-flex h-11 items-center justify-center rounded-xl border border-[#dcc7a1]/40 bg-[#dcc7a1] px-4 text-sm font-semibold text-black shadow-[0_10px_24px_rgba(220,199,161,0.18)] transition hover:brightness-105"
+                  className="inline-flex h-11 items-center justify-center rounded-xl bg-[#dcc7a1] px-4 text-sm font-semibold text-black transition hover:brightness-105"
                 >
                   Profil öffnen
                 </Link>
@@ -268,13 +268,13 @@ export default async function EinstellungenPage() {
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
                   href="/calendar/google"
-                  className="inline-flex h-11 items-center justify-center rounded-xl border border-[#dcc7a1]/40 bg-[#dcc7a1] px-4 text-sm font-semibold text-black shadow-[0_10px_24px_rgba(220,199,161,0.18)] transition hover:brightness-105"
+                  className="inline-flex h-11 items-center justify-center rounded-xl bg-[#dcc7a1] px-4 text-sm font-semibold text-black transition hover:brightness-105"
                 >
                   Google öffnen
                 </Link>
                 <Link
                   href="/calendar"
-                  className="inline-flex h-11 items-center justify-center rounded-xl border border-white/12 bg-white/[0.06] px-4 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:bg-white/10"
+                  className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white transition hover:bg-white/10"
                 >
                   Zum Kalender
                 </Link>
@@ -331,7 +331,7 @@ export default async function EinstellungenPage() {
                   {card.href ? (
                     <Link
                       href={card.href}
-                      className="inline-flex h-11 items-center justify-center rounded-xl border border-white/12 bg-white/[0.06] px-4 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:bg-white/10"
+                      className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white transition hover:bg-white/10"
                     >
                       {card.cta}
                     </Link>
