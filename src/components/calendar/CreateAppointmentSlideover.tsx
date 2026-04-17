@@ -88,6 +88,7 @@ export default function CreateAppointmentSlideover({
   const [walkInPhone, setWalkInPhone] = useState(initialWalkInPhone ?? "");
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState("scheduled");
+  const [studioWriteTarget, setStudioWriteTarget] = useState<string>("auto");
   const [returnTo, setReturnTo] = useState<string>("");
 
   const tenantServices = useMemo(() => {
@@ -110,6 +111,7 @@ export default function CreateAppointmentSlideover({
     setWalkInPhone(initialWalkInPhone ?? "");
     setNotes("");
     setStatus("scheduled");
+    setStudioWriteTarget("auto");
     setSelectedTenantId(forceTenantId ?? creatorTenantId ?? "");
     setSelectedServiceId("");
 
@@ -254,6 +256,31 @@ export default function CreateAppointmentSlideover({
             <input type="hidden" name="week" value={defaultWeekISO ?? ""} />
             <input type="hidden" name="tenant" value="" />
             <input type="hidden" name="returnTo" value={returnTo} />
+
+            <div>
+              <label className="text-white text-sm">Studio-Kalender</label>
+              <select
+                name="studioWriteTarget"
+                value={studioWriteTarget}
+                onChange={(e) => setStudioWriteTarget(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:ring-2 focus:ring-white/15"
+                style={{ colorScheme: "dark", backgroundColor: "rgba(0,0,0,0.30)" }}
+              >
+                <option value="auto" className="bg-[#0b0b0c] text-white">
+                  Automatisch (Behandler-Standard)
+                </option>
+                <option value="studio_radu" className="bg-[#0b0b0c] text-white">
+                  Studio Radu · radu.craus@gmail.com
+                </option>
+                <option value="studio_raluca" className="bg-[#0b0b0c] text-white">
+                  Studio Raluca · raluca.magnifique@gmail.com
+                </option>
+              </select>
+
+              <div className="mt-2 text-xs text-white/50">
+                Standard bleibt sicher bei Automatisch. Radu/Raluca sind die zwei schreibbaren Studio-Kalender.
+              </div>
+            </div>
 
             <div>
               <label className="text-white text-sm">Dienstleistung</label>

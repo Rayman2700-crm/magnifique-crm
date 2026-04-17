@@ -19,6 +19,290 @@ type GoogleTokenSelectionRow = {
   enabled_calendar_ids?: string[] | null;
 };
 
+type StudioWriteTarget = "auto" | "studio_radu" | "studio_raluca";
+
+type GoogleOauthConnectionRow = {
+  id: string;
+  owner_user_id: string;
+  provider: string | null;
+  connection_type: string | null;
+  connection_label: string | null;
+  google_account_email: string | null;
+  google_account_name: string | null;
+  access_token: string | null;
+  refresh_token: string | null;
+  expires_at: string | null;
+  is_active: boolean | null;
+  is_primary: boolean | null;
+  is_read_only: boolean | null;
+};
+
+const STUDIO_WRITE_TARGETS: Record<Exclude<StudioWriteTarget, "auto">, {
+  label: string;
+  calendarId: string;
+  connectionLabel: string;
+  emailHint: string;
+}> = {
+  studio_radu: {
+    label: "Studio Radu",
+    calendarId: "radu.craus@gmail.com",
+    connectionLabel: "Radu Studio",
+    emailHint: "radu.craus@gmail.com",
+  },
+  studio_raluca: {
+    label: "Studio Raluca",
+    calendarId: "raluca.magnifique@gmail.com",
+    connectionLabel: "Raluca Studio",
+    emailHint: "raluca.magnifique@gmail.com",
+  },
+};
+
+function normalizeStudioWriteTarget(value: FormDataEntryValue | null): StudioWriteTarget {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "studio_radu") return "studio_radu";
+  if (normalized === "studio_raluca") return "studio_raluca";
+  return "auto";
+}
+
+function isExpiringSoon(expiresAtIso: string | null | undefined) {
+  if (!expiresAtIso) return true;
+  const exp = new Date(expiresAtIso).getTime();
+  if (Number.isNaN(exp)) return true;
+  return exp - Date.now() < 2 * 60 * 1000;
+}
+
+async function refreshGoogleAccessTokenByRefreshToken(refreshToken: string) {
+  const clientId = process.env.GOOGLE_CLIENT_ID!;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET!;
+  if (!clientId || !clientSecret) throw new Error("Google OAuth env fehlt.");
+
+  const resp = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: "refresh_token",
+    }),
+    cache: "no-store",
+  });
+
+  const json: any = await resp.json().catch(() => null);
+  if (!resp.ok) {
+    throw new Error(json?.error_description ?? json?.error ?? "Google Token Refresh fehlgeschlagen.");
+  }
+
+  return {
+    accessToken: String(json?.access_token ?? "").trim(),
+    expiresAt:
+      typeof json?.expires_in === "number"
+        ? new Date(Date.now() + json.expires_in * 1000).toISOString()
+        : null,
+  };
+}
+
+async function getAccessTokenForGoogleConnection(admin: any, connection: GoogleOauthConnectionRow) {
+  const existingAccessToken = String(connection.access_token ?? "").trim();
+  if (existingAccessToken && !isExpiringSoon(connection.expires_at ?? null)) {
+    return existingAccessToken;
+  }
+
+  const refreshToken = String(connection.refresh_token ?? "").trim();
+  if (!refreshToken) {
+    throw new Error(`Für ${connection.connection_label || "die Google Verbindung"} fehlt ein refresh_token.`);
+  }
+
+  const refreshed = await refreshGoogleAccessTokenByRefreshToken(refreshToken);
+  if (!refreshed.accessToken) {
+    throw new Error(`Für ${connection.connection_label || "die Google Verbindung"} konnte kein access_token geladen werden.`);
+  }
+
+  await admin
+    .from("google_oauth_connections")
+    .update({
+      access_token: refreshed.accessToken,
+      expires_at: refreshed.expiresAt,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", connection.id);
+
+  return refreshed.accessToken;
+}
+
+async function googleFetchWithToken(token: string, path: string, init?: RequestInit) {
+  const res = await fetch(`https://www.googleapis.com/calendar/v3${path}`, {
+    ...init,
+    headers: {
+      ...(init?.headers ?? {}),
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    cache: "no-store",
+  });
+
+  const json: any = await res.json().catch(() => null);
+  if (!res.ok) {
+    const msg = json?.error?.message ?? "Google API error";
+    throw new Error(msg);
+  }
+  return json;
+}
+
+async function findStudioGoogleConnectionForOwner(
+  admin: any,
+  ownerUserId: string,
+  target: Exclude<StudioWriteTarget, "auto">
+) {
+  const definition = STUDIO_WRITE_TARGETS[target];
+
+  const byLabel = await admin
+    .from("google_oauth_connections")
+    .select("id, owner_user_id, provider, connection_type, connection_label, google_account_email, google_account_name, access_token, refresh_token, expires_at, is_active, is_primary, is_read_only")
+    .eq("connection_label", definition.connectionLabel)
+    .eq("is_active", true)
+    .order("updated_at", { ascending: false })
+    .limit(5);
+
+  if (byLabel.error) {
+    throw new Error("Studio-Google-Verbindungen konnten nicht geladen werden: " + byLabel.error.message);
+  }
+
+  const byLabelRows = Array.isArray(byLabel.data) ? (byLabel.data as GoogleOauthConnectionRow[]) : [];
+  const preferredByLabel =
+    byLabelRows.find((row) => String(row.owner_user_id ?? "").trim() === String(ownerUserId ?? "").trim()) ??
+    byLabelRows[0] ??
+    null;
+
+  if (preferredByLabel?.id) return preferredByLabel;
+
+  const byEmail = await admin
+    .from("google_oauth_connections")
+    .select("id, owner_user_id, provider, connection_type, connection_label, google_account_email, google_account_name, access_token, refresh_token, expires_at, is_active, is_primary, is_read_only")
+    .eq("google_account_email", definition.emailHint)
+    .eq("is_active", true)
+    .order("updated_at", { ascending: false })
+    .limit(5);
+
+  if (byEmail.error) {
+    throw new Error("Studio-Google-Verbindungen konnten nicht geladen werden: " + byEmail.error.message);
+  }
+
+  const byEmailRows = Array.isArray(byEmail.data) ? (byEmail.data as GoogleOauthConnectionRow[]) : [];
+  const preferredByEmail =
+    byEmailRows.find((row) => String(row.owner_user_id ?? "").trim() === String(ownerUserId ?? "").trim()) ??
+    byEmailRows[0] ??
+    null;
+
+  return preferredByEmail;
+}
+
+async function findAutomaticGoogleConnectionForOwner(admin: any, ownerUserId: string) {
+  const { data: rows, error } = await admin
+    .from("google_oauth_connections")
+    .select("id, owner_user_id, provider, connection_type, connection_label, google_account_email, google_account_name, access_token, refresh_token, expires_at, is_active, is_primary, is_read_only")
+    .eq("owner_user_id", ownerUserId)
+    .eq("is_active", true)
+    .eq("is_read_only", false)
+    .order("is_primary", { ascending: false })
+    .order("updated_at", { ascending: false })
+    .limit(20);
+
+  if (error) {
+    throw new Error("Google-Verbindungen konnten nicht geladen werden: " + error.message);
+  }
+
+  const rowsList = Array.isArray(rows) ? (rows as GoogleOauthConnectionRow[]) : [];
+  if (rowsList.length === 0) return null;
+
+  const nonStudioConnection = rowsList.find((row) => {
+    const label = String(row.connection_label ?? "").trim().toLowerCase();
+    return label !== "radu studio" && label !== "raluca studio";
+  });
+
+  return nonStudioConnection ?? rowsList[0] ?? null;
+}
+
+async function resolveAutomaticCalendarIdForConnection(
+  admin: any,
+  connection: GoogleOauthConnectionRow
+) {
+  const directCalendarId = String(
+    connection.google_account_email ??
+    connection.google_account_name ??
+    ""
+  ).trim();
+
+  if (directCalendarId) {
+    return directCalendarId;
+  }
+
+  const token = await getAccessTokenForGoogleConnection(admin, connection);
+
+  const calendarList = await googleFetchWithToken(
+    token,
+    "/users/me/calendarList?maxResults=250"
+  );
+
+  const items = Array.isArray(calendarList?.items) ? calendarList.items : [];
+
+  const primaryCalendar =
+    items.find((item: any) => item?.primary === true) ??
+    items.find((item: any) => String(item?.accessRole ?? "").trim().toLowerCase() === "owner") ??
+    null;
+
+  const resolvedCalendarId = String(primaryCalendar?.id ?? "").trim();
+
+  if (!resolvedCalendarId) {
+    throw new Error("Für die Google-Verbindung konnte kein eigener Kalender gefunden werden.");
+  }
+
+  const updatePayload: Record<string, any> = {
+    default_calendar_id: resolvedCalendarId,
+    updated_at: new Date().toISOString(),
+  };
+
+  const primarySummary = String(primaryCalendar?.summary ?? "").trim();
+  if (primarySummary && !String(connection.google_account_name ?? "").trim()) {
+    updatePayload.google_account_name = primarySummary;
+  }
+  if (!String(connection.google_account_email ?? "").trim()) {
+    updatePayload.google_account_email = resolvedCalendarId;
+  }
+
+  await admin
+    .from("google_oauth_connections")
+    .update(updatePayload)
+    .eq("id", connection.id);
+
+  return resolvedCalendarId;
+}
+
+async function getGoogleAccessTokenForAppointmentTarget(googleConnectionId: string | null | undefined) {
+  const normalizedConnectionId = String(googleConnectionId ?? "").trim();
+  if (!normalizedConnectionId) {
+    return await getValidGoogleAccessToken();
+  }
+
+  const admin = supabaseAdmin();
+  const { data: connection, error } = await admin
+    .from("google_oauth_connections")
+    .select("id, owner_user_id, provider, connection_type, connection_label, google_account_email, google_account_name, access_token, refresh_token, expires_at, is_active, is_primary, is_read_only")
+    .eq("id", normalizedConnectionId)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error("Google-Verbindung konnte nicht geladen werden: " + error.message);
+  }
+
+  if (!connection?.id) {
+    throw new Error("Google-Verbindung für diesen Termin wurde nicht gefunden.");
+  }
+
+  return await getAccessTokenForGoogleConnection(admin, connection as GoogleOauthConnectionRow);
+}
+
 function sanitizeCalendarIdList(values: Array<string | null | undefined>) {
   return Array.from(
     new Set(
@@ -128,22 +412,7 @@ async function isReadOnlyExtraCalendarAppointment(
 
 async function googleFetch(path: string, init?: RequestInit) {
   const token = await getValidGoogleAccessToken();
-  const res = await fetch(`https://www.googleapis.com/calendar/v3${path}`, {
-    ...init,
-    headers: {
-      ...(init?.headers ?? {}),
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    cache: "no-store",
-  });
-
-  const json: any = await res.json().catch(() => null);
-  if (!res.ok) {
-    const msg = json?.error?.message ?? "Google API error";
-    throw new Error(msg);
-  }
-  return json;
+  return googleFetchWithToken(token, path, init);
 }
 
 function normalizePhone(v: string) {
@@ -543,18 +812,6 @@ export async function connectGoogleCalendar() {
   redirect("/calendar/google");
 }
 
-const STUDIO_DEFAULT_CALENDAR_ID = "radu.craus@gmail.com";
-
-async function getCurrentUserRoleForCalendarSettings(supabase: Awaited<ReturnType<typeof supabaseServer>>, userId: string) {
-  const { data: profile } = await supabase
-    .from("user_profiles")
-    .select("role")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  return String((profile as any)?.role ?? "").toUpperCase();
-}
-
 export async function setDefaultCalendar(formData: FormData) {
   const supabase = await supabaseServer();
   const { data } = await supabase.auth.getUser();
@@ -562,27 +819,21 @@ export async function setDefaultCalendar(formData: FormData) {
   if (!user) redirect("/login");
 
   const returnTo = safeReturnTo(String(formData.get("returnTo") ?? "/calendar/google"));
-  const requestedCalendarId = String(formData.get("calendarId") ?? "").trim();
-  const requestedEnabledCalendarIds = sanitizeCalendarIdList(
+  const calendarId = String(formData.get("calendarId") ?? "").trim();
+  const enabledCalendarIds = sanitizeCalendarIdList(
     formData.getAll("enabledCalendarIds").map((value) => String(value ?? "").trim())
   );
 
-  const role = await getCurrentUserRoleForCalendarSettings(supabase, user.id);
-  const isAdmin = role === "ADMIN";
-
-  const defaultCalendarId = STUDIO_DEFAULT_CALENDAR_ID;
-  const nextEnabledCalendarIds = isAdmin
-    ? sanitizeCalendarIdList([defaultCalendarId, ...requestedEnabledCalendarIds])
-    : [defaultCalendarId];
-
-  if (requestedCalendarId && requestedCalendarId !== STUDIO_DEFAULT_CALENDAR_ID && !isAdmin) {
-    redirect(buildRedirectUrl(returnTo, "error", "Nur Admin darf weitere Kalender auswählen."));
+  if (!calendarId) {
+    redirect(buildRedirectUrl(returnTo, "error", "Bitte einen Standard-Kalender auswählen."));
   }
+
+  const nextEnabledCalendarIds = sanitizeCalendarIdList([calendarId, ...enabledCalendarIds]);
 
   const { error } = await supabase
     .from("google_oauth_tokens")
     .update({
-      default_calendar_id: defaultCalendarId,
+      default_calendar_id: calendarId,
       enabled_calendar_ids: nextEnabledCalendarIds,
     })
     .eq("user_id", user.id);
@@ -591,11 +842,13 @@ export async function setDefaultCalendar(formData: FormData) {
     redirect(buildRedirectUrl(returnTo, "error", "Konnte Kalender-Auswahl nicht speichern: " + error.message));
   }
 
-  const successText = isAdmin
-    ? `Kalender gespeichert ✅ (${nextEnabledCalendarIds.length} aktiv)`
-    : "Studio-Standardkalender gespeichert ✅";
-
-  redirect(buildRedirectUrl(returnTo, "success", successText));
+  redirect(
+    buildRedirectUrl(
+      returnTo,
+      "success",
+      `Kalender gespeichert ✅ (${nextEnabledCalendarIds.length} aktiv)`
+    )
+  );
 }
 
 export async function createTestEvent(formData?: FormData) {
@@ -710,6 +963,139 @@ async function ensurePersonIdForGoogleMirror(admin: any, tenantId: string, summa
 }
 
 
+
+export async function getReadOnlyExtraGoogleCalendarEventsForRange(input: { startISO: string; endISO: string }) {
+  const supabase = await supabaseServer();
+  const { data: authData } = await supabase.auth.getUser();
+  const user = authData.user;
+
+  if (!user) {
+    return { ok: false, items: [], reason: "not_authenticated" as const };
+  }
+
+  const startISO = String(input?.startISO ?? "").trim();
+  const endISO = String(input?.endISO ?? "").trim();
+  const clampedRange = clampSyncRange({ startISO, endISO });
+
+  if (!clampedRange) {
+    return { ok: false, items: [], reason: "invalid_range" as const };
+  }
+
+  const { data: tokenRow, error: tokenError } = await supabase
+    .from("google_oauth_tokens")
+    .select("default_calendar_id, enabled_calendar_ids")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (tokenError) {
+    throw new Error("Google-Kalender konnten nicht geladen werden: " + tokenError.message);
+  }
+
+  const tokenSelection = resolveEnabledCalendarIds((tokenRow ?? null) as GoogleTokenSelectionRow | null);
+  const defaultCalendarId = String(tokenSelection.defaultCalendarId ?? "").trim();
+  const extraCalendarIds = sanitizeCalendarIdList(
+    tokenSelection.enabledIds.filter((calendarId) => String(calendarId).trim() !== defaultCalendarId)
+  );
+
+  if (extraCalendarIds.length === 0) {
+    return { ok: true, items: [] };
+  }
+
+  let calendarList: any[] = [];
+  try {
+    const calendarListResponse = await googleFetch("/users/me/calendarList?maxResults=250");
+    calendarList = Array.isArray(calendarListResponse?.items) ? calendarListResponse.items : [];
+  } catch {
+    calendarList = [];
+  }
+
+  const calendarMetaById = new Map<
+    string,
+    { summary: string; backgroundColor: string | null; accessRole: string | null }
+  >();
+
+  for (const calendar of calendarList) {
+    const calendarId = String(calendar?.id ?? "").trim();
+    if (!calendarId) continue;
+    calendarMetaById.set(calendarId, {
+      summary: String(calendar?.summary ?? calendarId).trim() || calendarId,
+      backgroundColor: String(calendar?.backgroundColor ?? "").trim() || null,
+      accessRole: String(calendar?.accessRole ?? "").trim() || null,
+    });
+  }
+
+  const items: Array<{
+    id: string;
+    googleEventId: string;
+    googleCalendarId: string;
+    googleCalendarLabel: string;
+    googleCalendarShortLabel: string;
+    googleCalendarColor: string | null;
+    start_at: string;
+    end_at: string;
+    title: string;
+    note: string;
+    status: AppointmentStatus;
+    isExtraGoogleCalendar: true;
+  }> = [];
+
+  for (const calendarId of extraCalendarIds) {
+    let googleEvents: any[] = [];
+
+    try {
+      const response = await googleFetch(
+        `/calendars/${encodeURIComponent(calendarId)}/events?singleEvents=true&orderBy=startTime&showDeleted=false&timeMin=${encodeURIComponent(
+          clampedRange.startISO
+        )}&timeMax=${encodeURIComponent(clampedRange.endISO)}&maxResults=${MAX_GOOGLE_EVENTS_PER_CALENDAR}`
+      );
+      googleEvents = Array.isArray(response?.items) ? response.items : [];
+    } catch (error: any) {
+      console.error(`Google Zusatzkalender ${calendarId} konnte nicht geladen werden`, error?.message ?? error);
+      continue;
+    }
+
+    const meta = calendarMetaById.get(calendarId);
+    const googleCalendarLabel = meta?.summary ?? calendarId;
+    const googleCalendarColor = meta?.backgroundColor ?? null;
+    const googleCalendarShortLabel = googleCalendarLabel.split(/\s+/)[0] || googleCalendarLabel;
+
+    for (const event of googleEvents) {
+      const googleEventId = String(event?.id ?? "").trim();
+      if (!googleEventId) continue;
+
+      const eventStatus = String(event?.status ?? "confirmed").trim().toLowerCase();
+      if (eventStatus === "cancelled") continue;
+
+      const start = parseGoogleEventDate(event?.start, 9);
+      const end = parseGoogleEventDate(event?.end, 10);
+      if (!start || !end) continue;
+
+      const title = String(event?.summary ?? "").trim() || googleCalendarLabel || "Privater Termin";
+      const note = String(event?.description ?? "").trim();
+
+      items.push({
+        id: `extra:${calendarId}:${googleEventId}`,
+        googleEventId,
+        googleCalendarId: calendarId,
+        googleCalendarLabel,
+        googleCalendarShortLabel,
+        googleCalendarColor,
+        start_at: start.toISOString(),
+        end_at: end.toISOString(),
+        title,
+        note,
+        status: "scheduled",
+        isExtraGoogleCalendar: true,
+      });
+    }
+  }
+
+  items.sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
+
+  return { ok: true, items };
+}
+
+
 export async function syncGoogleCalendarRangeToAppointments(input: { startISO: string; endISO: string }) {
   const supabase = await supabaseServer();
   const admin = supabaseAdmin();
@@ -766,6 +1152,59 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
   );
   const sharedDefaultCalendarIds = await loadSharedDefaultCalendarIdSet(admin);
 
+  const syncTargets: Array<{
+    calendarId: string;
+    tenantId: string;
+    ownerLabel: string;
+    accessToken: string;
+  }> = [];
+
+  if (defaultCalendarId) {
+    const defaultToken = await getValidGoogleAccessToken();
+    syncTargets.push({
+      calendarId: defaultCalendarId,
+      tenantId: ownerTenantId,
+      ownerLabel: String(ownerProfile?.full_name ?? "").trim() || "Google Kalender",
+      accessToken: defaultToken,
+    });
+  }
+
+  const { data: studioConnections, error: studioConnectionsError } = await admin
+    .from("google_oauth_connections")
+    .select("id, owner_user_id, provider, connection_type, connection_label, google_account_email, google_account_name, access_token, refresh_token, expires_at, is_active, is_primary, is_read_only")
+    .eq("owner_user_id", ownerUserId)
+    .eq("is_active", true)
+    .eq("is_read_only", false)
+    .limit(20);
+
+  if (studioConnectionsError) {
+    throw new Error("Studio-Google-Verbindungen konnten nicht geladen werden: " + studioConnectionsError.message);
+  }
+
+  for (const connection of Array.isArray(studioConnections) ? studioConnections as GoogleOauthConnectionRow[] : []) {
+    let matchedCalendarId = "";
+
+    for (const definition of Object.values(STUDIO_WRITE_TARGETS)) {
+      const matchesLabel = String(connection.connection_label ?? "").trim().toLowerCase() === definition.connectionLabel.toLowerCase();
+      const matchesEmail = String(connection.google_account_email ?? "").trim().toLowerCase() === definition.emailHint.toLowerCase();
+      if (matchesLabel || matchesEmail) {
+        matchedCalendarId = definition.calendarId;
+        break;
+      }
+    }
+
+    if (!matchedCalendarId) continue;
+    if (syncTargets.some((entry) => entry.calendarId === matchedCalendarId)) continue;
+
+    const connectionToken = await getAccessTokenForGoogleConnection(admin, connection);
+    syncTargets.push({
+      calendarId: matchedCalendarId,
+      tenantId: ownerTenantId,
+      ownerLabel: String(connection.connection_label ?? connection.google_account_name ?? connection.google_account_email ?? ownerProfile?.full_name ?? "Google Kalender").trim() || "Google Kalender",
+      accessToken: connectionToken,
+    });
+  }
+
   let deleted = 0;
   let synced = 0;
 
@@ -801,19 +1240,21 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
     }
   }
 
-  // Ohne Standard-Kalender nur Cleanup der Altlasten durchführen
-  if (!defaultCalendarId) {
+  // Ohne erreichbaren Studio-Kalender nur Cleanup der Altlasten durchführen
+  if (syncTargets.length === 0) {
     return { ok: true, synced: 0, deleted };
   }
 
   const ownerByCalendarId = new Map<string, { tenantId: string; ownerLabel: string; defaultCalendarId: string | null }>();
-  ownerByCalendarId.set(defaultCalendarId, {
-    tenantId: ownerTenantId,
-    ownerLabel: String(ownerProfile?.full_name ?? "").trim() || "Google Kalender",
-    defaultCalendarId,
-  });
+  for (const target of syncTargets) {
+    ownerByCalendarId.set(target.calendarId, {
+      tenantId: target.tenantId,
+      ownerLabel: target.ownerLabel,
+      defaultCalendarId,
+    });
+  }
 
-  const calendarIds = [defaultCalendarId];
+  const calendarIds = syncTargets.map((target) => target.calendarId);
 
   const { data: existingAppointments, error: existingError } = await admin
     .from("appointments")
@@ -861,14 +1302,16 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
 
   const seenGoogleKeys = new Set<string>();
 
-  for (const calendarId of calendarIds) {
+  for (const syncTarget of syncTargets) {
+    const calendarId = syncTarget.calendarId;
     const ownerInfo = ownerByCalendarId.get(calendarId);
     if (!ownerInfo?.tenantId) continue;
 
     let googleEvents: any[] = [];
 
     try {
-      const response = await googleFetch(
+      const response = await googleFetchWithToken(
+        syncTarget.accessToken,
         `/calendars/${encodeURIComponent(calendarId)}/events?singleEvents=true&orderBy=startTime&showDeleted=true&timeMin=${encodeURIComponent(clampedRange.startISO)}&timeMax=${encodeURIComponent(clampedRange.endISO)}&maxResults=${MAX_GOOGLE_EVENTS_PER_CALENDAR}`
       );
       googleEvents = Array.isArray(response?.items) ? response.items : [];
@@ -1030,6 +1473,7 @@ export async function createAppointmentQuick(formData: FormData) {
   const week = String(formData.get("week") ?? "").trim();
   const returnToRaw = String(formData.get("returnTo") ?? "").trim();
   const serviceId = String(formData.get("serviceId") ?? "").trim();
+  const studioWriteTarget = normalizeStudioWriteTarget(formData.get("studioWriteTarget"));
 
   const effectiveTenantFilter = assignedTenantId;
   const defaultReturnUrl =
@@ -1203,16 +1647,15 @@ export async function createAppointmentQuick(formData: FormData) {
     personId = foundPersonId;
   }
 
-  // Wichtig:
-  // Der Termin muss im Kalender des ausgewählten Behandlers landen,
-  // nicht im Kalender des aktuell eingeloggten Benutzers.
+    // Wichtig:
+  // Standardverhalten bleibt sicher: Automatisch = Kalender des ausgewählten Behandlers.
+  // Zusätzlich kann jetzt explizit in einen der zwei Studio-Schreibkalender geschrieben werden.
   let targetCalendarUserId: string | null = null;
   let targetCalendarOwnerLabel = "Behandler";
+  let googleConnectionId: string | null = null;
+  let googleWriteCalendarId: string | null = null;
+  let googleAccessToken: string | null = null;
 
-  // Wichtig:
-  // Für Team-Termine muss zuerst der echte Besitzer über tenant_id aufgelöst werden.
-  // calendar_tenant_id ist hier nur Fallback und darf keinen fremden Kalenderbesitzer
-  // "gewinnen", sonst landen Termine später beim falschen User.
   const { data: targetByTenant, error: targetByTenantError } = await admin
     .from("user_profiles")
     .select("user_id, full_name, tenant_id, calendar_tenant_id, role")
@@ -1267,25 +1710,69 @@ export async function createAppointmentQuick(formData: FormData) {
     );
   }
 
-  const { data: tok, error: tokErr } = await admin
-    .from("google_oauth_tokens")
-    .select("default_calendar_id")
-    .eq("user_id", targetCalendarUserId)
-    .maybeSingle();
+  let calendarId: string | null = null;
 
-  if (tokErr) {
-    redirect(buildRedirectUrl(baseReturnUrl, "error", "Token DB Fehler: " + tokErr.message));
-  }
+  if (studioWriteTarget === "auto") {
+    const automaticConnection = await findAutomaticGoogleConnectionForOwner(admin, targetCalendarUserId);
 
-  const calendarId = (tok as any)?.default_calendar_id as string | null;
-  if (!calendarId) {
-    redirect(
-      buildRedirectUrl(
-        baseReturnUrl,
-        "error",
-        `${targetCalendarOwnerLabel} hat noch keinen Standard-Google-Kalender gespeichert.`
-      )
-    );
+    if (automaticConnection?.id) {
+      googleConnectionId = String(automaticConnection.id);
+      googleAccessToken = await getAccessTokenForGoogleConnection(admin, automaticConnection);
+      calendarId = await resolveAutomaticCalendarIdForConnection(admin, automaticConnection);
+    }
+
+    if (!calendarId) {
+      const { data: tok, error: tokErr } = await admin
+        .from("google_oauth_tokens")
+        .select("default_calendar_id")
+        .eq("user_id", targetCalendarUserId)
+        .maybeSingle();
+
+      if (tokErr) {
+        redirect(buildRedirectUrl(baseReturnUrl, "error", "Token DB Fehler: " + tokErr.message));
+      }
+
+      calendarId = (tok as any)?.default_calendar_id as string | null;
+    }
+
+    if (!calendarId) {
+      redirect(
+        buildRedirectUrl(
+          baseReturnUrl,
+          "error",
+          `${targetCalendarOwnerLabel} hat noch keinen eigenen Google-Kalender verbunden.`
+        )
+      );
+    }
+  } else {
+    const definition = STUDIO_WRITE_TARGETS[studioWriteTarget];
+    calendarId = definition.calendarId;
+    googleWriteCalendarId = definition.calendarId;
+
+    const selectedStudioConnection = await findStudioGoogleConnectionForOwner(admin, user.id, studioWriteTarget);
+    if (!selectedStudioConnection?.id) {
+      redirect(
+        buildRedirectUrl(
+          baseReturnUrl,
+          "error",
+          `${definition.label} ist noch nicht als Studio-Google-Verbindung hinterlegt.`
+        )
+      );
+    }
+
+    if (selectedStudioConnection.is_read_only) {
+      redirect(
+        buildRedirectUrl(
+          baseReturnUrl,
+          "error",
+          `${definition.label} ist aktuell als read-only markiert und kann nicht für Studio-Termine verwendet werden.`
+        )
+      );
+    }
+
+    googleConnectionId = String(selectedStudioConnection.id);
+    googleAccessToken = await getAccessTokenForGoogleConnection(admin, selectedStudioConnection);
+    targetCalendarOwnerLabel = definition.label;
   }
 
   const start = new Date(startLocal);
@@ -1297,21 +1784,41 @@ export async function createAppointmentQuick(formData: FormData) {
 
   let googleEventId: string | null = null;
   try {
-    const event = await googleFetch(`/calendars/${encodeURIComponent(calendarId)}/events`, {
-      method: "POST",
-      body: JSON.stringify({
-        summary: title,
-        description: notes || undefined,
-        start: { dateTime: start.toISOString() },
-        end: { dateTime: end.toISOString() },
-        extendedProperties: {
-          private: {
-            crmTenantId: assignedTenantId,
-            crmTenantName: targetCalendarOwnerLabel,
-          },
-        },
-      }),
-    });
+    const event = googleAccessToken
+      ? await googleFetchWithToken(
+          googleAccessToken,
+          `/calendars/${encodeURIComponent(calendarId)}/events`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              summary: title,
+              description: notes || undefined,
+              start: { dateTime: start.toISOString() },
+              end: { dateTime: end.toISOString() },
+              extendedProperties: {
+                private: {
+                  crmTenantId: assignedTenantId,
+                  crmTenantName: targetCalendarOwnerLabel,
+                },
+              },
+            }),
+          }
+        )
+      : await googleFetch(`/calendars/${encodeURIComponent(calendarId)}/events`, {
+          method: "POST",
+          body: JSON.stringify({
+            summary: title,
+            description: notes || undefined,
+            start: { dateTime: start.toISOString() },
+            end: { dateTime: end.toISOString() },
+            extendedProperties: {
+              private: {
+                crmTenantId: assignedTenantId,
+                crmTenantName: targetCalendarOwnerLabel,
+              },
+            },
+          }),
+        });
     googleEventId = String(event?.id ?? "");
   } catch (e: any) {
     redirect(buildRedirectUrl(baseReturnUrl, "error", e?.message ?? "Google Event konnte nicht erstellt werden"));
@@ -1343,6 +1850,8 @@ export async function createAppointmentQuick(formData: FormData) {
     reminder_at: buildReminderAt(start).toISOString(),
     reminder_sent_at: null,
     notes_internal: notesInternal || null,
+    google_connection_id: googleConnectionId,
+    google_write_calendar_id: googleWriteCalendarId || calendarId,
     google_calendar_id: calendarId,
     google_event_id: googleEventId || null,
   };
@@ -1381,7 +1890,7 @@ export async function deleteAppointmentFromCalendar(appointmentId: string, formD
 
   const { data: appt, error: apptErr } = await supabase
     .from("appointments")
-    .select("google_calendar_id, google_event_id, notes_internal")
+    .select("google_calendar_id, google_event_id, google_connection_id, notes_internal")
     .eq("id", appointmentId)
     .single();
 
@@ -1396,17 +1905,38 @@ export async function deleteAppointmentFromCalendar(appointmentId: string, formD
     });
 
     if (appt.google_calendar_id && appt.google_event_id) {
-      await googleFetch(
+      const token = await getGoogleAccessTokenForAppointmentTarget((appt as any).google_connection_id ?? null);
+      await googleFetchWithToken(
+        token,
         `/calendars/${encodeURIComponent(appt.google_calendar_id)}/events/${encodeURIComponent(appt.google_event_id)}`,
         { method: "DELETE" }
       );
     }
   } catch (e: any) {
-    const message = String(e?.message ?? "");
-    if (message.toLowerCase().includes("schreibgeschützt") || message.toLowerCase().includes("zusatzkalender")) {
-      redirect(buildRedirectUrl(baseReturnUrl, "error", message));
+    const message = String(e?.message ?? "").trim();
+    const normalized = message.toLowerCase();
+
+    if (normalized.includes("schreibgeschützt") || normalized.includes("zusatzkalender")) {
+      redirect(buildRedirectUrl(baseReturnUrl, "error", message || "Termin ist schreibgeschützt."));
     }
-    // ignore google delete errors if event already gone
+
+    if (
+      normalized.includes("not found") ||
+      normalized.includes("notfound") ||
+      normalized.includes("404") ||
+      normalized.includes("insufficient permissions for this calendar")
+    ) {
+      // Event ist in Google bereits weg oder Kalender erlaubt kein sauberes Löschen mehr.
+      // In diesen klaren Sonderfällen löschen wir lokal trotzdem weiter.
+    } else {
+      redirect(
+        buildRedirectUrl(
+          baseReturnUrl,
+          "error",
+          message || "Google-Termin konnte nicht gelöscht werden."
+        )
+      );
+    }
   }
 
   await supabase.from("appointment_open_slots").delete().eq("appointment_id", appointmentId);
@@ -1445,7 +1975,7 @@ export async function updateAppointmentFromCalendar(appointmentId: string, formD
 
   const { data: existing, error: findErr } = await supabase
     .from("appointments")
-    .select("notes_internal, google_calendar_id, google_event_id")
+    .select("notes_internal, google_calendar_id, google_event_id, google_connection_id")
     .eq("id", appointmentId)
     .single();
 
@@ -1481,7 +2011,9 @@ export async function updateAppointmentFromCalendar(appointmentId: string, formD
 
   try {
     if (existing.google_calendar_id && existing.google_event_id) {
-      await googleFetch(
+      const token = await getGoogleAccessTokenForAppointmentTarget((existing as any).google_connection_id ?? null);
+      await googleFetchWithToken(
+        token,
         `/calendars/${encodeURIComponent(existing.google_calendar_id)}/events/${encodeURIComponent(existing.google_event_id)}`,
         {
           method: "PATCH",

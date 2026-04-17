@@ -603,6 +603,28 @@ CREATE TABLE public.team_messages (
   file_size bigint,
   CONSTRAINT team_messages_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.tenant_branding (
+  tenant_id uuid NOT NULL,
+  app_name text,
+  logo_path text,
+  invoice_logo_path text,
+  email_sender_name text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT tenant_branding_pkey PRIMARY KEY (tenant_id),
+  CONSTRAINT tenant_branding_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id)
+);
+CREATE TABLE public.tenant_settings (
+  tenant_id uuid NOT NULL,
+  tax_number text,
+  invoice_footer_text text,
+  onboarding_required boolean NOT NULL DEFAULT true,
+  onboarding_completed_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT tenant_settings_pkey PRIMARY KEY (tenant_id),
+  CONSTRAINT tenant_settings_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id)
+);
 CREATE TABLE public.tenants (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   slug text NOT NULL UNIQUE,
@@ -650,6 +672,8 @@ CREATE TABLE public.user_profiles (
   is_active boolean NOT NULL DEFAULT true,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   calendar_tenant_id uuid,
+  avatar_path text,
+  onboarding_completed_at timestamp with time zone,
   CONSTRAINT user_profiles_pkey PRIMARY KEY (user_id),
   CONSTRAINT user_profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );

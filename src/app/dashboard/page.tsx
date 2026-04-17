@@ -21,6 +21,8 @@ type LegendUser = {
   userId: string;
   fullName: string | null;
   tenantDisplayName: string;
+  avatarUrl?: string | null;
+  avatarRingColor?: string | null;
 };
 
 type ReminderCountRow = {
@@ -176,6 +178,17 @@ function formatCurrentTime(date: Date) {
     minute: "2-digit",
     hour12: false,
   }).format(date);
+}
+
+function getNameInitials(value: string | null | undefined) {
+  const parts = String(value ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
 }
 
 
@@ -686,6 +699,23 @@ function resolveStorageAvatarUrl(raw: string | null | undefined, admin: ReturnTy
   return data?.publicUrl ?? null;
 }
 
+
+function getProfileAvatarTheme(name: string | null | undefined, avatarRingColor: string | null | undefined) {
+  const custom = String(avatarRingColor ?? "").trim();
+  if (/^#([0-9a-fA-F]{6})$/.test(custom)) {
+    const hex = custom.slice(1);
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    return {
+      border: custom,
+      bg: `rgba(${r}, ${g}, ${b}, 0.16)`,
+    };
+  }
+
+  return tenantTheme(name ?? "");
+}
+
 export default async function DashboardPage() {
   const supabase = await supabaseServer();
   const admin = supabaseAdmin();
@@ -699,13 +729,14 @@ export default async function DashboardPage() {
   let effectiveCustomerTenantId: string | null = null;
   let role: string = "PRACTITIONER";
   let avatarUrl: string | null = null;
+  let avatarRingColor: string | null = null;
   let effectiveReminderTenantId: string | null = null;
   let isAdmin = false;
 
   if (user) {
     const { data: profile } = await supabase
       .from("user_profiles")
-      .select("full_name, avatar_path, tenant_id, calendar_tenant_id, role")
+      .select("full_name, avatar_path, tenant_id, calendar_tenant_id, role, avatar_ring_color")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -714,6 +745,7 @@ export default async function DashboardPage() {
     isAdmin = role === "ADMIN";
 
     avatarUrl = resolveStorageAvatarUrl(profile?.avatar_path ?? null, admin);
+    avatarRingColor = profile?.avatar_ring_color ?? null;
 
     effectiveCustomerTenantId = await getEffectiveTenantId({
       role: profile?.role ?? "PRACTITIONER",
@@ -745,14 +777,9 @@ export default async function DashboardPage() {
     .select("id, display_name")
     .order("display_name", { ascending: true });
 
-  const legendUsersQuery = isAdmin
-    ? admin.from("user_profiles").select("user_id, tenant_id, calendar_tenant_id, full_name, role, avatar_path")
-    : user?.id
-      ? admin
-          .from("user_profiles")
-          .select("user_id, tenant_id, calendar_tenant_id, full_name, role, avatar_path")
-          .eq("user_id", user.id)
-      : admin.from("user_profiles").select("user_id, tenant_id, calendar_tenant_id, full_name, role, avatar_path").limit(0);
+  const legendUsersQuery = admin
+    .from("user_profiles")
+    .select("user_id, tenant_id, calendar_tenant_id, full_name, role, avatar_path, avatar_ring_color");
 
   const [{ data: tenantsRaw }, { data: userProfilesRaw }] = await Promise.all([
     tenantsQuery,
@@ -766,25 +793,33 @@ export default async function DashboardPage() {
     tenantNameById.set(t.id, t.display_name ?? "Behandler");
   }
 
-  const legendUsers: LegendUser[] = (userProfilesRaw ?? [])
-    .filter((p) => !!p.user_id && !!(p.calendar_tenant_id || p.tenant_id))
-    .map((p) => {
-      const resolvedTenantId =
-        String((p.calendar_tenant_id as string | null) ?? "").trim() ||
-        String((p.tenant_id as string | null) ?? "").trim();
+  const legendUsers: LegendUser[] = Array.from(
+    new Map(
+      (userProfilesRaw ?? [])
+        .filter((p) => !!p.user_id && !!(p.calendar_tenant_id || p.tenant_id))
+        .map((p) => {
+          const rawTenantId = String((p.tenant_id as string | null) ?? "").trim();
+          const rawCalendarTenantId = String((p.calendar_tenant_id as string | null) ?? "").trim();
+          const resolvedTenantId = rawCalendarTenantId || rawTenantId;
 
-      return {
-        tenantId: resolvedTenantId,
-        filterTenantId: resolvedTenantId,
-        userId: p.user_id as string,
-        fullName: (p.full_name as string | null) ?? null,
-        tenantDisplayName:
-          tenantNameById.get(resolvedTenantId) ??
-          tenantNameById.get(String((p.tenant_id as string | null) ?? "").trim()) ??
-          "Behandler",
-        avatarUrl: resolveStorageAvatarUrl((p as any).avatar_path ?? null, admin),
-      };
-    });
+          return [
+            String(p.user_id),
+            {
+              tenantId: rawTenantId || resolvedTenantId,
+              filterTenantId: resolvedTenantId,
+              userId: p.user_id as string,
+              fullName: (p.full_name as string | null) ?? null,
+              tenantDisplayName:
+                tenantNameById.get(resolvedTenantId) ??
+                tenantNameById.get(rawTenantId) ??
+                "Behandler",
+              avatarUrl: resolveStorageAvatarUrl((p as any).avatar_path ?? null, admin),
+              avatarRingColor: (p as any).avatar_ring_color ?? null,
+            } satisfies LegendUser,
+          ] as const;
+        })
+    ).values()
+  );
 
   const now = new Date();
   const startOfToday = new Date(now);
@@ -1253,7 +1288,7 @@ export default async function DashboardPage() {
 
   const currentDateLabel = formatShortDate(now);
   const currentTimeLabel = formatCurrentTime(now);
-  const profileTheme = tenantTheme(tenantDisplayName ?? displayName);
+  const profileTheme = getProfileAvatarTheme(fullName ?? tenantDisplayName ?? displayName, avatarRingColor);
 
   return (
     <div className="space-y-4 lg:space-y-8">
@@ -1267,11 +1302,17 @@ export default async function DashboardPage() {
                     className="flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-[22px] border-[4px] shadow-[0_0_0_2px_rgba(11,11,12,0.9)] sm:h-[80px] sm:w-[80px] md:h-[88px] md:w-[88px]"
                     style={{ borderColor: profileTheme.border, background: profileTheme.bg }}
                   >
-                    <img
-                      src={avatarUrl || `/users/${user?.id}.png`}
-                      alt="Benutzerfoto"
-                      className="h-full w-full object-cover"
-                    />
+                    {avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt="Benutzerfoto"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-white/5 text-lg font-extrabold text-white/90">
+                        {getNameInitials(fullName)}
+                      </div>
+                    )}
                   </div>
 
                   <div className="min-w-0">
@@ -1301,11 +1342,17 @@ export default async function DashboardPage() {
                   className="flex h-[18px] w-[18px] shrink-0 items-center justify-center overflow-hidden rounded-[20px] border-[2px] shadow-[0_0_0_2px_rgba(11,11,12,0.9)]"
                   style={{ borderColor: profileTheme.border, background: profileTheme.bg }}
                 >
-                  <img
-                    src={avatarUrl || `/users/${user?.id}.png`}
-                    alt="Benutzerfoto"
-                    className="h-full w-full object-cover"
-                  />
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt="Benutzerfoto"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-white/5 text-[8px] font-extrabold text-white/90">
+                      {getNameInitials(fullName)}
+                    </div>
+                  )}
                 </div>
 
                 <div className="min-w-0">

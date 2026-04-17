@@ -21,6 +21,12 @@ export type Item = {
 
   reminderSentAt: string | null;
 
+  googleCalendarId?: string | null;
+  googleCalendarLabel?: string | null;
+  googleCalendarShortLabel?: string | null;
+  googleCalendarColor?: string | null;
+  isExtraGoogleCalendar?: boolean;
+
   canOpenCustomerProfile: boolean;
   canCreateFollowUp: boolean;
   canDeleteAppointment: boolean;

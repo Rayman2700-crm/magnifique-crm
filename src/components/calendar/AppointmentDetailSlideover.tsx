@@ -456,10 +456,12 @@ export default function AppointmentDetailSlideover({
   mounted,
   selected,
   onClose,
+  initialEditMode = false,
 }: {
   mounted: boolean;
   selected: SelectedItem | null;
   onClose: () => void;
+  initialEditMode?: boolean;
 }) {
   const [returnTo, setReturnTo] = useState("");
   const [editMode, setEditMode] = useState(false);
@@ -514,7 +516,7 @@ export default function AppointmentDetailSlideover({
     if (typeof window !== "undefined") {
       setReturnTo(window.location.pathname + window.location.search);
     }
-    setEditMode(false);
+    setEditMode(initialEditMode);
     setStatusError(null);
     setTitleValue(selected.title || "Termin");
     setStartValue(toDatetimeLocalValue(new Date(selected.start_at)));
@@ -529,7 +531,7 @@ export default function AppointmentDetailSlideover({
     setCheckoutState({ salesOrder: null, payment: null, receipt: null });
     setPaymentMethod("CASH");
     setPaymentNotes("");
-  }, [selected, durationDefault]);
+  }, [selected, durationDefault, initialEditMode]);
 
   useEffect(() => {
     let alive = true;
@@ -737,6 +739,15 @@ export default function AppointmentDetailSlideover({
   const reminderPermissionHint = permissionsLoaded && !canManageForThisAppointment;
   const statusPermissionHint = permissionsLoaded && !canManageForThisAppointment;
 
+  const checkoutDraftTotalCents = useMemo(() => {
+    return checkoutLines.reduce((sum, line) => sum + moneyStringToCents(line.price) * Math.max(1, line.quantity), 0);
+  }, [checkoutLines]);
+
+  useEffect(() => {
+    if (!checkoutOpen) return;
+    setPaymentMethod("CASH");
+  }, [checkoutOpen, checkoutDraftTotalCents]);
+
   if (!mounted || !selected || typeof document === "undefined") return null;
 
   const startDate = new Date(selected.start_at);
@@ -754,15 +765,6 @@ export default function AppointmentDetailSlideover({
     Number.isFinite(selected.serviceBufferMinutesSnapshot) && (selected.serviceBufferMinutesSnapshot ?? 0) >= 0
       ? `${selected.serviceBufferMinutesSnapshot} Min`
       : null;
-
-  const checkoutDraftTotalCents = useMemo(() => {
-    return checkoutLines.reduce((sum, line) => sum + moneyStringToCents(line.price) * Math.max(1, line.quantity), 0);
-  }, [checkoutLines]);
-
-  useEffect(() => {
-    if (!checkoutOpen) return;
-    setPaymentMethod("CASH");
-  }, [checkoutOpen, checkoutDraftTotalCents]);
 
   const updateLine = (lineId: string, patch: Partial<CheckoutLine>) => {
     setCheckoutLines((current) => current.map((line) => (line.id === lineId ? { ...line, ...patch } : line)));

@@ -8,6 +8,8 @@ type LegendUser = {
   userId: string;
   fullName: string | null;
   tenantDisplayName: string;
+  avatarUrl?: string | null;
+  avatarRingColor?: string | null;
 };
 
 function tenantTheme(label: string) {
@@ -50,7 +52,9 @@ export default function TenantLegendClient({
   const items = useMemo(() => {
     const mapped = (users ?? []).map((u) => {
       const label = u.fullName || u.tenantDisplayName || "Behandler";
-      const theme = tenantTheme(label);
+      const theme = u.avatarRingColor && /^#([0-9a-fA-F]{6})$/.test(u.avatarRingColor)
+        ? { color: u.avatarRingColor }
+        : tenantTheme(label);
 
       return {
         ...u,
@@ -58,7 +62,8 @@ export default function TenantLegendClient({
         color: theme.color,
         name: firstName(u.fullName, u.tenantDisplayName),
         initials: initials(u.fullName, u.tenantDisplayName),
-        imgSrc: `/users/${u.userId}.png`,
+        imgSrc: (u.avatarUrl && u.avatarUrl.trim()) || `/users/${u.userId}.png`,
+        fallbackSrc: `/users/${u.userId}.png`,
       };
     });
 
@@ -155,7 +160,20 @@ export default function TenantLegendClient({
                   src={it.imgSrc}
                   alt={it.name}
                   className="h-full w-full object-cover"
-                  onError={() => setBroken((p) => ({ ...p, [it.userId]: true }))}
+                  onError={(e) => {
+                    const img = e.currentTarget;
+                    const fallback = it.fallbackSrc;
+                    if (img.dataset.fallbackApplied === "1") {
+                      setBroken((p) => ({ ...p, [it.userId]: true }));
+                      return;
+                    }
+                    if (img.getAttribute("src") !== fallback) {
+                      img.dataset.fallbackApplied = "1";
+                      img.src = fallback;
+                      return;
+                    }
+                    setBroken((p) => ({ ...p, [it.userId]: true }));
+                  }}
                 />
               )}
 
