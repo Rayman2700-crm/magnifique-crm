@@ -48,6 +48,35 @@ function parseOAuthMeta(raw: string | null | undefined): OAuthMeta | null {
   }
 }
 
+
+function isAdminUser(profileRole: unknown, userEmail: unknown) {
+  return (
+    String(profileRole ?? "").trim().toUpperCase() === "ADMIN" ||
+    String(userEmail ?? "").trim().toLowerCase() === "radu.craus@gmail.com"
+  );
+}
+
+function normalizeConnectionMeta(meta: OAuthMeta | null | undefined) {
+  const label = String(meta?.connectionLabel ?? "").trim();
+  const emailHint = String(meta?.emailHint ?? "").trim().toLowerCase();
+
+  const isStudioRadu =
+    label.toLowerCase() === "radu studio" ||
+    label.toLowerCase() === "studio radu" ||
+    emailHint === "radu.craus@gmail.com";
+
+  const isStudioRaluca =
+    label.toLowerCase() === "raluca studio" ||
+    label.toLowerCase() === "studio raluca" ||
+    label.toLowerCase() === "studio magnifique beauty institut" ||
+    emailHint === "raluca.magnifique@gmail.com";
+
+  return {
+    isStudioRadu,
+    isStudioRaluca,
+  };
+}
+
 async function fetchGoogleUserInfo(accessToken: string | null | undefined): Promise<GoogleUserInfo | null> {
   const token = String(accessToken ?? "").trim();
   if (!token) return null;
@@ -127,6 +156,21 @@ export async function GET(req: Request) {
     return NextResponse.redirect(new URL("/login?error=1", baseUrl));
   }
 
+  const { data: profile } = await supabase
+    .from("user_profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const isAdmin = isAdminUser((profile as any)?.role, user.email);
+  const normalizedMeta = normalizeConnectionMeta(meta);
+
+  if (normalizedMeta.isStudioRadu && !isAdmin) {
+    return NextResponse.redirect(
+      new URL(`/calendar/google?error=${encodeURIComponent("Studio Radu darf nur vom Admin verbunden werden.")}`, baseUrl)
+    );
+  }
+
   const accessToken: string | undefined = tokenJson.access_token;
   const refreshToken: string | undefined = tokenJson.refresh_token;
   const tokenType: string | undefined = tokenJson.token_type;
@@ -141,7 +185,7 @@ export async function GET(req: Request) {
 
   const { data: existingLegacy } = await supabase
     .from("google_oauth_tokens")
-    .select("refresh_token")
+    .select("refresh_token, default_calendar_id, enabled_calendar_ids")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -161,8 +205,18 @@ export async function GET(req: Request) {
   const googleUserInfo = await fetchGoogleUserInfo(accessToken ?? null);
   const googleAccountEmail = String(googleUserInfo?.email ?? "").trim() || null;
   const googleAccountName = String(googleUserInfo?.name ?? "").trim() || null;
-  const connectionLabel =
-    meta?.connectionLabel || googleAccountEmail || googleAccountName || "Google Verbindung";
+
+  const effectiveIsReadOnly =
+    Boolean(meta?.isReadOnly) || (!normalizedMeta.isStudioRadu && !normalizedMeta.isStudioRaluca);
+  const effectiveIsPrimary =
+    Boolean(meta?.isPrimary) && (normalizedMeta.isStudioRadu || normalizedMeta.isStudioRaluca);
+  const effectiveLegacySync =
+    Boolean(meta?.legacySync) && (normalizedMeta.isStudioRadu || normalizedMeta.isStudioRaluca);
+  const connectionLabel = normalizedMeta.isStudioRadu
+    ? "Radu Studio"
+    : normalizedMeta.isStudioRaluca
+      ? "Raluca Studio"
+      : "Privater Kalender";
 
   let savedConnectionId: string | null = null;
 
@@ -201,12 +255,12 @@ export async function GET(req: Request) {
     token_type: tokenType ?? null,
     refresh_token_expires_in: refreshTokenExpiresIn ?? null,
     is_active: true,
-    is_primary: Boolean(meta?.isPrimary),
-    is_read_only: Boolean(meta?.isReadOnly),
+    is_primary: effectiveIsPrimary,
+    is_read_only: effectiveIsReadOnly,
     updated_at: new Date().toISOString(),
   };
 
-  if (meta?.isPrimary) {
+  if (effectiveIsPrimary) {
     await supabase
       .from("google_oauth_connections")
       .update({ is_primary: false, updated_at: new Date().toISOString() })
@@ -254,7 +308,49 @@ export async function GET(req: Request) {
     savedConnectionId = String(insertedConnection.id);
   }
 
-  if (meta?.legacySync) {
+
+  if ((normalizedMeta.isStudioRadu || normalizedMeta.isStudioRaluca) && !effectiveIsReadOnly) {
+    const targetCalendarId = normalizedMeta.isStudioRadu
+      ? "radu.craus@gmail.com"
+      : "raluca.magnifique@gmail.com";
+
+    const existingEnabledIds = Array.isArray((existingLegacy as any)?.enabled_calendar_ids)
+      ? ((existingLegacy as any).enabled_calendar_ids as Array<string | null | undefined>)
+      : [];
+
+    const nextEnabledIds = Array.from(
+      new Set(
+        [...existingEnabledIds, targetCalendarId]
+          .map((value) => String(value ?? "").trim())
+          .filter(Boolean)
+      )
+    );
+
+    const { error: tokenSelectionError } = await supabase.from("google_oauth_tokens").upsert({
+      user_id: user.id,
+      provider: "google",
+      access_token: accessToken ?? null,
+      refresh_token: finalRefreshToken,
+      expires_at: expiresAt,
+      scope: scope ?? null,
+      token_type: tokenType ?? null,
+      refresh_token_expires_in: refreshTokenExpiresIn ?? null,
+      default_calendar_id: targetCalendarId,
+      enabled_calendar_ids: nextEnabledIds,
+      updated_at: new Date().toISOString(),
+    });
+
+    if (tokenSelectionError) {
+      return NextResponse.redirect(
+        new URL(
+          `/calendar/google?error=${encodeURIComponent("Kalender-Auswahl konnte nicht gespeichert werden: " + tokenSelectionError.message)}`,
+          baseUrl
+        )
+      );
+    }
+  }
+
+  if (effectiveLegacySync) {
     const { error: legacyError } = await supabase.from("google_oauth_tokens").upsert({
       user_id: user.id,
       provider: "google",
@@ -280,7 +376,7 @@ export async function GET(req: Request) {
   const successUrl = new URL(redirectTo);
   successUrl.searchParams.set(
     "success",
-    meta?.legacySync
+    effectiveLegacySync
       ? "Google verbunden ✅"
       : `Google Verbindung gespeichert ✅${connectionLabel ? ` (${connectionLabel})` : ""}`
   );

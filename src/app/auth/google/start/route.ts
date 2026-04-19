@@ -19,6 +19,20 @@ function normalizeConnectionType(value: string | null): OAuthMeta["connectionTyp
   return "calendar_gmail";
 }
 
+
+function isAdminUser(profileRole: unknown, userEmail: unknown) {
+  return (
+    String(profileRole ?? "").trim().toUpperCase() === "ADMIN" ||
+    String(userEmail ?? "").trim().toLowerCase() === "radu.craus@gmail.com"
+  );
+}
+
+function isStudioRaduRequest(connectionLabel: string | null | undefined, emailHint: string | null | undefined) {
+  const label = String(connectionLabel ?? "").trim().toLowerCase();
+  const email = String(emailHint ?? "").trim().toLowerCase();
+  return label === "radu studio" || label === "studio radu" || email === "radu.craus@gmail.com";
+}
+
 function parseBooleanFlag(value: string | null | undefined, fallback = false) {
   const normalized = String(value ?? "").trim().toLowerCase();
   if (!normalized) return fallback;
@@ -33,6 +47,14 @@ export async function GET(req: Request) {
   if (!user) {
     return NextResponse.redirect(new URL("/login?error=1", process.env.NEXT_PUBLIC_BASE_URL));
   }
+
+  const { data: profile } = await supabase
+    .from("user_profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const isAdmin = isAdminUser((profile as any)?.role, user.email);
 
   const requestUrl = new URL(req.url);
   const clientId = process.env.GOOGLE_CLIENT_ID!;
@@ -54,6 +76,12 @@ export async function GET(req: Request) {
     redirectToRaw && redirectToRaw.startsWith("/")
       ? `${baseUrl}${redirectToRaw}`
       : `${baseUrl}/calendar/google?success=${encodeURIComponent("Google verbunden ✅")}`;
+
+  if (isStudioRaduRequest(connectionLabelRaw, emailHintRaw) && !isAdmin) {
+    return NextResponse.redirect(
+      new URL(`/calendar/google?error=${encodeURIComponent("Studio Radu darf nur vom Admin verbunden werden.")}`, baseUrl)
+    );
+  }
 
   const meta: OAuthMeta = {
     redirectTo,

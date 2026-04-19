@@ -46,6 +46,8 @@ type LegendUser = {
   fullName: string | null;
   tenantDisplayName: string;
   avatarUrl?: string | null;
+  ringColor?: string | null;
+  bgColor?: string | null;
 };
 
 type ServiceOptionInput = {
@@ -235,27 +237,111 @@ type CalendarFilterSource = {
   kind: "studio" | "extra" | "other";
 };
 
+const STUDIO_RADU_CALENDAR_ID = "radu.craus@gmail.com";
+const STUDIO_MAGNIFIQUE_CALENDAR_ID = "raluca.magnifique@gmail.com";
+
+function getAllowedStudioCalendarIds(isAdmin: boolean) {
+  return isAdmin
+    ? [STUDIO_RADU_CALENDAR_ID, STUDIO_MAGNIFIQUE_CALENDAR_ID]
+    : [STUDIO_MAGNIFIQUE_CALENDAR_ID];
+}
+
+function getStudioCalendarSource(calendarId: string): CalendarFilterSource | null {
+  const normalized = normalizeConfiguredCalendarId(calendarId);
+  if (normalized === STUDIO_RADU_CALENDAR_ID) {
+    return {
+      id: STUDIO_RADU_CALENDAR_ID,
+      label: "Studio Radu",
+      shortLabel: "Radu",
+      color: "#4F7CFF",
+      kind: "studio",
+    };
+  }
+
+  if (normalized === STUDIO_MAGNIFIQUE_CALENDAR_ID) {
+    return {
+      id: STUDIO_MAGNIFIQUE_CALENDAR_ID,
+      label: "Studio Magnifique Beauty Institut",
+      shortLabel: "Magnifique",
+      color: "#A855F7",
+      kind: "studio",
+    };
+  }
+
+  return null;
+}
+
+function normalizeConfiguredCalendarId(rawValue: string | null | undefined) {
+  const raw = String(rawValue ?? "").trim();
+  const lower = raw.toLowerCase();
+  if (!raw) return "";
+
+  if (lower.includes(STUDIO_RADU_CALENDAR_ID) || lower.includes("studio radu") || lower.includes("radu studio")) {
+    return STUDIO_RADU_CALENDAR_ID;
+  }
+
+  if (
+    lower.includes(STUDIO_MAGNIFIQUE_CALENDAR_ID) ||
+    lower.includes("studio raluca") ||
+    lower.includes("raluca studio") ||
+    lower.includes("studio magnifique") ||
+    lower.includes("magnifique beauty institut")
+  ) {
+    return STUDIO_MAGNIFIQUE_CALENDAR_ID;
+  }
+
+  return raw;
+}
+
+function getConnectionRowCalendarIds(row: any) {
+  const email = String(row?.google_account_email ?? "").trim();
+  const name = String(row?.google_account_name ?? "").trim();
+  const label = String(row?.connection_label ?? "").trim();
+  const combined = [email, name, label].filter(Boolean).join(" ").toLowerCase();
+
+  if (!combined) return [] as string[];
+
+  if (combined.includes(STUDIO_RADU_CALENDAR_ID) || combined.includes("studio radu") || combined.includes("radu studio")) {
+    return [STUDIO_RADU_CALENDAR_ID];
+  }
+
+  if (
+    combined.includes(STUDIO_MAGNIFIQUE_CALENDAR_ID) ||
+    combined.includes("studio raluca") ||
+    combined.includes("raluca studio") ||
+    combined.includes("studio magnifique") ||
+    combined.includes("magnifique beauty institut")
+  ) {
+    return [STUDIO_MAGNIFIQUE_CALENDAR_ID];
+  }
+
+  const preferred = email || name || label;
+  return preferred ? [preferred] : [];
+}
+
 function calendarFilterSourceMeta(item: Item): CalendarFilterSource | null {
   const rawId = String((item as any).googleCalendarId ?? "").trim();
   const rawLabel = String((item as any).googleCalendarLabel ?? "").trim();
-  const lowerId = rawId.toLowerCase();
+  const normalizedId = normalizeConfiguredCalendarId(rawId || rawLabel);
   const lowerLabel = rawLabel.toLowerCase();
 
-  if (!rawId && !rawLabel) return null;
+  if (!normalizedId && !rawLabel) return null;
 
-  if (lowerId === "radu.craus@gmail.com" || lowerLabel.includes("radu")) {
-    return { id: rawId || "radu.craus@gmail.com", label: "Studio Radu", shortLabel: "Radu", color: "#4F7CFF", kind: "studio" };
+  const studioSource = getStudioCalendarSource(normalizedId || rawLabel);
+  if (studioSource) return studioSource;
+
+  if (lowerLabel === "google" || lowerLabel === "google kalender" || lowerLabel === "google calendar") {
+    return null;
   }
 
-  if (lowerId === "raluca.magnifique@gmail.com" || lowerLabel.includes("raluca")) {
-    return { id: rawId || "raluca.magnifique@gmail.com", label: "Studio Raluca", shortLabel: "Raluca", color: "#A855F7", kind: "studio" };
-  }
+  const meta = calendarSourceMeta(normalizedId || rawLabel);
+  const cleanedLabel = rawLabel && rawLabel.toLowerCase() !== "google" ? rawLabel : meta.label;
+  const cleanedShortLabel = String((item as any).googleCalendarShortLabel ?? "").trim() || meta.shortLabel;
 
-  const meta = calendarSourceMeta(rawId || rawLabel);
   return {
-    id: rawId || meta.id,
-    label: rawLabel || meta.label,
-    shortLabel: String((item as any).googleCalendarShortLabel ?? "").trim() || meta.shortLabel,
+    id: normalizedId || meta.id,
+    label: cleanedLabel,
+    shortLabel: cleanedShortLabel,
     color: String((item as any).googleCalendarColor ?? "").trim() || meta.color,
     kind: Boolean((item as any).isExtraGoogleCalendar) ? "extra" : "other",
   };
@@ -736,7 +822,7 @@ function DailyAgendaPanel({
               ) ?? null;
 
             const avatarName = legendUser?.fullName ?? item.tenantName;
-            const theme = getLegendAvatarTheme(avatarName);
+            const theme = getLegendThemeFromUser(legendUser);
 
             return (
               <div
@@ -758,6 +844,7 @@ function DailyAgendaPanel({
                     title={String((item as any).googleCalendarLabel)}
                     style={{
                       width: 10,
+                      height: 25,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -781,6 +868,7 @@ function DailyAgendaPanel({
                   className="order-1 shrink-0 self-start md:order-none md:self-center"
                   style={{
                     width: 84,
+                    height: 25,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1126,7 +1214,17 @@ function DesktopMiniMonthPicker({
           </div>
         )}
 
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: isMobileCompact ? 12 : "auto", flexShrink: 0 }}>
+        <div
+  style={{
+    display: "flex",
+    flexDirection: "row",
+    flexWrap: "nowrap",
+    alignItems: "center",
+    gap: 6,
+    flexShrink: 0,
+    marginLeft: isMobileCompact ? 12 : "auto",
+  }}
+>
           {isMobileCompact ? (
             <MobileCalendarFilterPicker
               sources={availableCalendarSources}
@@ -1285,6 +1383,71 @@ function DesktopMiniMonthPicker({
 }
 
 
+
+function pickLegendColor(source: any, keys: string[]) {
+  if (!source || typeof source !== "object") return null;
+
+  for (const key of keys) {
+    const value = source?.[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+
+  return null;
+}
+
+function pickLegendNestedColor(source: any) {
+  if (!source || typeof source !== "object") return null;
+
+  const nestedCandidates = [source.profile, source.settings, source.tenant, source.theme, source.preferences];
+  for (const candidate of nestedCandidates) {
+    const nested = pickLegendColor(candidate, [
+      "ringColor",
+      "avatarRingColor",
+      "avatarColor",
+      "tenantColor",
+      "accentColor",
+      "profileColor",
+      "primaryColor",
+      "brandColor",
+      "color",
+    ]);
+    if (nested) return nested;
+  }
+
+  return null;
+}
+
+function getLegendThemeFromUser(user: LegendUser | null | undefined) {
+  const explicitRing =
+    user?.ringColor ??
+    pickLegendColor(user as any, [
+      "ringColor",
+      "avatarRingColor",
+      "avatarColor",
+      "tenantColor",
+      "accentColor",
+      "profileColor",
+      "primaryColor",
+      "brandColor",
+      "color",
+    ]) ??
+    pickLegendNestedColor(user as any);
+
+  const explicitBg =
+    user?.bgColor ??
+    pickLegendColor(user as any, ["bgColor", "avatarBgColor", "backgroundColor", "accentBgColor"]) ??
+    null;
+
+  if (explicitRing) {
+    return {
+      ring: explicitRing,
+      bg: explicitBg ?? `${explicitRing}1f`,
+    };
+  }
+
+  return getLegendAvatarTheme(user?.fullName ?? user?.tenantDisplayName);
+}
+
 function getLegendAvatarTheme(name: string | null | undefined) {
   const n = String(name ?? "").toLowerCase();
 
@@ -1439,6 +1602,23 @@ function buildEffectiveLegendUsers(
         fullName: user.fullName ?? fallbackName,
         tenantDisplayName: user.tenantDisplayName || fallbackName,
         avatarUrl: user.avatarUrl ?? null,
+        ringColor:
+          (user as any).ringColor ??
+          (user as any).avatarRingColor ??
+          (user as any).avatarColor ??
+          (user as any).tenantColor ??
+          (user as any).accentColor ??
+          (user as any).profileColor ??
+          (user as any).primaryColor ??
+          (user as any).brandColor ??
+          pickLegendNestedColor(user as any) ??
+          null,
+        bgColor:
+          (user as any).bgColor ??
+          (user as any).avatarBgColor ??
+          (user as any).backgroundColor ??
+          (user as any).accentBgColor ??
+          null,
       } satisfies LegendUser;
     });
 
@@ -1459,6 +1639,8 @@ function buildEffectiveLegendUsers(
       fullName: existing.fullName || user.fullName,
       tenantDisplayName: existing.tenantDisplayName || user.tenantDisplayName,
       avatarUrl: existing.avatarUrl || user.avatarUrl,
+      ringColor: existing.ringColor || user.ringColor,
+      bgColor: existing.bgColor || user.bgColor,
     });
   }
 
@@ -1516,6 +1698,8 @@ function buildEffectiveLegendUsers(
           fullName: creatorTenant.display_name,
           tenantDisplayName: creatorTenant.display_name,
           avatarUrl: null,
+          ringColor: null,
+          bgColor: null,
         });
       }
     }
@@ -1560,7 +1744,7 @@ function DesktopHeaderLegend({
       </button>
 
       {users.map((user) => {
-        const theme = getLegendAvatarTheme(user.fullName ?? user.tenantDisplayName);
+        const theme = getLegendThemeFromUser(user);
         const active = getLegendFilterCandidates(user).includes(String(activeTenantId ?? "").trim().toLowerCase());
         const chipLabel = (user.fullName ?? user.tenantDisplayName ?? "Behandler").split(/\s+/)[0] || "Behandler";
         return (
@@ -1687,10 +1871,10 @@ function MobileLegendPicker({
       ? null
       : users.find((user) => getLegendFilterCandidates(user).includes(String(activeTenantId ?? "").trim().toLowerCase())) ?? null;
 
-  const ringColors = ["#d6c3a3", ...users.map((user) => getLegendAvatarTheme(user.fullName ?? user.tenantDisplayName).ring)];
+  const ringColors = ["#d6c3a3", ...users.map((user) => getLegendThemeFromUser(user).ring)];
   const ringBackground = useMemo(() => {
     if (activeUser) {
-      return getLegendAvatarTheme(activeUser.fullName ?? activeUser.tenantDisplayName).ring;
+      return getLegendThemeFromUser(activeUser).ring;
     }
 
     const step = 100 / ringColors.length;
@@ -1790,7 +1974,7 @@ function MobileLegendPicker({
                   </button>
 
                   {users.map((user) => {
-                    const theme = getLegendAvatarTheme(user.fullName ?? user.tenantDisplayName);
+                    const theme = getLegendThemeFromUser(user);
                     const selected = getLegendFilterCandidates(user).includes(String(activeTenantId ?? "").trim().toLowerCase());
                     return (
                       <button
@@ -2389,6 +2573,7 @@ export default function DashboardCalendarCardClient({
   const [createOpen, setCreateOpen] = useState(false);
   const [calendarFilterOpen, setCalendarFilterOpen] = useState(false);
   const [selectedCalendarSourceIds, setSelectedCalendarSourceIds] = useState<string[]>([]);
+  const [configuredCalendarSourceIds, setConfiguredCalendarSourceIds] = useState<string[]>([]);
   const [desktopSearchOpen, setDesktopSearchOpen] = useState(false);
   const [desktopSearchQuery, setDesktopSearchQuery] = useState("");
   const calendarFilterButtonRef = useRef<HTMLDivElement | null>(null);
@@ -2397,6 +2582,78 @@ export default function DashboardCalendarCardClient({
   const desktopSearchPanelRef = useRef<HTMLDivElement | null>(null);
   const miniMonthCardRef = useRef<HTMLDivElement | null>(null);
   const [miniMonthCardHeight, setMiniMonthCardHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadConfiguredCalendarSourceIds() {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user || cancelled) return;
+
+        const [{ data }, { data: connectionRows }] = await Promise.all([
+          supabase
+            .from("google_oauth_tokens")
+            .select("default_calendar_id, enabled_calendar_ids")
+            .eq("user_id", user.id)
+            .maybeSingle(),
+          supabase
+            .from("google_oauth_connections")
+            .select("google_account_email, google_account_name, connection_label, is_active, is_read_only")
+            .eq("owner_user_id", user.id),
+        ]);
+
+        if (cancelled) return;
+
+        const rows = Array.isArray(connectionRows) ? connectionRows : [];
+        const activeRows = rows.filter((row: any) => row?.is_active === true);
+
+        if (!activeRows.length) {
+          setConfiguredCalendarSourceIds([]);
+          return;
+        }
+
+        const blockedIds = new Set(
+          rows
+            .filter((row: any) => row?.is_read_only === true && row?.is_active === false)
+            .flatMap((row: any) => getConnectionRowCalendarIds(row))
+            .map((value: any) => normalizeConfiguredCalendarId(String(value ?? "").trim()))
+            .filter(Boolean)
+        );
+
+        const defaultId = normalizeConfiguredCalendarId(String((data as any)?.default_calendar_id ?? "").trim());
+        const enabledIds = Array.isArray((data as any)?.enabled_calendar_ids)
+          ? (data as any).enabled_calendar_ids.map((value: any) => normalizeConfiguredCalendarId(String(value ?? "").trim())).filter(Boolean)
+          : [];
+
+        const inferredConnectedIds = Array.from(
+          new Set(
+            activeRows
+              .flatMap((row: any) => getConnectionRowCalendarIds(row))
+              .map((value: any) => normalizeConfiguredCalendarId(String(value ?? "").trim()))
+              .filter(Boolean)
+          )
+        );
+
+        const next = Array.from(
+          new Set([defaultId, ...enabledIds, ...inferredConnectedIds].filter((value) => value && !blockedIds.has(value)))
+        );
+
+        setConfiguredCalendarSourceIds(next);
+      } catch {
+        if (!cancelled) setConfiguredCalendarSourceIds([]);
+      }
+    }
+
+    void loadConfiguredCalendarSourceIds();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase]);
 
   const [calendarState, setCalendarState] = useState<{
     view: ViewMode;
@@ -2845,23 +3102,56 @@ export default function DashboardCalendarCardClient({
   }, [calendarFilterOpen, desktopSearchOpen]);
 
   const availableCalendarSources = useMemo<CalendarFilterSource[]>(() => {
+    if (!configuredCalendarSourceIds.length) return [];
+
+    const allowedStudioIds = new Set(getAllowedStudioCalendarIds(isAdmin));
     const byId = new Map<string, CalendarFilterSource>();
-    for (const item of items) {
-      const source = calendarFilterSourceMeta(item);
-      if (!source) continue;
-      byId.set(source.id, source);
+
+    for (const calendarId of configuredCalendarSourceIds) {
+      const normalizedId = normalizeConfiguredCalendarId(String(calendarId ?? "").trim());
+      if (!normalizedId) continue;
+
+      const studioSource = getStudioCalendarSource(normalizedId);
+      if (studioSource) {
+        if (allowedStudioIds.has(studioSource.id)) {
+          byId.set(studioSource.id, studioSource);
+        }
+        continue;
+      }
+
+      const sourceFromItems = items.find(
+        (item) => normalizeConfiguredCalendarId(String((item as any).googleCalendarId ?? "").trim()) === normalizedId
+      );
+      if (sourceFromItems) {
+        const source = calendarFilterSourceMeta(sourceFromItems);
+        if (source && source.id && source.label.toLowerCase() !== "google") {
+          byId.set(source.id, source);
+          continue;
+        }
+      }
+
+      const meta = calendarSourceMeta(normalizedId);
+      if (!meta.id || meta.label.toLowerCase() === "google") continue;
+
+      byId.set(normalizedId, {
+        id: normalizedId,
+        label: meta.label,
+        shortLabel: meta.shortLabel,
+        color: meta.color,
+        kind: "extra",
+      });
     }
 
     return Array.from(byId.values()).sort((a, b) => {
       const rank = (value: CalendarFilterSource) => {
-        if (value.label === "Studio Radu") return 0;
-        if (value.label === "Studio Raluca") return 1;
+        if (value.id === STUDIO_RADU_CALENDAR_ID) return 0;
+        if (value.id === STUDIO_MAGNIFIQUE_CALENDAR_ID) return 1;
         if (value.kind === "extra") return 2;
         return 3;
       };
       return rank(a) - rank(b) || a.label.localeCompare(b.label, "de");
     });
-  }, [items]);
+  }, [configuredCalendarSourceIds, isAdmin, items]);
 
   useEffect(() => {
     if (!availableCalendarSources.length) {
@@ -2940,7 +3230,7 @@ export default function DashboardCalendarCardClient({
 
   return (
     <Card className="overflow-hidden border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
-      <CardContent className="p-5 md:p-6 xl:p-8">
+      <CardContent className="p-3 md:p-6 xl:p-8">
         <style jsx global>{`
           .calendar-desktop-pill:hover {
             background: rgba(255,255,255,0.08) !important;
@@ -2978,7 +3268,7 @@ export default function DashboardCalendarCardClient({
             box-shadow: 0 10px 22px rgba(37,99,235,0.28) !important;
           }
 
-          @media (min-width: 768px) and (max-width: 1020px) {
+          @media (min-width: 768px) and (max-width: 1080px) {
             #dashboard-calendar-header-shell {
               padding-right: 560px !important;
             }
@@ -3015,7 +3305,7 @@ export default function DashboardCalendarCardClient({
                 </div>
               ) : null}
 
-              {isAdmin ? (
+              {(
                 <div ref={calendarFilterButtonRef} className="relative">
                   <DesktopHeaderPillButton
                     active={allCalendarSourcesSelected}
@@ -3141,7 +3431,7 @@ export default function DashboardCalendarCardClient({
                     </div>
                   ) : null}
                 </div>
-              ) : null}
+              )}
 
               <div className="relative">
                 <button

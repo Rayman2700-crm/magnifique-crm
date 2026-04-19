@@ -50,12 +50,38 @@ const STUDIO_WRITE_TARGETS: Record<Exclude<StudioWriteTarget, "auto">, {
     emailHint: "radu.craus@gmail.com",
   },
   studio_raluca: {
-    label: "Studio Raluca",
+    label: "Studio Magnifique Beauty Institut",
     calendarId: "raluca.magnifique@gmail.com",
     connectionLabel: "Raluca Studio",
     emailHint: "raluca.magnifique@gmail.com",
   },
 };
+
+function isAdminUser(profileRole: unknown, userEmail: unknown) {
+  return (
+    String(profileRole ?? "").trim().toUpperCase() === "ADMIN" ||
+    String(userEmail ?? "").trim().toLowerCase() === "radu.craus@gmail.com"
+  );
+}
+
+function canUseStudioWriteTarget(target: Exclude<StudioWriteTarget, "auto">, isAdmin: boolean) {
+  return target === "studio_radu" ? isAdmin : true;
+}
+
+function isTargetConnectionMatch(
+  row: Pick<GoogleOauthConnectionRow, "google_account_email" | "connection_label"> | null | undefined,
+  target: Exclude<StudioWriteTarget, "auto">
+) {
+  const definition = STUDIO_WRITE_TARGETS[target];
+  const email = String(row?.google_account_email ?? "").trim().toLowerCase();
+  const label = String(row?.connection_label ?? "").trim().toLowerCase();
+  const labelAliases =
+    target === "studio_raluca"
+      ? [definition.connectionLabel.toLowerCase(), "studio magnifique beauty institut", "magnifique beauty institut"]
+      : [definition.connectionLabel.toLowerCase()];
+
+  return email === definition.emailHint.toLowerCase() || labelAliases.includes(label);
+}
 
 function normalizeStudioWriteTarget(value: FormDataEntryValue | null): StudioWriteTarget {
   const normalized = String(value ?? "").trim().toLowerCase();
@@ -169,9 +195,10 @@ async function findStudioGoogleConnectionForOwner(
   }
 
   const byLabelRows = Array.isArray(byLabel.data) ? (byLabel.data as GoogleOauthConnectionRow[]) : [];
+  const matchingByLabelRows = byLabelRows.filter((row) => isTargetConnectionMatch(row, target));
   const preferredByLabel =
-    byLabelRows.find((row) => String(row.owner_user_id ?? "").trim() === String(ownerUserId ?? "").trim()) ??
-    byLabelRows[0] ??
+    matchingByLabelRows.find((row) => String(row.owner_user_id ?? "").trim() === String(ownerUserId ?? "").trim()) ??
+    matchingByLabelRows[0] ??
     null;
 
   if (preferredByLabel?.id) return preferredByLabel;
@@ -189,9 +216,10 @@ async function findStudioGoogleConnectionForOwner(
   }
 
   const byEmailRows = Array.isArray(byEmail.data) ? (byEmail.data as GoogleOauthConnectionRow[]) : [];
+  const matchingByEmailRows = byEmailRows.filter((row) => isTargetConnectionMatch(row, target));
   const preferredByEmail =
-    byEmailRows.find((row) => String(row.owner_user_id ?? "").trim() === String(ownerUserId ?? "").trim()) ??
-    byEmailRows[0] ??
+    matchingByEmailRows.find((row) => String(row.owner_user_id ?? "").trim() === String(ownerUserId ?? "").trim()) ??
+    matchingByEmailRows[0] ??
     null;
 
   return preferredByEmail;
@@ -818,6 +846,14 @@ export async function setDefaultCalendar(formData: FormData) {
   const user = data.user;
   if (!user) redirect("/login");
 
+  const { data: profile } = await supabase
+    .from("user_profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const isAdmin = isAdminUser((profile as any)?.role, user.email);
+
   const returnTo = safeReturnTo(String(formData.get("returnTo") ?? "/calendar/google"));
   const calendarId = String(formData.get("calendarId") ?? "").trim();
   const enabledCalendarIds = sanitizeCalendarIdList(
@@ -826,6 +862,10 @@ export async function setDefaultCalendar(formData: FormData) {
 
   if (!calendarId) {
     redirect(buildRedirectUrl(returnTo, "error", "Bitte einen Standard-Kalender auswählen."));
+  }
+
+  if (!isAdmin && calendarId === STUDIO_WRITE_TARGETS.studio_radu.calendarId) {
+    redirect(buildRedirectUrl(returnTo, "error", "Studio Radu darf nur vom Admin als Schreibkalender verwendet werden."));
   }
 
   const nextEnabledCalendarIds = sanitizeCalendarIdList([calendarId, ...enabledCalendarIds]);
@@ -981,20 +1021,38 @@ export async function getReadOnlyExtraGoogleCalendarEventsForRange(input: { star
     return { ok: false, items: [], reason: "invalid_range" as const };
   }
 
-  const { data: tokenRow, error: tokenError } = await supabase
-    .from("google_oauth_tokens")
-    .select("default_calendar_id, enabled_calendar_ids")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const [{ data: tokenRow, error: tokenError }, { data: connectionRows }] = await Promise.all([
+    supabase
+      .from("google_oauth_tokens")
+      .select("default_calendar_id, enabled_calendar_ids")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("google_oauth_connections")
+      .select("google_account_email, google_account_name, connection_label, is_active")
+      .eq("owner_user_id", user.id),
+  ]);
 
   if (tokenError) {
     throw new Error("Google-Kalender konnten nicht geladen werden: " + tokenError.message);
   }
 
+  const activeRows = Array.isArray(connectionRows) ? connectionRows.filter((row: any) => row?.is_active === true) : [];
+  if (!activeRows.length) {
+    return { ok: true, items: [] };
+  }
+
+  const allowedIds = new Set(
+    activeRows
+      .flatMap((row: any) => [row?.google_account_email, row?.google_account_name, row?.connection_label])
+      .map((value: any) => String(value ?? "").trim())
+      .filter(Boolean)
+  );
+
   const tokenSelection = resolveEnabledCalendarIds((tokenRow ?? null) as GoogleTokenSelectionRow | null);
   const defaultCalendarId = String(tokenSelection.defaultCalendarId ?? "").trim();
   const extraCalendarIds = sanitizeCalendarIdList(
-    tokenSelection.enabledIds.filter((calendarId) => String(calendarId).trim() !== defaultCalendarId)
+    tokenSelection.enabledIds.filter((calendarId) => String(calendarId).trim() !== defaultCalendarId && allowedIds.has(String(calendarId).trim()))
   );
 
   if (extraCalendarIds.length === 0) {
@@ -1145,10 +1203,30 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
     throw new Error("Google-Kalender konnten nicht geladen werden: " + tokenError.message);
   }
 
+  const { data: connectionRows, error: connectionRowsError } = await admin
+    .from("google_oauth_connections")
+    .select("google_account_email, google_account_name, connection_label, is_active")
+    .eq("owner_user_id", ownerUserId);
+
+  if (connectionRowsError) {
+    throw new Error("Google-Verbindungen konnten nicht geladen werden: " + connectionRowsError.message);
+  }
+
+  const activeConnectionRows = Array.isArray(connectionRows)
+    ? connectionRows.filter((row: any) => row?.is_active === true)
+    : [];
+
+  const allowedIds = new Set<string>(
+    activeConnectionRows
+      .flatMap((row: any) => [row?.google_account_email, row?.google_account_name, row?.connection_label])
+      .map((value: any) => String(value ?? "").trim())
+      .filter(Boolean)
+  );
+
   const tokenSelection = resolveEnabledCalendarIds((tokenRow ?? null) as GoogleTokenSelectionRow | null);
   const defaultCalendarId = String(tokenSelection.defaultCalendarId ?? "").trim();
   const extraCalendarIds = sanitizeCalendarIdList(
-    tokenSelection.enabledIds.filter((calendarId) => String(calendarId).trim() !== defaultCalendarId)
+    tokenSelection.enabledIds.filter((calendarId) => String(calendarId).trim() !== defaultCalendarId && allowedIds.has(String(calendarId).trim()))
   );
   const sharedDefaultCalendarIds = await loadSharedDefaultCalendarIdSet(admin);
 
@@ -1503,9 +1581,11 @@ export async function createAppointmentQuick(formData: FormData) {
     calendar_tenant_id: profile?.calendar_tenant_id ?? null,
   });
 
-  const isAdmin =
-    String(profile?.role ?? "").toUpperCase() === "ADMIN" ||
-    String(user.email ?? "").toLowerCase().includes("radu");
+  const isAdmin = isAdminUser(profile?.role, user.email);
+
+  if (studioWriteTarget !== "auto" && !canUseStudioWriteTarget(studioWriteTarget, isAdmin)) {
+    redirect(buildRedirectUrl(baseReturnUrl, "error", "Studio Radu darf nur vom Admin als Schreibkalender verwendet werden."));
+  }
 
   // Team-Kalender-Regel:
   // Alle eingeloggten Benutzer dürfen Termine für alle Behandler anlegen.

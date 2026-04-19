@@ -43,6 +43,25 @@ const STUDIO_TARGETS = [
   { key: "studio_raluca", label: "Studio Raluca", calendarId: "raluca.magnifique@gmail.com" },
 ] as const;
 
+const STUDIO_TARGET_IDS = new Set<string>(STUDIO_TARGETS.map((target) => target.calendarId));
+
+type GoogleConnectionRow = {
+  id: string;
+  connection_label: string | null;
+  google_account_email: string | null;
+  google_account_name: string | null;
+  connection_type: string | null;
+  is_primary: boolean | null;
+  is_read_only: boolean | null;
+  is_active: boolean | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+function settingsCardClass() {
+  return "flex h-full flex-col rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),rgba(255,255,255,0.02)_42%,rgba(255,255,255,0.01)_100%)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-sm";
+}
+
 export default async function EinstellungenPage() {
   const supabase = await supabaseServer();
   const admin = supabaseAdmin();
@@ -51,9 +70,7 @@ export default async function EinstellungenPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect("/login");
-  }
+  if (!user) redirect("/login");
 
   const [{ data: profile }, { data: tokenRow }, { data: connectionRows }] = await Promise.all([
     admin
@@ -82,31 +99,60 @@ export default async function EinstellungenPage() {
 
   const tenantId = profile?.tenant_id ?? null;
   const { data: tenantProfile } = tenantId
-    ? await admin
-        .from("tenants")
-        .select("legal_name, email, phone")
-        .eq("id", tenantId)
-        .maybeSingle()
+    ? await admin.from("tenants").select("legal_name, email, phone").eq("id", tenantId).maybeSingle()
     : { data: null as any };
 
-  const connections = Array.isArray(connectionRows) ? connectionRows : [];
-  const activeConnections = connections.filter((row) => row.is_active !== false);
-  const primaryConnection =
-    activeConnections.find((row) => row.is_primary && row.is_read_only !== true) ??
-    activeConnections.find((row) => row.is_read_only !== true) ??
-    null;
-  const readOnlyConnections = activeConnections.filter((row) => row.is_read_only === true);
+  const connections = (Array.isArray(connectionRows) ? connectionRows : []) as GoogleConnectionRow[];
+  const activeConnections = connections.filter((row) => row.is_active === true);
   const writableConnections = activeConnections.filter((row) => row.is_read_only !== true);
-  const connectedGoogleMail =
-    String(primaryConnection?.google_account_email ?? "").trim() ||
-    String(primaryConnection?.google_account_name ?? "").trim() ||
-    "Nicht verbunden";
+  const primaryWritableConnection =
+    writableConnections.find((row) => row.is_primary) ?? writableConnections[0] ?? null;
 
-  const defaultCalendarId = String((tokenRow as any)?.default_calendar_id ?? "").trim() || null;
+  const defaultCalendarId = String((tokenRow as any)?.default_calendar_id ?? "").trim() || STUDIO_TARGETS[0].calendarId;
   const enabledCalendarIds = uniqueStrings((tokenRow as any)?.enabled_calendar_ids ?? []);
-  const lastSync = formatDateTime((tokenRow as any)?.updated_at ?? primaryConnection?.updated_at ?? null);
 
-  const activeCalendarLabels = enabledCalendarIds.length > 0 ? enabledCalendarIds : defaultCalendarId ? [defaultCalendarId] : [];
+  const connectedStudioIds = new Set<string>(
+    STUDIO_TARGETS.filter((target) =>
+      activeConnections.some(
+        (row) =>
+          String(row.google_account_email ?? "").trim().toLowerCase() === target.calendarId.toLowerCase() ||
+          String(row.connection_label ?? "").trim().toLowerCase() === target.label.toLowerCase() ||
+          String(row.connection_label ?? "").trim().toLowerCase() === `${target.label.split(" " )[1] ?? ""} studio`.toLowerCase()
+      )
+    ).map((target) => target.calendarId)
+  );
+
+  const allowedActiveIds = new Set<string>([
+    ...Array.from(connectedStudioIds),
+    ...activeConnections
+      .flatMap((row) => [row.google_account_email, row.google_account_name, row.connection_label])
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean),
+  ]);
+
+  const enabledExtraIds = enabledCalendarIds.filter((id) => !STUDIO_TARGET_IDS.has(id) && allowedActiveIds.has(String(id).trim()));
+  const activeCalendarIds = activeConnections.length > 0
+    ? uniqueStrings([...(connectedStudioIds.has(defaultCalendarId) ? [defaultCalendarId] : []), ...enabledExtraIds])
+    : [];
+  const studioConnectionCount = connectedStudioIds.size;
+
+  const primaryMail =
+    String(primaryWritableConnection?.google_account_email ?? "").trim() ||
+    String(primaryWritableConnection?.google_account_name ?? "").trim() ||
+    "";
+
+  const hasAnyGoogleSetup = activeConnections.length > 0;
+  const googleStatusLabel = hasAnyGoogleSetup ? "Verbunden" : "Offen";
+  const googleStatusChipClass = hasAnyGoogleSetup
+    ? "rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-200"
+    : "rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-white/70";
+
+  const selectedStudioTarget = STUDIO_TARGETS.find((target) => target.calendarId === defaultCalendarId) ?? null;
+  const selectedStudioCalendarId = selectedStudioTarget?.calendarId ?? null;
+  const selectedStudioLabel = selectedStudioCalendarId && connectedStudioIds.has(selectedStudioCalendarId)
+    ? selectedStudioTarget?.label ?? "Kein verbundener Schreibkalender"
+    : "Kein verbundener Schreibkalender";
+  const lastSync = formatDateTime((tokenRow as any)?.updated_at ?? primaryWritableConnection?.updated_at ?? null);
 
   const cards = [
     {
@@ -115,13 +161,15 @@ export default async function EinstellungenPage() {
       href: "/profile",
       cta: "Zum Profil",
       status: "Aktiv",
+      chipClass: "rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-white/70",
     },
     {
       title: "Google Kalender",
-      text: "Verbindungen, Hauptkalender, Zusatzkalender und Sync-Status pro Benutzer verwalten.",
+      text: "Verbindungen, Schreibkalender, Zusatzkalender und Sync-Status pro Benutzer verwalten.",
       href: "/calendar/google",
       cta: "Google öffnen",
-      status: primaryConnection ? "Verbunden" : "Offen",
+      status: googleStatusLabel,
+      chipClass: googleStatusChipClass,
     },
     {
       title: "E-Mail / Versand",
@@ -129,6 +177,7 @@ export default async function EinstellungenPage() {
       href: null,
       cta: "Demnächst",
       status: "Geplant",
+      chipClass: "rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-white/70",
     },
     {
       title: "Benachrichtigungen",
@@ -136,6 +185,7 @@ export default async function EinstellungenPage() {
       href: null,
       cta: "Demnächst",
       status: "Geplant",
+      chipClass: "rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-white/70",
     },
   ] as const;
 
@@ -176,9 +226,9 @@ export default async function EinstellungenPage() {
           </div>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
-          <div className="space-y-6">
-            <div className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),rgba(255,255,255,0.02)_42%,rgba(255,255,255,0.01)_100%)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-sm">
+        <section className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)] items-stretch">
+          <div className="h-full">
+            <div className={settingsCardClass()}>
               <h2 className="text-xl font-semibold text-white">Dein Bereich</h2>
               <p className="mt-2 text-sm leading-6 text-white/70">
                 Von hier kommst du direkt zu deinen persönlichen Daten und siehst, welche Einstellungen als Nächstes im CRM dazukommen.
@@ -201,7 +251,7 @@ export default async function EinstellungenPage() {
                 </div>
               </div>
 
-              <div className="mt-6">
+              <div className="mt-auto pt-6">
                 <Link
                   href="/profile"
                   className="inline-flex h-11 items-center justify-center rounded-xl border border-[#dcc7a1]/40 bg-[#dcc7a1] px-4 text-sm font-semibold text-black shadow-[0_10px_24px_rgba(220,199,161,0.18)] transition hover:brightness-105"
@@ -210,92 +260,17 @@ export default async function EinstellungenPage() {
                 </Link>
               </div>
             </div>
-
-            <div className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),rgba(255,255,255,0.02)_42%,rgba(255,255,255,0.01)_100%)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-sm">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-[#d7c097]">Google Status</div>
-                  <h2 className="mt-2 text-xl font-semibold text-white">Kalender</h2>
-                </div>
-                <div className={`rounded-full border px-3 py-1 text-xs font-semibold ${primaryConnection ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200" : "border-white/15 bg-white/5 text-white/70"}`}>
-                  {primaryConnection ? "Verbunden" : "Nicht verbunden"}
-                </div>
-              </div>
-
-              <div className="mt-5 space-y-4 rounded-[22px] border border-white/10 bg-black/20 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                <div>
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-[#d7c097]">Google-Mail</div>
-                  <div className="mt-2 text-sm font-medium text-white break-all">{connectedGoogleMail}</div>
-                </div>
-
-                <div>
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-[#d7c097]">Hauptkalender</div>
-                  <div className="mt-2 text-sm text-white/80 break-all">{defaultCalendarId ?? "Noch nicht gesetzt"}</div>
-                </div>
-
-                <div>
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-[#d7c097]">Aktive Kalender</div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {activeCalendarLabels.length > 0 ? (
-                      activeCalendarLabels.map((calendarId) => (
-                        <span key={calendarId} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/75">
-                          {calendarId}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-sm text-white/50">Noch keine aktiven Kalender gespeichert.</span>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-[#d7c097]">Letzter Sync</div>
-                  <div className="mt-2 text-sm text-white/80">{lastSync}</div>
-                </div>
-
-                <div>
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-[#d7c097]">Zusatzkalender</div>
-                  <div className="mt-2 text-sm text-white/80">
-                    {isAdmin
-                      ? readOnlyConnections.length > 0
-                        ? `${readOnlyConnections.length} read-only Verbindung(en) aktiv`
-                        : "Noch keine read-only Zusatzkalender aktiv"
-                      : "Nur für Admin sichtbar und verwaltbar"}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Link
-                  href="/calendar/google"
-                  className="inline-flex h-11 items-center justify-center rounded-xl border border-[#dcc7a1]/40 bg-[#dcc7a1] px-4 text-sm font-semibold text-black shadow-[0_10px_24px_rgba(220,199,161,0.18)] transition hover:brightness-105"
-                >
-                  Google öffnen
-                </Link>
-                <Link
-                  href="/calendar"
-                  className="inline-flex h-11 items-center justify-center rounded-xl border border-white/12 bg-white/[0.06] px-4 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:bg-white/10"
-                >
-                  Zum Kalender
-                </Link>
-              </div>
-            </div>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3 items-stretch auto-rows-fr">
             {cards.map((card) => (
-              <div
-                key={card.title}
-                className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),rgba(255,255,255,0.02)_42%,rgba(255,255,255,0.01)_100%)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-sm"
-              >
+              <div key={card.title} className={settingsCardClass()}>
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <div className="text-[11px] uppercase tracking-[0.22em] text-[#d7c097]">{card.status}</div>
                     <h3 className="mt-2 text-xl font-semibold text-white">{card.title}</h3>
                   </div>
-                  <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-white/70">
-                    {card.status}
-                  </div>
+                  <div className={card.chipClass}>{card.status}</div>
                 </div>
 
                 <p className="mt-3 text-sm leading-6 text-white/70">{card.text}</p>
@@ -303,22 +278,20 @@ export default async function EinstellungenPage() {
                 {card.title === "Google Kalender" ? (
                   <div className="mt-5 space-y-3 rounded-[22px] border border-white/10 bg-black/20 p-4 text-sm text-white/75">
                     <div className="flex items-start justify-between gap-3">
-                      <span className="text-white/60">Hauptverbindung</span>
-                      <span className="text-right font-medium text-white break-all">{connectedGoogleMail}</span>
+                      <span className="text-white/60">Status</span>
+                      <span className="text-right font-medium text-white">{googleStatusLabel}</span>
                     </div>
                     <div className="flex items-start justify-between gap-3">
-                      <span className="text-white/60">Schreibziele</span>
-                      <div className="text-right">
-                        {STUDIO_TARGETS.map((target) => (
-                          <div key={target.key} className="font-medium text-white">{target.label}</div>
-                        ))}
-                      </div>
+                      <span className="text-white/60">Schreibkalender</span>
+                      <span className="text-right font-medium text-white">{selectedStudioTarget?.label ?? "Kein verbundener Schreibkalender"}</span>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="text-white/60">Aktive Kalender</span>
+                      <span className="text-right font-medium text-white">{activeCalendarIds.length}</span>
                     </div>
                     <div className="flex items-start justify-between gap-3">
                       <span className="text-white/60">Zusatzkalender</span>
-                      <span className="text-right font-medium text-white">
-                        {isAdmin ? `${readOnlyConnections.length} aktiv` : "Nur Admin"}
-                      </span>
+                      <span className="text-right font-medium text-white">{isAdmin ? `${enabledExtraIds.length} aktiv` : "Nur Admin"}</span>
                     </div>
                     <div className="flex items-start justify-between gap-3">
                       <span className="text-white/60">Zuletzt aktualisiert</span>
@@ -327,7 +300,7 @@ export default async function EinstellungenPage() {
                   </div>
                 ) : null}
 
-                <div className="mt-6">
+                <div className="mt-auto pt-6">
                   {card.href ? (
                     <Link
                       href={card.href}

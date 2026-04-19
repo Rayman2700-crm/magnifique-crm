@@ -144,9 +144,41 @@ export async function GET(request: NextRequest) {
       );
     });
 
+    const personIds = Array.from(
+      new Set(
+        filtered
+          .map((row) => (row?.person_id ? String(row.person_id) : null))
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+
+    let customerProfileByTenantAndPerson = new Map<string, string>();
+
+    if (personIds.length > 0) {
+      const { data: customerProfiles, error: customerProfilesError } = await admin
+        .from("customer_profiles")
+        .select("id, tenant_id, person_id")
+        .in("person_id", personIds);
+
+      if (customerProfilesError) {
+        return NextResponse.json({ error: customerProfilesError.message }, { status: 500 });
+      }
+
+      customerProfileByTenantAndPerson = new Map(
+        ((customerProfiles ?? []) as Array<{ id: string; tenant_id: string | null; person_id: string | null }>)
+          .filter((row) => row.id && row.tenant_id && row.person_id)
+          .map((row) => [`${row.tenant_id}::${row.person_id}`, row.id])
+      );
+    }
+
     const items = filtered.map((row) => {
       const tenant = Array.isArray(row.tenant) ? row.tenant[0] : row.tenant;
       const person = Array.isArray(row.person) ? row.person[0] : row.person;
+      const tenantId = String(row.tenant_id ?? "");
+      const personId = row.person_id ? String(row.person_id) : "";
+      const customerProfileId = tenantId && personId
+        ? customerProfileByTenantAndPerson.get(`${tenantId}::${personId}`) ?? null
+        : null;
 
       return {
         id: String(row.id),
@@ -155,14 +187,14 @@ export async function GET(request: NextRequest) {
         title: parseTitle(row.notes_internal),
         note: "",
         status: parseStatus(row.notes_internal),
-        tenantId: String(row.tenant_id ?? ""),
+        tenantId,
         tenantName: String(tenant?.display_name ?? "Behandler"),
-        customerProfileId: null,
+        customerProfileId,
         customerName: String(person?.full_name ?? "").trim() || "Walk-in",
         customerPhone: person?.phone ? String(person.phone) : null,
         customerEmail: null,
         reminderSentAt: row.reminder_sent_at ? String(row.reminder_sent_at) : null,
-        canOpenCustomerProfile: true,
+        canOpenCustomerProfile: Boolean(customerProfileId),
         canCreateFollowUp: true,
         canDeleteAppointment: true,
         reminderAt: row.reminder_at ? String(row.reminder_at) : null,
