@@ -3638,13 +3638,15 @@ export default function DashboardCalendarCardClient({
         </div>
 
         <div className="md:hidden flex flex-col gap-4 lg:gap-6 min-w-0">
-          <div className="flex min-w-0 items-start justify-between gap-3">
-            <div className="min-w-0">
+          <div className="flex min-w-0 flex-col gap-3">
+            <div>
               <div className="text-lg font-semibold text-white">Kalender</div>
               <div className="text-sm text-white/60">Team-Übersicht</div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2 md:hidden">
+            <div className="flex min-w-0 items-center gap-2 overflow-x-auto whitespace-nowrap md:hidden">
+              </div>
+
               <button
                 ref={desktopSearchButtonRef}
                 type="button"
@@ -3734,7 +3736,7 @@ export default function DashboardCalendarCardClient({
               </div>
             </div>
           ) : null}
-        </div>
+
 
         <div className="mt-5 lg:mt-7">
           {errorText ? (

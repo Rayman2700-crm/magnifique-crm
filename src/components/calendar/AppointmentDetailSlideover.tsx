@@ -431,7 +431,7 @@ function statusButtonStyle(status: AppointmentStatus, active: boolean): React.CS
     alignItems: "center",
     whiteSpace: "nowrap",
     width: "100%",
-    border: "1px solid rgba(255,255,255,0.10)",
+    
     background: "rgba(255,255,255,0.03)",
     color: "rgba(255,255,255,0.72)",
     transition: "all 120ms ease",
@@ -952,18 +952,67 @@ export default function AppointmentDetailSlideover({
 
   const content = (
     <div style={{ position: "fixed", inset: 0, zIndex: 99999, isolation: "isolate" }}>
-      <div onClick={onClose} style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.82)", backdropFilter: "blur(6px)" }} />
-      <div style={{ position: "absolute", top: 0, right: 0, height: "100%", width: "min(704px, calc(100vw - 1rem))", padding: 12, display: "flex" }}>
-        <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", height: "100%", backgroundColor: "#0b0b0c", borderRadius: 20, border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 24px 70px rgba(0,0,0,0.62)", display: "flex", flexDirection: "column" }}>
-          
+      <div
+        onClick={onClose}
+        className="crm-slideover-backdrop"
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: [
+            "linear-gradient(90deg, rgba(1,1,2,0.76) 0%, rgba(2,2,3,0.72) 38%, rgba(4,4,5,0.58) 62%, rgba(5,5,6,0.44) 100%)",
+            "radial-gradient(980px 680px at 79% 48%, rgba(214,195,163,0.12) 0%, rgba(214,195,163,0.08) 16%, rgba(214,195,163,0.04) 28%, rgba(0,0,0,0) 54%)",
+            "radial-gradient(1400px 980px at 10% 12%, rgba(0,0,0,0.42) 0%, rgba(0,0,0,0.58) 36%, rgba(0,0,0,0.72) 64%, rgba(0,0,0,0.80) 100%)",
+            "linear-gradient(180deg, rgba(3,3,4,0.68) 0%, rgba(5,5,6,0.74) 100%)"
+          ].join(", "),
+          backdropFilter: "blur(34px) saturate(128%) brightness(0.44)",
+          WebkitBackdropFilter: "blur(34px) saturate(128%) brightness(0.44)",
+        }}
+      />
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          background: [
+            "linear-gradient(90deg, rgba(0,0,0,0.26) 0%, rgba(0,0,0,0.18) 28%, rgba(0,0,0,0.10) 52%, rgba(0,0,0,0.02) 72%, rgba(0,0,0,0) 100%)",
+            "radial-gradient(760px 980px at 92% 50%, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.22) 44%, rgba(0,0,0,0.46) 100%)"
+          ].join(", "),
+        }}
+      />
+      <div className="crm-appointment-shell" style={{ position: "absolute", top: 0, right: 0, height: "100%", width: "min(780px, calc(100vw - 1rem))", padding: 14, display: "flex" }}>
+        <div
+          className="crm-appointment-panel"
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            width: "100%",
+            height: "100%",
+            background: [
+              "linear-gradient(180deg, rgba(17,15,13,0.84) 0%, rgba(10,9,9,0.82) 52%, rgba(8,8,8,0.84) 100%)",
+              "radial-gradient(920px 420px at 22% 0%, rgba(214,195,163,0.12) 0%, rgba(214,195,163,0.05) 28%, rgba(214,195,163,0.015) 54%, rgba(0,0,0,0) 78%)"
+            ].join(", "),
+            backdropFilter: "blur(22px) saturate(132%)",
+            WebkitBackdropFilter: "blur(22px) saturate(132%)",
+            borderRadius: 28,
+            border: "1px solid rgba(255,255,255,0.12)",
+            boxShadow:
+              "0 70px 180px rgba(0,0,0,0.72), 0 28px 80px rgba(0,0,0,0.46), -26px 0 80px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -1px 0 rgba(255,255,255,0.02)",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
+        >
+
 <div
+            className="crm-appointment-header"
             style={{
-              padding: 20,
-              borderBottom: "1px solid rgba(255,255,255,0.08)",
+              padding: 24,
+              borderBottom: "1px solid rgba(255,255,255,0.07)",
               display: "flex",
               flexDirection: "column",
               gap: 18,
-              background: "linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)",
+              background:
+                "linear-gradient(180deg, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0.014) 52%, rgba(255,255,255,0.006) 100%)",
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
@@ -992,24 +1041,24 @@ export default function AppointmentDetailSlideover({
                 </div>
 
                 <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  <span style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 999, padding: "5px 10px", fontSize: 12, color: "rgba(255,255,255,0.72)" }}>
+                  <span style={{  borderRadius: 999, padding: "5px 10px", fontSize: 12, color: "rgba(255,255,255,0.72)" }}>
                     {selected.tenantName}
                   </span>
-                  <span style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 999, padding: "5px 10px", fontSize: 12, color: "rgba(255,255,255,0.60)" }}>
+                  <span style={{  borderRadius: 999, padding: "5px 10px", fontSize: 12, color: "rgba(255,255,255,0.60)" }}>
                     {fmtDate(startDate)}
                   </span>
-                  <span style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 999, padding: "5px 10px", fontSize: 12, color: "rgba(255,255,255,0.72)" }}>
+                  <span style={{  borderRadius: 999, padding: "5px 10px", fontSize: 12, color: "rgba(255,255,255,0.72)" }}>
                     {fmtTime(startDate)}–{fmtTime(endDate)}
                   </span>
                 </div>
 
                 <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
                   <div style={{ fontSize: 17, fontWeight: 800, color: "rgba(255,255,255,0.95)" }}>{serviceLabel}</div>
-                  <span style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 999, padding: "4px 10px", fontSize: 12, color: "rgba(255,255,255,0.60)" }}>
+                  <span style={{  borderRadius: 999, padding: "4px 10px", fontSize: 12, color: "rgba(255,255,255,0.60)" }}>
                     Dauer: {serviceDurationLabel}
                   </span>
                   {serviceBufferLabel ? (
-                    <span style={{ border: "1px solid rgba(255,255,255,0.10)", borderRadius: 999, padding: "4px 10px", fontSize: 12, color: "rgba(255,255,255,0.60)" }}>
+                    <span style={{  borderRadius: 999, padding: "4px 10px", fontSize: 12, color: "rgba(255,255,255,0.60)" }}>
                       Buffer: {serviceBufferLabel}
                     </span>
                   ) : null}
@@ -1194,7 +1243,7 @@ export default function AppointmentDetailSlideover({
             ) : null}
           </div>
 
-          <div className="appointment-detail-scroll" style={{ padding: 16, display: "grid", gap: 14, overflow: "auto", scrollbarWidth: "none", msOverflowStyle: "none" }}>
+          <div className="appointment-detail-scroll crm-appointment-body" style={{ padding: 20, display: "grid", gap: 16, overflow: "auto", scrollbarWidth: "none", msOverflowStyle: "none" }}>
             {!checkoutOpen ? (
               <>
                 <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045)_0%,rgba(255,255,255,0.02)_100%)] p-4">
@@ -1345,7 +1394,7 @@ export default function AppointmentDetailSlideover({
             ) : null}
 
             {checkoutOpen ? (
-              <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3">
+              <div className="crm-slideover-section rounded-xl border-emerald-400/20 bg-emerald-400/5 p-3">
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -1446,6 +1495,65 @@ export default function AppointmentDetailSlideover({
           <style jsx>{`
             .appointment-detail-scroll::-webkit-scrollbar {
               display: none;
+            }
+
+            .crm-appointment-shell {
+              justify-content: flex-end;
+            }
+
+            .crm-appointment-panel {
+              position: relative;
+            }
+
+            .crm-appointment-panel::before {
+              content: "";
+              position: absolute;
+              inset: 0;
+              border-radius: 26px;
+              pointer-events: none;
+              background:
+                linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.015) 18%, rgba(255,255,255,0) 40%),
+                radial-gradient(900px 300px at 16% 0%, rgba(214,195,163,0.08) 0%, rgba(214,195,163,0) 62%);
+              opacity: 0.95;
+            }
+
+            .crm-appointment-header {
+              position: relative;
+            }
+
+            .crm-appointment-header::after {
+              content: "";
+              position: absolute;
+              left: 24px;
+              right: 24px;
+              bottom: 0;
+              height: 1px;
+              background: linear-gradient(90deg, rgba(214,195,163,0.18) 0%, rgba(255,255,255,0.05) 52%, rgba(214,195,163,0.12) 100%);
+              pointer-events: none;
+            }
+
+            .crm-appointment-body {
+              background:
+                linear-gradient(180deg, rgba(255,255,255,0.012) 0%, rgba(255,255,255,0.004) 100%);
+            }
+
+            .crm-appointment-body > div {
+              backdrop-filter: saturate(118%);
+            }
+
+            @media (max-width: 960px) {
+              .crm-appointment-shell {
+                width: min(100vw, calc(100vw - 0.35rem)) !important;
+                padding: 8px !important;
+              }
+
+              .crm-appointment-header {
+                padding: 18px !important;
+              }
+
+              .crm-appointment-body {
+                padding: 16px !important;
+              }
             }
           `}</style>
         </div>

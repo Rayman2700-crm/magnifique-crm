@@ -255,7 +255,8 @@ export default function GoogleCalendarUiSettingsClient({
               <div>
                 <div className="text-sm font-semibold text-white">Studiokalender für neue Termine</div>
                 <div className="mt-1 text-sm text-white/55">
-                  Wähle das gespeicherte Standard-Ziel, in das neue CRM-Termine geschrieben werden.
+                  Wähle das Standard-Ziel, in das neue CRM-Termine geschrieben werden. Bereits verbundene Studio-Kalender
+                  bleiben zusätzlich automatisch in der Anzeige aktiv.
                 </div>
               </div>
               <button
@@ -272,7 +273,7 @@ export default function GoogleCalendarUiSettingsClient({
             </div>
 
             <div className="mt-4 rounded-[18px] border border-white/10 bg-white/[0.03] px-4 py-3">
-              <div className="text-xs uppercase tracking-[0.18em] text-[#d7c097]">Gespeichert</div>
+              <div className="text-xs uppercase tracking-[0.18em] text-[#d7c097]">Schreibziel</div>
               <div className="mt-2 text-base font-semibold text-white break-words">
                 {selectedStudio ? `${selectedStudio.label} · ${selectedStudio.calendarId}` : "Kein Studiokalender gespeichert"}
               </div>

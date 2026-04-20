@@ -260,36 +260,38 @@ export default function GoogleCalendarSetupSlideover({
     <div style={{ position: "fixed", inset: 0, zIndex: 1300, isolation: "isolate" }}>
       <div
         onClick={close}
-        className="crm-slideover-backdrop"
         style={{
           position: "absolute",
           inset: 0,
-          opacity: visible ? 1 : 0,
-          transition: "opacity 180ms ease",
+          background: visible ? "rgba(0,0,0,0.52)" : "rgba(0,0,0,0)",
+          backdropFilter: visible ? "blur(4px)" : "blur(0px)",
+          transition: "background 180ms ease, backdrop-filter 180ms ease",
         }}
       />
 
       <aside
-        className="crm-slideover-panel crm-slideover-panel--wide clientique-scrollbar"
         style={{
           position: "absolute",
           top: 0,
           right: 0,
           bottom: 0,
           width: "min(860px, 92vw)",
-          
+          background:
+            "linear-gradient(180deg, rgba(7,7,10,0.98) 0%, rgba(5,5,7,0.98) 100%)",
+          borderLeft: "1px solid rgba(255,255,255,0.08)",
+          boxShadow: "-24px 0 80px rgba(0,0,0,0.55)",
           transform: visible ? "translateX(0)" : "translateX(100%)",
           transition: "transform 220ms ease",
           overflow: "auto",
         }}
       >
-        <div className="crm-slideover-sticky-header sticky top-0 z-10">
+        <div className="sticky top-0 z-10 border-b border-white/10 bg-black/75 backdrop-blur">
           <div className="flex items-center justify-between gap-4 px-6 py-5">
             <div>
-              <div className="crm-slideover-eyebrow">
+              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-white/35">
                 Einstellungen / Google
               </div>
-              <div className="crm-slideover-title">
+              <div className="mt-1 text-3xl font-semibold tracking-tight text-white">
                 Google Kalender Setup
               </div>
             </div>
@@ -298,7 +300,7 @@ export default function GoogleCalendarSetupSlideover({
               type="button"
               onClick={close}
               aria-label="Schließen"
-              className="crm-slideover-icon-button"
+              className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/15 bg-white/5 text-white transition hover:bg-white/10"
             >
               <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M6 6l12 12M18 6l-12 12" strokeLinecap="round" />
@@ -345,7 +347,7 @@ export default function GoogleCalendarSetupSlideover({
               </MessageCard>
             ) : (
               <div className="grid gap-5">
-                <div className="crm-slideover-section p-5">
+                <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
                   <div className="text-sm text-white/60">
                     Gespeicherter Standard-Kalender:{" "}
                     <span className="font-medium text-white">{STUDIO_DEFAULT_CALENDAR_ID}</span>
@@ -365,7 +367,7 @@ export default function GoogleCalendarSetupSlideover({
 
                     <div className="text-sm font-medium text-white">Standard-Kalender</div>
 
-                    <div className="crm-slideover-summary px-4 py-3 text-white">
+                    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white">
                       <div className="text-sm font-semibold break-words">
                         {(studioCalendar.primary ? "⭐ " : "") + (studioCalendar.summary ?? studioCalendar.id)}
                       </div>
@@ -375,7 +377,7 @@ export default function GoogleCalendarSetupSlideover({
                       </div>
                     </div>
 
-                    <div className="crm-slideover-section-muted px-4 py-3 text-sm text-white/60">
+                    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/60">
                       Alle Studio-Termine werden weiter in den gemeinsamen Standard-Kalender{" "}
                       <span className="font-medium text-white">{STUDIO_DEFAULT_CALENDAR_ID}</span> geschrieben.
                     </div>
@@ -413,7 +415,7 @@ export default function GoogleCalendarSetupSlideover({
                               );
                             })
                           ) : (
-                            <div className="crm-slideover-section-muted px-4 py-3 text-sm text-white/50">
+                            <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/50">
                               Keine weiteren Kalender gefunden.
                             </div>
                           )}
@@ -424,7 +426,7 @@ export default function GoogleCalendarSetupSlideover({
                         </div>
                       </div>
                     ) : (
-                      <div className="crm-slideover-section-muted px-4 py-3 text-sm text-white/50">
+                      <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/50">
                         Weitere Kalender sind nur für Admin sichtbar.
                       </div>
                     )}
@@ -434,7 +436,7 @@ export default function GoogleCalendarSetupSlideover({
                 </div>
 
                 {isAdmin ? (
-                  <div className="crm-slideover-section p-5">
+                  <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
                     <div className="text-sm font-medium text-white">Studio-Google-Verbindungen</div>
                     <div className="mt-1 text-sm text-white/55">
                       Hier verbindest du zusätzliche Google-Konten für spätere schreibbare Studio-Kalender.
@@ -549,7 +551,7 @@ export default function GoogleCalendarSetupSlideover({
                             </div>
                           ))
                         ) : (
-                          <div className="crm-slideover-section-muted px-4 py-3 text-sm text-white/50">
+                          <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/50">
                             Noch keine Mehrfach-Verbindungen gespeichert.
                           </div>
                         )}

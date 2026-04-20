@@ -154,9 +154,11 @@ function formatPrice(cents: number | null | undefined) {
 }
 
 function getStudioWriteTargetLabel(value: string, canUseStudioRadu: boolean) {
-  if (value === "studio_radu" && canUseStudioRadu) return "Studio Radu · radu.craus@gmail.com";
+  if (value === "studio_radu" && canUseStudioRadu) return "Studio Radu";
   if (value === "studio_raluca") return "Studio Magnifique Beauty Institut";
-  return "Automatisch (Behandler-Standard)";
+  return canUseStudioRadu
+    ? "Automatisch (Behandler-Standard)"
+    : "Automatisch (Studio Magnifique Beauty Institut)";
 }
 
 function useIsMounted() {
@@ -852,6 +854,7 @@ export default function CreateAppointmentSlideover({
   const [studioWriteTarget, setStudioWriteTarget] = useState<string>("auto");
   const [returnTo, setReturnTo] = useState<string>("");
   const [practitionerProfile, setPractitionerProfile] = useState<UserProfileAvatarRow | null>(null);
+  const [resolvedCurrentUserEmail, setResolvedCurrentUserEmail] = useState<string>(normalizeText(currentUserEmail));
 
   const creatorTenant = useMemo(
     () => sortedTenants.find((tenant) => tenant.id === creatorTenantId) ?? null,
@@ -895,18 +898,42 @@ export default function CreateAppointmentSlideover({
     </div>
   ) : null;
 
-  const canUseStudioRadu = useMemo(() => {
-    const normalizedCurrentUserEmail = normalizeText(currentUserEmail);
-    if (normalizedCurrentUserEmail) return normalizedCurrentUserEmail === RADU_USER_EMAIL;
+  useEffect(() => {
+    const normalizedPropEmail = normalizeText(currentUserEmail);
+    if (normalizedPropEmail) {
+      setResolvedCurrentUserEmail(normalizedPropEmail);
+      return;
+    }
 
     const domUserEmail = readCurrentUserEmailFromDom();
-    if (domUserEmail) return domUserEmail === RADU_USER_EMAIL;
+    if (domUserEmail) {
+      setResolvedCurrentUserEmail(domUserEmail);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadCurrentUserEmail = async () => {
+      const { data } = await supabaseBrowser().auth.getUser();
+      if (cancelled) return;
+      setResolvedCurrentUserEmail(normalizeText(data.user?.email));
+    };
+
+    void loadCurrentUserEmail();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserEmail]);
+
+  const canUseStudioRadu = useMemo(() => {
+    if (resolvedCurrentUserEmail) return resolvedCurrentUserEmail === RADU_USER_EMAIL;
 
     const creatorDisplayName = normalizeText(creatorTenant?.display_name);
     const effectiveLabel = normalizeText(tenantLabel);
 
     return creatorDisplayName.includes("radu") || effectiveLabel.includes("radu");
-  }, [creatorTenant?.display_name, currentUserEmail, tenantLabel]);
+  }, [creatorTenant?.display_name, resolvedCurrentUserEmail, tenantLabel]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1040,10 +1067,20 @@ export default function CreateAppointmentSlideover({
   const bufferValue = selectedService?.buffer_minutes ?? Math.max(0, Number.parseInt(manualBufferMinutes || "0", 10) || 0);
   const priceLabel = formatPrice(selectedService?.default_price_cents ?? null);
   const effectiveTenantLabel = tenantLabel || selectedTenant?.display_name || "Behandler";
+  const summaryCustomerLabel = walkInName.trim() || "Kein Kunde";
+  const summaryServiceLabel = titleValue || "Keine Dienstleistung";
+  const summaryNoteLabel = notes.trim() || "Keine Notiz";
+  const summaryDateTimeLabel = startValue ? formatDateTimeLabel(startValue) : "Start wählen";
+  const canSubmit = Boolean(selectedTenantId && titleValue.trim() && startValue.trim());
 
   const studioCalendarOptions: SelectOption[] = [
-    { value: "auto", label: "Automatisch (Behandler-Standard)" },
-    ...(canUseStudioRadu ? [{ value: "studio_radu", label: "Studio Radu · radu.craus@gmail.com" }] : []),
+    {
+      value: "auto",
+      label: canUseStudioRadu
+        ? "Automatisch (Behandler-Standard)"
+        : "Automatisch (Studio Magnifique Beauty Institut)",
+    },
+    ...(canUseStudioRadu ? [{ value: "studio_radu", label: "Studio Radu" }] : []),
     { value: "studio_raluca", label: "Studio Magnifique Beauty Institut" },
   ];
 
@@ -1072,8 +1109,7 @@ export default function CreateAppointmentSlideover({
         style={{
           position: "absolute",
           inset: 0,
-          backgroundColor: "rgba(0,0,0,0.60)",
-          backdropFilter: "blur(6px)",
+          
           opacity: createShown ? 1 : 0,
           transition: "opacity 200ms ease",
           pointerEvents: createShown ? "auto" : "none",
@@ -1105,47 +1141,95 @@ export default function CreateAppointmentSlideover({
             padding: 16,
             borderBottom: "1px solid rgba(255,255,255,0.08)",
             display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            gap: 10,
+            flexDirection: "column",
+            gap: 12,
           }}
         >
-          <div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>Kalender</div>
-            <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: "rgba(255,255,255,0.95)" }}>
-              Neuer Termin
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>Kalender</div>
+              <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: "rgba(255,255,255,0.95)" }}>
+                Neuer Termin
+              </div>
             </div>
 
+            <div className="flex items-center gap-3 self-start">
+              {selectedTenantId && practitionerProfile?.user_id ? (
+                <div
+                  className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full border bg-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_10px_24px_rgba(0,0,0,0.28)]"
+                  style={{ borderColor: selectedTenantRingColor }}
+                  title={tenantLabel || selectedTenant?.display_name || "Behandler"}
+                >
+                  {selectedTenantAvatarUrl ? (
+                    <img
+                      src={selectedTenantAvatarUrl}
+                      alt={tenantLabel || selectedTenant?.display_name || "Behandler"}
+                      className="h-full w-full object-cover"
+                      onError={avatarFallbackHandler(practitionerProfile.user_id)}
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-white/88">
+                      {String(tenantLabel || selectedTenant?.display_name || "Behandler").trim().slice(0, 1).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="pointer-events-none absolute inset-0 rounded-full" style={{ boxShadow: `inset 0 0 0 2px ${selectedTenantRingColor}` }} />
+                </div>
+              ) : null}
+
+              <button
+                type="submit"
+                form="create-appointment-form"
+                className={canSubmit
+                  ? "inline-flex h-12 min-w-[56px] items-center justify-center rounded-[16px] border border-emerald-500/30 bg-emerald-600/70 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-600"
+                  : "inline-flex h-12 min-w-[56px] items-center justify-center rounded-[16px] border border-white/12 bg-white/[0.04] px-4 text-sm font-semibold text-white/45 transition-colors cursor-not-allowed opacity-100"}
+                aria-label="Termin erstellen"
+                title={canSubmit ? "Termin erstellen" : "Pflichtfelder fehlen noch"}
+                disabled={!canSubmit}
+              >
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </button>
+
+              <button type="button" onClick={onClose} className={menuIconButtonClass(false, true)} aria-label="Schließen" title="Schließen">
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {selectedTenantId && practitionerProfile?.user_id ? (
-              <div
-                className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full border bg-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_10px_24px_rgba(0,0,0,0.28)]"
-                style={{ borderColor: selectedTenantRingColor }}
-                title={tenantLabel || selectedTenant?.display_name || "Behandler"}
-              >
-                {selectedTenantAvatarUrl ? (
-                  <img
-                    src={selectedTenantAvatarUrl}
-                    alt={tenantLabel || selectedTenant?.display_name || "Behandler"}
-                    className="h-full w-full object-cover"
-                    onError={avatarFallbackHandler(practitionerProfile.user_id)}
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-white/88">
-                    {String(tenantLabel || selectedTenant?.display_name || "Behandler").trim().slice(0, 1).toUpperCase()}
-                  </div>
-                )}
-                <div className="pointer-events-none absolute inset-0 rounded-full" style={{ boxShadow: `inset 0 0 0 2px ${selectedTenantRingColor}` }} />
+          <div className="crm-slideover-summary w-full min-w-0 px-3 py-3">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-[11px] leading-4 sm:grid-cols-3">
+              <div className="col-span-2 sm:col-span-3">
+                <div className="text-white/45">Dienstleistung</div>
+                <div className="mt-0.5 break-words font-medium text-white/92">{summaryServiceLabel}</div>
               </div>
-            ) : null}
-
-            <button type="button" onClick={onClose} className={menuIconButtonClass(false, true)} aria-label="Schließen" title="Schließen">
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
+              <div className="col-span-2 sm:col-span-3">
+                <div className="text-white/45">Kunde</div>
+                <div className="mt-0.5 break-words font-medium text-white/92">{summaryCustomerLabel}</div>
+              </div>
+              <div className="col-span-2 sm:col-span-3">
+                <div className="text-white/45">Start</div>
+                <div className="mt-0.5 break-words font-medium text-white/92">{summaryDateTimeLabel}</div>
+              </div>
+              <div>
+                <div className="text-white/45">Dauer</div>
+                <div className="mt-0.5 font-medium text-white/92">{durationValue} Min</div>
+              </div>
+              <div>
+                <div className="text-white/45">Buffer</div>
+                <div className="mt-0.5 font-medium text-white/92">{bufferValue} Min</div>
+              </div>
+              <div>
+                <div className="text-white/45">Preis</div>
+                <div className="mt-0.5 break-words font-medium text-white/92">{priceLabel ?? "—"}</div>
+              </div>
+              <div className="col-span-2 sm:col-span-3">
+                <div className="text-white/45">Notiz</div>
+                <div className="mt-0.5 break-words font-medium text-white/78">{summaryNoteLabel}</div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1158,7 +1242,7 @@ export default function CreateAppointmentSlideover({
           }}
           className="[&::-webkit-scrollbar]:hidden"
         >
-          <form action={createAppointmentQuick} className="space-y-4">
+          <form id="create-appointment-form" action={createAppointmentQuick} className="space-y-4">
             <input type="hidden" name="customerProfileId" value={selectedCustomerProfileId} />
 
             {hideTenantSelect ? (
@@ -1215,7 +1299,7 @@ export default function CreateAppointmentSlideover({
               <input type="hidden" name="buffer" value={bufferValue} />
 
               {selectedService ? (
-                <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-sm text-white/80">
+                <div className="crm-slideover-section-muted mt-2 px-3 py-3 text-sm text-white/80">
                   <div className="font-medium text-white">{selectedService.name}</div>
                   <div className="mt-1 flex flex-wrap gap-2 text-xs text-white/65">
                     <span>Dauer: {durationValue} Min</span>
@@ -1225,7 +1309,7 @@ export default function CreateAppointmentSlideover({
                 </div>
               ) : null}
 
-              <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
+              <div className="crm-slideover-section-muted mt-3 overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setManualServiceOpen((prev) => !prev)}
@@ -1373,7 +1457,7 @@ export default function CreateAppointmentSlideover({
               </div>
             </div>
 
-            <Button type="submit" className="w-full" disabled={!selectedTenantId || !titleValue.trim()}>
+            <Button type="submit" className="w-full" disabled={!canSubmit}>
               Termin erstellen
             </Button>
 

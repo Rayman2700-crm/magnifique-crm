@@ -147,6 +147,8 @@ export default async function EinstellungenPage() {
     ? "rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-200"
     : "rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-white/70";
 
+  const googleSetupAlertCount = hasAnyGoogleSetup ? 0 : 1;
+
   const selectedStudioTarget = STUDIO_TARGETS.find((target) => target.calendarId === defaultCalendarId) ?? null;
   const selectedStudioCalendarId = selectedStudioTarget?.calendarId ?? null;
   const selectedStudioLabel = selectedStudioCalendarId && connectedStudioIds.has(selectedStudioCalendarId)
@@ -270,7 +272,7 @@ export default async function EinstellungenPage() {
                     <div className="text-[11px] uppercase tracking-[0.22em] text-[#d7c097]">{card.status}</div>
                     <h3 className="mt-2 text-xl font-semibold text-white">{card.title}</h3>
                   </div>
-                  <div className={card.chipClass}>{card.status}</div>
+                  <div className={`${card.chipClass} mr-1 shrink-0 self-start`}>{card.status}</div>
                 </div>
 
                 <p className="mt-3 text-sm leading-6 text-white/70">{card.text}</p>
@@ -304,9 +306,14 @@ export default async function EinstellungenPage() {
                   {card.href ? (
                     <Link
                       href={card.href}
-                      className="inline-flex h-11 items-center justify-center rounded-xl border border-white/12 bg-white/[0.06] px-4 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:bg-white/10"
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/[0.06] px-4 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:bg-white/10"
                     >
-                      {card.cta}
+                      <span>{card.cta}</span>
+                      {card.title === "Google Kalender" && googleSetupAlertCount > 0 ? (
+                        <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#2563eb] px-0 text-[10px] font-bold leading-none text-white shadow-[0_8px_18px_rgba(37,99,235,0.35)] ring-2 ring-[#111216]">
+                          {googleSetupAlertCount > 99 ? "99+" : String(googleSetupAlertCount)}
+                        </span>
+                      ) : null}
                     </Link>
                   ) : (
                     <span className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-4 text-sm font-semibold text-white/50">

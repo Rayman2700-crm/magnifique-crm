@@ -20,12 +20,12 @@ const base =
 
 const variants: Record<Variant, string> = {
   primary:
-    "bg-[var(--primary)] text-[var(--primary-foreground)] border border-[rgba(216,193,160,0.72)] " +
+    "bg-[var(--primary)] text-[var(--primary-foreground)] border border-[rgba(214,195,163,0.7)] " +
     "hover:opacity-95 active:scale-[0.98] " +
-    "shadow-[0_10px_28px_rgba(216,193,160,0.24)]",
+    "shadow-[0_10px_28px_rgba(214,195,163,0.24)]",
 
   secondary:
-    "bg-[rgba(255,248,240,0.06)] text-[var(--text)] border border-white/12 backdrop-blur-md " +
+    "bg-[rgba(255,255,255,0.06)] text-[var(--text)] border border-white/12 backdrop-blur-md " +
     "hover:bg-white/10 active:bg-white/14",
 
   ghost:
@@ -37,18 +37,18 @@ const variants: Record<Variant, string> = {
     "hover:bg-red-500/18 active:bg-red-500/22",
 
   success:
-    "bg-[rgba(168,146,112,0.8)] text-[#fffaf3] border border-[rgba(226,203,170,0.34)] shadow-[0_10px_24px_rgba(168,146,112,0.18)] " +
-    "hover:bg-[rgba(168,146,112,0.9)] active:bg-[rgba(145,123,92,0.92)]",
+    "bg-emerald-600/78 text-white border border-emerald-400/35 shadow-[0_10px_24px_rgba(16,185,129,0.18)] " +
+    "hover:bg-emerald-600 active:bg-emerald-700/90",
 
   accent:
-    "bg-[rgba(125,98,74,0.18)] text-[#f3e6d6] border border-[rgba(214,193,160,0.2)] backdrop-blur-md " +
-    "hover:bg-[rgba(125,98,74,0.24)] active:bg-[rgba(125,98,74,0.28)]",
+    "bg-fuchsia-400/10 text-fuchsia-100 border border-fuchsia-400/20 backdrop-blur-md " +
+    "hover:bg-fuchsia-400/15 active:bg-fuchsia-400/20",
 };
 
 const sizes: Record<Size, string> = {
-  sm: "h-9 px-3 text-[13px] rounded-[14px]",
-  md: "h-10 px-4 text-[13px] rounded-[16px]",
-  lg: "h-11 px-5 text-[15px] rounded-[18px]",
+  sm: "h-9 px-3 text-sm rounded-[14px]",
+  md: "h-10 px-4 text-sm rounded-[16px]",
+  lg: "h-11 px-5 text-base rounded-[18px]",
   icon: "h-9 w-9 rounded-[16px] p-0",
   pill: "h-8 px-3 text-xs rounded-full",
 };

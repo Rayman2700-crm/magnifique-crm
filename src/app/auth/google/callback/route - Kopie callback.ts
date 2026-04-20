@@ -1,4 +1,3 @@
-
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -16,13 +15,6 @@ type OAuthMeta = {
 type GoogleUserInfo = {
   email?: string;
   name?: string;
-};
-
-type CalendarListItem = {
-  id: string;
-  summary?: string;
-  primary?: boolean;
-  accessRole?: string;
 };
 
 function safeBaseUrl() {
@@ -56,6 +48,7 @@ function parseOAuthMeta(raw: string | null | undefined): OAuthMeta | null {
   }
 }
 
+
 function isAdminUser(profileRole: unknown, userEmail: unknown) {
   return (
     String(profileRole ?? "").trim().toUpperCase() === "ADMIN" ||
@@ -64,21 +57,24 @@ function isAdminUser(profileRole: unknown, userEmail: unknown) {
 }
 
 function normalizeConnectionMeta(meta: OAuthMeta | null | undefined) {
-  const label = String(meta?.connectionLabel ?? "").trim().toLowerCase();
+  const label = String(meta?.connectionLabel ?? "").trim();
   const emailHint = String(meta?.emailHint ?? "").trim().toLowerCase();
 
   const isStudioRadu =
-    label === "radu studio" ||
-    label === "studio radu" ||
+    label.toLowerCase() === "radu studio" ||
+    label.toLowerCase() === "studio radu" ||
     emailHint === "radu.craus@gmail.com";
 
   const isStudioRaluca =
-    label === "raluca studio" ||
-    label === "studio raluca" ||
-    label === "studio magnifique beauty institut" ||
+    label.toLowerCase() === "raluca studio" ||
+    label.toLowerCase() === "studio raluca" ||
+    label.toLowerCase() === "studio magnifique beauty institut" ||
     emailHint === "raluca.magnifique@gmail.com";
 
-  return { isStudioRadu, isStudioRaluca };
+  return {
+    isStudioRadu,
+    isStudioRaluca,
+  };
 }
 
 async function fetchGoogleUserInfo(accessToken: string | null | undefined): Promise<GoogleUserInfo | null> {
@@ -87,58 +83,18 @@ async function fetchGoogleUserInfo(accessToken: string | null | undefined): Prom
 
   try {
     const response = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
       cache: "no-store",
     });
 
     if (!response.ok) return null;
-    return (await response.json()) as GoogleUserInfo;
+    const json = (await response.json()) as GoogleUserInfo;
+    return json ?? null;
   } catch {
     return null;
   }
-}
-
-async function fetchWritableGoogleCalendars(accessToken: string) {
-  const response = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList", {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: "no-store",
-  });
-
-  const json: any = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(json?.error?.message ?? "Kalenderliste konnte nicht geladen werden.");
-  }
-
-  const items = Array.isArray(json?.items) ? (json.items as CalendarListItem[]) : [];
-  return items.filter((item) => {
-    const role = String(item.accessRole ?? "").toLowerCase();
-    return role === "owner" || role === "writer";
-  });
-}
-
-function chooseDefaultCalendarId(input: {
-  calendars: CalendarListItem[];
-  preferredId?: string | null;
-  existingDefault?: string | null;
-}) {
-  const preferred = String(input.preferredId ?? "").trim().toLowerCase();
-  const existingDefault = String(input.existingDefault ?? "").trim().toLowerCase();
-  const calendars = input.calendars;
-
-  const byPreferred = calendars.find((item) => String(item.id ?? "").trim().toLowerCase() === preferred);
-  if (byPreferred?.id) return byPreferred.id;
-
-  const byExisting = calendars.find((item) => String(item.id ?? "").trim().toLowerCase() === existingDefault);
-  if (byExisting?.id) return byExisting.id;
-
-  const primary = calendars.find((item) => item.primary);
-  if (primary?.id) return primary.id;
-
-  return String(calendars[0]?.id ?? "").trim() || null;
-}
-
-function sanitizeCalendarIds(values: Array<string | null | undefined>) {
-  return Array.from(new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean)));
 }
 
 export async function GET(req: Request) {
@@ -161,15 +117,9 @@ export async function GET(req: Request) {
   cookieStore.set("gcal_oauth_state", "", { path: "/", maxAge: 0 });
   cookieStore.set("gcal_oauth_meta", "", { path: "/", maxAge: 0 });
 
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI;
-
-  if (!clientId || !clientSecret || !redirectUri) {
-    return NextResponse.redirect(
-      new URL(`/calendar/google?error=${encodeURIComponent("Google OAuth ENV fehlt.")}`, baseUrl)
-    );
-  }
+  const clientId = process.env.GOOGLE_CLIENT_ID!;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET!;
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI!;
 
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -184,13 +134,14 @@ export async function GET(req: Request) {
     cache: "no-store",
   });
 
-  const tokenJson: any = await tokenRes.json().catch(() => null);
+  const tokenJson: any = await tokenRes.json();
 
   if (!tokenRes.ok) {
     return NextResponse.redirect(
       new URL(
         `/calendar/google?error=${encodeURIComponent(
-          "Google Token Fehler: " + (tokenJson?.error_description ?? tokenJson?.error ?? "unknown")
+          "Google Token Fehler: " +
+            (tokenJson.error_description ?? tokenJson.error ?? "unknown")
         )}`,
         baseUrl
       )
@@ -216,26 +167,21 @@ export async function GET(req: Request) {
 
   if (normalizedMeta.isStudioRadu && !isAdmin) {
     return NextResponse.redirect(
-      new URL(
-        `/calendar/google?error=${encodeURIComponent("Studio Radu darf nur vom Admin verbunden werden.")}`,
-        baseUrl
-      )
+      new URL(`/calendar/google?error=${encodeURIComponent("Studio Radu darf nur vom Admin verbunden werden.")}`, baseUrl)
     );
   }
 
-  const accessToken = String(tokenJson?.access_token ?? "").trim() || null;
-  const refreshTokenFromGoogle = String(tokenJson?.refresh_token ?? "").trim() || null;
-  const tokenType = String(tokenJson?.token_type ?? "").trim() || null;
-  const scope = String(tokenJson?.scope ?? "").trim() || null;
-  const expiresIn = typeof tokenJson?.expires_in === "number" ? tokenJson.expires_in : null;
-  const refreshTokenExpiresIn = typeof tokenJson?.refresh_token_expires_in === "number" ? tokenJson.refresh_token_expires_in : null;
-  const expiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000).toISOString() : null;
+  const accessToken: string | undefined = tokenJson.access_token;
+  const refreshToken: string | undefined = tokenJson.refresh_token;
+  const tokenType: string | undefined = tokenJson.token_type;
+  const expiresIn: number | undefined = tokenJson.expires_in;
+  const scope: string | undefined = tokenJson.scope;
+  const refreshTokenExpiresIn: number | undefined = tokenJson.refresh_token_expires_in;
 
-  if (!accessToken) {
-    return NextResponse.redirect(
-      new URL(`/calendar/google?error=${encodeURIComponent("Google hat keinen access_token geliefert.")}`, baseUrl)
-    );
-  }
+  const expiresAt =
+    typeof expiresIn === "number"
+      ? new Date(Date.now() + expiresIn * 1000).toISOString()
+      : null;
 
   const { data: existingLegacy } = await supabase
     .from("google_oauth_tokens")
@@ -243,21 +189,21 @@ export async function GET(req: Request) {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  const finalRefreshToken = refreshTokenFromGoogle || String(existingLegacy?.refresh_token ?? "").trim() || null;
+  const finalRefreshToken = refreshToken ?? existingLegacy?.refresh_token ?? null;
 
   if (!finalRefreshToken) {
     return NextResponse.redirect(
       new URL(
         `/calendar/google?error=${encodeURIComponent(
-          "Kein refresh_token erhalten. Bitte die Verbindung einmal komplett trennen und mit Offline-Zugriff neu verbinden."
+          "Kein refresh_token erhalten. Bitte Google Verbindung entfernen und neu verbinden."
         )}`,
         baseUrl
       )
     );
   }
 
-  const googleUserInfo = await fetchGoogleUserInfo(accessToken);
-  const googleAccountEmail = String(googleUserInfo?.email ?? "").trim() || String(meta?.emailHint ?? "").trim() || null;
+  const googleUserInfo = await fetchGoogleUserInfo(accessToken ?? null);
+  const googleAccountEmail = String(googleUserInfo?.email ?? "").trim() || null;
   const googleAccountName = String(googleUserInfo?.name ?? "").trim() || null;
 
   const effectiveIsReadOnly =
@@ -266,12 +212,11 @@ export async function GET(req: Request) {
     Boolean(meta?.isPrimary) && (normalizedMeta.isStudioRadu || normalizedMeta.isStudioRaluca);
   const effectiveLegacySync =
     Boolean(meta?.legacySync) && (normalizedMeta.isStudioRadu || normalizedMeta.isStudioRaluca);
-
   const connectionLabel = normalizedMeta.isStudioRadu
     ? "Radu Studio"
     : normalizedMeta.isStudioRaluca
       ? "Raluca Studio"
-      : String(meta?.connectionLabel ?? "").trim() || "Privater Kalender";
+      : "Privater Kalender";
 
   let savedConnectionId: string | null = null;
 
@@ -284,14 +229,17 @@ export async function GET(req: Request) {
         .maybeSingle()
     : { data: null as any };
 
-  const findByLabel = await supabase
-    .from("google_oauth_connections")
-    .select("id")
-    .eq("owner_user_id", user.id)
-    .eq("connection_label", connectionLabel)
-    .maybeSingle();
-
-  const existingConnection = findByEmail.data ?? findByLabel.data ?? null;
+  const existingConnection =
+    findByEmail.data ??
+    (
+      await supabase
+        .from("google_oauth_connections")
+        .select("id")
+        .eq("owner_user_id", user.id)
+        .eq("connection_label", connectionLabel)
+        .maybeSingle()
+    ).data ??
+    null;
 
   const connectionPayload = {
     owner_user_id: user.id,
@@ -300,12 +248,12 @@ export async function GET(req: Request) {
     connection_label: connectionLabel,
     google_account_email: googleAccountEmail,
     google_account_name: googleAccountName,
-    access_token: accessToken,
+    access_token: accessToken ?? null,
     refresh_token: finalRefreshToken,
     expires_at: expiresAt,
-    scope,
-    token_type: tokenType,
-    refresh_token_expires_in: refreshTokenExpiresIn,
+    scope: scope ?? null,
+    token_type: tokenType ?? null,
+    refresh_token_expires_in: refreshTokenExpiresIn ?? null,
     is_active: true,
     is_primary: effectiveIsPrimary,
     is_read_only: effectiveIsReadOnly,
@@ -321,16 +269,16 @@ export async function GET(req: Request) {
   }
 
   if (existingConnection?.id) {
-    const { error } = await supabase
+    const { error: updateConnectionError } = await supabase
       .from("google_oauth_connections")
       .update(connectionPayload)
       .eq("id", existingConnection.id);
 
-    if (error) {
+    if (updateConnectionError) {
       return NextResponse.redirect(
         new URL(
           `/calendar/google?error=${encodeURIComponent(
-            "Google Verbindung konnte nicht aktualisiert werden: " + error.message
+            "Mehrfach-Verbindung konnte nicht gespeichert werden: " + updateConnectionError.message
           )}`,
           baseUrl
         )
@@ -339,84 +287,103 @@ export async function GET(req: Request) {
 
     savedConnectionId = String(existingConnection.id);
   } else {
-    const { data: inserted, error } = await supabase
+    const { data: insertedConnection, error: insertConnectionError } = await supabase
       .from("google_oauth_connections")
       .insert(connectionPayload)
       .select("id")
       .single();
 
-    if (error || !inserted?.id) {
+    if (insertConnectionError || !insertedConnection?.id) {
       return NextResponse.redirect(
         new URL(
           `/calendar/google?error=${encodeURIComponent(
-            "Google Verbindung konnte nicht erstellt werden: " + (error?.message ?? "unknown")
+            "Mehrfach-Verbindung konnte nicht erstellt werden: " +
+              (insertConnectionError?.message ?? "unknown")
           )}`,
           baseUrl
         )
       );
     }
 
-    savedConnectionId = String(inserted.id);
+    savedConnectionId = String(insertedConnection.id);
   }
 
-  let defaultCalendarId = String(existingLegacy?.default_calendar_id ?? "").trim() || null;
-  let enabledCalendarIds = sanitizeCalendarIds((existingLegacy?.enabled_calendar_ids as string[] | null | undefined) ?? []);
 
   if ((normalizedMeta.isStudioRadu || normalizedMeta.isStudioRaluca) && !effectiveIsReadOnly) {
-    const preferredStudioCalendarId = normalizedMeta.isStudioRadu ? "radu.craus@gmail.com" : "raluca.magnifique@gmail.com";
+    const targetCalendarId = normalizedMeta.isStudioRadu
+      ? "radu.craus@gmail.com"
+      : "raluca.magnifique@gmail.com";
 
-    try {
-      const calendars = await fetchWritableGoogleCalendars(accessToken);
-      const chosenCalendarId = chooseDefaultCalendarId({
-        calendars,
-        preferredId: preferredStudioCalendarId,
-        existingDefault: defaultCalendarId,
-      });
+    const existingEnabledIds = Array.isArray((existingLegacy as any)?.enabled_calendar_ids)
+      ? ((existingLegacy as any).enabled_calendar_ids as Array<string | null | undefined>)
+      : [];
 
-      if (chosenCalendarId) {
-        defaultCalendarId = chosenCalendarId;
-        enabledCalendarIds = sanitizeCalendarIds([chosenCalendarId, ...enabledCalendarIds]);
-      }
-    } catch {
-      if (preferredStudioCalendarId) {
-        defaultCalendarId = preferredStudioCalendarId;
-        enabledCalendarIds = sanitizeCalendarIds([preferredStudioCalendarId, ...enabledCalendarIds]);
-      }
+    const nextEnabledIds = Array.from(
+      new Set(
+        [...existingEnabledIds, targetCalendarId]
+          .map((value) => String(value ?? "").trim())
+          .filter(Boolean)
+      )
+    );
+
+    const { error: tokenSelectionError } = await supabase.from("google_oauth_tokens").upsert({
+      user_id: user.id,
+      provider: "google",
+      access_token: accessToken ?? null,
+      refresh_token: finalRefreshToken,
+      expires_at: expiresAt,
+      scope: scope ?? null,
+      token_type: tokenType ?? null,
+      refresh_token_expires_in: refreshTokenExpiresIn ?? null,
+      default_calendar_id: targetCalendarId,
+      enabled_calendar_ids: nextEnabledIds,
+      updated_at: new Date().toISOString(),
+    });
+
+    if (tokenSelectionError) {
+      return NextResponse.redirect(
+        new URL(
+          `/calendar/google?error=${encodeURIComponent("Kalender-Auswahl konnte nicht gespeichert werden: " + tokenSelectionError.message)}`,
+          baseUrl
+        )
+      );
     }
   }
 
-  const legacyPayload = {
-    user_id: user.id,
-    access_token: accessToken,
-    refresh_token: finalRefreshToken,
-    expires_at: expiresAt,
-    scope,
-    token_type: tokenType,
-    refresh_token_expires_in: refreshTokenExpiresIn,
-    default_calendar_id: defaultCalendarId,
-    enabled_calendar_ids: enabledCalendarIds,
-    updated_at: new Date().toISOString(),
-  };
+  if (effectiveLegacySync) {
+    const { error: legacyError } = await supabase.from("google_oauth_tokens").upsert({
+      user_id: user.id,
+      provider: "google",
+      access_token: accessToken ?? null,
+      refresh_token: finalRefreshToken,
+      expires_at: expiresAt,
+      scope: scope ?? null,
+      token_type: tokenType ?? null,
+      refresh_token_expires_in: refreshTokenExpiresIn ?? null,
+      updated_at: new Date().toISOString(),
+    });
 
-  const { error: legacyError } = await supabase
-    .from("google_oauth_tokens")
-    .upsert(legacyPayload, { onConflict: "user_id" });
-
-  if (legacyError) {
-    return NextResponse.redirect(
-      new URL(
-        `/calendar/google?error=${encodeURIComponent(
-          "Google Token-Daten konnten nicht gespeichert werden: " + legacyError.message
-        )}`,
-        baseUrl
-      )
-    );
+    if (legacyError) {
+      return NextResponse.redirect(
+        new URL(
+          `/calendar/google?error=${encodeURIComponent("DB Save Fehler: " + legacyError.message)}`,
+          baseUrl
+        )
+      );
+    }
   }
 
-  const successUrl = new URL(redirectTo, baseUrl);
-  successUrl.searchParams.set("success", encodeURIComponent("Google erfolgreich verbunden."));
-  if (savedConnectionId) successUrl.searchParams.set("googleConnectionId", savedConnectionId);
-  if (effectiveLegacySync) successUrl.searchParams.set("link", "1");
+  const successUrl = new URL(redirectTo);
+  successUrl.searchParams.set(
+    "success",
+    effectiveLegacySync
+      ? "Google verbunden ✅"
+      : `Google Verbindung gespeichert ✅${connectionLabel ? ` (${connectionLabel})` : ""}`
+  );
+
+  if (savedConnectionId) {
+    successUrl.searchParams.set("googleConnectionId", savedConnectionId);
+  }
 
   return NextResponse.redirect(successUrl);
 }

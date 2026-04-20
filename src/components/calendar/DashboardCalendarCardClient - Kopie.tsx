@@ -479,37 +479,6 @@ function isAdminTenantName(name: string | null | undefined) {
   return n.includes("radu");
 }
 
-function findLegendUserForStudioCalendarId(calendarId: string, legendUsers: LegendUser[]) {
-  const normalized = normalizeConfiguredCalendarId(calendarId);
-  if (!normalized) return null;
-
-  if (normalized === STUDIO_RADU_CALENDAR_ID) {
-    return (
-      legendUsers.find((user) => {
-        const fullName = String(user.fullName ?? "").toLowerCase();
-        const display = String(user.tenantDisplayName ?? "").toLowerCase();
-        return fullName.includes("radu") || display.includes("radu");
-      }) ?? null
-    );
-  }
-
-  if (normalized === STUDIO_MAGNIFIQUE_CALENDAR_ID) {
-    return (
-      legendUsers.find((user) => {
-        const fullName = String(user.fullName ?? "").toLowerCase();
-        const display = String(user.tenantDisplayName ?? "").toLowerCase();
-        return (
-          fullName.includes("raluca") ||
-          display.includes("magnifique") ||
-          display.includes("raluca")
-        );
-      }) ?? null
-    );
-  }
-
-  return null;
-}
-
 function buildMiniMonthGrid(monthAnchorISO: string) {
   const monthStart = startOfMonthLocal(new Date(`${monthAnchorISO}T12:00:00`));
   const gridStart = startOfWeekMondayLocal(monthStart);
@@ -2731,23 +2700,6 @@ export default function DashboardCalendarCardClient({
     );
   }, [creatorTenantId, effectiveLegendUsersWithAvatars]);
 
-  const studioCalendarTenantMap = useMemo(() => {
-    const entries: Array<[string, { tenantId: string; tenantName: string }]> = [];
-
-    for (const calendarId of [STUDIO_RADU_CALENDAR_ID, STUDIO_MAGNIFIQUE_CALENDAR_ID]) {
-      const legendUser = findLegendUserForStudioCalendarId(calendarId, effectiveLegendUsersWithAvatars);
-      if (!legendUser) continue;
-
-      const tenantId = String(legendUser.filterTenantId || legendUser.tenantId || "").trim();
-      const tenantName = String(legendUser.tenantDisplayName || legendUser.fullName || "").trim();
-
-      if (!tenantId || !tenantName) continue;
-      entries.push([calendarId, { tenantId, tenantName }]);
-    }
-
-    return new Map(entries);
-  }, [effectiveLegendUsersWithAvatars]);
-
   const currentTenantDisplayName =
     currentLegendUser?.tenantDisplayName ??
     tenants.find((t) => t.id === creatorTenantId)?.display_name ??
@@ -2788,133 +2740,6 @@ export default function DashboardCalendarCardClient({
     };
   }, [anchorISO, view]);
 
-  const mapAppointmentRowsToItems = useCallback(async (appts: ApptRow[]) => {
-    const uniquePairs = new Map<string, { tenant_id: string; person_id: string }>();
-    for (const a of appts) {
-      uniquePairs.set(`${a.tenant_id}:${a.person_id}`, {
-        tenant_id: a.tenant_id,
-        person_id: a.person_id,
-      });
-    }
-
-    const cpMap = new Map<string, string>();
-
-    if (uniquePairs.size > 0) {
-      const tenantIds = Array.from(new Set(Array.from(uniquePairs.values()).map((p) => p.tenant_id)));
-      const personIds = Array.from(new Set(Array.from(uniquePairs.values()).map((p) => p.person_id)));
-
-      const { data: cps } = await supabase
-        .from("customer_profiles")
-        .select("id,tenant_id,person_id")
-        .in("tenant_id", tenantIds)
-        .in("person_id", personIds);
-
-      for (const cp of (cps ?? []) as CustomerProfileRow[]) {
-        cpMap.set(`${cp.tenant_id}:${cp.person_id}`, cp.id);
-      }
-    }
-
-    return appts.map((a) => {
-      const parsed = parseNotes(a.notes_internal);
-      const key = `${a.tenant_id}:${a.person_id}`;
-      const customerProfileId = cpMap.get(key) ?? null;
-      const tenant = firstJoin(a.tenant);
-      const person = firstJoin(a.person);
-
-      const isExtraGoogleCalendar = hasExtraGoogleCalendarMarker(a.notes_internal ?? null);
-      const canManageCustomerActions = !isExtraGoogleCalendar && (isAdmin || (!!creatorTenantId && a.tenant_id === creatorTenantId));
-      const sourceMeta = isExtraGoogleCalendar
-        ? calendarSourceMeta(a.google_calendar_id ?? null)
-        : { id: String(a.google_calendar_id ?? "").trim(), label: null, shortLabel: null, color: null };
-
-      return {
-        id: a.id,
-        start_at: a.start_at,
-        end_at: a.end_at,
-        title: parsed.title ? parsed.title : "Termin",
-        note: parsed.note ?? "",
-        status: parsed.status,
-        tenantId: a.tenant_id,
-        tenantName: tenant?.display_name ?? "Behandler",
-        customerProfileId,
-        customerName: person?.full_name ?? null,
-        customerPhone: person?.phone ?? null,
-        customerEmail: person?.email ?? null,
-        reminderSentAt: a.reminder_sent_at ?? null,
-        canOpenCustomerProfile: canManageCustomerActions,
-        canCreateFollowUp: canManageCustomerActions,
-        canDeleteAppointment: canManageCustomerActions,
-        googleCalendarId: sourceMeta.id,
-        googleCalendarLabel: sourceMeta.label,
-        googleCalendarShortLabel: sourceMeta.shortLabel,
-        googleCalendarColor: sourceMeta.color,
-        isExtraGoogleCalendar,
-      } as Item;
-    });
-  }, [creatorTenantId, isAdmin, supabase]);
-
-  const mergeItemsByIdAndSort = useCallback((baseItems: Item[], extraItems: Item[] = []) => {
-    const deduped = new Map<string, Item>();
-    for (const item of [...baseItems, ...extraItems]) {
-      deduped.set(String(item.id), item);
-    }
-    return Array.from(deduped.values()).sort(
-      (a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime()
-    );
-  }, []);
-
-  const loadExtraGoogleItems = useCallback(async () => {
-    if (!isAdmin) return [] as Item[];
-
-    try {
-      const extraResult = await getReadOnlyExtraGoogleCalendarEventsForRange({
-        startISO: range.startISO,
-        endISO: range.endISO,
-      });
-
-      return Array.isArray(extraResult?.items)
-        ? extraResult.items.map((event: any) => {
-            const calendarId = normalizeConfiguredCalendarId(String(event.googleCalendarId ?? "").trim());
-            const mappedTenant = studioCalendarTenantMap.get(calendarId);
-            const fallbackTenantId = String(creatorTenantId ?? currentLegendUser?.filterTenantId ?? currentLegendUser?.tenantId ?? "").trim();
-            const fallbackTenantName =
-              String(currentLegendUser?.tenantDisplayName ?? currentTenantDisplayName ?? "Google Kalender").trim() ||
-              "Google Kalender";
-
-            return {
-              id: String(event.id),
-              start_at: String(event.start_at),
-              end_at: String(event.end_at),
-              title:
-                String(event.note ?? "").trim() ||
-                String(event.googleCalendarLabel ?? "").trim() ||
-                "Zusatzkalender",
-              note: String(event.note ?? "").trim(),
-              status: "scheduled" as AppointmentStatus,
-              tenantId: mappedTenant?.tenantId ?? fallbackTenantId ?? calendarId,
-              tenantName: mappedTenant?.tenantName ?? fallbackTenantName,
-              customerProfileId: null,
-              customerName: String(event.title ?? "Privater Termin").trim() || "Privater Termin",
-              customerPhone: null,
-              customerEmail: null,
-              reminderSentAt: null,
-              canOpenCustomerProfile: false,
-              canCreateFollowUp: false,
-              canDeleteAppointment: false,
-              googleCalendarId: String(event.googleCalendarId ?? "").trim(),
-              googleCalendarLabel: String(event.googleCalendarLabel ?? "").trim() || null,
-              googleCalendarShortLabel: String(event.googleCalendarShortLabel ?? "").trim() || null,
-              googleCalendarColor: String(event.googleCalendarColor ?? "").trim() || null,
-              isExtraGoogleCalendar: true,
-            } as Item;
-          })
-        : [];
-    } catch (extraError: any) {
-      console.error("Zusatzkalender konnten nicht geladen werden", extraError);
-      return [] as Item[];
-    }
-  }, [creatorTenantId, currentLegendUser, currentTenantDisplayName, isAdmin, range.endISO, range.startISO, studioCalendarTenantMap]);
-
   const loadAppointments = useCallback(async (options?: { skipGoogleSync?: boolean }) => {
     const seq = ++loadSeq.current;
     const hasExistingItems = hasLoadedOnceRef.current;
@@ -2924,7 +2749,7 @@ export default function DashboardCalendarCardClient({
 
     setErrorText(null);
 
-    try {
+    const loadLocalAppointments = async () => {
       const apptQuery = supabase
         .from("appointments")
         .select(
@@ -2939,30 +2764,150 @@ export default function DashboardCalendarCardClient({
 
       const { data: apptData, error: apptError } = await apptQuery.order("start_at", { ascending: true });
 
-      if (seq !== loadSeq.current) return;
+      if (seq !== loadSeq.current) return false;
 
       if (apptError) {
         setErrorText(apptError.message);
         setIsInitialLoading(false);
         setIsRefreshing(false);
-        return;
+        return false;
       }
 
-      const mappedItems = await mapAppointmentRowsToItems((apptData ?? []) as ApptRow[]);
-      if (seq !== loadSeq.current) return;
+      const appts = (apptData ?? []) as ApptRow[];
 
-      const extraItems = await loadExtraGoogleItems();
-      if (seq !== loadSeq.current) return;
+      const uniquePairs = new Map<string, { tenant_id: string; person_id: string }>();
+      for (const a of appts) {
+        uniquePairs.set(`${a.tenant_id}:${a.person_id}`, {
+          tenant_id: a.tenant_id,
+          person_id: a.person_id,
+        });
+      }
 
-      setItems(mergeItemsByIdAndSort(mappedItems, extraItems));
+      const cpMap = new Map<string, string>();
+
+      if (uniquePairs.size > 0) {
+        const tenantIds = Array.from(new Set(Array.from(uniquePairs.values()).map((p) => p.tenant_id)));
+        const personIds = Array.from(new Set(Array.from(uniquePairs.values()).map((p) => p.person_id)));
+
+        const { data: cps } = await supabase
+          .from("customer_profiles")
+          .select("id,tenant_id,person_id")
+          .in("tenant_id", tenantIds)
+          .in("person_id", personIds);
+
+        if (seq !== loadSeq.current) return false;
+
+        for (const cp of (cps ?? []) as CustomerProfileRow[]) {
+          cpMap.set(`${cp.tenant_id}:${cp.person_id}`, cp.id);
+        }
+      }
+
+      const mappedItems: Item[] = appts.map((a) => {
+        const parsed = parseNotes(a.notes_internal);
+        const key = `${a.tenant_id}:${a.person_id}`;
+        const customerProfileId = cpMap.get(key) ?? null;
+        const tenant = firstJoin(a.tenant);
+        const person = firstJoin(a.person);
+
+        const isExtraGoogleCalendar = hasExtraGoogleCalendarMarker(a.notes_internal ?? null);
+        const canManageCustomerActions = !isExtraGoogleCalendar && (isAdmin || (!!creatorTenantId && a.tenant_id === creatorTenantId));
+        const sourceMeta = isExtraGoogleCalendar
+          ? calendarSourceMeta(a.google_calendar_id ?? null)
+          : { id: String(a.google_calendar_id ?? "").trim(), label: null, shortLabel: null, color: null };
+
+        return {
+          id: a.id,
+          start_at: a.start_at,
+          end_at: a.end_at,
+          title: parsed.title ? parsed.title : "Termin",
+          note: parsed.note ?? "",
+          status: parsed.status,
+          tenantId: a.tenant_id,
+          tenantName: tenant?.display_name ?? "Behandler",
+          customerProfileId,
+          customerName: person?.full_name ?? null,
+          customerPhone: person?.phone ?? null,
+          customerEmail: person?.email ?? null,
+          reminderSentAt: a.reminder_sent_at ?? null,
+          canOpenCustomerProfile: canManageCustomerActions,
+          canCreateFollowUp: canManageCustomerActions,
+          canDeleteAppointment: canManageCustomerActions,
+          googleCalendarId: sourceMeta.id,
+          googleCalendarLabel: sourceMeta.label,
+          googleCalendarShortLabel: sourceMeta.shortLabel,
+          googleCalendarColor: sourceMeta.color,
+          isExtraGoogleCalendar,
+        } as Item;
+      });
+
+      let mergedItems = mappedItems;
+
+      if (isAdmin && creatorTenantId) {
+        try {
+          const extraResult = await getReadOnlyExtraGoogleCalendarEventsForRange({
+            startISO: range.startISO,
+            endISO: range.endISO,
+          });
+
+          if (seq !== loadSeq.current) return false;
+
+          const extraItems: Item[] = Array.isArray(extraResult?.items)
+            ? extraResult.items.map((event: any) => ({
+                id: String(event.id),
+                start_at: String(event.start_at),
+                end_at: String(event.end_at),
+                title: String(event.note ?? "").trim() || String(event.googleCalendarLabel ?? "").trim() || "Zusatzkalender",
+                note: String(event.note ?? "").trim(),
+                status: "scheduled" as AppointmentStatus,
+                tenantId: creatorTenantId,
+                tenantName: currentTenantDisplayName ?? "Radu",
+                customerProfileId: null,
+                customerName: String(event.title ?? "Privater Termin").trim() || "Privater Termin",
+                customerPhone: null,
+                customerEmail: null,
+                reminderSentAt: null,
+                canOpenCustomerProfile: false,
+                canCreateFollowUp: false,
+                canDeleteAppointment: false,
+                googleCalendarId: String(event.googleCalendarId ?? "").trim(),
+                googleCalendarLabel: String(event.googleCalendarLabel ?? "").trim() || null,
+                googleCalendarShortLabel: String(event.googleCalendarShortLabel ?? "").trim() || null,
+                googleCalendarColor: String(event.googleCalendarColor ?? "").trim() || null,
+                isExtraGoogleCalendar: true,
+              } as Item))
+            : [];
+
+          const deduped = new Map<string, Item>();
+          for (const item of [...mappedItems, ...extraItems]) {
+            deduped.set(String(item.id), item);
+          }
+          mergedItems = Array.from(deduped.values()).sort(
+            (a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime()
+          );
+        } catch (extraError: any) {
+          console.error("Zusatzkalender konnten nicht geladen werden", extraError);
+        }
+      }
+
+      if (seq !== loadSeq.current) return false;
+
+      setItems(mergedItems);
       hasLoadedOnceRef.current = true;
       setIsInitialLoading(false);
       setIsRefreshing(false);
+      return true;
+    };
+
+    try {
+      const didLoadLocal = await loadLocalAppointments();
+      if (!didLoadLocal) return;
 
       const nowMs = Date.now();
       const shouldRunGoogleSync = !options?.skipGoogleSync && nowMs - lastGoogleSyncAtRef.current > 20_000;
 
-      if (!shouldRunGoogleSync) return;
+      if (!shouldRunGoogleSync) {
+        return;
+      }
 
       lastGoogleSyncAtRef.current = nowMs;
 
@@ -2982,87 +2927,41 @@ export default function DashboardCalendarCardClient({
       setIsInitialLoading(false);
       setIsRefreshing(false);
     }
-  }, [loadExtraGoogleItems, mapAppointmentRowsToItems, mergeItemsByIdAndSort, range.endISO, range.startISO, supabase]);
+  }, [creatorTenantId, currentTenantDisplayName, isAdmin, range.endISO, range.startISO, supabase]);
 
-  const scheduleRefresh = useCallback((options?: { immediate?: boolean }) => {
+  const scheduleRefresh = useCallback(() => {
     if (document.visibilityState !== "visible") return;
 
     if (refreshTimeoutRef.current) {
       clearTimeout(refreshTimeoutRef.current);
     }
 
-    const run = () => {
-      loadAppointments({ skipGoogleSync: true });
-    };
-
-    if (options?.immediate) {
-      run();
-      return;
-    }
-
-    refreshTimeoutRef.current = setTimeout(run, 250);
+    refreshTimeoutRef.current = setTimeout(() => {
+      loadAppointments();
+    }, 250);
   }, [loadAppointments]);
-
-  const upsertAppointmentById = useCallback(async (appointmentId: string) => {
-    const normalizedId = String(appointmentId ?? "").trim();
-    if (!normalizedId) return;
-
-    const { data, error } = await supabase
-      .from("appointments")
-      .select(
-        `
-        id,start_at,end_at,notes_internal,reminder_sent_at,tenant_id,person_id,google_calendar_id,
-        tenant:tenants ( display_name ),
-        person:persons ( full_name, phone, email )
-      `
-      )
-      .eq("id", normalizedId)
-      .maybeSingle();
-
-    if (error) {
-      scheduleRefresh({ immediate: true });
-      return;
-    }
-
-    const row = (data ?? null) as ApptRow | null;
-
-    if (!row) {
-      setItems((prev) => prev.filter((item) => String(item.id) !== normalizedId));
-      return;
-    }
-
-    const startMs = new Date(row.start_at).getTime();
-    const rangeStartMs = new Date(range.startISO).getTime();
-    const rangeEndMs = new Date(range.endISO).getTime();
-
-    if (Number.isNaN(startMs) || startMs < rangeStartMs || startMs >= rangeEndMs) {
-      setItems((prev) => prev.filter((item) => String(item.id) !== normalizedId));
-      return;
-    }
-
-    const mappedItems = await mapAppointmentRowsToItems([row]);
-    const nextItem = mappedItems[0] ?? null;
-
-    if (!nextItem) {
-      setItems((prev) => prev.filter((item) => String(item.id) !== normalizedId));
-      return;
-    }
-
-    setItems((prev) => mergeItemsByIdAndSort(prev.filter((item) => String(item.id) !== normalizedId), [nextItem]));
-  }, [mapAppointmentRowsToItems, mergeItemsByIdAndSort, range.endISO, range.startISO, scheduleRefresh, supabase]);
 
   useEffect(() => {
     loadAppointments();
   }, [loadAppointments]);
 
   useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      loadAppointments({ skipGoogleSync: true });
+    }, 20000);
+
+    return () => window.clearInterval(interval);
+  }, [loadAppointments]);
+
+  useEffect(() => {
     const triggerVisibleRefresh = () => {
       if (document.visibilityState !== "visible") return;
-      scheduleRefresh({ immediate: true });
+      scheduleRefresh();
     };
 
     const triggerFocusRefresh = () => {
-      scheduleRefresh({ immediate: true });
+      scheduleRefresh();
     };
 
     window.addEventListener("focus", triggerFocusRefresh);
@@ -3086,31 +2985,20 @@ export default function DashboardCalendarCardClient({
 
   useEffect(() => {
     const channel = supabase
-      .channel(`dashboard-appointments-realtime-${view}-${anchorISO}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "appointments" }, (payload: any) => {
-        void upsertAppointmentById(String((payload as any)?.new?.id ?? ""));
+      .channel(`dashboard-appointments-${selectedTenantId ?? "all"}-${view}-${anchorISO}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, () => {
+        scheduleRefresh();
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "appointments" }, (payload: any) => {
-        void upsertAppointmentById(String((payload as any)?.new?.id ?? (payload as any)?.old?.id ?? ""));
-      })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "appointments" }, (payload: any) => {
-        const deletedId = String((payload as any)?.old?.id ?? "").trim();
-        if (!deletedId) {
-          scheduleRefresh({ immediate: true });
-          return;
-        }
-        setItems((prev) => prev.filter((item) => String(item.id) !== deletedId));
-      })
-      .subscribe((status: string) => {
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-          scheduleRefresh({ immediate: true });
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          scheduleRefresh();
         }
       });
 
     return () => {
-      void supabase.removeChannel(channel);
+      supabase.removeChannel(channel);
     };
-  }, [anchorISO, scheduleRefresh, supabase, upsertAppointmentById, view]);
+  }, [anchorISO, scheduleRefresh, supabase, view]);
 
   const handleToday = useCallback(() => {
     setCalendarState((prev) => ({
@@ -3293,6 +3181,11 @@ export default function DashboardCalendarCardClient({
     const queryTokens = q.split(/\s+/).map((token) => token.trim()).filter(Boolean);
 
     return items.filter((item) => {
+      const isExtraGoogleCalendar = Boolean((item as any).isExtraGoogleCalendar);
+      if (isExtraGoogleCalendar && creatorTenantId && item.tenantId !== creatorTenantId) {
+        return false;
+      }
+
       const calendarSource = calendarFilterSourceMeta(item);
       if (calendarSource && selectedCalendarSourceIdSet.size > 0 && !selectedCalendarSourceIdSet.has(calendarSource.id)) {
         return false;
@@ -3638,13 +3531,15 @@ export default function DashboardCalendarCardClient({
         </div>
 
         <div className="md:hidden flex flex-col gap-4 lg:gap-6 min-w-0">
-          <div className="flex min-w-0 items-start justify-between gap-3">
-            <div className="min-w-0">
+          <div className="flex min-w-0 flex-col gap-3">
+            <div>
               <div className="text-lg font-semibold text-white">Kalender</div>
               <div className="text-sm text-white/60">Team-Übersicht</div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2 md:hidden">
+            <div className="flex min-w-0 items-center gap-2 overflow-x-auto whitespace-nowrap md:hidden">
+              </div>
+
               <button
                 ref={desktopSearchButtonRef}
                 type="button"
@@ -3734,7 +3629,7 @@ export default function DashboardCalendarCardClient({
               </div>
             </div>
           ) : null}
-        </div>
+
 
         <div className="mt-5 lg:mt-7">
           {errorText ? (

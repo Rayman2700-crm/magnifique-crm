@@ -1,6 +1,8 @@
 import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 type TokenRow = {
+  user_id?: string | null;
   access_token: string | null;
   refresh_token: string | null;
   expires_at: string | null;
@@ -8,9 +10,15 @@ type TokenRow = {
 
 type GoogleConnectionRow = {
   id: string;
+  owner_user_id: string | null;
   access_token: string | null;
   refresh_token: string | null;
   expires_at: string | null;
+  is_active?: boolean | null;
+};
+
+type UserProfileRow = {
+  role: string | null;
 };
 
 type GetValidGoogleAccessTokenInput = {
@@ -22,13 +30,21 @@ function isExpiringSoon(expiresAtIso: string | null) {
   if (!expiresAtIso) return true;
   const exp = new Date(expiresAtIso).getTime();
   if (Number.isNaN(exp)) return true;
-  return exp - Date.now() < 2 * 60 * 1000; // < 2 min
+  return exp - Date.now() < 2 * 60 * 1000;
+}
+
+function isInvalidGrantMessage(message: string) {
+  const normalized = message.toLowerCase();
+  return normalized.includes("invalid_grant") || normalized.includes("token has been expired") || normalized.includes("revoked");
 }
 
 async function refreshGoogleAccessToken(refreshToken: string) {
-  const clientId = process.env.GOOGLE_CLIENT_ID!;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET!;
-  if (!clientId || !clientSecret) throw new Error("Google OAuth env fehlt.");
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error("Google OAuth env fehlt.");
+  }
 
   const resp = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -50,82 +66,203 @@ async function refreshGoogleAccessToken(refreshToken: string) {
   const accessToken = String(json?.access_token ?? "").trim();
   const expiresIn = typeof json?.expires_in === "number" ? json.expires_in : 0;
   const expiresAt = expiresIn > 0 ? new Date(Date.now() + expiresIn * 1000).toISOString() : null;
+  const rotatedRefreshToken = String(json?.refresh_token ?? "").trim() || null;
 
   if (!accessToken) {
     throw new Error("Google access_token fehlt nach Refresh.");
   }
 
-  return { accessToken, expiresAt };
+  return { accessToken, expiresAt, refreshToken: rotatedRefreshToken };
+}
+
+async function getCurrentUserRole(userId: string) {
+  const server = await supabaseServer();
+  const { data: profile } = await server
+    .from("user_profiles")
+    .select("role")
+    .eq("user_id", userId)
+    .maybeSingle<UserProfileRow>();
+
+  return String(profile?.role ?? "").trim().toUpperCase();
+}
+
+async function persistLegacyTokenRow(targetUserId: string, payload: { access_token: string; expires_at: string | null; refresh_token?: string | null; }) {
+  const admin = supabaseAdmin();
+  const updatePayload: Record<string, unknown> = {
+    access_token: payload.access_token,
+    expires_at: payload.expires_at,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (typeof payload.refresh_token !== "undefined") {
+    updatePayload.refresh_token = payload.refresh_token;
+  }
+
+  const { error } = await admin
+    .from("google_oauth_tokens")
+    .update(updatePayload)
+    .eq("user_id", targetUserId);
+
+  if (error) {
+    throw new Error("google_oauth_tokens konnte nach Refresh nicht gespeichert werden: " + error.message);
+  }
+}
+
+async function persistConnectionRow(connectionId: string, payload: { access_token: string; expires_at: string | null; refresh_token?: string | null; }) {
+  const admin = supabaseAdmin();
+  const updatePayload: Record<string, unknown> = {
+    access_token: payload.access_token,
+    expires_at: payload.expires_at,
+    updated_at: new Date().toISOString(),
+    is_active: true,
+  };
+
+  if (typeof payload.refresh_token !== "undefined") {
+    updatePayload.refresh_token = payload.refresh_token;
+  }
+
+  const { error } = await admin
+    .from("google_oauth_connections")
+    .update(updatePayload)
+    .eq("id", connectionId);
+
+  if (error) {
+    throw new Error("google_oauth_connections konnte nach Refresh nicht gespeichert werden: " + error.message);
+  }
 }
 
 export async function getValidGoogleAccessToken(
   input?: GetValidGoogleAccessTokenInput | null
 ): Promise<string> {
-  const supabase = await supabaseServer();
-  const { data } = await supabase.auth.getUser();
+  const server = await supabaseServer();
+  const { data } = await server.auth.getUser();
   const user = data.user;
-  if (!user) throw new Error("Nicht eingeloggt.");
+
+  if (!user) {
+    throw new Error("Nicht eingeloggt.");
+  }
 
   const googleConnectionId = String(input?.googleConnectionId ?? "").trim();
   const explicitUserId = String(input?.userId ?? "").trim();
+  const currentUserRole = await getCurrentUserRole(user.id);
+  const isAdmin = currentUserRole === "ADMIN" || String(user.email ?? "").trim().toLowerCase() === "radu.craus@gmail.com";
+  const targetUserId = explicitUserId || user.id;
+
+  if (explicitUserId && explicitUserId !== user.id && !isAdmin) {
+    throw new Error("Keine Berechtigung für fremde Google-Tokens.");
+  }
+
+  const admin = supabaseAdmin();
 
   if (googleConnectionId) {
-    const { data: row, error } = await supabase
+    const { data: row, error } = await admin
       .from("google_oauth_connections")
-      .select("id, access_token, refresh_token, expires_at")
+      .select("id, owner_user_id, access_token, refresh_token, expires_at, is_active")
       .eq("id", googleConnectionId)
-      .eq("owner_user_id", user.id)
-      .eq("is_active", true)
       .single<GoogleConnectionRow>();
 
-    if (error || !row) throw new Error("Google Studio-Verbindung nicht gefunden.");
+    if (error || !row) {
+      throw new Error("Google Verbindung nicht gefunden.");
+    }
+
+    const ownerUserId = String(row.owner_user_id ?? "").trim();
+    if (ownerUserId && ownerUserId !== user.id && !isAdmin) {
+      throw new Error("Keine Berechtigung für diese Google Verbindung.");
+    }
 
     if (row.access_token && !isExpiringSoon(row.expires_at)) {
       return row.access_token;
     }
 
-    if (!row.refresh_token) throw new Error("Kein refresh_token gespeichert.");
+    if (!row.refresh_token) {
+      throw new Error("Kein refresh_token gespeichert.");
+    }
 
-    const refreshed = await refreshGoogleAccessToken(row.refresh_token);
-
-    await supabase
-      .from("google_oauth_connections")
-      .update({
+    try {
+      const refreshed = await refreshGoogleAccessToken(row.refresh_token);
+      await persistConnectionRow(row.id, {
         access_token: refreshed.accessToken,
         expires_at: refreshed.expiresAt,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", row.id);
+        refresh_token: refreshed.refreshToken ?? undefined,
+      });
 
-    return refreshed.accessToken;
+      if (ownerUserId) {
+        try {
+          await persistLegacyTokenRow(ownerUserId, {
+            access_token: refreshed.accessToken,
+            expires_at: refreshed.expiresAt,
+            refresh_token: refreshed.refreshToken ?? undefined,
+          });
+        } catch {
+          // Legacy table sync should never block a valid access token.
+        }
+      }
+
+      return refreshed.accessToken;
+    } catch (error: any) {
+      const message = String(error?.message ?? error ?? "Google Refresh fehlgeschlagen.");
+      if (isInvalidGrantMessage(message)) {
+        await admin
+          .from("google_oauth_connections")
+          .update({ access_token: null, updated_at: new Date().toISOString(), is_active: false })
+          .eq("id", row.id);
+      }
+      throw new Error("Google Refresh fehlgeschlagen: " + message);
+    }
   }
 
-  const targetUserId = explicitUserId || user.id;
-
-  const { data: row, error } = await supabase
+  const { data: row, error } = await admin
     .from("google_oauth_tokens")
-    .select("access_token, refresh_token, expires_at")
+    .select("user_id, access_token, refresh_token, expires_at")
     .eq("user_id", targetUserId)
     .single<TokenRow>();
 
-  if (error || !row) throw new Error("Google nicht verbunden.");
+  if (error || !row) {
+    throw new Error("Google nicht verbunden.");
+  }
 
   if (row.access_token && !isExpiringSoon(row.expires_at)) {
     return row.access_token;
   }
 
-  if (!row.refresh_token) throw new Error("Kein refresh_token gespeichert.");
+  if (!row.refresh_token) {
+    throw new Error("Kein refresh_token gespeichert.");
+  }
 
-  const refreshed = await refreshGoogleAccessToken(row.refresh_token);
+  try {
+    const refreshed = await refreshGoogleAccessToken(row.refresh_token);
 
-  await supabase
-    .from("google_oauth_tokens")
-    .update({
+    await persistLegacyTokenRow(targetUserId, {
       access_token: refreshed.accessToken,
       expires_at: refreshed.expiresAt,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("user_id", targetUserId);
+      refresh_token: refreshed.refreshToken ?? undefined,
+    });
 
-  return refreshed.accessToken;
+    const { data: primaryConnection } = await admin
+      .from("google_oauth_connections")
+      .select("id")
+      .eq("owner_user_id", targetUserId)
+      .eq("is_active", true)
+      .eq("is_primary", true)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<{ id: string }>();
+
+    if (primaryConnection?.id) {
+      try {
+        await persistConnectionRow(primaryConnection.id, {
+          access_token: refreshed.accessToken,
+          expires_at: refreshed.expiresAt,
+          refresh_token: refreshed.refreshToken ?? undefined,
+        });
+      } catch {
+        // Legacy refresh should still succeed even if connection sync fails.
+      }
+    }
+
+    return refreshed.accessToken;
+  } catch (error: any) {
+    const message = String(error?.message ?? error ?? "Google Refresh fehlgeschlagen.");
+    throw new Error("Google Refresh fehlgeschlagen: " + message);
+  }
 }

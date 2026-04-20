@@ -131,7 +131,8 @@ export default function EditAppointmentSlideover({
         style={{
           position: "absolute",
           inset: 0,
-          
+          backgroundColor: "rgba(0,0,0,0.60)",
+          backdropFilter: "blur(6px)",
           opacity: shown ? 1 : 0,
           transition: "opacity 200ms ease",
           pointerEvents: shown ? "auto" : "none",
@@ -139,7 +140,6 @@ export default function EditAppointmentSlideover({
       />
 
       <div
-        className="crm-slideover-panel crm-slideover-panel--compact clientique-scrollbar"
         style={{
           position: "absolute",
           top: 18,
@@ -147,6 +147,10 @@ export default function EditAppointmentSlideover({
           bottom: 18,
           width: 470,
           maxWidth: "calc(100vw - 36px)",
+          borderRadius: 18,
+          border: "1px solid rgba(255,255,255,0.12)",
+          background: "linear-gradient(180deg, rgba(16,16,16,0.92) 0%, rgba(10,10,10,0.92) 100%)",
+          boxShadow: "0 18px 60px rgba(0,0,0,0.55)",
           transform: shown ? "translateX(0)" : "translateX(18px)",
           opacity: shown ? 1 : 0,
           transition: "all 220ms ease",
@@ -155,11 +159,24 @@ export default function EditAppointmentSlideover({
           flexDirection: "column",
         }}
       >
-        <div className="crm-slideover-sticky-header" style={{padding: 16, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10}}>
+        <div
+          style={{
+            padding: 16,
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            gap: 10,
+          }}
+        >
           <div>
-            <div className="crm-slideover-eyebrow">Kalender</div>
-            <div className="crm-slideover-title crm-slideover-title--compact">Termin bearbeiten</div>
-            <div className="crm-slideover-subtitle">Änderungen direkt im Kundenprofil speichern</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>Kalender</div>
+            <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: "rgba(255,255,255,0.95)" }}>
+              Termin bearbeiten
+            </div>
+            <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,0.50)" }}>
+              Änderungen direkt im Kundenprofil speichern
+            </div>
           </div>
 
           <Button variant="secondary" onClick={onClose}>
@@ -167,7 +184,7 @@ export default function EditAppointmentSlideover({
           </Button>
         </div>
 
-        <div className="clientique-scrollbar" style={{ padding: 16, overflow: "auto" }}>
+        <div style={{ padding: 16, overflow: "auto" }}>
           <form action={updateAppointmentFromCalendar.bind(null, appointmentId)} className="space-y-4">
             <input type="hidden" name="returnTo" value={returnTo} />
 

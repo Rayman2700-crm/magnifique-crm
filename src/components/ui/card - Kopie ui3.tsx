@@ -7,8 +7,8 @@ export function Card({
   return (
     <div
       className={cn(
-        "clientique-card rounded-[30px] border border-[rgba(214,195,163,0.16)]",
-        "bg-[linear-gradient(180deg,rgba(255,250,244,0.065)_0%,rgba(255,248,240,0.026)_100%)] shadow-[0_28px_88px_rgba(0,0,0,0.34)] backdrop-blur-[20px]",
+        "clientique-card rounded-[28px] border border-[rgba(214,195,163,0.14)]",
+        "bg-[linear-gradient(180deg,rgba(255,250,244,0.06)_0%,rgba(255,248,240,0.024)_100%)] shadow-[0_26px_84px_rgba(0,0,0,0.34)] backdrop-blur-[18px]",
         className
       )}
       {...props}
@@ -23,7 +23,7 @@ export function CardHeader({
   return (
     <div
       className={cn(
-        "px-5 pt-5 pb-2.5 text-[12px] text-[var(--text-muted)]",
+        "px-5 pt-5 pb-2 text-sm text-[var(--text-muted)]",
         className
       )}
       {...props}
@@ -38,7 +38,7 @@ export function CardContent({
   return (
     <div
       className={cn(
-        "px-4 pb-4",
+        "px-3.5 pb-3.5",
         className
       )}
       {...props}

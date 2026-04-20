@@ -231,7 +231,11 @@ export default async function GoogleCalendarSettingsPage({
       const nextEnabledIds = sanitizeCalendarIds(
         currentEnabledIds.filter((id) => allowedIds.has(String(id ?? "").trim()) && !allBlockedIds.includes(String(id ?? "").trim()))
       );
-      const finalEnabledIds = sanitizeCalendarIds(nextDefaultId ? [nextDefaultId, ...nextEnabledIds] : nextEnabledIds);
+      const finalEnabledIds = sanitizeCalendarIds([
+        ...Array.from(activeStudioIds),
+        ...(nextDefaultId ? [nextDefaultId] : []),
+        ...nextEnabledIds,
+      ]);
 
       if (remainingActiveRows.length === 0) {
         await server
@@ -396,8 +400,9 @@ export default async function GoogleCalendarSettingsPage({
   const connectedStudioIds = new Set(Array.from(studioConnectionsById.entries()).filter(([, row]) => Boolean(row)).map(([id]) => id));
   const activeStudioCalendarId = connectedStudioIds.has(effectiveStudioCalendarId) ? effectiveStudioCalendarId : "";
   const selectedStudioTarget = availableStudioTargets.find((target) => target.calendarId === effectiveStudioCalendarId) ?? null;
+  const autoActiveStudioCalendarIds = Array.from(connectedStudioIds).filter((id) => AVAILABLE_STUDIO_TARGET_IDS.has(id));
   const activeCalendarIds = activeConnections.length > 0
-    ? sanitizeCalendarIds([activeStudioCalendarId, ...enabledExtraIds])
+    ? sanitizeCalendarIds([...autoActiveStudioCalendarIds, ...enabledExtraIds])
     : [];
   const hasConnectedStudioTargets = connectedStudioIds.size > 0;
 
@@ -534,6 +539,10 @@ export default async function GoogleCalendarSettingsPage({
             </div>
 
             <div className="mt-5 rounded-[22px] border border-white/10 bg-black/20 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <div className="mb-4 rounded-[18px] border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+                Verbundene Studio-Schreibkalender sind automatisch in der CRM-Ansicht aktiv. Hier wählst du nur,
+                in welchen Studiokalender neue CRM-Termine geschrieben werden.
+              </div>
               <GoogleCalendarUiSettingsClient
                 saveAction={setDefaultCalendar}
                 studioTargets={availableStudioTargets}

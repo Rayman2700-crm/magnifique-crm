@@ -27,7 +27,6 @@ type LegendUser = {
 
 type ReminderCountRow = {
   id: string;
-  start_at: string | null;
   reminder_at: string | null;
   reminder_sent_at: string | null;
   notes_internal: string | null;
@@ -904,7 +903,6 @@ export default async function DashboardPage() {
     .from("appointments")
     .select(`
       id,
-      start_at,
       reminder_at,
       reminder_sent_at,
       notes_internal
@@ -1145,12 +1143,7 @@ export default async function DashboardPage() {
   const reminderRows = (reminderCountResult.data ?? []) as ReminderCountRow[];
   const reminderCount = reminderRows.filter((row) => {
     const status = parseStatus(row.notes_internal);
-    if (status === "cancelled" || status === "completed" || status === "no_show") return false;
-
-    const startAt = row.start_at ? new Date(row.start_at) : null;
-    if (!startAt || Number.isNaN(startAt.getTime())) return false;
-
-    return startAt.getTime() >= Date.now();
+    return status !== "cancelled" && status !== "completed" && status !== "no_show";
   }).length;
 
   const nextAppointmentRows = (nextAppointmentResult.data ?? []) as NextAppointmentRow[];
@@ -1462,15 +1455,13 @@ export default async function DashboardPage() {
         </Card>
       </section>
 
-      <section id="dashboard-calendar-card" className="scroll-mt-[108px]">
-        <DashboardCalendarCardClient
-          tenants={tenantRows}
-          legendUsers={legendUsers}
-          services={calendarServices}
-          creatorTenantId={creatorTenantId}
-          isAdmin={isAdmin}
-        />
-      </section>
+      <DashboardCalendarCardClient
+        tenants={tenantRows}
+        legendUsers={legendUsers}
+        services={calendarServices}
+        creatorTenantId={creatorTenantId}
+        isAdmin={isAdmin}
+      />
 
       <OpenSlotsSlideover items={openSlotItems} />
       <WaitlistSlideover items={waitlistItems} />

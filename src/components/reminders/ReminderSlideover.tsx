@@ -69,6 +69,65 @@ function isPastAppointment(dateString: string) {
   return new Date(dateString).getTime() < Date.now();
 }
 
+function minutesUntil(dateString: string) {
+  const target = new Date(dateString).getTime();
+  if (Number.isNaN(target)) return null;
+  return Math.floor((target - Date.now()) / 60000);
+}
+
+function formatTimeUntil(dateString: string) {
+  const totalMinutes = minutesUntil(dateString);
+  if (totalMinutes == null) return "";
+  if (totalMinutes <= 0) return "Termin läuft oder ist vorbei";
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours <= 0) return `Termin in ${minutes}m`;
+  return `Termin in ${hours}h ${String(minutes).padStart(2, "0")}m`;
+}
+
+function formatRelativeDuration(dateString: string | null | undefined, empty = "") {
+  const target = new Date(String(dateString ?? "")).getTime();
+  if (Number.isNaN(target)) return empty;
+
+  const diff = Math.abs(Date.now() - target);
+  const totalMinutes = Math.max(0, Math.floor(diff / 60000));
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+
+  if (days > 0) return `${days}d ${String(hours).padStart(2, "0")}h`;
+  if (hours > 0) return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+  return `${minutes}m`;
+}
+
+function getUrgencyMeta(dateString: string) {
+  const totalMinutes = minutesUntil(dateString);
+  if (totalMinutes == null) {
+    return { labelClassName: "text-white/55", cardClassName: "text-white/55" };
+  }
+
+  if (totalMinutes <= 120) {
+    return {
+      labelClassName: "text-red-300",
+      cardClassName: "text-red-300 font-semibold",
+    };
+  }
+
+  if (totalMinutes <= 720) {
+    return {
+      labelClassName: "text-amber-300",
+      cardClassName: "text-amber-300 font-semibold",
+    };
+  }
+
+  return {
+    labelClassName: "text-white/55",
+    cardClassName: "text-white/55",
+  };
+}
+
 function reminderStatus(item: ReminderItem) {
   if (item.reminderSentAt) {
     return {
@@ -414,7 +473,12 @@ export default function ReminderSlideover({
     };
   }, [router, pathname, searchParams]);
 
-  const visibleItems = liveItems.filter((item) => !item.reminderSentAt && !isPastAppointment(item.start_at));
+  const visibleItems = useMemo(() =>
+    liveItems
+      .filter((item) => !item.reminderSentAt && !isPastAppointment(item.start_at))
+      .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime()),
+    [liveItems]
+  );
   const openCount = visibleItems.length;
   const sentCount = liveItems.filter((item) => Boolean(item.reminderSentAt)).length;
   const firstCalendarHref = "/calendar";
@@ -703,6 +767,7 @@ export default function ReminderSlideover({
             <div className="space-y-3">
               {visibleItems.map((item) => {
                 const theme = tenantTheme(item.tenantName ?? "");
+                const urgency = getUrgencyMeta(item.start_at);
                 const hasWhatsApp = Boolean(item.customerPhone && buildReminderWhatsAppUrl(item));
                 const whatsappDisabled = !item.customerPhone || !hasWhatsApp || (isPending && pendingId === item.id);
                 const customerHref = smartCustomerHref(item);
@@ -738,6 +803,9 @@ export default function ReminderSlideover({
                           <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45">
                             Termin
                           </div>
+                          <div className={`mt-1 text-[10px] font-semibold ${urgency.labelClassName}`}>
+                            {formatTimeUntil(item.start_at)}
+                          </div>
                         </div>
 
                         <div className="min-w-0 flex-1">
@@ -750,6 +818,10 @@ export default function ReminderSlideover({
                           {item.reminderSentAt ? (
                             <div className="mt-1 text-[11px] text-emerald-200/85">
                               Gesendet am {formatSentAt(item.reminderSentAt)}
+                            </div>
+                          ) : item.reminderAt ? (
+                            <div className="mt-1 text-[11px] text-white/48">
+                              Offen seit {formatRelativeDuration(item.reminderAt)}
                             </div>
                           ) : null}
                         </div>
@@ -809,6 +881,9 @@ export default function ReminderSlideover({
                           <div className="font-semibold uppercase tracking-[0.16em]">Terminzeit</div>
                           <div className="mt-1 text-[12px] font-semibold normal-case tracking-normal text-white/82">
                             {formatDateTime(item.start_at)}
+                          </div>
+                          <div className={`mt-1 text-[11px] font-medium normal-case tracking-normal ${urgency.cardClassName}`}>
+                            {item.reminderAt ? `Offen seit ${formatRelativeDuration(item.reminderAt)}` : formatTimeUntil(item.start_at)}
                           </div>
                         </div>
                       </div>

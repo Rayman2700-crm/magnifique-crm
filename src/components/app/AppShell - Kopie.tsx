@@ -241,7 +241,6 @@ export default async function AppShell({
     .not("reminder_at", "is", null)
     .is("reminder_sent_at", null)
     .lte("reminder_at", new Date().toISOString())
-    .gte("end_at", new Date().toISOString())
     .order("reminder_at", { ascending: true })
     .limit(25);
 

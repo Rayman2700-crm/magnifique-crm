@@ -28,7 +28,7 @@ export function PageHeader({
           {title}
         </h1>
         {description ? (
-          <p className="mt-1 text-sm text-white/60">{description}</p>
+          <p className="mt-1 text-sm text-black/60">{description}</p>
         ) : null}
       </div>
       {actions ? <div className="flex gap-2">{actions}</div> : null}
