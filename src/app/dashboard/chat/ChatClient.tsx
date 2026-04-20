@@ -1459,7 +1459,7 @@ export default function ChatClient({
               table: "team_messages",
               filter: `tenant_id=eq.${tenantId}`,
             },
-            async (payload) => {
+            async (payload: any) => {
               const row = (payload.new || payload.old) as any;
               if (!row) return;
 
@@ -1512,7 +1512,7 @@ export default function ChatClient({
               }
             }
           )
-          .subscribe((status) => {
+          .subscribe((status: string) => {
             console.log("[realtime] messages status:", status);
 
             if (status === "SUBSCRIBED") {
@@ -1539,7 +1539,7 @@ export default function ChatClient({
               broadcast: { self: false },
             },
           })
-          .on("broadcast", { event: "typing" }, ({ payload }) => {
+          .on("broadcast", { event: "typing" }, ({ payload }: { payload: any }) => {
             const userId = String(payload?.userId ?? "");
             const userName = String(payload?.userName ?? "Team");
             const isTyping = Boolean(payload?.isTyping);
@@ -1560,7 +1560,7 @@ export default function ChatClient({
               setTypingUsers((prev) => prev.filter((u) => u.userId !== userId));
             }
           })
-          .subscribe((status) => {
+          .subscribe((status: string) => {
             console.log("[realtime] typing status:", status);
           });
 
@@ -1573,7 +1573,7 @@ export default function ChatClient({
               schema: "public",
               table: "team_message_reactions",
             },
-            (payload) => {
+            (payload: any) => {
               const row = payload.new as any;
               const messageId = String(row.message_id ?? "");
 
@@ -1599,12 +1599,12 @@ export default function ChatClient({
               schema: "public",
               table: "team_message_reactions",
             },
-            (payload) => {
+            (payload: any) => {
               const row = payload.old as any;
               removeReactionRow(String(row.id));
             }
           )
-          .subscribe((status) => {
+          .subscribe((status: string) => {
             console.log("[realtime] reactions status:", status);
           });
 
