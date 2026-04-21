@@ -490,8 +490,8 @@ function MobileBottomNavIsland({
 }) {
   return (
     <div className={cn("pointer-events-none fixed inset-x-0 bottom-[max(10px,env(safe-area-inset-bottom))] z-[85] px-3", visible ? "block" : "hidden")}>
-      <div className="pointer-events-auto relative mx-auto flex max-w-[420px] items-center gap-[2px] overflow-visible rounded-[22px] border border-white/[0.06] bg-[rgba(18,14,11,0.12)] px-[5px] py-[5px] backdrop-blur-[20px] saturate-[118%]">
-        <div className="pointer-events-none absolute inset-0 rounded-[22px] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]" />
+      <div className="pointer-events-auto relative mx-auto flex max-w-[420px] items-center gap-[2px] overflow-visible rounded-[22px] border border-white/[0.12] bg-[rgba(255,255,255,0.09)] px-[5px] py-[5px] backdrop-blur-[20px] saturate-[118%]">
+        <div className="pointer-events-none absolute inset-0 rounded-[22px] shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]" />
         <MobileBottomNavButton icon={<HomeIcon />} label="Dashboard" active={isDashboardActive} onClick={onDashboard} />
         <MobileBottomNavButton icon={<CalendarIcon />} label="Kalender" active={isCalendarActive} onClick={onCalendar} />
         <MobileBottomNavButton icon={<ReceiptIcon />} label="Rechnungen" active={isReceiptsActive} onClick={onReceipts} />
