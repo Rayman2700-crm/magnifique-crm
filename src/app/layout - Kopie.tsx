@@ -1,4 +1,4 @@
-import type { Metadata, Viewport } from "next";
+import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import AppShell from "@/components/app/AppShell";
@@ -18,11 +18,6 @@ export const metadata: Metadata = {
   title: "Magnifique CRM",
   description: "Kunden, Termine, Rechnungen & Intake",
   manifest: "/manifest.webmanifest",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "black-translucent",
-    title: "Magnifique CRM",
-  },
   icons: {
     icon: [
       { url: "/brand/favicon.svg", type: "image/svg+xml" },
@@ -30,10 +25,6 @@ export const metadata: Metadata = {
     ],
     apple: [{ url: "/brand/apple-touch-icon.png" }],
   },
-};
-
-export const viewport: Viewport = {
-  themeColor: "#120f0c",
 };
 
 export default async function RootLayout({
@@ -54,11 +45,8 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang="de" style={{ backgroundColor: "#120f0c" }}>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-        style={{ backgroundColor: "#120f0c", color: "#f6f0e8" }}
-      >
+    <html lang="de">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {currentUserId ? (
           <AppShell
             userLabel={userLabel}
