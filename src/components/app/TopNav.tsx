@@ -1020,6 +1020,7 @@ return (
       onReceipts={navigateReceipts}
       onReminders={openReminders}
       onChat={openChat}
+      onAssistant={openAssistant}
     />
     <MobileNavDrawer
       open={mobileMenuOpen}
