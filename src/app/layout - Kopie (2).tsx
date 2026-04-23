@@ -30,13 +30,6 @@ export const metadata: Metadata = {
     ],
     apple: [{ url: "/brand/apple-touch-icon.png" }],
   },
-  other: {
-    "mobile-web-app-capable": "yes",
-    "apple-mobile-web-app-capable": "yes",
-    "apple-mobile-web-app-status-bar-style": "black-translucent",
-    "apple-mobile-web-app-title": "Magnifique CRM",
-    "format-detection": "telephone=no",
-  },
 };
 
 export const viewport: Viewport = {
@@ -61,28 +54,10 @@ export default async function RootLayout({
   }
 
   return (
-    <html
-      lang="de"
-      style={{ backgroundColor: "#120f0c", color: "#f6f0e8" }}
-      suppressHydrationWarning
-    >
-      <head>
-        <meta name="theme-color" content="#120f0c" />
-        <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="Magnifique CRM" />
-        <meta name="format-detection" content="telephone=no" />
-        <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" />
-        <link rel="preload" as="image" href="/brand/apple-touch-icon.png" />
-      </head>
+    <html lang="de" style={{ backgroundColor: "#120f0c" }}>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-        style={{
-          backgroundColor: "#120f0c",
-          color: "#f6f0e8",
-          minHeight: "100vh",
-        }}
+        style={{ backgroundColor: "#120f0c", color: "#f6f0e8" }}
       >
         {currentUserId ? (
           <AppShell

@@ -1,12 +1,25 @@
 {
   "name": "Magnifique CRM",
   "short_name": "CRM",
-  "start_url": "/dashboard",
+  "description": "Kunden, Termine, Rechnungen & Intake",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#120f0c",
+  "theme_color": "#120f0c",
   "icons": [
-    { "src": "/brand/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
-    { "src": "/brand/logo.png", "sizes": "512x512", "type": "image/png" }
+    {
+      "src": "/brand/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
   ]
 }
