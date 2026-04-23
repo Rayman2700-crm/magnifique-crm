@@ -333,7 +333,7 @@ function MobileNavDrawer({ open, shown, onClose, pathname, remindersOpen, waitli
   }, [open, onClose]);
   if (!mounted || !open || typeof document === "undefined") return null;
 
-  const itemClass = "clientique-touchable clientique-touchable--soft flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-3 text-left text-sm font-medium text-white/90 transition hover:bg-white/[0.08]";
+  const itemClass = "flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-3 text-left text-sm font-medium text-white/90 transition hover:bg-white/[0.08]";
   const isActive = (href: string) => href === "/dashboard" ? pathname === "/dashboard" : pathname?.startsWith(href);
 
   function DrawerLink({
@@ -449,7 +449,7 @@ function SidebarItem({ icon, label, active = false, badgeCount = 0, pulse = fals
     </>
   );
 
-  const className = cn("clientique-touchable clientique-touchable--soft group flex h-10 items-center rounded-[16px] px-1.5 text-left transition-colors duration-200 hover:bg-white/[0.04]", divider && "mt-3 pt-3 border-t border-white/[0.06]");
+  const className = cn("group flex h-10 items-center rounded-[16px] px-1.5 text-left transition-colors duration-200 hover:bg-white/[0.04]", divider && "mt-3 pt-3 border-t border-white/[0.06]");
   if (href) return <Link href={href} className={className}>{content}</Link>;
   return <button type="button" onClick={onClick} className={cn(className, "w-full")}>{content}</button>;
 }
@@ -522,7 +522,7 @@ function MobileBottomNavButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "clientique-touchable clientique-touchable--nav relative z-10 flex h-[50px] min-w-0 flex-1 flex-col items-center justify-center gap-0 rounded-[15px] px-[2px] text-center transition",
+        "relative z-10 flex h-[50px] min-w-0 flex-1 flex-col items-center justify-center gap-0 rounded-[15px] px-[2px] text-center transition active:scale-[0.985]",
         active
           ? "bg-[rgba(255,255,255,0.055)] text-[var(--brand-gold,#d6b98b)]"
           : "text-white/72 hover:bg-white/[0.018] hover:text-white"
