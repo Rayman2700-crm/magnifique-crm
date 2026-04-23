@@ -407,3 +407,50 @@ img {
     0 18px 48px rgba(0,0,0,0.16),
     inset 0 1px 0 rgba(255,255,255,0.025);
 }
+
+/* === Global mobile touch behavior === */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+a,
+button,
+[role="button"],
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  a,
+  button,
+  [role="button"] {
+    -webkit-touch-callout: none;
+  }
+
+  a:hover,
+  button:hover,
+  [role="button"]:hover,
+  input:hover,
+  select:hover,
+  textarea:hover {
+    transform: none !important;
+    box-shadow: inherit !important;
+    filter: none !important;
+    opacity: 1 !important;
+  }
+
+  a:active,
+  button:active,
+  [role="button"]:active {
+    transform: scale(0.985) !important;
+    transition-duration: 90ms !important;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  button {
+    cursor: pointer;
+  }
+}
