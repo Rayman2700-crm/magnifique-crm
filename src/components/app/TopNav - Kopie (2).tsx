@@ -161,6 +161,16 @@ function ClockIcon() {
   );
 }
 
+function SparklesIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3l1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3Z" />
+      <path d="M19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14Z" />
+      <path d="M5 14l.7 1.6L7.3 16l-1.6.7L5 18.3l-.7-1.6L2.7 16l1.6-.4L5 14Z" />
+    </svg>
+  );
+}
+
 function SettingsIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
@@ -471,6 +481,7 @@ function MobileBottomNavIsland({
   onReceipts,
   onReminders,
   onChat,
+  onAssistant,
 }: {
   visible: boolean;
   isDashboardActive: boolean;
@@ -487,16 +498,18 @@ function MobileBottomNavIsland({
   onReceipts: () => void;
   onReminders: () => void;
   onChat: () => void;
+  onAssistant: () => void;
 }) {
   return (
     <div className={cn("pointer-events-none fixed inset-x-0 bottom-[max(10px,env(safe-area-inset-bottom))] z-[85] px-3", visible ? "block" : "hidden")}>
-      <div className="pointer-events-auto relative mx-auto flex max-w-[420px] items-center gap-[2px] overflow-visible rounded-[22px] border border-white/[0.12] bg-[rgba(255,255,255,0.09)] px-[5px] py-[5px] backdrop-blur-[20px] saturate-[118%]">
+      <div className="pointer-events-auto relative mx-auto flex max-w-[440px] items-center gap-[1px] overflow-visible rounded-[22px] border border-white/[0.12] bg-[rgba(255,255,255,0.09)] px-[4px] py-[4px] backdrop-blur-[20px] saturate-[118%]">
         <div className="pointer-events-none absolute inset-0 rounded-[22px] shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]" />
         <MobileBottomNavButton icon={<HomeIcon />} label="Dashboard" active={isDashboardActive} onClick={onDashboard} />
         <MobileBottomNavButton icon={<CalendarIcon />} label="Kalender" active={isCalendarActive} onClick={onCalendar} />
         <MobileBottomNavButton icon={<ReceiptIcon />} label="Rechnungen" active={isReceiptsActive} onClick={onReceipts} />
         <MobileBottomNavButton icon={<BellIcon />} label="Reminder" active={isRemindersActive} onClick={onReminders} badgeCount={reminderCount} pulse={reminderPulse} />
-        <MobileBottomNavButton icon={<ChatIcon />} label="Team Chat" active={isChatActive} onClick={onChat} badgeCount={unreadCount} pulse={chatPulse} />
+        <MobileBottomNavButton icon={<ChatIcon />} label="Chat" active={isChatActive} onClick={onChat} badgeCount={unreadCount} pulse={chatPulse} />
+        <MobileBottomNavButton icon={<SparklesIcon />} label="Assist" active={false} onClick={onAssistant} />
       </div>
     </div>
   );
@@ -522,7 +535,7 @@ function MobileBottomNavButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "clientique-touchable clientique-touchable--nav relative z-10 flex h-[50px] min-w-0 flex-1 flex-col items-center justify-center gap-0 rounded-[15px] px-[2px] text-center transition",
+        "clientique-touchable clientique-touchable--nav relative z-10 flex h-[50px] min-w-0 flex-1 flex-col items-center justify-center gap-0 rounded-[14px] px-[1px] text-center transition",
         active
           ? "bg-[rgba(255,255,255,0.055)] text-[var(--brand-gold,#d6b98b)]"
           : "text-white/72 hover:bg-white/[0.018] hover:text-white"
@@ -541,7 +554,7 @@ function MobileBottomNavButton({
           <span className="absolute -right-[5px] -top-[5px] z-20"><BrandBadge count={badgeCount} pulse={pulse} /></span>
         ) : null}
       </span>
-      <span className="truncate text-[10px] font-medium leading-[0.95] tracking-[-0.01em]">{label}</span>
+      <span className="truncate text-[9px] font-medium leading-[0.95] tracking-[-0.01em]">{label}</span>
     </button>
   );
 }
@@ -565,6 +578,12 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
   const [mobileMenuShown, setMobileMenuShown] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+
+  const openAssistant = () => {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("studio-assistant:open"));
+    }
+  };
 
   const previousChatCount = useRef(0);
   const previousReminderCount = useRef(reminderCount);

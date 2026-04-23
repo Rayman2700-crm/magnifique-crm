@@ -407,3 +407,102 @@ img {
     0 18px 48px rgba(0,0,0,0.16),
     inset 0 1px 0 rgba(255,255,255,0.025);
 }
+
+
+/* === refined touch feedback === */
+html,
+body {
+  -webkit-touch-callout: none;
+}
+
+a,
+button,
+[role="button"],
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+label[for],
+select {
+  touch-action: manipulation;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  a,
+  button,
+  [role="button"],
+  input,
+  textarea,
+  select {
+    transition:
+      background-color 140ms ease,
+      border-color 140ms ease,
+      color 140ms ease,
+      box-shadow 140ms ease,
+      transform 110ms ease,
+      opacity 140ms ease,
+      filter 140ms ease;
+  }
+
+  a:hover,
+  button:hover,
+  [role="button"]:hover {
+    background-color: inherit;
+    border-color: inherit;
+    color: inherit;
+    box-shadow: inherit;
+    transform: none;
+    filter: none;
+  }
+
+  a:active,
+  button:active,
+  [role="button"]:active {
+    transform: scale(0.992);
+    filter: brightness(1.04);
+  }
+
+  .clientique-touchable {
+    position: relative;
+    -webkit-tap-highlight-color: transparent;
+    transform: translateZ(0);
+  }
+
+  .clientique-touchable::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: rgba(255, 248, 240, 0);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 110ms ease, background-color 110ms ease;
+  }
+
+  .clientique-touchable:active {
+    transform: scale(0.992);
+  }
+
+  .clientique-touchable:active::after {
+    opacity: 1;
+    background: rgba(255, 248, 240, 0.055);
+  }
+
+  .clientique-touchable--soft:active::after {
+    background: rgba(255, 248, 240, 0.045);
+  }
+
+  .clientique-touchable--nav:active {
+    transform: scale(0.988);
+  }
+
+  .clientique-touchable--nav:active::after {
+    background: rgba(255, 248, 240, 0.05);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .clientique-touchable:active,
+  .clientique-touchable--nav:active {
+    transform: none;
+  }
+}

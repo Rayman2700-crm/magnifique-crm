@@ -9,7 +9,6 @@ import { getEffectiveTenantId } from "@/lib/effectiveTenant";
 import { getValidGoogleAccessToken } from "@/lib/google/getValidGoogleAccessToken";
 import type { Item } from "@/components/calendar/types";
 import GoogleCalendarSetupSlideover from "@/components/calendar/GoogleCalendarSetupSlideover";
-import StudioAssistantSlideover from "@/components/assistant/StudioAssistantSlideover";
 import type { ReactNode } from "react";
 
 type ReminderRow = {
@@ -440,10 +439,6 @@ export default async function AppShell({
           calendars={googleCalendars}
           savedDefault={googleSavedDefault}
           loadError={googleLoadError}
-        />
-        <StudioAssistantSlideover
-          userLabel={resolvedUserLabel ?? undefined}
-          tenantId={tenantId}
         />
       </div>
     </div>
