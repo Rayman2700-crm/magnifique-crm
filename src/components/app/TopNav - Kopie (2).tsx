@@ -831,11 +831,8 @@ return (
     <div
       className={cn(
         "fixed inset-x-0 z-40 bg-transparent shadow-none backdrop-blur-0",
-        isMobile
-          ? "px-1 pt-[max(env(safe-area-inset-top),10px)]"
-          : "top-4 px-5 lg:pl-[88px] lg:pr-2 xl:top-3"
+        isMobile ? "top-3 px-1" : "top-4 px-5 lg:pl-[88px] lg:pr-2 xl:top-3"
       )}
-      style={isMobile ? { paddingTop: "max(env(safe-area-inset-top), 10px)" } : undefined}
     >
       <div className={cn(isMobile ? "w-full" : "mx-auto w-full max-w-[1400px]")}>
         <div
