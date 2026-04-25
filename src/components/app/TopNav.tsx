@@ -509,7 +509,7 @@ function MobileBottomNavIsland({
         <MobileBottomNavButton icon={<ReceiptIcon />} label="Rechnungen" active={isReceiptsActive} onClick={onReceipts} />
         <MobileBottomNavButton icon={<BellIcon />} label="Reminder" active={isRemindersActive} onClick={onReminders} badgeCount={reminderCount} pulse={reminderPulse} />
         <MobileBottomNavButton icon={<ChatIcon />} label="Chat" active={isChatActive} onClick={onChat} badgeCount={unreadCount} pulse={chatPulse} />
-        <MobileBottomNavButton icon={<SparklesIcon />} label="Assist" active={false} onClick={onAssistant} />
+        <MobileBottomNavButton icon={<SparklesIcon />} label="GIGI" active={false} onClick={onAssistant} />
       </div>
     </div>
   );

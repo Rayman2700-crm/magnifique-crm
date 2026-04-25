@@ -2702,6 +2702,7 @@ export default function DashboardCalendarCardClient({
   const loadSeq = useRef(0);
   const hasLoadedOnceRef = useRef(false);
   const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const googleSyncPollInFlightRef = useRef(false);
   const lastGoogleSyncAtRef = useRef(0);
 
   const view = calendarState.view;
@@ -2864,8 +2865,8 @@ export default function DashboardCalendarCardClient({
   }, []);
 
   const loadExtraGoogleItems = useCallback(async () => {
-    if (!isAdmin) return [] as Item[];
-
+    // Private/Zusatzkalender sind pro Benutzer read-only und muessen fuer alle Benutzer sichtbar geladen werden.
+    // Nicht nur Admin: jeder eingeloggte Benutzer darf seinen eigenen privaten Kalender anzeigen.
     try {
       const extraResult = await getReadOnlyExtraGoogleCalendarEventsForRange({
         startISO: range.startISO,
@@ -2913,7 +2914,7 @@ export default function DashboardCalendarCardClient({
       console.error("Zusatzkalender konnten nicht geladen werden", extraError);
       return [] as Item[];
     }
-  }, [creatorTenantId, currentLegendUser, currentTenantDisplayName, isAdmin, range.endISO, range.startISO, studioCalendarTenantMap]);
+  }, [creatorTenantId, currentLegendUser, currentTenantDisplayName, range.endISO, range.startISO, studioCalendarTenantMap]);
 
   const loadAppointments = useCallback(async (options?: { skipGoogleSync?: boolean }) => {
     const seq = ++loadSeq.current;
@@ -3054,6 +3055,51 @@ export default function DashboardCalendarCardClient({
   useEffect(() => {
     loadAppointments();
   }, [loadAppointments]);
+
+  useEffect(() => {
+    const runGoogleSyncOnReturn = async () => {
+      if (document.visibilityState !== "visible") return;
+      if (googleSyncPollInFlightRef.current) return;
+
+      const nowMs = Date.now();
+      // Kein Dauer-Polling mehr: Google wird nur beim Zurueckkehren/Fokus synchronisiert.
+      // Der kleine Cooldown verhindert doppelte Syncs durch focus + visibilitychange gleichzeitig.
+      if (nowMs - lastGoogleSyncAtRef.current < 10_000) return;
+
+      googleSyncPollInFlightRef.current = true;
+      lastGoogleSyncAtRef.current = nowMs;
+
+      try {
+        await syncGoogleCalendarRangeToAppointments({
+          startISO: range.startISO,
+          endISO: range.endISO,
+        });
+
+        await loadAppointments({ skipGoogleSync: true });
+      } catch (syncError: any) {
+        console.error("Google-Kalender Fokus-Sync fehlgeschlagen", syncError);
+      } finally {
+        googleSyncPollInFlightRef.current = false;
+      }
+    };
+
+    const handleVisible = () => {
+      if (document.visibilityState === "visible") {
+        void runGoogleSyncOnReturn();
+      }
+    };
+
+    window.addEventListener("focus", handleVisible);
+    window.addEventListener("pageshow", handleVisible);
+    document.addEventListener("visibilitychange", handleVisible);
+
+    return () => {
+      window.removeEventListener("focus", handleVisible);
+      window.removeEventListener("pageshow", handleVisible);
+      document.removeEventListener("visibilitychange", handleVisible);
+      googleSyncPollInFlightRef.current = false;
+    };
+  }, [loadAppointments, range.endISO, range.startISO]);
 
   useEffect(() => {
     const triggerVisibleRefresh = () => {

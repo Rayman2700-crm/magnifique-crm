@@ -36,6 +36,8 @@ type GoogleOauthConnectionRow = {
   is_active: boolean | null;
   is_primary: boolean | null;
   is_read_only: boolean | null;
+  default_calendar_id?: string | null;
+  enabled_calendar_ids?: string[] | null;
 };
 
 const STUDIO_WRITE_TARGETS: Record<Exclude<StudioWriteTarget, "auto">, {
@@ -82,6 +84,23 @@ function isTargetConnectionMatch(
       : [definition.connectionLabel.toLowerCase()];
 
   return email === definition.emailHint.toLowerCase() || labelAliases.includes(label);
+}
+
+function getStudioWriteTargetForConnection(
+  row: Pick<GoogleOauthConnectionRow, "google_account_email" | "connection_label" | "is_read_only"> | null | undefined
+): Exclude<StudioWriteTarget, "auto"> | null {
+  if (!row || row.is_read_only === true) return null;
+  if (isTargetConnectionMatch(row, "studio_radu")) return "studio_radu";
+  if (isTargetConnectionMatch(row, "studio_raluca")) return "studio_raluca";
+  return null;
+}
+
+function isStudioWriteCalendarId(calendarId: string | null | undefined) {
+  const normalized = normalizeGoogleCalendarId(calendarId);
+  return (
+    normalized === STUDIO_WRITE_TARGETS.studio_radu.calendarId ||
+    normalized === STUDIO_WRITE_TARGETS.studio_raluca.calendarId
+  );
 }
 
 function normalizeStudioWriteTarget(value: FormDataEntryValue | null): StudioWriteTarget {
@@ -185,7 +204,7 @@ async function findStudioGoogleConnectionForOwner(
 
   const byLabel = await admin
     .from("google_oauth_connections")
-    .select("id, owner_user_id, provider, connection_type, connection_label, google_account_email, google_account_name, access_token, refresh_token, expires_at, is_active, is_primary, is_read_only")
+    .select("id, owner_user_id, provider, connection_type, connection_label, google_account_email, google_account_name, access_token, refresh_token, expires_at, is_active, is_primary, is_read_only, default_calendar_id, enabled_calendar_ids")
     .eq("connection_label", definition.connectionLabel)
     .eq("is_active", true)
     .order("updated_at", { ascending: false })
@@ -242,16 +261,18 @@ async function findAutomaticGoogleConnectionForOwner(admin: any, ownerUserId: st
   }
 
   const rowsList = Array.isArray(rows) ? (rows as GoogleOauthConnectionRow[]) : [];
-  if (rowsList.length === 0) return null;
 
-  const nonStudioConnection = rowsList.find((row) => {
-    const label = String(row.connection_label ?? "").trim().toLowerCase();
-    return label !== "radu studio" && label !== "raluca studio";
-  });
+  // Automatisch darf niemals einen privaten Kalender als Schreibkalender nehmen.
+  // Zulässig sind nur die beiden Studio-Schreibkalender.
+  const studioRows = rowsList.filter((row) => getStudioWriteTargetForConnection(row) !== null);
+  if (studioRows.length === 0) return null;
 
-  return nonStudioConnection ?? rowsList[0] ?? null;
+  const raduStudio = studioRows.find((row) => getStudioWriteTargetForConnection(row) === "studio_radu");
+  if (raduStudio) return raduStudio;
+
+  const ralucaStudio = studioRows.find((row) => getStudioWriteTargetForConnection(row) === "studio_raluca");
+  return ralucaStudio ?? studioRows[0] ?? null;
 }
-
 async function resolveAutomaticCalendarIdForConnection(
   admin: any,
   connection: GoogleOauthConnectionRow
@@ -1086,6 +1107,40 @@ async function ensurePersonIdForGoogleMirror(admin: any, tenantId: string, summa
   return String(insertedPerson.id);
 }
 
+async function updateGoogleMirrorPersonNameIfSafe(admin: any, tenantId: string, personId: string | null | undefined, nextName: string) {
+  const cleanPersonId = String(personId ?? "").trim();
+  const cleanTenantId = String(tenantId ?? "").trim();
+  const cleanName = String(nextName ?? "").trim();
+
+  if (!cleanPersonId || !cleanTenantId || !cleanName) return;
+
+  // Nur reine Google-Spiegelpersonen aktualisieren.
+  // Echte CRM-Kunden haben ein customer_profile und dürfen durch Google-Titeländerungen
+  // niemals umbenannt werden.
+  const { data: profileRows, error: profileError } = await admin
+    .from("customer_profiles")
+    .select("id")
+    .eq("tenant_id", cleanTenantId)
+    .eq("person_id", cleanPersonId)
+    .limit(1);
+
+  if (profileError) {
+    console.error("Google Mirror Person Check fehlgeschlagen", profileError.message);
+    return;
+  }
+
+  if (Array.isArray(profileRows) && profileRows.length > 0) return;
+
+  const { error: updateError } = await admin
+    .from("persons")
+    .update({ full_name: cleanName })
+    .eq("id", cleanPersonId);
+
+  if (updateError) {
+    console.error("Google Mirror Person Update fehlgeschlagen", updateError.message);
+  }
+}
+
 
 
 export async function getReadOnlyExtraGoogleCalendarEventsForRange(input: { startISO: string; endISO: string }) {
@@ -1114,7 +1169,7 @@ export async function getReadOnlyExtraGoogleCalendarEventsForRange(input: { star
       .maybeSingle(),
     admin
       .from("google_oauth_connections")
-      .select("id, owner_user_id, provider, connection_type, connection_label, google_account_email, google_account_name, access_token, refresh_token, expires_at, is_active, is_primary, is_read_only")
+      .select("id, owner_user_id, provider, connection_type, connection_label, google_account_email, google_account_name, access_token, refresh_token, expires_at, is_active, is_primary, is_read_only, default_calendar_id, enabled_calendar_ids")
       .eq("owner_user_id", user.id)
       .eq("is_active", true),
   ]);
@@ -1130,22 +1185,34 @@ export async function getReadOnlyExtraGoogleCalendarEventsForRange(input: { star
   if (!activeRows.length) {
     return { ok: true, items: [] };
   }
-
   const tokenSelection = resolveEnabledCalendarIds((tokenRow ?? null) as GoogleTokenSelectionRow | null);
   const defaultCalendarId = normalizeGoogleCalendarId(tokenSelection.defaultCalendarId ?? null);
-  const enabledIds = sanitizeCalendarIdList(tokenSelection.enabledIds.map((value) => normalizeGoogleCalendarId(value)));
+  const tokenEnabledIds = sanitizeCalendarIdList(tokenSelection.enabledIds.map((value) => normalizeGoogleCalendarId(value)));
 
   const readOnlyConnections = activeRows.filter((row) => row.is_read_only === true);
-  const readOnlyCalendarIds = sanitizeCalendarIdList(
-    readOnlyConnections.flatMap((row) => [
-      normalizeGoogleCalendarId(row.google_account_email),
-      normalizeGoogleCalendarId(row.google_account_name),
-      normalizeGoogleCalendarId(row.connection_label),
-    ])
+
+  // Wichtig: Eine read-only Verbindung kann mehrere Kalender anzeigen.
+  // Beispiel: Connection "Privater Kalender" läuft über radu.craus@gmail.com,
+  // aber der tatsächlich gewählte Kalender ist fenster.lenhardt@gmail.com.
+  // Deshalb dürfen wir NICHT nur google_account_email/connection_label als Kalender-ID verwenden.
+  const readOnlyEnabledIds = sanitizeCalendarIdList(
+    readOnlyConnections.flatMap((row) => {
+      const rowDefaultId = normalizeGoogleCalendarId(row.default_calendar_id ?? null);
+      const rowEnabledIds = Array.isArray(row.enabled_calendar_ids)
+        ? row.enabled_calendar_ids.map((value) => normalizeGoogleCalendarId(value))
+        : [];
+      return [rowDefaultId, ...rowEnabledIds];
+    })
   );
 
+  const candidateExtraCalendarIds = readOnlyEnabledIds.length > 0 ? readOnlyEnabledIds : tokenEnabledIds;
+
   const extraCalendarIds = sanitizeCalendarIdList(
-    enabledIds.filter((calendarId) => calendarId && calendarId !== defaultCalendarId && readOnlyCalendarIds.includes(calendarId))
+    candidateExtraCalendarIds.filter((calendarId) =>
+      calendarId &&
+      calendarId !== defaultCalendarId &&
+      !isStudioWriteCalendarId(calendarId)
+    )
   );
 
   if (extraCalendarIds.length === 0) {
@@ -1154,8 +1221,19 @@ export async function getReadOnlyExtraGoogleCalendarEventsForRange(input: { star
 
   const connectionByCalendarId = new Map<string, GoogleOauthConnectionRow>();
   for (const row of readOnlyConnections) {
-    for (const candidate of [row.google_account_email, row.google_account_name, row.connection_label]) {
-      const normalized = normalizeGoogleCalendarId(candidate);
+    const rowDefaultId = normalizeGoogleCalendarId(row.default_calendar_id ?? null);
+    const rowEnabledIds = Array.isArray(row.enabled_calendar_ids)
+      ? row.enabled_calendar_ids.map((value) => normalizeGoogleCalendarId(value))
+      : [];
+    const candidates = sanitizeCalendarIdList([
+      rowDefaultId,
+      ...rowEnabledIds,
+      normalizeGoogleCalendarId(row.google_account_email),
+      normalizeGoogleCalendarId(row.google_account_name),
+      normalizeGoogleCalendarId(row.connection_label),
+    ]);
+
+    for (const normalized of candidates) {
       if (!normalized || !extraCalendarIds.includes(normalized) || connectionByCalendarId.has(normalized)) continue;
       connectionByCalendarId.set(normalized, row);
     }
@@ -1177,7 +1255,7 @@ export async function getReadOnlyExtraGoogleCalendarEventsForRange(input: { star
   }> = [];
 
   for (const calendarId of extraCalendarIds) {
-    const connection = connectionByCalendarId.get(calendarId);
+    const connection = connectionByCalendarId.get(calendarId) ?? (readOnlyConnections.length === 1 ? readOnlyConnections[0] : undefined);
     if (!connection) continue;
 
     let accessToken = "";
@@ -1356,6 +1434,7 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
     tenantId: string;
     ownerLabel: string;
     accessToken: string;
+    connectionId: string | null;
   }> = [];
 
   const { data: studioConnections, error: studioConnectionsError } = await admin
@@ -1372,38 +1451,32 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
 
   const studioConnectionList = Array.isArray(studioConnections) ? studioConnections as GoogleOauthConnectionRow[] : [];
 
-  if (defaultCalendarId) {
+  if (defaultCalendarId && isStudioWriteCalendarId(defaultCalendarId)) {
     const matchedDefaultConnection = studioConnectionList.find((connection) => {
+      if (getStudioWriteTargetForConnection(connection) === null) return false;
       return [connection.google_account_email, connection.connection_label, connection.google_account_name]
         .map((value) => normalizeGoogleCalendarId(value))
         .includes(normalizeGoogleCalendarId(defaultCalendarId));
     });
 
-    const defaultToken = matchedDefaultConnection
-      ? await getAccessTokenForGoogleConnection(admin, matchedDefaultConnection)
-      : await getValidGoogleAccessToken();
+    if (matchedDefaultConnection?.id) {
+      const defaultToken = await getAccessTokenForGoogleConnection(admin, matchedDefaultConnection);
 
-    syncTargets.push({
-      calendarId: defaultCalendarId,
-      tenantId: resolveStudioTenantId(defaultCalendarId),
-      ownerLabel: String(matchedDefaultConnection?.connection_label ?? matchedDefaultConnection?.google_account_name ?? matchedDefaultConnection?.google_account_email ?? ownerProfile?.full_name ?? "Google Kalender").trim() || "Google Kalender",
-      accessToken: defaultToken,
-    });
+      syncTargets.push({
+        calendarId: normalizeGoogleCalendarId(defaultCalendarId),
+        tenantId: resolveStudioTenantId(defaultCalendarId),
+        ownerLabel: String(matchedDefaultConnection.connection_label ?? matchedDefaultConnection.google_account_name ?? matchedDefaultConnection.google_account_email ?? ownerProfile?.full_name ?? "Google Kalender").trim() || "Google Kalender",
+        accessToken: defaultToken,
+        connectionId: String(matchedDefaultConnection.id),
+      });
+    }
   }
 
   for (const connection of studioConnectionList) {
-    let matchedCalendarId = "";
+    const target = getStudioWriteTargetForConnection(connection);
+    if (!target) continue;
 
-    for (const definition of Object.values(STUDIO_WRITE_TARGETS)) {
-      const matchesLabel = String(connection.connection_label ?? "").trim().toLowerCase() === definition.connectionLabel.toLowerCase();
-      const matchesEmail = String(connection.google_account_email ?? "").trim().toLowerCase() === definition.emailHint.toLowerCase();
-      if (matchesLabel || matchesEmail) {
-        matchedCalendarId = definition.calendarId;
-        break;
-      }
-    }
-
-    if (!matchedCalendarId) continue;
+    const matchedCalendarId = STUDIO_WRITE_TARGETS[target].calendarId;
     if (syncTargets.some((entry) => entry.calendarId === matchedCalendarId)) continue;
 
     const connectionToken = await getAccessTokenForGoogleConnection(admin, connection);
@@ -1414,6 +1487,7 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
       tenantId: mappedTenantId,
       ownerLabel: String(connection.connection_label ?? connection.google_account_name ?? connection.google_account_email ?? ownerProfile?.full_name ?? "Google Kalender").trim() || "Google Kalender",
       accessToken: connectionToken,
+      connectionId: String(connection.id),
     });
   }
 
@@ -1572,6 +1646,10 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
         ? String(existing.person_id)
         : await ensurePersonIdForGoogleMirror(admin, stableTenantId, mirrorPersonName);
 
+      if (isExternalStudioMirror && existing?.person_id) {
+        await updateGoogleMirrorPersonNameIfSafe(admin, stableTenantId, personId, mirrorPersonName);
+      }
+
       let notesInternal = buildNotesInternal({
         existing: existing?.notes_internal ?? null,
         title,
@@ -1597,6 +1675,9 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
             notes_internal: notesInternal || null,
             google_calendar_id: calendarId,
             google_event_id: googleEventId,
+            google_connection_id: syncTarget.connectionId,
+            calendar_connection_id: syncTarget.connectionId,
+            calendar_mode: "STUDIO",
           },
           "scheduled"
         );
@@ -1622,6 +1703,9 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
           notes_internal: notesInternal || null,
           google_calendar_id: calendarId,
           google_event_id: googleEventId,
+          google_connection_id: syncTarget.connectionId,
+          calendar_connection_id: syncTarget.connectionId,
+          calendar_mode: "STUDIO",
         },
         "scheduled"
       );
@@ -2056,6 +2140,8 @@ export async function createAppointmentQuick(formData: FormData) {
     reminder_sent_at: null,
     notes_internal: notesInternal || null,
     google_connection_id: googleConnectionId,
+    calendar_connection_id: googleConnectionId,
+    calendar_mode: "STUDIO",
     google_write_calendar_id: googleWriteCalendarId || calendarId,
     google_calendar_id: calendarId,
     google_event_id: googleEventId || null,
@@ -2072,8 +2158,31 @@ export async function createAppointmentQuick(formData: FormData) {
 
 async function ensureWritableGoogleCalendarAppointment(
   admin: any,
-  input: { googleCalendarId?: string | null; notesInternal?: string | null }
+  input: {
+    googleCalendarId?: string | null;
+    notesInternal?: string | null;
+    calendarMode?: string | null;
+    calendarConnectionId?: string | null;
+  }
 ) {
+  const mode = String(input.calendarMode ?? "").trim().toUpperCase();
+  if (mode === "PRIVATE") {
+    throw new Error("Zusatzkalender-Termine sind schreibgeschützt. Änderungen bitte direkt im ursprünglichen Google-Kalender machen.");
+  }
+
+  const connectionId = String(input.calendarConnectionId ?? "").trim();
+  if (connectionId) {
+    const { data: connection } = await admin
+      .from("google_oauth_connections")
+      .select("is_read_only")
+      .eq("id", connectionId)
+      .maybeSingle();
+
+    if ((connection as any)?.is_read_only === true) {
+      throw new Error("Zusatzkalender-Termine sind schreibgeschützt. Änderungen bitte direkt im ursprünglichen Google-Kalender machen.");
+    }
+  }
+
   const normalizedCalendarId = String(input.googleCalendarId ?? "").trim();
   if (!normalizedCalendarId) return;
 
@@ -2095,7 +2204,7 @@ export async function deleteAppointmentFromCalendar(appointmentId: string, formD
 
   const { data: appt, error: apptErr } = await supabase
     .from("appointments")
-    .select("google_calendar_id, google_event_id, google_connection_id, notes_internal")
+    .select("google_calendar_id, google_event_id, google_connection_id, calendar_connection_id, calendar_mode, notes_internal")
     .eq("id", appointmentId)
     .single();
 
@@ -2109,6 +2218,8 @@ export async function deleteAppointmentFromCalendar(appointmentId: string, formD
     await ensureWritableGoogleCalendarAppointment(supabaseAdmin(), {
       googleCalendarId: appt.google_calendar_id,
       notesInternal: (appt as any).notes_internal ?? null,
+      calendarMode: (appt as any).calendar_mode ?? null,
+      calendarConnectionId: (appt as any).calendar_connection_id ?? (appt as any).google_connection_id ?? null,
     });
 
     if (appt.google_calendar_id && appt.google_event_id) {
@@ -2188,7 +2299,7 @@ export async function updateAppointmentFromCalendar(appointmentId: string, formD
 
   const { data: existing, error: findErr } = await supabase
     .from("appointments")
-    .select("notes_internal, google_calendar_id, google_event_id, google_connection_id")
+    .select("notes_internal, google_calendar_id, google_event_id, google_connection_id, calendar_connection_id, calendar_mode")
     .eq("id", appointmentId)
     .single();
 
@@ -2200,6 +2311,8 @@ export async function updateAppointmentFromCalendar(appointmentId: string, formD
     await ensureWritableGoogleCalendarAppointment(supabaseAdmin(), {
       googleCalendarId: existing.google_calendar_id,
       notesInternal: existing.notes_internal ?? null,
+      calendarMode: (existing as any).calendar_mode ?? null,
+      calendarConnectionId: (existing as any).calendar_connection_id ?? (existing as any).google_connection_id ?? null,
     });
   } catch (e: any) {
     redirect(buildRedirectUrl(baseReturnUrl, "error", e?.message ?? "Termin ist schreibgeschützt."));

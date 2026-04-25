@@ -13,6 +13,12 @@ type Positioned = {
   googleCalendarLabel?: string | null;
   googleCalendarShortLabel?: string | null;
   googleCalendarColor?: string | null;
+  isExtraGoogleCalendar?: boolean | null;
+  calendarMode?: string | null;
+  isReadOnly?: boolean | null;
+  canOpenCustomerProfile?: boolean | null;
+  canCreateFollowUp?: boolean | null;
+  canDeleteAppointment?: boolean | null;
   _top: number;
   _height: number;
   _col: number;
@@ -102,6 +108,39 @@ function getReminderBadge(reminderSentAt?: string | null) {
     solidBg: sent ? "#16a34a" : "#d89a17",
     solidText: sent ? "#ffffff" : "#18120a",
   };
+}
+
+function isPrivateReadOnlyEvent(ev: Partial<Positioned> | null | undefined) {
+  const anyEv = ev as any;
+  const mode = String(anyEv?.calendarMode ?? anyEv?.calendar_mode ?? "").trim().toUpperCase();
+
+  return (
+    anyEv?.isExtraGoogleCalendar === true ||
+    anyEv?.isReadOnly === true ||
+    anyEv?.is_read_only === true ||
+    mode === "PRIVATE" ||
+    mode === "PRIVATE_READONLY" ||
+    mode === "READ_ONLY" ||
+    mode === "READONLY" ||
+    (!!String(anyEv?.googleCalendarLabel ?? "").trim() && anyEv?.canOpenCustomerProfile === false)
+  );
+}
+
+function getEventStatusBadge(ev: Partial<Positioned> | null | undefined) {
+  if (isPrivateReadOnlyEvent(ev)) {
+    return {
+      sent: true,
+      shortLabel: "Privat",
+      tinyLabel: "P",
+      bg: "rgba(34,197,94,0.14)",
+      text: "#bbf7d0",
+      border: "rgba(34,197,94,0.34)",
+      solidBg: "#16a34a",
+      solidText: "#ffffff",
+    };
+  }
+
+  return getReminderBadge(ev?.reminderSentAt ?? null);
 }
 
 function withAlpha(color: string, alphaHex: string) {
@@ -590,6 +629,10 @@ export default function WeekDayGridView(props: {
       customer: payload._customer,
       timeLine: payload._timeLine,
       reminderSentAt: payload.reminderSentAt,
+      isExtraGoogleCalendar: (payload as any).isExtraGoogleCalendar ?? null,
+      calendarMode: (payload as any).calendarMode ?? (payload as any).calendar_mode ?? null,
+      isReadOnly: (payload as any).isReadOnly ?? (payload as any).is_read_only ?? null,
+      canOpenCustomerProfile: (payload as any).canOpenCustomerProfile ?? null,
     };
   }, [DISPLAY_START_OFFSET_PX, dragging, totalHeight]);
 
@@ -738,7 +781,7 @@ export default function WeekDayGridView(props: {
                       {draggingPreview && isDragTargetDay ? (() => {
                         const previewBaseTheme = tenantTheme(draggingPreview.tenantName);
                         const previewTheme = luxuryTheme(previewBaseTheme);
-                        const previewBadge = getReminderBadge(draggingPreview.reminderSentAt);
+                        const previewBadge = getEventStatusBadge(draggingPreview as any);
                         const previewCompact = draggingPreview.height < 82;
 
                         return (
@@ -999,7 +1042,7 @@ export default function WeekDayGridView(props: {
                               >
                                 {visibleClusterEvents.map((ev) => {
                                   const evTheme = luxuryTheme(tenantTheme(ev.tenantName));
-                                  const evBadge = getReminderBadge(ev.reminderSentAt);
+                                  const evBadge = getEventStatusBadge(ev);
                                   return (
                                     <span
                                       key={`${cluster.id}-chip-${ev.id}`}
@@ -1020,7 +1063,7 @@ export default function WeekDayGridView(props: {
                                         boxShadow: `0 0 10px ${evTheme.accentSoft}`,
                                         flexShrink: 0,
                                       }}
-                                      title={`${ev._customer} · ${evBadge.sent ? "Reminder gesendet" : "Reminder offen"}`}
+                                      title={`${ev._customer} · ${evBadge.shortLabel}`}
                                     >
                                       {initialsFromName(ev._customer).slice(0, 1)}
                                       <span
@@ -1132,13 +1175,14 @@ export default function WeekDayGridView(props: {
                         .map((ev) => {
                           const baseTheme = tenantTheme(ev.tenantName);
                           const theme = luxuryTheme(baseTheme);
-                          const badge = getReminderBadge(ev.reminderSentAt);
+                          const badge = getEventStatusBadge(ev);
                           const leftPct = (ev._col / ev._cols) * 100;
                           const widthPct = 100 / ev._cols;
                           const isDragging = dragging?.id === ev.id;
                           const dragOffsetX = isDragging ? dragging.deltaX : 0;
                           const dragOffsetY = isDragging ? dragging.deltaY : 0;
                           const isSaving = moveSavingId === ev.id;
+                          const isPrivateReadOnly = isPrivateReadOnlyEvent(ev);
 
                           const eventWidthPx = Math.max(16, dayColumnWidthPx / ev._cols - 6);
                           const rawEventHeightPx = Math.max(28, ev._height);
@@ -1196,7 +1240,7 @@ export default function WeekDayGridView(props: {
                                 boxShadow: `0 0 10px ${theme.accentSoft}`,
                                 flexShrink: 0,
                               }}
-                              title={`${ev._customer} · ${badge.sent ? "Reminder gesendet" : "Reminder offen"}`}
+                              title={`${ev._customer} · ${badge.shortLabel}`}
                             >
                               {customerInitial}
                               <span
@@ -1341,37 +1385,65 @@ export default function WeekDayGridView(props: {
                                   zIndex: 4,
                                 }}
                               >
-                                <div
-                                  role="button"
-                                  aria-label="Termin verschieben"
-                                  onPointerDownCapture={(e) => {
-                                    onPointerDownEvent(e, ev.id, iso, ev);
-                                  }}
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                  }}
-                                  style={{
-                                    width: chrome.handleSize,
-                                    height: chrome.handleSize,
-                                    borderRadius: 999,
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    background: "rgba(255,255,255,0.10)",
-                                    border: "1px solid rgba(255,255,255,0.16)",
-                                    color: "rgba(255,255,255,0.78)",
-                                    cursor: isSaving ? "progress" : "grab",
-                                    fontSize: isTiny ? 9 : 11,
-                                    lineHeight: 1,
-                                    userSelect: "none",
-                                    WebkitUserSelect: "none",
-                                    flexShrink: 0,
-                                  }}
-                                  title="Ziehen zum Verschieben"
-                                >
-                                  ⋮⋮
-                                </div>
+                                {isPrivateReadOnly ? (
+                                  <span
+                                    aria-label="Privater Read-only-Kalender"
+                                    style={{
+                                      minWidth: chrome.handleSize,
+                                      width: chrome.handleSize,
+                                      height: chrome.handleSize,
+                                      borderRadius: 999,
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      background: badge.bg,
+                                      border: `1px solid ${badge.border}`,
+                                      color: badge.text,
+                                      fontSize: isTiny ? 9 : 10,
+                                      fontWeight: 900,
+                                      lineHeight: 1,
+                                      userSelect: "none",
+                                      WebkitUserSelect: "none",
+                                      flexShrink: 0,
+                                      boxShadow: "0 0 12px rgba(34,197,94,0.22)",
+                                    }}
+                                    title="Privater Kalender · nur anzeigen"
+                                  >
+                                    P
+                                  </span>
+                                ) : (
+                                  <div
+                                    role="button"
+                                    aria-label="Termin verschieben"
+                                    onPointerDownCapture={(e) => {
+                                      onPointerDownEvent(e, ev.id, iso, ev);
+                                    }}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                    }}
+                                    style={{
+                                      width: chrome.handleSize,
+                                      height: chrome.handleSize,
+                                      borderRadius: 999,
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      background: "rgba(255,255,255,0.10)",
+                                      border: "1px solid rgba(255,255,255,0.16)",
+                                      color: "rgba(255,255,255,0.78)",
+                                      cursor: isSaving ? "progress" : "grab",
+                                      fontSize: isTiny ? 9 : 11,
+                                      lineHeight: 1,
+                                      userSelect: "none",
+                                      WebkitUserSelect: "none",
+                                      flexShrink: 0,
+                                    }}
+                                    title="Ziehen zum Verschieben"
+                                  >
+                                    ⋮⋮
+                                  </div>
+                                )}
                               </div>
 
                               {tooltipOpen ? (
@@ -1456,7 +1528,7 @@ export default function WeekDayGridView(props: {
                                       lineHeight: 1,
                                     }}
                                   >
-                                    {badge.sent ? "Reminder gesendet" : "Reminder offen"}
+                                    {badge.shortLabel}
                                   </div>
                                 </div>
                               ) : null}
@@ -1770,12 +1842,14 @@ export default function WeekDayGridView(props: {
             <div style={{ padding: 12, overflowY: "auto", display: "grid", gap: 10 }}>
               {cluster.events.map((ev) => {
                 const rowAccent = luxuryTheme(tenantTheme(ev.tenantName)).accent;
-                const rowBadge = getReminderBadge(ev.reminderSentAt);
+                const rowBadge = getEventStatusBadge(ev);
+                const rowIsPrivateReadOnly = isPrivateReadOnlyEvent(ev);
                 return (
                   <button
                     key={`${cluster.id}-sidebar-${ev.id}`}
                     type="button"
                     onPointerDownCapture={(e) => {
+                      if (rowIsPrivateReadOnly) return;
                       onPointerDownEvent(e, ev.id, openClusterData.iso, ev);
                     }}
                     onClick={(e) => {
@@ -1798,8 +1872,8 @@ export default function WeekDayGridView(props: {
                       border: "1px solid rgba(255,255,255,0.12)",
                       boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 10px 24px rgba(0,0,0,0.22)",
                       textAlign: "left",
-                      cursor: "grab",
-                      touchAction: "none",
+                      cursor: rowIsPrivateReadOnly ? "pointer" : "grab",
+                      touchAction: rowIsPrivateReadOnly ? "auto" : "none",
                       overflow: "hidden",
                     }}
                   >
@@ -1886,25 +1960,27 @@ export default function WeekDayGridView(props: {
                       >
                         {rowBadge.tinyLabel}
                       </span>
-                      <span
-                        style={{
-                          width: 34,
-                          height: 26,
-                          borderRadius: 999,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 2,
-                          background: "rgba(255,255,255,0.05)",
-                          border: "1px solid rgba(255,255,255,0.09)",
-                          color: "rgba(255,255,255,0.76)",
-                          fontSize: 11,
-                          fontWeight: 900,
-                          letterSpacing: "-0.08em",
-                        }}
-                      >
-                        ⋮⋮
-                      </span>
+                      {rowIsPrivateReadOnly ? null : (
+                        <span
+                          style={{
+                            width: 34,
+                            height: 26,
+                            borderRadius: 999,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 2,
+                            background: "rgba(255,255,255,0.05)",
+                            border: "1px solid rgba(255,255,255,0.09)",
+                            color: "rgba(255,255,255,0.76)",
+                            fontSize: 11,
+                            fontWeight: 900,
+                            letterSpacing: "-0.08em",
+                          }}
+                        >
+                          ⋮⋮
+                        </span>
+                      )}
                     </div>
                   </button>
                 );

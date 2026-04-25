@@ -42,6 +42,54 @@ function getPageLabel(pathname: string | null) {
   return match?.[1] ?? "App";
 }
 
+function getSuggestions(pathname: string | null) {
+  if (!pathname) {
+    return [
+      "Was kann ich hier aktuell mit der App machen?",
+      "Hilf mir bei einer freundlichen Kunden-Nachricht.",
+      "Erkläre mir den besten Ablauf im Studio.",
+    ];
+  }
+
+  if (pathname.startsWith("/dashboard")) {
+    return [
+      "Was sollte ich heute im Dashboard prüfen?",
+      "Welche Termine hat Alexandra morgen?",
+      "Zeige mir die letzte Rechnung von Muster",
+    ];
+  }
+
+  if (pathname.startsWith("/calendar")) {
+    return [
+      "Welche Termine hat Alexandra morgen?",
+      "Welche Termine stehen heute an?",
+      "Erkläre mir den schnellsten Termin-Workflow.",
+    ];
+  }
+
+  if (pathname.startsWith("/customers")) {
+    return [
+      "Finde Kunde Muster",
+      "Zeige mir die letzte Rechnung von Muster",
+      "Welche Termine hat dieser Kunde demnächst?",
+    ];
+  }
+
+  if (pathname.startsWith("/rechnungen")) {
+    return [
+      "Zeige mir die letzte Rechnung von Muster",
+      "Erkläre mir den Ablauf von Rechnung bis Versand.",
+      "Wann sollte ich statt ändern lieber stornieren?",
+    ];
+  }
+
+  return [
+    "Hilf mir bei der Nutzung dieser Seite.",
+    "Schreibe mir einen kurzen Kundentext.",
+    "Was ist hier der sinnvollste nächste Schritt?",
+  ];
+}
+
 
 function collectPageSnapshot() {
   if (typeof document === "undefined") return "";
@@ -71,23 +119,6 @@ function actionClass(tone?: "primary" | "secondary") {
   return tone === "primary"
     ? "inline-flex items-center justify-center rounded-xl border border-[#d8c1a0]/45 bg-[#d8c1a0]/18 px-3 py-2 text-xs font-semibold text-[#f6f0e8] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:bg-[#d8c1a0]/26"
     : "inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.055] px-3 py-2 text-xs font-semibold text-white/85 hover:bg-white/[0.09]";
-}
-
-
-function menuIconButtonClass(active = false, danger = false) {
-  if (danger) {
-    return "inline-flex h-12 min-w-0 flex-1 basis-0 items-center justify-center rounded-[16px] border border-white/10 bg-white/10 px-3 text-sm font-semibold text-white transition-colors hover:bg-red-600/90 hover:text-white";
-  }
-
-  return `inline-flex h-12 min-w-0 flex-1 basis-0 items-center justify-center rounded-[16px] border ${
-    active ? "border-white/18 bg-white/12" : "border-white/12 bg-white/[0.04]"
-  } px-3 text-sm font-semibold text-white transition-colors hover:bg-white/[0.10]`;
-}
-
-function composerIconButtonClass(disabled = false) {
-  return `absolute bottom-3 right-3 inline-flex h-9 w-9 items-center justify-center rounded-[14px] border border-white/12 bg-white/[0.04] text-white transition-colors ${
-    disabled ? "cursor-not-allowed opacity-45 pointer-events-none" : "hover:bg-white/[0.10]"
-  }`;
 }
 
 function renderAssistantText(text: string) {
@@ -133,6 +164,7 @@ export default function StudioAssistantSlideover({
   const router = useRouter();
   const searchParams = useSearchParams();
   const pageLabel = getPageLabel(pathname);
+  const suggestions = useMemo(() => getSuggestions(pathname), [pathname]);
   const storageKey = useMemo(() => `gigi-assistant:v1:${userLabel?.trim() || "anonymous"}`, [userLabel]);
   const introText = useMemo(() => {
     const greeting = `Hallo ${userLabel?.trim() || ""}`.trim();
@@ -383,10 +415,8 @@ export default function StudioAssistantSlideover({
                     {userLabel ? ` · ${userLabel}` : ""}
                   </p>
                 </div>
-                <button type="button" onClick={close} className={menuIconButtonClass(false, true)} aria-label="Schließen" title="Schließen">
-                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
-                    <path d="M6 6l12 12M18 6L6 18" />
-                  </svg>
+                <button type="button" onClick={close} className="studio-assistant-panel__close" aria-label="Schließen">
+                  ✕
                 </button>
               </header>
 
@@ -409,6 +439,19 @@ export default function StudioAssistantSlideover({
                 </div>
               </details>
 
+              <div className="studio-assistant-panel__chips">
+                {suggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    className="studio-assistant-chip clientique-touchable clientique-touchable--soft"
+                    onClick={() => void sendMessage(suggestion)}
+                    disabled={busy}
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
 
               <div ref={scrollRef} className="studio-assistant-panel__messages clientique-scrollbar">
                 {messages.map((message) => (
@@ -468,19 +511,12 @@ export default function StudioAssistantSlideover({
                   />
                   <button
                     type="submit"
-                    className={composerIconButtonClass(busy || !input.trim())}
+                    className="absolute bottom-3 right-3 inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-white/12 bg-white/[0.055] text-base font-bold text-white/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:bg-white/[0.095] hover:border-white/18 disabled:cursor-not-allowed disabled:opacity-40"
                     disabled={busy || !input.trim()}
                     aria-label="Nachricht senden"
                     title="Senden"
                   >
-                    {busy ? (
-                      <span className="text-sm font-bold">…</span>
-                    ) : (
-                      <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M12 19V5" />
-                        <path d="M5 12l7-7 7 7" />
-                      </svg>
-                    )}
+                    {busy ? "…" : "↑"}
                   </button>
                 </div>
               </form>

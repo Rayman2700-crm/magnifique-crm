@@ -34,8 +34,13 @@ function formatDateTime(value: string | null | undefined) {
   }).format(date);
 }
 
-function uniqueStrings(values: Array<string | null | undefined>) {
-  return Array.from(new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean)));
+function uniqueStrings(values: unknown) {
+  const input = Array.isArray(values) ? values : typeof values === "string" ? [values] : [];
+  return Array.from(new Set(input.map((value) => String(value ?? "").trim()).filter(Boolean)));
+}
+
+function uniqueCalendarIds(...groups: unknown[]) {
+  return Array.from(new Set(groups.flatMap((group) => uniqueStrings(group))));
 }
 
 const STUDIO_TARGETS = [
@@ -56,6 +61,8 @@ type GoogleConnectionRow = {
   is_active: boolean | null;
   created_at: string | null;
   updated_at: string | null;
+  default_calendar_id?: string | null;
+  enabled_calendar_ids?: unknown;
 };
 
 function settingsCardClass() {
@@ -86,7 +93,7 @@ export default async function EinstellungenPage() {
     admin
       .from("google_oauth_connections")
       .select(
-        "id, connection_label, google_account_email, google_account_name, connection_type, is_primary, is_read_only, is_active, created_at, updated_at"
+        "id, connection_label, google_account_email, google_account_name, connection_type, is_primary, is_read_only, is_active, default_calendar_id, enabled_calendar_ids, created_at, updated_at"
       )
       .eq("owner_user_id", user.id)
       .order("updated_at", { ascending: false }),
@@ -108,32 +115,41 @@ export default async function EinstellungenPage() {
   const primaryWritableConnection =
     writableConnections.find((row) => row.is_primary) ?? writableConnections[0] ?? null;
 
-  const defaultCalendarId = String((tokenRow as any)?.default_calendar_id ?? "").trim() || STUDIO_TARGETS[0].calendarId;
-  const enabledCalendarIds = uniqueStrings((tokenRow as any)?.enabled_calendar_ids ?? []);
+  const connectionEnabledCalendarIds = uniqueCalendarIds(
+    ...activeConnections.map((row) => row.enabled_calendar_ids ?? [])
+  );
+  const enabledCalendarIds = uniqueCalendarIds(
+    (tokenRow as any)?.enabled_calendar_ids ?? [],
+    connectionEnabledCalendarIds
+  );
+
+  const defaultCalendarId =
+    String((tokenRow as any)?.default_calendar_id ?? "").trim() ||
+    activeConnections
+      .map((row) => String(row.default_calendar_id ?? "").trim())
+      .find(Boolean) ||
+    STUDIO_TARGETS[0].calendarId;
 
   const connectedStudioIds = new Set<string>(
     STUDIO_TARGETS.filter((target) =>
-      activeConnections.some(
-        (row) =>
-          String(row.google_account_email ?? "").trim().toLowerCase() === target.calendarId.toLowerCase() ||
-          String(row.connection_label ?? "").trim().toLowerCase() === target.label.toLowerCase() ||
-          String(row.connection_label ?? "").trim().toLowerCase() === `${target.label.split(" " )[1] ?? ""} studio`.toLowerCase()
-      )
+      activeConnections.some((row) => {
+        const email = String(row.google_account_email ?? "").trim().toLowerCase();
+        const label = String(row.connection_label ?? "").trim().toLowerCase();
+        const connectionDefault = String(row.default_calendar_id ?? "").trim().toLowerCase();
+        return (
+          email === target.calendarId.toLowerCase() ||
+          label === target.label.toLowerCase() ||
+          label === `${target.label.split(" ")[1] ?? ""} studio`.toLowerCase() ||
+          connectionDefault === target.calendarId.toLowerCase()
+        );
+      })
     ).map((target) => target.calendarId)
   );
 
-  const allowedActiveIds = new Set<string>([
-    ...Array.from(connectedStudioIds),
-    ...activeConnections
-      .flatMap((row) => [row.google_account_email, row.google_account_name, row.connection_label])
-      .map((value) => String(value ?? "").trim())
-      .filter(Boolean),
-  ]);
-
-  const enabledExtraIds = enabledCalendarIds.filter((id) => !STUDIO_TARGET_IDS.has(id) && allowedActiveIds.has(String(id).trim()));
   const activeCalendarIds = activeConnections.length > 0
-    ? uniqueStrings([...(connectedStudioIds.has(defaultCalendarId) ? [defaultCalendarId] : []), ...enabledExtraIds])
+    ? uniqueCalendarIds(Array.from(connectedStudioIds), enabledCalendarIds)
     : [];
+  const enabledExtraIds = activeCalendarIds.filter((id) => !STUDIO_TARGET_IDS.has(id));
   const studioConnectionCount = connectedStudioIds.size;
 
   const primaryMail =
@@ -150,10 +166,7 @@ export default async function EinstellungenPage() {
   const googleSetupAlertCount = hasAnyGoogleSetup ? 0 : 1;
 
   const selectedStudioTarget = STUDIO_TARGETS.find((target) => target.calendarId === defaultCalendarId) ?? null;
-  const selectedStudioCalendarId = selectedStudioTarget?.calendarId ?? null;
-  const selectedStudioLabel = selectedStudioCalendarId && connectedStudioIds.has(selectedStudioCalendarId)
-    ? selectedStudioTarget?.label ?? "Kein verbundener Schreibkalender"
-    : "Kein verbundener Schreibkalender";
+  const selectedStudioLabel = selectedStudioTarget?.label ?? "Kein verbundener Schreibkalender";
   const lastSync = formatDateTime((tokenRow as any)?.updated_at ?? primaryWritableConnection?.updated_at ?? null);
 
   const cards = [
@@ -285,7 +298,7 @@ export default async function EinstellungenPage() {
                     </div>
                     <div className="flex items-start justify-between gap-3">
                       <span className="text-white/60">Schreibkalender</span>
-                      <span className="text-right font-medium text-white">{selectedStudioTarget?.label ?? "Kein verbundener Schreibkalender"}</span>
+                      <span className="text-right font-medium text-white">{selectedStudioLabel}</span>
                     </div>
                     <div className="flex items-start justify-between gap-3">
                       <span className="text-white/60">Aktive Kalender</span>
