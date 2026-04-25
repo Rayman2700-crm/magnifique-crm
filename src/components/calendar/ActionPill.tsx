@@ -23,7 +23,7 @@ export default function ActionPill({
     justifyContent: "center",
     gap: 8,
     height: 38,
-    padding: "0 14px",
+    padding: "0 12px",
     borderRadius: 12,
     fontSize: 13,
     fontWeight: 700,

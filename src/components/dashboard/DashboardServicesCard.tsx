@@ -22,7 +22,7 @@ function fieldClassName() {
 
 function OpenIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-[14px] w-[14px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" className="h-[24px] w-[24px] md:h-[24px] md:w-[24px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M9 5H6.5A1.5 1.5 0 0 0 5 6.5v11A1.5 1.5 0 0 0 6.5 19h11a1.5 1.5 0 0 0 1.5-1.5V15" />
       <path d="M10 14 19 5" />
       <path d="M13 5h6v6" />
@@ -32,10 +32,9 @@ function OpenIcon() {
 
 function PlusCircleIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-[16px] w-[16px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="8.5" />
-      <path d="M12 8.5v7" />
-      <path d="M8.5 12h7" />
+    <svg viewBox="0 0 24 24" className="h-[24px] w-[24px] md:h-[24px] md:w-[24px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 7v10" />
+      <path d="M7 12h10" />
     </svg>
   );
 }
@@ -49,11 +48,12 @@ function ServicesActionPill({
 }) {
   return (
     <span
-      className="inline-flex h-9 w-9 items-center justify-center rounded-full border"
+      className="inline-flex h-10 w-10 items-center justify-center rounded-full border transition duration-150 hover:-translate-y-px hover:brightness-110 active:scale-[0.97] md:h-9 md:w-9"
       style={{
         color: accentColor,
         backgroundColor: `${accentColor}14`,
         borderColor: `${accentColor}30`,
+        boxShadow: "0 10px 28px rgba(0,0,0,0.16)",
       }}
     >
       {icon}

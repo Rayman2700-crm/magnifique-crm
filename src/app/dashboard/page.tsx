@@ -9,6 +9,7 @@ import WaitlistSlideover from "@/components/dashboard/WaitlistSlideover";
 import DashboardServicesCard from "@/components/dashboard/DashboardServicesCard";
 import DashboardInvoiceSlideover from "@/components/dashboard/DashboardInvoiceSlideover";
 import OpenCreateAppointmentButton from "@/components/dashboard/OpenCreateAppointmentButton";
+import { cn } from "@/lib/cn";
 
 type TenantRow = {
   id: string;
@@ -341,7 +342,7 @@ function tenantTheme(tenantName: string): ThemeLike {
 
 function OpenIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-[14px] w-[14px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" className="h-[24px] w-[24px] md:h-[24px] md:w-[24px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M9 5H6.5A1.5 1.5 0 0 0 5 6.5v11A1.5 1.5 0 0 0 6.5 19h11a1.5 1.5 0 0 0 1.5-1.5V15" />
       <path d="M10 14 19 5" />
       <path d="M13 5h6v6" />
@@ -351,10 +352,9 @@ function OpenIcon() {
 
 function PlusCircleIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-[16px] w-[16px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="8.5" />
-      <path d="M12 8.5v7" />
-      <path d="M8.5 12h7" />
+    <svg viewBox="0 0 24 24" className="h-[24px] w-[24px] md:h-[24px] md:w-[24px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 7.5v9" />
+      <path d="M7.5 12h9" />
     </svg>
   );
 }
@@ -374,14 +374,14 @@ function DashboardActionPill({
     <span
       className={`inline-flex items-center justify-center border font-semibold uppercase tracking-[0.12em] transition ${
         compact
-          ? "h-9 w-9 rounded-full px-0 text-white/70 hover:-translate-y-[1px] hover:bg-white/[0.08] hover:text-white"
+          ? "h-10 w-10 rounded-full px-0 text-white/82 hover:-translate-y-[1px] hover:bg-white/[0.10] hover:text-white active:scale-[0.98] md:h-9 md:w-9 md:text-white/70 md:hover:bg-white/[0.08]"
           : "h-9 rounded-[16px] px-3 text-[9px] text-white/80 hover:bg-white/[0.08] hover:text-white"
       }`}
       style={{
-        backgroundColor: accentColor ? `${accentColor}14` : "rgba(255,255,255,0.04)",
-        borderColor: accentColor ? `${accentColor}30` : "rgba(255,255,255,0.10)",
-        color: compact ? (accentColor ?? "rgba(255,255,255,0.70)") : "rgba(255,255,255,0.80)",
-        boxShadow: "0 10px 28px rgba(0,0,0,0.16)",
+        backgroundColor: accentColor ? `${accentColor}16` : "rgba(255,255,255,0.05)",
+        borderColor: accentColor ? `${accentColor}38` : "rgba(255,255,255,0.12)",
+        color: compact ? (accentColor ?? "rgba(255,255,255,0.82)") : "rgba(255,255,255,0.80)",
+        boxShadow: compact ? "0 10px 28px rgba(0,0,0,0.16)" : "0 10px 28px rgba(0,0,0,0.16)",
       }}
     >
       {icon ?? label}
@@ -395,12 +395,14 @@ function DashboardStatCard({
   subtext,
   href,
   accentColor,
+  className,
 }: {
   label: string;
   value: string;
   subtext?: string;
   href?: string;
   accentColor?: string;
+  className?: string;
 }) {
   const card = (
     <Card className="h-full overflow-hidden border-[rgba(255,255,255,0.04)] bg-[linear-gradient(180deg,rgba(255,250,244,0.045)_0%,rgba(255,248,240,0.018)_52%,rgba(255,248,240,0.008)_100%)] shadow-[0_26px_72px_rgba(0,0,0,0.26)] backdrop-blur-[22px] transition duration-200 hover:-translate-y-0.5 hover:border-[rgba(255,255,255,0.07)] hover:shadow-[0_34px_84px_rgba(0,0,0,0.30)]">
@@ -454,7 +456,7 @@ function AppointmentsOverviewCard({
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
-              <span className="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[#d6c3a3] shadow-[0_10px_28px_rgba(0,0,0,0.16)] transition hover:-translate-y-[1px] hover:border-white/15 hover:bg-white/[0.08] [&_*]:!shadow-none [&_button]:!m-0 [&_button]:!inline-flex [&_button]:!h-9 [&_button]:!w-9 [&_button]:!items-center [&_button]:!justify-center [&_button]:!rounded-full [&_button]:!border-0 [&_button]:!bg-transparent [&_button]:!p-0 [&_button]:!text-[#d6c3a3] [&_button]:!shadow-none [&_button:hover]:!bg-transparent [&_svg]:!h-4 [&_svg]:!w-4]">
+              <span className="shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/12 bg-white/[0.05] text-[#d6c3a3] shadow-[0_10px_28px_rgba(0,0,0,0.16)] transition hover:-translate-y-[1px] hover:border-white/18 hover:bg-white/[0.10] active:scale-[0.98] md:h-9 md:w-9 md:border-white/10 md:bg-white/[0.04] md:hover:border-white/15 md:hover:bg-white/[0.08] [&_*]:!shadow-none [&_button]:!m-0 [&_button]:!items-center [&_button]:!justify-center [&_button]:!rounded-full [&_button]:!border-0 [&_button]:!bg-transparent [&_button]:!p-0 [&_button]:!text-[#d6c3a3] [&_button]:!shadow-none [&_button:hover]:!bg-transparent md:[&_button]:!h-9 md:[&_button]:!w-9 [&_svg]:!h-[24px] [&_svg]:!w-[24px] md:[&_svg]:!h-[24px] md:[&_svg]:!w-[24px]]">
                 <OpenCreateAppointmentButton accentColor="#d6c3a3" />
               </span>
               <Link href="/calendar" className="shrink-0" aria-label="Kalender öffnen">
@@ -607,6 +609,24 @@ function InvoiceCreateCard({
     }).format(euros);
   };
 
+  const now = new Date();
+
+  const getIsoWeek = (date: Date) => {
+    const tmp = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const day = tmp.getUTCDay() || 7;
+    tmp.setUTCDate(tmp.getUTCDate() + 4 - day);
+    const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+    return Math.ceil((((tmp.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  };
+
+  const currentWeekLabel = `KW ${getIsoWeek(now)}`;
+  const currentMonthLabel = new Intl.DateTimeFormat("de-AT", {
+    month: "short",
+    year: "numeric",
+  })
+    .format(now)
+    .replace(".", "");
+
   return (
     <Card className="h-full overflow-hidden border-[rgba(255,255,255,0.04)] bg-[linear-gradient(180deg,rgba(255,248,240,0.05)_0%,rgba(255,248,240,0.015)_100%)] shadow-[0_28px_76px_rgba(0,0,0,0.26)] backdrop-blur-[22px] transition duration-200 hover:-translate-y-0.5 hover:border-[rgba(255,255,255,0.07)] hover:shadow-[0_36px_88px_rgba(0,0,0,0.30)] lg:col-span-2 xl:col-span-2 2xl:col-span-2">
       <CardContent className="flex min-h-[114px] flex-col p-4 sm:min-h-[126px] sm:p-4.5">
@@ -630,23 +650,23 @@ function InvoiceCreateCard({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-2.5 pt-3">
-            <div className="rounded-[20px] border border-[rgba(255,255,255,0.035)] bg-[linear-gradient(180deg,rgba(255,250,244,0.038)_0%,rgba(255,248,240,0.012)_100%)] backdrop-blur-md px-3.5 py-3 shadow-[0_12px_30px_rgba(0,0,0,0.12)]">
-              <div className="text-[9px] uppercase tracking-[0.12em] text-white/45">Heute</div>
-              <div className="mt-1 text-[14px] font-semibold text-white">{formatMoney(todayRevenueCents)}</div>
-              <div className="mt-0.5 text-[9px] text-white/40">{todayReceiptCount} Belege</div>
+          <div className="grid grid-cols-3 gap-2 pt-3 sm:gap-2.5">
+            <div className="rounded-[20px] border border-[rgba(255,255,255,0.035)] bg-[linear-gradient(180deg,rgba(255,250,244,0.038)_0%,rgba(255,248,240,0.012)_100%)] backdrop-blur-md px-2.5 py-3 sm:px-3.5 shadow-[0_12px_30px_rgba(0,0,0,0.12)]">
+              <div className="text-[8px] uppercase tracking-[0.12em] text-white/45 sm:text-[9px]">Heute</div>
+              <div className="mt-1 text-[13px] font-semibold text-white sm:text-[14px]">{formatMoney(todayRevenueCents)}</div>
+              <div className="mt-0.5 text-[8px] text-white/40 sm:text-[9px]">{todayReceiptCount} Belege</div>
             </div>
 
-            <div className="rounded-[20px] border border-[rgba(255,255,255,0.035)] bg-[linear-gradient(180deg,rgba(255,250,244,0.038)_0%,rgba(255,248,240,0.012)_100%)] backdrop-blur-md px-3.5 py-3 shadow-[0_12px_30px_rgba(0,0,0,0.12)]">
-              <div className="text-[9px] uppercase tracking-[0.12em] text-white/45">Woche</div>
-              <div className="mt-1 text-[14px] font-semibold text-white">{formatMoney(weekRevenueCents)}</div>
-              <div className="mt-0.5 text-[9px] text-white/40">laufender Stand</div>
+            <div className="rounded-[20px] border border-[rgba(255,255,255,0.035)] bg-[linear-gradient(180deg,rgba(255,250,244,0.038)_0%,rgba(255,248,240,0.012)_100%)] backdrop-blur-md px-2.5 py-3 sm:px-3.5 shadow-[0_12px_30px_rgba(0,0,0,0.12)]">
+              <div className="text-[8px] uppercase tracking-[0.12em] text-white/45 sm:text-[9px]">Woche</div>
+              <div className="mt-1 text-[13px] font-semibold text-white sm:text-[14px]">{formatMoney(weekRevenueCents)}</div>
+              <div className="mt-0.5 text-[8px] text-white/40 sm:text-[9px]">{currentWeekLabel}</div>
             </div>
 
-            <div className="rounded-[20px] border border-[rgba(255,255,255,0.035)] bg-[linear-gradient(180deg,rgba(255,250,244,0.038)_0%,rgba(255,248,240,0.012)_100%)] backdrop-blur-md px-3.5 py-3 shadow-[0_12px_30px_rgba(0,0,0,0.12)]">
-              <div className="text-[9px] uppercase tracking-[0.12em] text-white/45">Monat</div>
-              <div className="mt-1 text-[14px] font-semibold text-white">{formatMoney(monthRevenueCents)}</div>
-              <div className="mt-0.5 text-[9px] text-white/40">aktueller Monat</div>
+            <div className="rounded-[20px] border border-[rgba(255,255,255,0.035)] bg-[linear-gradient(180deg,rgba(255,250,244,0.038)_0%,rgba(255,248,240,0.012)_100%)] backdrop-blur-md px-2.5 py-3 sm:px-3.5 shadow-[0_12px_30px_rgba(0,0,0,0.12)]">
+              <div className="text-[8px] uppercase tracking-[0.12em] text-white/45 sm:text-[9px]">Monat</div>
+              <div className="mt-1 text-[13px] font-semibold text-white sm:text-[14px]">{formatMoney(monthRevenueCents)}</div>
+              <div className="mt-0.5 text-[8px] text-white/40 sm:text-[9px]">{currentMonthLabel}</div>
             </div>
           </div>
 
@@ -666,13 +686,13 @@ function InvoiceCreateCard({
               </Link>
               <Link
                 href={`/rechnungen?closingDate=${encodeURIComponent(closingDateKey)}&closingPanel=year`}
-                className="inline-flex h-9 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-white/10 bg-white/[0.04] px-3 text-[13px] font-medium text-white/85 shadow-[0_10px_28px_rgba(0,0,0,0.16)] transition hover:-translate-y-[1px] hover:border-white/15 hover:bg-white/[0.08] hover:text-white"
+                className="hidden sm:inline-flex h-9 w-full items-center justify-center whitespace-nowrap rounded-[16px] border border-white/10 bg-white/[0.04] px-3 text-[13px] font-medium text-white/85 shadow-[0_10px_28px_rgba(0,0,0,0.16)] transition hover:-translate-y-[1px] hover:border-white/15 hover:bg-white/[0.08] hover:text-white"
               >
                 Jahresabschluss
               </Link>
               <Link
                 href="/dashboard?invoice=1"
-                className="inline-flex h-9 w-full items-center justify-center whitespace-nowrap rounded-[14px] bg-[linear-gradient(180deg,#d8c19f_0%,#cfb289_100%)] px-3 text-[13px] font-medium text-[#1b140f] shadow-[0_10px_28px_rgba(214,195,163,0.24)] transition hover:brightness-[1.03]"
+                className="hidden sm:inline-flex h-9 w-full items-center justify-center whitespace-nowrap rounded-[14px] bg-[linear-gradient(180deg,#d8c19f_0%,#cfb289_100%)] px-3 text-[13px] font-medium text-[#1b140f] shadow-[0_10px_28px_rgba(214,195,163,0.24)] transition hover:brightness-[1.03]"
               >
                 + Rechnung
               </Link>
@@ -1351,7 +1371,7 @@ export default async function DashboardPage() {
               </div>
             </div>
 
-            <div className="hidden">
+            <div className="hidden md:hidden">
               <div className="flex items-center gap-3">
                 <div
                   className="flex h-[18px] w-[18px] shrink-0 items-center justify-center overflow-hidden rounded-[20px] border-[2px] shadow-[0_0_0_2px_rgba(11,11,12,0.9)]"
@@ -1415,7 +1435,7 @@ export default async function DashboardPage() {
               />
 
               <Card className="h-full overflow-hidden border-[rgba(255,255,255,0.04)] bg-[linear-gradient(180deg,rgba(255,250,244,0.045)_0%,rgba(255,248,240,0.018)_52%,rgba(255,248,240,0.008)_100%)] shadow-[0_26px_72px_rgba(0,0,0,0.26)] backdrop-blur-[22px] transition duration-200 hover:-translate-y-0.5 hover:border-[rgba(255,255,255,0.07)] hover:shadow-[0_34px_84px_rgba(0,0,0,0.30)]">
-                <CardContent className="flex min-h-[114px] flex-col p-4 sm:min-h-[126px] sm:p-4.5">
+                <CardContent className="p-3.5 sm:p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex flex-1 items-start gap-3">
                       <div
@@ -1443,20 +1463,23 @@ export default async function DashboardPage() {
                 </CardContent>
               </Card>
 
-              <DashboardStatCard
-                label="Freie Termine"
-                value={String(openSlots.length)}
-                subtext="Kurzfristig frei"
-                href="/dashboard?openSlots=1"
-                accentColor={openSlots.length === 0 ? "#34d399" : "#fb923c"}
-              />
-              <DashboardStatCard
-                label="Reminder"
-                value={String(reminderCount)}
-                subtext="Offene Reminder"
-                href="/dashboard?openReminders=1"
-                accentColor={reminderCount === 0 ? "#34d399" : "#fb923c"}
-              />
+<DashboardStatCard
+  label="Freie Termine"
+  value={String(openSlots.length)}
+  subtext="Kurzfristig frei"
+  href="/dashboard?openSlots=1"
+  accentColor={openSlots.length === 0 ? "#34d399" : "#fb923c"}
+  className="min-h-[176px] p-3.5 sm:min-h-0 sm:p-4"
+/>
+
+<DashboardStatCard
+  label="Reminder"
+  value={String(reminderCount)}
+  subtext="Offene Reminder"
+  href="/dashboard?openReminders=1"
+  accentColor={reminderCount === 0 ? "#34d399" : "#fb923c"}
+  className="p-3.5 sm:p-4"
+/>
             </div>
           </CardContent>
         </Card>

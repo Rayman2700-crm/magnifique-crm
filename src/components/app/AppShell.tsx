@@ -18,6 +18,7 @@ type ReminderRow = {
   end_at: string;
   reminder_at: string | null;
   reminder_sent_at: string | null;
+  status?: string | null;
   notes_internal: string | null;
   tenant?:
     | { id?: string | null; display_name: string | null }
@@ -235,6 +236,7 @@ export default async function AppShell({
       end_at,
       reminder_at,
       reminder_sent_at,
+      status,
       notes_internal,
       tenant:tenants ( id, display_name ),
       person:persons ( full_name, phone, email )
@@ -254,7 +256,16 @@ export default async function AppShell({
 
   const reminderItems = ((remindersRaw ?? []) as ReminderRow[])
     .filter((row) => {
-      const status = parseStatus(row.notes_internal);
+      const rawStatus = String(row.status ?? "").trim().toLowerCase();
+      const derivedStatus = parseStatus(row.notes_internal);
+      const status =
+        rawStatus === "scheduled" ||
+        rawStatus === "completed" ||
+        rawStatus === "cancelled" ||
+        rawStatus === "no_show"
+          ? rawStatus
+          : derivedStatus;
+
       return status !== "cancelled" && status !== "completed" && status !== "no_show";
     })
     .map((row) => {
@@ -267,7 +278,18 @@ export default async function AppShell({
         end_at: row.end_at,
         title: parseTitle(row.notes_internal),
         note: parseNote(row.notes_internal),
-        status: parseStatus(row.notes_internal),
+        status: (() => {
+          const rawStatus = String(row.status ?? "").trim().toLowerCase();
+          if (
+            rawStatus === "scheduled" ||
+            rawStatus === "completed" ||
+            rawStatus === "cancelled" ||
+            rawStatus === "no_show"
+          ) {
+            return rawStatus as "scheduled" | "completed" | "cancelled" | "no_show";
+          }
+          return parseStatus(row.notes_internal);
+        })(),
         tenantId: String(tenant?.id ?? ""),
         tenantName: tenant?.display_name ?? "",
         customerProfileId: null,

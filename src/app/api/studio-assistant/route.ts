@@ -20,8 +20,6 @@ type AssistantAction = {
   label: string;
   href: string;
   tone?: "primary" | "secondary";
-  requiresConfirm?: boolean;
-  confirmLabel?: string;
 };
 
 type DbLookupResult = {
@@ -142,11 +140,40 @@ function escapeLike(value: string) {
   return value.replace(/[\\%_]/g, (char) => `\\${char}`);
 }
 
+function startOfLocalDay(date: Date) {
+  const copy = new Date(date);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+function startOfWeekMonday(date: Date) {
+  const start = startOfLocalDay(date);
+  const weekday = start.getDay();
+  const diffToMonday = (weekday + 6) % 7;
+  start.setDate(start.getDate() - diffToMonday);
+  return start;
+}
+
 function detectDateRange(question: string) {
   const q = question.toLowerCase();
   const now = new Date();
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
+
+  if (q.includes("nächste woche") || q.includes("naechste woche") || q.includes("nächsten woche") || q.includes("naechsten woche")) {
+    const start = startOfWeekMonday(now);
+    start.setDate(start.getDate() + 7);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    return { start, end, label: "nächste Woche" };
+  }
+
+  if (q.includes("diese woche") || q.includes("aktueller woche") || q.includes("woche")) {
+    const start = startOfWeekMonday(now);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    return { start, end, label: "diese Woche" };
+  }
+
+  const start = startOfLocalDay(now);
   if (q.includes("morgen")) start.setDate(start.getDate() + 1);
   if (q.includes("gestern")) start.setDate(start.getDate() - 1);
   const end = new Date(start);
@@ -169,7 +196,7 @@ function wantsCustomerSearch(question: string) {
 
 function wantsAppointments(question: string) {
   const q = question.toLowerCase();
-  return q.includes("termin") || q.includes("termine") || q.includes("kalender") || q.includes("morgen") || q.includes("heute");
+  return q.includes("termin") || q.includes("termine") || q.includes("kalender") || q.includes("morgen") || q.includes("heute") || q.includes("woche");
 }
 
 function wantsInvoice(question: string) {
@@ -180,6 +207,170 @@ function wantsInvoice(question: string) {
 function wantsPreparedAction(question: string) {
   const q = question.toLowerCase();
   return /\b(erstellen|anlegen|machen|vorbereiten|neu|neue|neuen)\b/i.test(q);
+}
+
+
+function wantsTextDraft(question: string) {
+  const q = question.toLowerCase();
+  return /\b(formuliere|formulieren|schreibe|schreib|verfasse|text|nachricht|whatsapp|sms|e-mail|email|mail|antwort|remindertext|erinnerungstext)\b/i.test(q);
+}
+
+function wantsProcessAdvice(question: string) {
+  const q = question.toLowerCase();
+  return /\b(ablauf|erkläre|erklaere|wie funktioniert|stornieren|storno|ändern|aendern|versand|verschicken|drucken|bezahlt|rechnung bis versand)\b/i.test(q);
+}
+
+function extractRecipientHint(question: string) {
+  const quoted = extractQuotedName(question);
+  if (quoted) return quoted;
+
+  const match = question.match(/(?:kunde[n]?|an|für|fuer)\s+([a-zA-ZÀ-ž0-9 .'-]{2,80})(?:,|\.|;|\?| dass| der| die| das| wegen| über| ueber| erinnert| erinnern| termin| rechnung|$)/i);
+  if (match?.[1]) {
+    return match[1]
+      .replace(/\b(dass|sein|seine|seinen|nächster|naechster|termin|ansteht|erinnert|wird|soll)\b/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  const cleaned = removeCommonWords(question);
+  return cleaned;
+}
+
+function extractMessagePurpose(question: string) {
+  const q = question.toLowerCase();
+  if (q.includes("termin") && (q.includes("erinner") || q.includes("ansteht") || q.includes("bald"))) return "termin_reminder";
+  if (q.includes("rechnung") && (q.includes("offen") || q.includes("zahlen") || q.includes("zahlung"))) return "invoice_reminder";
+  if (q.includes("absage") || q.includes("verschieben")) return "appointment_change";
+  if (q.includes("danke") || q.includes("besuch")) return "thank_you";
+  return "general";
+}
+
+async function enrichRecipientName(question: string) {
+  const hint = extractRecipientHint(question);
+  if (!hint || hint.length < 2) return "";
+
+  try {
+    const supabase = await supabaseServer();
+    const lookup = await lookupCustomers(supabase, `Kunde ${hint}`);
+    const rows = Array.isArray(lookup.data) ? lookup.data as any[] : [];
+    const first = rows.find((row: any) => row?.id) || rows[0];
+    const person = firstJoin(first?.person) as any;
+    return String(person?.full_name || hint).trim();
+  } catch {
+    return hint;
+  }
+}
+
+function localTextDraft(question: string, recipientName = "") {
+  const purpose = extractMessagePurpose(question);
+  const name = recipientName || extractRecipientHint(question) || "";
+  const greetingName = name ? ` ${name}` : "";
+
+  if (purpose === "termin_reminder") {
+    return [
+      "Klar — hier ist ein freundlicher Vorschlag:",
+      "",
+      `Hallo${greetingName},`,
+      "ich wollte dich kurz freundlich daran erinnern, dass dein nächster Termin bei uns ansteht.",
+      "Falls sich bei dir etwas geändert hat oder du den Termin verschieben möchtest, gib uns bitte rechtzeitig Bescheid.",
+      "Wir freuen uns auf dich!",
+      "",
+      "Liebe Grüße",
+      "Magnifique Beauty Institut",
+      "",
+      "Kürzer für WhatsApp:",
+      `Hallo${greetingName}, kurze Erinnerung an deinen nächsten Termin bei uns. Falls du etwas ändern möchtest, melde dich bitte rechtzeitig. Wir freuen uns auf dich!`,
+    ].join("\n");
+  }
+
+  if (purpose === "invoice_reminder") {
+    return [
+      "Natürlich — hier ist ein höflicher Zahlungserinnerungs-Text:",
+      "",
+      `Hallo${greetingName},`,
+      "ich wollte dich kurz darauf hinweisen, dass zu deinem letzten Besuch noch eine Rechnung offen ist.",
+      "Bitte begleiche den Betrag bei Gelegenheit. Falls du Fragen dazu hast, melde dich jederzeit gerne.",
+      "",
+      "Liebe Grüße",
+      "Magnifique Beauty Institut",
+    ].join("\n");
+  }
+
+  if (purpose === "appointment_change") {
+    return [
+      "Gerne — hier ist ein freundlicher Text:",
+      "",
+      `Hallo${greetingName},`,
+      "kein Problem, wir können deinen Termin gerne verschieben.",
+      "Schick uns bitte kurz ein paar passende Zeitfenster, dann suchen wir dir einen neuen Termin heraus.",
+      "",
+      "Liebe Grüße",
+      "Magnifique Beauty Institut",
+    ].join("\n");
+  }
+
+  if (purpose === "thank_you") {
+    return [
+      "Gerne — hier ist ein netter Nachfass-Text:",
+      "",
+      `Hallo${greetingName},`,
+      "vielen Dank für deinen Besuch bei uns. Wir hoffen, du bist mit dem Ergebnis zufrieden.",
+      "Wenn du Fragen zur Pflege oder zum weiteren Ablauf hast, melde dich jederzeit gerne.",
+      "",
+      "Liebe Grüße",
+      "Magnifique Beauty Institut",
+    ].join("\n");
+  }
+
+  return [
+    "Gerne — hier ist ein freundlicher Vorschlag:",
+    "",
+    `Hallo${greetingName},`,
+    "ich melde mich kurz bei dir wegen deines Anliegens bei Magnifique Beauty Institut.",
+    "Falls du Fragen hast oder etwas ändern möchtest, gib uns bitte einfach kurz Bescheid.",
+    "",
+    "Liebe Grüße",
+    "Magnifique Beauty Institut",
+  ].join("\n");
+}
+
+function localProcessAdvice(question: string, context: AssistantContext) {
+  const q = question.toLowerCase();
+
+  if (q.includes("rechnung") && q.includes("versand")) {
+    return [
+      "Der saubere Ablauf von Rechnung bis Versand ist:",
+      "",
+      "1. Kunde oder Termin auswählen.",
+      "2. Rechnung bzw. Checkout öffnen und die Leistungen prüfen.",
+      "3. Zahlungsart wählen: Bar oder Karte.",
+      "4. Zahlung abschließen.",
+      "5. Beleg/Fiscal Receipt erzeugen.",
+      "6. Belegdetails öffnen und Versand/Druck prüfen.",
+      "7. Per E-Mail, WhatsApp-Vorlage oder Drucker weitergeben.",
+      "",
+      "Wichtig: Nach dem Beleg/Fiscal Receipt nicht mehr einfach ändern. Wenn fachlich etwas falsch ist, sauber stornieren und neu erstellen.",
+    ].join("\n");
+  }
+
+  if (q.includes("storn") || q.includes("ändern") || q.includes("aendern")) {
+    return [
+      "Als Faustregel:",
+      "",
+      "Ändern ist okay, solange der Vorgang noch ein Entwurf ist oder noch kein finaler Beleg erzeugt wurde.",
+      "",
+      "Stornieren ist besser, wenn:",
+      "• bereits ein Beleg/Fiscal Receipt erzeugt wurde,",
+      "• der Betrag falsch ist,",
+      "• die falsche Leistung verrechnet wurde,",
+      "• der falsche Kunde verwendet wurde,",
+      "• der Vorgang bereits bezahlt oder versendet wurde.",
+      "",
+      "Kurz gesagt: Vor dem finalen Beleg korrigieren. Nach dem finalen Beleg sauber stornieren und neu machen.",
+    ].join("\n");
+  }
+
+  return localUsefulFallback(question, context);
 }
 
 async function lookupPractitionerTenant(supabase: Awaited<ReturnType<typeof supabaseServer>>, practitionerName: string) {
@@ -316,16 +507,38 @@ async function lookupAppointments(supabase: Awaited<ReturnType<typeof supabaseSe
   if (tenantId) query = query.eq("tenant_id", tenantId);
 
   const { data, error } = await query;
-  const rows = data ?? [];
+  const rowsRaw = data ?? [];
 
   if (error) {
     return { kind: "appointments", title: "Terminsuche", summary: `Ich konnte die Termine gerade nicht lesen: ${error.message}`, data: [] };
   }
 
   const who = practitionerName ? ` für ${practitionerName[0].toUpperCase()}${practitionerName.slice(1)}` : "";
-  if (rows.length === 0) {
+  if (rowsRaw.length === 0) {
     return { kind: "appointments", title: "Terminsuche", summary: `Ich habe ${label}${who} keine Termine gefunden.`, data: [] };
   }
+
+  const tenantIds = Array.from(new Set(rowsRaw.map((row: any) => String(row?.tenant_id ?? "").trim()).filter(Boolean)));
+  const personIds = Array.from(new Set(rowsRaw.map((row: any) => String(row?.person_id ?? "").trim()).filter(Boolean)));
+  const customerProfileByPair = new Map<string, string>();
+
+  if (tenantIds.length > 0 && personIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("customer_profiles")
+      .select("id, tenant_id, person_id")
+      .in("tenant_id", tenantIds)
+      .in("person_id", personIds);
+
+    for (const profile of profiles ?? []) {
+      const key = `${profile.tenant_id}:${profile.person_id}`;
+      if (!customerProfileByPair.has(key)) customerProfileByPair.set(key, profile.id);
+    }
+  }
+
+  const rows = rowsRaw.map((row: any) => ({
+    ...row,
+    customer_profile_id: customerProfileByPair.get(`${row.tenant_id}:${row.person_id}`) ?? null,
+  }));
 
   const lines = rows.map((row: any, index: number) => {
     const person = firstJoin(row.person) as any;
@@ -840,8 +1053,6 @@ function buildActionsFromLookup(dbLookup: DbLookupResult): AssistantAction[] {
           label: `Termin vorbereiten: ${label}`,
           href: `/calendar?customerProfileId=${encodeURIComponent(profileId)}&assistantAction=newAppointment`,
           tone: actions.length === 0 ? "primary" : "secondary",
-          requiresConfirm: true,
-          confirmLabel: "Termin wirklich vorbereiten",
         });
       }
       for (const row of rows.slice(0, 3)) {
@@ -857,8 +1068,6 @@ function buildActionsFromLookup(dbLookup: DbLookupResult): AssistantAction[] {
           label: `Rechnung vorbereiten: ${label}`,
           href: `/rechnungen?invoice=1&customerProfileId=${encodeURIComponent(profileId)}&assistantAction=newInvoice`,
           tone: actions.length === 0 ? "primary" : "secondary",
-          requiresConfirm: true,
-          confirmLabel: "Rechnung wirklich vorbereiten",
         });
       }
       for (const row of rows.slice(0, 3)) {
@@ -875,8 +1084,8 @@ function buildActionsFromLookup(dbLookup: DbLookupResult): AssistantAction[] {
 
       const firstProfileId = String(rows[0]?.id ?? "").trim();
       if (firstProfileId) {
-        actions.push({ label: "Termin vorbereiten", href: `/calendar?customerProfileId=${encodeURIComponent(firstProfileId)}&assistantAction=newAppointment`, tone: "secondary", requiresConfirm: true, confirmLabel: "Termin wirklich vorbereiten" });
-        actions.push({ label: "Rechnung vorbereiten", href: `/rechnungen?invoice=1&customerProfileId=${encodeURIComponent(firstProfileId)}&assistantAction=newInvoice`, tone: "secondary", requiresConfirm: true, confirmLabel: "Rechnung wirklich vorbereiten" });
+        actions.push({ label: "Termin vorbereiten", href: `/calendar?customerProfileId=${encodeURIComponent(firstProfileId)}&assistantAction=newAppointment`, tone: "secondary" });
+        actions.push({ label: "Rechnung vorbereiten", href: `/rechnungen?invoice=1&customerProfileId=${encodeURIComponent(firstProfileId)}&assistantAction=newInvoice`, tone: "secondary" });
       }
     }
   }
@@ -897,17 +1106,50 @@ function buildActionsFromLookup(dbLookup: DbLookupResult): AssistantAction[] {
     if (customerId) {
       const label = customerActionLabel(customer);
       if (intent === "invoice_create") {
-        actions.push({ label: `Rechnung vorbereiten: ${label}`, href: `/rechnungen?invoice=1&customerProfileId=${encodeURIComponent(customerId)}&assistantAction=newInvoice`, tone: receiptId ? "secondary" : "primary", requiresConfirm: true, confirmLabel: "Rechnung wirklich vorbereiten" });
+        actions.push({ label: `Rechnung vorbereiten: ${label}`, href: `/rechnungen?invoice=1&customerProfileId=${encodeURIComponent(customerId)}&assistantAction=newInvoice`, tone: receiptId ? "secondary" : "primary" });
       }
       actions.push({ label: `Kundenprofil öffnen: ${label}`, href: `/customers/${customerId}`, tone: receiptId ? "secondary" : "primary" });
     } else if (intent === "invoice_create") {
       const fallbackName = receiptCustomerNameFromLookupData(data) || dbLookup.queryName || "Kunde";
-      actions.push({ label: `Neuen Kunden anlegen: ${fallbackName}`, href: `/customers/new?name=${encodeURIComponent(fallbackName)}`, tone: receiptId ? "secondary" : "primary", requiresConfirm: true, confirmLabel: "Kundenanlage wirklich öffnen" });
+      actions.push({ label: `Neuen Kunden anlegen: ${fallbackName}`, href: `/customers/new?name=${encodeURIComponent(fallbackName)}`, tone: receiptId ? "secondary" : "primary" });
     }
   }
 
-  if (dbLookup.kind === "appointments") {
-    actions.push({ label: "Kalender öffnen", href: "/calendar", tone: "primary" });
+  if (dbLookup.kind === "appointments" && Array.isArray(dbLookup.data)) {
+    const rows = (dbLookup.data as any[]).filter((row) => row?.id).slice(0, 6);
+
+    for (const row of rows) {
+      const appointmentId = String(row?.id ?? "").trim();
+      const startAt = String(row?.start_at ?? "").trim();
+      const dateParam = startAt ? startAt.slice(0, 10) : "";
+      const person = firstJoin(row?.person) as any;
+      const tenant = firstJoin(row?.tenant) as any;
+      const customerName = String(person?.full_name ?? "Termin").trim();
+      const tenantName = String(tenant?.display_name ?? "").trim();
+      const label = tenantName ? `${customerName} · ${tenantName}` : customerName;
+      const calendarHref = `/calendar?appointmentId=${encodeURIComponent(appointmentId)}${dateParam ? `&date=${encodeURIComponent(dateParam)}` : ""}`;
+
+      actions.push({
+        label: `Termin öffnen: ${label}`,
+        href: calendarHref,
+        tone: actions.length === 0 ? "primary" : "secondary",
+      });
+
+      actions.push({
+        label: `Bearbeiten: ${label}`,
+        href: `${calendarHref}&assistantAction=editAppointment`,
+        tone: "secondary",
+      });
+
+      const customerProfileId = String(row?.customer_profile_id ?? "").trim();
+      if (customerProfileId) {
+        actions.push({
+          label: `Kunde öffnen: ${customerName}`,
+          href: `/customers/${encodeURIComponent(customerProfileId)}`,
+          tone: "secondary",
+        });
+      }
+    }
   }
 
   const seen = new Set<string>();
@@ -1002,6 +1244,70 @@ export async function POST(request: Request) {
     }
 
     const lastQuestion = getLastUserQuestion(messages);
+
+    if (wantsTextDraft(lastQuestion)) {
+      const recipientName = await enrichRecipientName(lastQuestion);
+
+      if (!apiKey) {
+        return NextResponse.json({
+          answer: localTextDraft(lastQuestion, recipientName),
+          lookup: { kind: "none", title: "Textmodus", summary: "", data: null },
+          actions: [],
+        });
+      }
+
+      const textPrompt = [
+        "Du bist GIGI, die interne Studio-KI für ein Beauty-CRM.",
+        "Der Benutzer will einen Text, keine Datenabfrage und keine Aktion.",
+        "Antworte auf Deutsch, freundlich, praxistauglich und direkt kopierbar.",
+        "Gib bei Kommunikationsnachrichten am besten eine kurze Hauptversion und optional eine kurze WhatsApp-Version.",
+        "Behaupte nicht, dass du etwas versendet oder geändert hast.",
+        recipientName ? `Erkannter Kunde/Empfänger: ${recipientName}.` : "Kein eindeutiger Empfänger erkannt.",
+        `Benutzerfrage: ${lastQuestion}`,
+      ].filter(Boolean).join("\n");
+
+      try {
+        const textResponse = await fetch("https://api.openai.com/v1/responses", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: DEFAULT_MODEL,
+            max_output_tokens: 650,
+            input: [{ role: "developer", content: textPrompt }],
+          }),
+        });
+
+        if (textResponse.ok) {
+          const textData = await textResponse.json();
+          const answer = extractAssistantText(textData);
+          return NextResponse.json({
+            answer: answer || localTextDraft(lastQuestion, recipientName),
+            lookup: { kind: "none", title: "Textmodus", summary: "", data: null },
+            actions: [],
+          });
+        }
+      } catch {
+        // local fallback below
+      }
+
+      return NextResponse.json({
+        answer: localTextDraft(lastQuestion, recipientName),
+        lookup: { kind: "none", title: "Textmodus", summary: "", data: null },
+        actions: [],
+      });
+    }
+
+    if (wantsProcessAdvice(lastQuestion) && !wantsAppointments(lastQuestion) && !wantsCustomerSearch(lastQuestion)) {
+      return NextResponse.json({
+        answer: localProcessAdvice(lastQuestion, context),
+        lookup: { kind: "none", title: "Ablaufhilfe", summary: "", data: null },
+        actions: [],
+      });
+    }
+
     const dbLookup = await lookupDbData(lastQuestion, messages).catch((error) => ({
       kind: "none" as const,
       title: "Datenabfrage fehlgeschlagen",
@@ -1020,8 +1326,8 @@ export async function POST(request: Request) {
     const systemPrompt = [
       "Du bist der interne Studio-Assistent für ein Beauty-CRM namens Magnifique CRM.",
       "Antworte immer auf Deutsch.",
-      "Version 2.0: Du darfst echte CRM-Daten lesen, vorherige Suchtreffer im Gespräch berücksichtigen und bestätigungspflichtige Aktionslinks vorbereiten. Du änderst keine Daten im Hintergrund.",
-      "Behaupte niemals, du hättest Termine, Kunden, Rechnungen oder Daten geändert. Aktionen werden erst nach Klick des Nutzers geöffnet oder vorbereitet.",
+      "Version 1.8: Du unterscheidest klar zwischen Datenabfrage, Aktion vorbereiten, Ablaufhilfe und Textmodus. Wenn der Benutzer formulieren/schreiben/verfassen will, erzeugst du Text und machst keine unnötige CRM-Abfrage.",
+      "Du hast keinen Schreibzugriff. Behaupte niemals, du hättest Termine, Kunden, Rechnungen oder Daten geändert.",
       "Gib keine langen allgemeinen Erklärungen. Antworte praktisch und direkt.",
       `Aktuelle Seite: ${context.pageLabel}${context.pagePath ? ` (${context.pagePath})` : ""}.`,
       context.userLabel ? `Eingeloggter Benutzer: ${context.userLabel}.` : "",

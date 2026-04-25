@@ -565,8 +565,8 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
   const searchParams = useSearchParams();
 
   const [unreadCount, setUnreadCount] = useState(0);
-  const [liveReminderCount, setLiveReminderCount] = useState(reminderCount);
-  const [liveWaitlistCount, setLiveWaitlistCount] = useState(waitlistCount);
+  const [liveReminderCount, setLiveReminderCount] = useState(Math.max(0, Number.isFinite(reminderCount) ? Math.trunc(reminderCount) : 0));
+  const [liveWaitlistCount, setLiveWaitlistCount] = useState(Math.max(0, Number.isFinite(waitlistCount) ? Math.trunc(waitlistCount) : 0));
   const [chatPulse, setChatPulse] = useState(false);
   const [reminderPulse, setReminderPulse] = useState(false);
   const [waitlistPulse, setWaitlistPulse] = useState(false);
@@ -600,8 +600,8 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
     return `team-chat:last-read:${tenantId}:${currentUserId}`;
   }, [tenantId, currentUserId]);
 
-  useEffect(() => { setLiveReminderCount(reminderCount); previousReminderCount.current = reminderCount; }, [reminderCount]);
-  useEffect(() => { setLiveWaitlistCount(waitlistCount); previousWaitlistCount.current = waitlistCount; }, [waitlistCount]);
+  useEffect(() => { const next = Math.max(0, Number.isFinite(reminderCount) ? Math.trunc(reminderCount) : 0); setLiveReminderCount(next); previousReminderCount.current = next; }, [reminderCount]);
+  useEffect(() => { const next = Math.max(0, Number.isFinite(waitlistCount) ? Math.trunc(waitlistCount) : 0); setLiveWaitlistCount(next); previousWaitlistCount.current = next; }, [waitlistCount]);
   useEffect(() => { if (!userMenuOpen) return; const t = window.setTimeout(() => setUserMenuShown(true), 10); return () => window.clearTimeout(t); }, [userMenuOpen]);
   useEffect(() => { if (!settingsMenuOpen) return; const t = window.setTimeout(() => setSettingsMenuShown(true), 10); return () => window.clearTimeout(t); }, [settingsMenuOpen]);
   useEffect(() => { if (!mobileMenuOpen) return; const t = window.setTimeout(() => setMobileMenuShown(true), 10); return () => window.clearTimeout(t); }, [mobileMenuOpen]);
@@ -661,16 +661,17 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
   }, [storageKey, currentUserId, pathname, searchParams]);
 
   useEffect(() => {
-    if (reminderCount > previousReminderCount.current) {
+    const nextReminderCount = Math.max(0, Number.isFinite(reminderCount) ? Math.trunc(reminderCount) : 0);
+    if (nextReminderCount > previousReminderCount.current) {
       setReminderPulse(true);
       const timeout = window.setTimeout(() => setReminderPulse(false), 3000);
-      previousReminderCount.current = reminderCount;
-      setLiveReminderCount(reminderCount);
+      previousReminderCount.current = nextReminderCount;
+      setLiveReminderCount(nextReminderCount);
       return () => window.clearTimeout(timeout);
     }
 
-    previousReminderCount.current = reminderCount;
-    setLiveReminderCount(reminderCount);
+    previousReminderCount.current = nextReminderCount;
+    setLiveReminderCount(nextReminderCount);
   }, [reminderCount]);
 
   useEffect(() => {

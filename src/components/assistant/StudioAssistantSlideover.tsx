@@ -12,11 +12,21 @@ type AssistantAction = {
   confirmLabel?: string;
 };
 
+type AssistantLookup = {
+  kind?: "none" | "customers" | "appointments" | "invoice";
+  title?: string;
+  summary?: string;
+  data?: any;
+  actionIntent?: string;
+  queryName?: string;
+};
+
 type AssistantMessage = {
   id: string;
   role: "user" | "assistant";
   text: string;
   actions?: AssistantAction[];
+  lookup?: AssistantLookup | null;
 };
 
 type ApiMessage = {
@@ -67,6 +77,12 @@ function uid(prefix: string) {
 }
 
 
+function compactHeaderButtonClass(danger = false) {
+  return danger
+    ? "inline-flex h-11 w-11 items-center justify-center rounded-[16px] border border-white/10 bg-white/10 text-white transition-colors hover:bg-red-600/90 hover:text-white"
+    : "inline-flex h-11 w-11 items-center justify-center rounded-[16px] border border-white/12 bg-white/[0.04] text-white/85 transition-colors hover:bg-white/[0.10] hover:text-white";
+}
+
 function actionClass(tone?: "primary" | "secondary") {
   return tone === "primary"
     ? "inline-flex items-center justify-center rounded-xl border border-[#d8c1a0]/45 bg-[#d8c1a0]/18 px-3 py-2 text-xs font-semibold text-[#f6f0e8] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:bg-[#d8c1a0]/26"
@@ -88,6 +104,191 @@ function composerIconButtonClass(disabled = false) {
   return `absolute bottom-3 right-3 inline-flex h-9 w-9 items-center justify-center rounded-[14px] border border-white/12 bg-white/[0.04] text-white transition-colors ${
     disabled ? "cursor-not-allowed opacity-45 pointer-events-none" : "hover:bg-white/[0.10]"
   }`;
+}
+
+function firstJoinValue(value: any) {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
+
+function safeText(value: any, fallback = "—") {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+function formatCardDate(value: any) {
+  if (!value) return "—";
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return safeText(value);
+  return new Intl.DateTimeFormat("de-AT", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatCardMoney(value: any, currency = "EUR") {
+  const numeric = typeof value === "number" ? value : Number(value ?? 0);
+  if (!Number.isFinite(numeric)) return "—";
+  return new Intl.NumberFormat("de-AT", { style: "currency", currency }).format(numeric);
+}
+
+function receiptPayloadValue(row: any, paths: string[][]) {
+  let payload = row?.receipt_payload_canonical;
+  if (typeof payload === "string") {
+    try { payload = JSON.parse(payload); } catch { payload = null; }
+  }
+  if (!payload || typeof payload !== "object") return "";
+  for (const path of paths) {
+    let current = payload;
+    for (const key of path) {
+      current = current?.[key];
+      if (current == null) break;
+    }
+    if (typeof current === "string" && current.trim()) return current.trim();
+    if (typeof current === "number" && Number.isFinite(current)) return String(current);
+  }
+  return "";
+}
+
+function matchingActions(actions: AssistantAction[] | undefined, matcher: (action: AssistantAction) => boolean) {
+  return (actions ?? []).filter(matcher).slice(0, 3);
+}
+
+function renderCardActions(actions: AssistantAction[]) {
+  if (actions.length === 0) return null;
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {actions.map((action, index) => (
+        <a key={`${action.href}-${action.label}-${index}`} href={action.href} className={actionClass(action.tone)}>
+          {action.label}
+        </a>
+      ))}
+    </div>
+  );
+}
+
+function renderLookupCards(lookup: AssistantLookup | null | undefined, actions?: AssistantAction[]) {
+  if (!lookup || !lookup.kind || lookup.kind === "none") return null;
+
+  if (lookup.kind === "customers") {
+    const rows = Array.isArray(lookup.data) ? lookup.data : Array.isArray(lookup.data?.customers) ? lookup.data.customers : [];
+    if (rows.length === 0) return null;
+
+    return (
+      <div className="mt-3 grid gap-3">
+        {rows.slice(0, 4).map((row: any, index: number) => {
+          const person = firstJoinValue(row?.person);
+          const tenant = firstJoinValue(row?.tenant);
+          const profileId = safeText(row?.id, "");
+          const name = safeText(person?.full_name, "Unbekannter Kunde");
+          const tenantName = safeText(tenant?.display_name, "ohne Behandler");
+          const cardActions = matchingActions(actions, (action) => Boolean(profileId) && action.href.includes(profileId));
+
+          return (
+            <div key={`${profileId || name}-${index}`} className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+              <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/38">Kunde</div>
+              <div className="mt-1 text-sm font-semibold text-white">{name}</div>
+              <div className="mt-0.5 text-xs text-white/55">{tenantName}</div>
+              <div className="mt-2 grid gap-1 text-xs text-white/55">
+                <div>Telefon: {safeText(person?.phone)}</div>
+                <div>E-Mail: {safeText(person?.email)}</div>
+              </div>
+              {renderCardActions(cardActions)}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (lookup.kind === "invoice") {
+    const data = lookup.data ?? {};
+    const receipts = Array.isArray(data?.receipts) ? data.receipts : [];
+    const customers = Array.isArray(data?.customers) ? data.customers : [];
+    if (receipts.length === 0 && customers.length === 0) return null;
+
+    return (
+      <div className="mt-3 grid gap-3">
+        {receipts.slice(0, 4).map((receipt: any, index: number) => {
+          const receiptId = safeText(receipt?.id, "");
+          const number = safeText(receipt?.receipt_number, "Beleg");
+          const amount = typeof receipt?.turnover_value_cents === "number" ? receipt.turnover_value_cents / 100 : Number(receipt?.turnover_value_cents ?? 0) / 100;
+          const customerName = receiptPayloadValue(receipt, [["customer_name"], ["person_name"], ["customer", "full_name"], ["customer", "name"], ["buyer", "name"]]);
+          const providerName = receiptPayloadValue(receipt, [["provider_name"], ["tenant_display_name"], ["tenant_name"], ["tenant", "display_name"]]);
+          const cardActions = matchingActions(actions, (action) => Boolean(receiptId) && action.href.includes(receiptId));
+
+          return (
+            <div key={`${receiptId || number}-${index}`} className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+              <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/38">Rechnung / Beleg</div>
+              <div className="mt-1 text-sm font-semibold text-white">{number}</div>
+              <div className="mt-0.5 text-xs text-white/55">{safeText(customerName || providerName, "gespeicherter Beleg")}</div>
+              <div className="mt-2 grid gap-1 text-xs text-white/55">
+                <div>Status: {safeText(receipt?.receipt_type)} · {safeText(receipt?.status)}</div>
+                <div>Datum: {formatCardDate(receipt?.issued_at ?? receipt?.created_at)}</div>
+                <div>Betrag: {formatCardMoney(amount, receipt?.currency_code ?? "EUR")}</div>
+              </div>
+              {renderCardActions(cardActions)}
+            </div>
+          );
+        })}
+
+        {receipts.length === 0 && customers.slice(0, 3).map((row: any, index: number) => {
+          const person = firstJoinValue(row?.person);
+          const tenant = firstJoinValue(row?.tenant);
+          const profileId = safeText(row?.id, "");
+          const cardActions = matchingActions(actions, (action) => Boolean(profileId) && action.href.includes(profileId));
+          return (
+            <div key={`${profileId}-${index}`} className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+              <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/38">Kundenprofil ohne Beleg</div>
+              <div className="mt-1 text-sm font-semibold text-white">{safeText(person?.full_name, "Unbekannter Kunde")}</div>
+              <div className="mt-0.5 text-xs text-white/55">{safeText(tenant?.display_name, "ohne Behandler")}</div>
+              {renderCardActions(cardActions)}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (lookup.kind === "appointments") {
+    const rows = Array.isArray(lookup.data) ? lookup.data : [];
+    if (rows.length === 0) return null;
+
+    return (
+      <div className="mt-3 grid gap-3">
+        {rows.slice(0, 6).map((row: any, index: number) => {
+          const person = firstJoinValue(row?.person);
+          const tenant = firstJoinValue(row?.tenant);
+          const appointmentId = safeText(row?.id, "");
+          const profileId = safeText(row?.customer_profile_id, "");
+          const cardActions = matchingActions(
+            actions,
+            (action) =>
+              (Boolean(appointmentId) && action.href.includes(appointmentId)) ||
+              (Boolean(profileId) && action.href.includes(profileId))
+          );
+
+          return (
+            <div key={`${row?.id || index}`} className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+              <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/38">Termin</div>
+              <div className="mt-1 text-sm font-semibold text-white">{formatCardDate(row?.start_at)}</div>
+              <div className="mt-0.5 text-xs text-white/55">{safeText(person?.full_name, "Unbekannter Kunde")}</div>
+              <div className="mt-2 grid gap-1 text-xs text-white/55">
+                <div>Behandler: {safeText(tenant?.display_name)}</div>
+                <div>Leistung: {safeText(row?.service_name_snapshot, "ohne Dienstleistung")}</div>
+              </div>
+              {renderCardActions(cardActions)}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function renderAssistantText(text: string) {
@@ -136,7 +337,7 @@ export default function StudioAssistantSlideover({
   const storageKey = useMemo(() => `gigi-assistant:v1:${userLabel?.trim() || "anonymous"}`, [userLabel]);
   const introText = useMemo(() => {
     const greeting = `Hallo ${userLabel?.trim() || ""}`.trim();
-    return `${greeting} — ich bin GIGI. Ich helfe dir in ${pageLabel}, finde Kunden, Belege und Termine, merke mir passende Treffer und bringe dich direkt zum richtigen nächsten Schritt.`;
+    return `${greeting} — ich bin GIGI. Ich helfe dir in ${pageLabel}, finde Kunden, Belege und Termine, formuliere Texte und bringe dich direkt zum richtigen nächsten Schritt.`;
   }, [pageLabel, userLabel]);
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
@@ -238,6 +439,16 @@ export default function StudioAssistantSlideover({
     scrollToBottom("auto");
   }, [open, shown]);
 
+  function resetChat() {
+    try {
+      window.localStorage.removeItem(storageKey);
+    } catch {
+      // optional
+    }
+    setMessages([{ id: uid("assistant"), role: "assistant", text: introText }]);
+    window.setTimeout(() => scrollToBottom("auto"), 40);
+  }
+
   function close() {
     setShown(false);
 
@@ -310,6 +521,7 @@ export default function StudioAssistantSlideover({
 
       const data = await response.json();
       const reply = String(data?.answer ?? "").trim();
+      const lookup = data?.lookup && typeof data.lookup === "object" ? (data.lookup as AssistantLookup) : null;
       const actions = Array.isArray(data?.actions)
         ? data.actions
             .filter((action: any) => action && typeof action.label === "string" && typeof action.href === "string")
@@ -333,6 +545,7 @@ export default function StudioAssistantSlideover({
           role: "assistant",
           text: reply || fallback,
           actions,
+          lookup,
         },
       ]);
     } catch {
@@ -383,29 +596,59 @@ export default function StudioAssistantSlideover({
                     {userLabel ? ` · ${userLabel}` : ""}
                   </p>
                 </div>
-                <button type="button" onClick={close} className={menuIconButtonClass(false, true)} aria-label="Schließen" title="Schließen">
-                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
-                    <path d="M6 6l12 12M18 6L6 18" />
-                  </svg>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={resetChat} className={compactHeaderButtonClass(false)} aria-label="Chat neu starten" title="Chat neu starten">
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M3 6h18" />
+                      <path d="M8 6V4h8v2" />
+                      <path d="M6 6l1 15h10l1-15" />
+                      <path d="M10 11v6M14 11v6" />
+                    </svg>
+                  </button>
+                  <button type="button" onClick={close} className={compactHeaderButtonClass(true)} aria-label="Schließen" title="Schließen">
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+                      <path d="M6 6l12 12M18 6L6 18" />
+                    </svg>
+                  </button>
+                </div>
               </header>
 
               <details className="studio-assistant-panel__hint group">
                 <summary className="cursor-pointer select-none font-semibold text-white/85">Was kann ich GIGI fragen?</summary>
-                <div className="mt-3 space-y-2 text-white/65">
-                  <p>GIGI kann Kunden, Belege und Termine suchen, Treffer merken und dir passende Links oder nächste Schritte zeigen.</p>
-                  <p className="font-semibold text-white/78">Beispiele:</p>
-                  <ul className="list-disc space-y-1 pl-5">
-                    <li>„Finde Kunde Berbec“</li>
-                    <li>„Für Alexandra einen Termin vorbereiten“</li>
-                    <li>„Zeige mir Rechnungen von Bauer“</li>
-                    <li>„Zeige mir die letzte Rechnung von Muster“</li>
-                    <li>„Welche Termine hat Alexandra morgen?“</li>
-                    <li>„Erkläre mir den Ablauf von Rechnung bis Versand.“</li>
-                    <li>„Wann sollte ich statt ändern lieber stornieren?“</li>
-                    <li>„Formuliere eine freundliche Nachricht an den Kunden“</li>
-                  </ul>
-                  <p>Wichtig: GIGI öffnet und vorbereitet — sie ändert keine sensiblen CRM-Daten ungefragt.</p>
+                <div className="mt-3 grid gap-3 text-white/65 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
+                    <div className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-white/42">Kunden</div>
+                    <ul className="list-disc space-y-1 pl-5">
+                      <li>„Finde Kunde Berbec“</li>
+                      <li>„Für Alexandra einen Termin vorbereiten“</li>
+                      <li>„Nimm den zweiten“</li>
+                    </ul>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
+                    <div className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-white/42">Termine</div>
+                    <ul className="list-disc space-y-1 pl-5">
+                      <li>„Welche Termine hat Alexandra morgen?“</li>
+                      <li>„Termin für Berbec“</li>
+                      <li>„Was steht heute im Kalender?“</li>
+                    </ul>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
+                    <div className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-white/42">Rechnungen</div>
+                    <ul className="list-disc space-y-1 pl-5">
+                      <li>„Zeige mir Rechnungen von Bauer“</li>
+                      <li>„Zeige mir die letzte Rechnung von Muster“</li>
+                      <li>„Wann sollte ich statt ändern lieber stornieren?“</li>
+                    </ul>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
+                    <div className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-white/42">Texte & Abläufe</div>
+                    <ul className="list-disc space-y-1 pl-5">
+                      <li>„Erkläre mir den Ablauf von Rechnung bis Versand.“</li>
+                      <li>„Was sollte ich heute im Dashboard prüfen?“</li>
+                      <li>„Formuliere eine freundliche Nachricht an den Kunden Berbec“</li>
+                    </ul>
+                  </div>
+                  <p className="sm:col-span-2">GIGI öffnet und vorbereitet — sie ändert keine sensiblen CRM-Daten ungefragt.</p>
                 </div>
               </details>
 
@@ -421,6 +664,7 @@ export default function StudioAssistantSlideover({
                     </div>
                     <div className="studio-assistant-message__body">
                       {renderAssistantText(message.text)}
+                      {message.lookup ? renderLookupCards(message.lookup, message.actions) : null}
                       {message.actions && message.actions.length > 0 ? (
                         <div className="mt-3 flex flex-wrap gap-2">
                           {message.actions.map((action, index) => {
