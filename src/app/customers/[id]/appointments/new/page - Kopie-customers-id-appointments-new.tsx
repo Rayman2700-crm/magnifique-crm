@@ -25,9 +25,6 @@ export default async function NewAppointmentPage({
         duration?: string;
         buffer?: string;
         status?: string;
-        openSlotId?: string;
-        waitlistId?: string;
-        source?: string;
       }
     | Promise<{
         error?: string;
@@ -37,9 +34,6 @@ export default async function NewAppointmentPage({
         duration?: string;
         buffer?: string;
         status?: string;
-        openSlotId?: string;
-        waitlistId?: string;
-        source?: string;
       }>;
 }) {
   const { id: customerProfileId } = await params;
@@ -65,9 +59,6 @@ export default async function NewAppointmentPage({
     sp?.status === "completed" || sp?.status === "cancelled" || sp?.status === "no_show" || sp?.status === "scheduled"
       ? sp.status
       : "scheduled";
-  const openSlotId = safeDecode(sp?.openSlotId) || "";
-  const waitlistId = safeDecode(sp?.waitlistId) || "";
-  const source = safeDecode(sp?.source) || "";
 
   return (
     <main className="mx-auto max-w-3xl p-6">
@@ -95,15 +86,6 @@ export default async function NewAppointmentPage({
         className="mt-6 space-y-4 rounded-2xl border border-white/10 bg-black/20 p-4"
         action={createAppointment.bind(null, customerProfileId)}
       >
-        <input type="hidden" name="openSlotId" value={openSlotId} />
-        <input type="hidden" name="waitlistId" value={waitlistId} />
-        <input type="hidden" name="source" value={source} />
-
-        {source === "open-slot" ? (
-          <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
-            Dieser Termin wird aus einem freien Slot erstellt. Nach dem Speichern werden Slot und Warteliste automatisch als gebucht markiert.
-          </div>
-        ) : null}
         <div>
           <label className="text-sm font-medium text-white/85">Titel (z. B. Kunde + Service)</label>
           <input

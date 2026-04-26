@@ -2478,25 +2478,56 @@ function MobileCalendarFilterPicker({
               />
 
               <div
-                className="fixed z-[121] w-[min(320px,calc(100vw-24px))] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.985)_0%,rgba(12,13,16,0.985)_100%)] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-xl md:hidden"
-                style={{ top: panelTop, left: panelLeft, width: panelWidth, maxHeight: "min(70vh, 520px)" }}
+                className="fixed z-[121] overflow-hidden rounded-[26px] md:hidden"
+                style={{
+                  top: panelTop,
+                  left: panelLeft,
+                  width: panelWidth,
+                  maxHeight: "min(70vh, 520px)",
+                  border: "1px solid rgba(214,195,163,0.16)",
+                  background: "linear-gradient(180deg, rgba(34,27,22,0.97) 0%, rgba(21,17,14,0.98) 100%)",
+                  boxShadow: "0 28px 80px rgba(0,0,0,0.42)",
+                  backdropFilter: "blur(24px) saturate(135%)",
+                }}
               >
-                <div className="flex items-center justify-between px-1 pb-2">
+                <div
+                  style={{
+                    padding: 16,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    background: "linear-gradient(180deg, rgba(255,248,240,0.065) 0%, rgba(255,248,240,0.03) 100%)",
+                    borderBottom: "1px solid rgba(214,195,163,0.12)",
+                  }}
+                >
                   <div>
-                    <div className="text-sm font-semibold text-white">Kalender anzeigen</div>
-                    <div className="mt-0.5 text-xs text-white/45">Studio- und Zusatzkalender wählen</div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.96)" }}>Kalender anzeigen</div>
+                    <div style={{ marginTop: 4, fontSize: 12, color: "rgba(247,247,245,0.58)" }}>Studio- und Zusatzkalender wählen</div>
                   </div>
                   <button
                     type="button"
                     onClick={() => setOpen(false)}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-lg leading-none text-white/70 transition hover:bg-white/[0.08] hover:text-white"
                     aria-label="Schließen"
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: 999,
+                      border: "1px solid rgba(214,195,163,0.14)",
+                      background: "linear-gradient(180deg, rgba(255,248,240,0.05) 0%, rgba(255,248,240,0.028) 100%)",
+                      color: "rgba(255,255,255,0.92)",
+                      fontSize: 22,
+                      lineHeight: 1,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
                   >
                     ×
                   </button>
                 </div>
 
-                <div className="grid gap-2">
+                <div style={{ padding: 10, display: "grid", gap: 8 }}>
                   <button
                     type="button"
                     onClick={() => onChange(allSelected ? [] : sources.map((source) => source.id))}
@@ -3485,24 +3516,52 @@ export default function DashboardCalendarCardClient({
                   {calendarFilterOpen ? (
                     <div
                       ref={calendarFilterPanelRef}
-                      className="absolute right-0 top-[calc(100%+14px)] z-40 w-[320px] max-w-[min(320px,calc(100vw-48px))] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.985)_0%,rgba(12,13,16,0.985)_100%)] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.42)] backdrop-blur-xl"
+                      className="absolute right-0 top-[calc(100%+14px)] z-40 w-[320px] max-w-[min(320px,calc(100vw-48px))] overflow-hidden rounded-[26px]"
+                      style={{
+                        border: "1px solid rgba(214,195,163,0.16)",
+                        background: "linear-gradient(180deg, rgba(34,27,22,0.97) 0%, rgba(21,17,14,0.98) 100%)",
+                        boxShadow: "0 28px 80px rgba(0,0,0,0.42)",
+                        backdropFilter: "blur(24px) saturate(135%)",
+                      }}
                     >
-                      <div className="flex items-center justify-between px-1 pb-2">
+                      <div
+                        style={{
+                          padding: 16,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 12,
+                          background: "linear-gradient(180deg, rgba(255,248,240,0.065) 0%, rgba(255,248,240,0.03) 100%)",
+                          borderBottom: "1px solid rgba(214,195,163,0.12)",
+                        }}
+                      >
                         <div>
-                          <div className="text-sm font-semibold text-white">Kalender anzeigen</div>
-                          <div className="mt-0.5 text-xs text-white/45">Studio- und Zusatzkalender wählen</div>
+                          <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,0.96)" }}>Kalender anzeigen</div>
+                          <div style={{ marginTop: 4, fontSize: 12, color: "rgba(247,247,245,0.58)" }}>Studio- und Zusatzkalender wählen</div>
                         </div>
                         <button
                           type="button"
                           onClick={() => setCalendarFilterOpen(false)}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-lg leading-none text-white/70 transition hover:bg-white/[0.08] hover:text-white"
                           aria-label="Schließen"
+                          style={{
+                            width: 38,
+                            height: 38,
+                            borderRadius: 999,
+                            border: "1px solid rgba(214,195,163,0.14)",
+                            background: "linear-gradient(180deg, rgba(255,248,240,0.05) 0%, rgba(255,248,240,0.028) 100%)",
+                            color: "rgba(255,255,255,0.92)",
+                            fontSize: 22,
+                            lineHeight: 1,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
                         >
                           ×
                         </button>
                       </div>
 
-                      <div className="grid gap-2">
+                      <div style={{ padding: 10, display: "grid", gap: 8 }}>
                         <button
                           type="button"
                           onClick={() =>

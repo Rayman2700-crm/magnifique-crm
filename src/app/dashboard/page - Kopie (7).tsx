@@ -1072,13 +1072,11 @@ export default async function DashboardPage() {
     .from("appointment_open_slots")
     .select("id, appointment_id, tenant_id, start_at, end_at, status, created_at")
     .eq("status", "open")
-    // Freie Slots sollen sichtbar bleiben, solange das Zeitfenster noch nicht vorbei ist.
-    .gte("end_at", now.toISOString())
+    .gte("start_at", startOfToday.toISOString())
     .lt("start_at", slotsWindowEnd.toISOString())
     .order("start_at", { ascending: true });
 
-  // Admin sieht alle freien Slots. Normale Benutzer sehen nur ihren Tenant.
-  if (!isAdmin && effectiveReminderTenantId) {
+  if (effectiveReminderTenantId) {
     openSlotsQuery = openSlotsQuery.eq("tenant_id", effectiveReminderTenantId);
   }
 
@@ -1098,8 +1096,7 @@ export default async function DashboardPage() {
       created_at
     `);
 
-  // Admin sieht alle aktiven Wartelisten-Einträge. Normale Benutzer sehen nur ihren Tenant.
-  if (!isAdmin && effectiveReminderTenantId) {
+  if (effectiveReminderTenantId) {
     activeWaitlistQuery = activeWaitlistQuery.eq("tenant_id", effectiveReminderTenantId);
   }
 

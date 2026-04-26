@@ -222,9 +222,6 @@ function getCreateForWaitlistHref(selected: OpenSlotItem, row: WaitlistMatchRow)
     duration: String(durationMin),
     buffer: "0",
     status: "scheduled",
-    openSlotId: selected.id,
-    waitlistId: row.id,
-    source: "open-slot",
   });
   return `/customers/${row.customer_profile_id}/appointments/new?${params.toString()}`;
 }

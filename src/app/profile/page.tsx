@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import ProfilePageClient from "./ProfilePageClient";
+import ProfilePhotoCardClient from "./ProfilePhotoCardClient";
 
 function resolveStorageAvatarUrl(raw: string | null | undefined, admin: ReturnType<typeof supabaseAdmin>) {
   const value = String(raw ?? "").trim();
@@ -276,14 +277,11 @@ export default async function ProfilePage({
   }
 
   return (
-    <main className="mx-auto max-w-5xl p-6 text-white">
+    <main className="mx-auto max-w-6xl px-4 py-6 text-white sm:px-6 lg:px-8">
       <div className="mb-6 flex items-center justify-between gap-4">
         <div>
           <div className="text-xs uppercase tracking-[0.18em] text-[var(--primary)]/80">Magnifique Beauty Institut</div>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Profil</h1>
-          <p className="mt-2 text-sm text-white/60">
-            Hier kann jeder Benutzer seinen Namen, sein Passwort und sein Profilfoto selbst pflegen.
-          </p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Profil - Einstellungen</h1>
         </div>
         <Link
           href="/dashboard"
@@ -305,18 +303,18 @@ export default async function ProfilePage({
         </div>
       ) : null}
 
-      <section className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(24,24,28,0.94)_0%,rgba(13,14,18,0.98)_100%)] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.28)]">
-        <div className="grid gap-6 md:grid-cols-[220px_minmax(0,1fr)] md:items-start">
-          <div className="flex flex-col items-center rounded-[24px] border border-white/10 bg-white/[0.03] p-5 text-center">
+      <section className="rounded-[28px] border border-[rgba(255,255,255,0.04)] bg-[linear-gradient(180deg,rgba(255,250,244,0.045)_0%,rgba(255,248,240,0.018)_52%,rgba(255,248,240,0.008)_100%)] p-6 shadow-[0_26px_72px_rgba(0,0,0,0.26)] backdrop-blur-[22px]">
+        <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start">
+          <div className="flex flex-col items-center rounded-[26px] border border-[rgba(255,255,255,0.04)] bg-[linear-gradient(180deg,rgba(255,250,244,0.045)_0%,rgba(255,248,240,0.018)_52%,rgba(255,248,240,0.008)_100%)] p-5 text-center shadow-[0_26px_72px_rgba(0,0,0,0.20)] backdrop-blur-[20px]">
             {avatarUrl ? (
               <img
                 src={avatarUrl}
                 alt="Profilfoto"
-                className="h-36 w-36 rounded-[28px] border border-white/10 object-cover shadow-[0_18px_38px_rgba(0,0,0,0.28)]"
+                className="h-auto w-full max-w-[170px] rounded-[28px] border border-[rgba(255,255,255,0.06)] object-cover shadow-[0_18px_38px_rgba(0,0,0,0.28)]"
                 style={{ boxShadow: `0 0 0 3px rgba(10,10,12,0.9), 0 0 0 7px ${defaultRingColor}, 0 18px 38px rgba(0,0,0,0.28)` }}
               />
             ) : (
-              <div className="flex h-36 w-36 items-center justify-center rounded-[28px] border border-white/10 bg-white/[0.05] text-4xl font-semibold text-white/90 shadow-[0_18px_38px_rgba(0,0,0,0.28)]"
+              <div className="flex aspect-square w-full max-w-[170px] items-center justify-center rounded-[28px] border border-[rgba(255,255,255,0.06)] bg-white/[0.05] text-4xl font-semibold text-white/90 shadow-[0_18px_38px_rgba(0,0,0,0.28)]"
                 style={{ boxShadow: `0 0 0 3px rgba(10,10,12,0.9), 0 0 0 7px ${defaultRingColor}, 0 18px 38px rgba(0,0,0,0.28)` }}>
                 {initials}
               </div>
@@ -327,16 +325,54 @@ export default async function ProfilePage({
             <div className="mt-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs uppercase tracking-[0.14em] text-white/55">
               {profile?.role ?? "USER"}
             </div>
+
+            <ProfilePhotoCardClient
+              uploadAvatarAction={uploadAvatar}
+              removeAvatarAction={removeAvatar}
+            />
+
+            <div className="w-full pt-1">
+              <h2 className="text-base font-semibold text-white/95">Avatar-Ring-Farbe</h2>
+
+              <form action={updateAvatarRingColor} className="mt-4 grid gap-3">
+                <label className="grid gap-2 text-sm text-white/80">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <input
+                      type="color"
+                      name="avatar_ring_color"
+                      defaultValue={defaultRingColor}
+                      className="h-11 w-16 shrink-0 rounded-xl border border-[rgba(255,255,255,0.08)] bg-white/[0.04] p-1"
+                    />
+                    <input
+                      type="text"
+                      value={defaultRingColor}
+                      readOnly
+                      className="h-11 min-w-0 flex-1 rounded-xl border border-[rgba(255,255,255,0.08)] bg-white/[0.03] px-3 text-sm text-white/60 outline-none"
+                    />
+                  </div>
+                </label>
+
+                <div>
+                  <button
+                    type="submit"
+                    className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-[var(--primary)] px-5 text-sm font-semibold text-black shadow-[0_10px_28px_rgba(214,195,163,0.20)] transition hover:brightness-105"
+                  >
+                    Ring-Farbe speichern
+                  </button>
+                </div>
+              </form>
+            </div>
+
           </div>
 
           <div className="grid gap-6">
-            <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-5">
+            <div className="rounded-[26px] border border-[rgba(255,255,255,0.04)] bg-[linear-gradient(180deg,rgba(255,250,244,0.045)_0%,rgba(255,248,240,0.018)_52%,rgba(255,248,240,0.008)_100%)] p-5 shadow-[0_26px_72px_rgba(0,0,0,0.20)] backdrop-blur-[20px]">
               <h2 className="text-lg font-semibold text-white/95">Persönliche Daten</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">
                 Der Name hier wird im System für dein Benutzerprofil und an allen Stellen mit Avatar/Fallback verwendet.
               </p>
 
-              <form action={updateProfile} className="mt-6 grid gap-4 rounded-[22px] border border-white/10 bg-black/20 p-4 md:max-w-xl">
+              <form action={updateProfile} className="mt-6 grid gap-4 rounded-[22px] border border-[rgba(255,255,255,0.04)] bg-[linear-gradient(180deg,rgba(255,250,244,0.04)_0%,rgba(255,248,240,0.012)_100%)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] md:max-w-xl">
                 <label className="grid gap-2 text-sm text-white/80">
                   <span>Vollständiger Name</span>
                   <input
@@ -344,7 +380,7 @@ export default async function ProfilePage({
                     name="full_name"
                     defaultValue={profile?.full_name ?? ""}
                     required
-                    className="h-11 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none focus:border-white/20"
+                    className="h-11 rounded-xl border border-[rgba(255,255,255,0.08)] bg-white/[0.04] px-3 text-sm text-white outline-none transition focus:border-[rgba(214,195,163,0.30)] focus:bg-white/[0.05]"
                   />
                 </label>
 
@@ -354,14 +390,14 @@ export default async function ProfilePage({
                     type="email"
                     value={user.email ?? ""}
                     disabled
-                    className="h-11 rounded-xl border border-white/10 bg-white/[0.03] px-3 text-sm text-white/60 outline-none"
+                    className="h-11 rounded-xl border border-[rgba(255,255,255,0.08)] bg-white/[0.03] px-3 text-sm text-white/60 outline-none"
                   />
                 </label>
 
                 <div>
                   <button
                     type="submit"
-                    className="inline-flex h-11 items-center justify-center rounded-xl bg-[var(--primary)] px-5 text-sm font-semibold text-black transition hover:brightness-105"
+                    className="inline-flex h-11 items-center justify-center rounded-xl bg-[var(--primary)] px-5 text-sm font-semibold text-black shadow-[0_10px_28px_rgba(214,195,163,0.20)] transition hover:brightness-105"
                   >
                     Name speichern
                   </button>
@@ -370,13 +406,13 @@ export default async function ProfilePage({
             </div>
 
 
-            <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-5">
+            <div className="rounded-[26px] border border-[rgba(255,255,255,0.04)] bg-[linear-gradient(180deg,rgba(255,250,244,0.045)_0%,rgba(255,248,240,0.018)_52%,rgba(255,248,240,0.008)_100%)] p-5 shadow-[0_26px_72px_rgba(0,0,0,0.20)] backdrop-blur-[20px]">
               <h2 className="text-lg font-semibold text-white/95">Rechnungs- und Firmendaten</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">
                 Diese Daten gehören zu deiner eigenen Firma und werden für Rechnungen, Bankblock und Absender verwendet.
               </p>
 
-              <form action={updateBusinessSettings} className="mt-6 grid gap-4 rounded-[22px] border border-white/10 bg-black/20 p-4">
+              <form action={updateBusinessSettings} className="mt-6 grid gap-4 rounded-[22px] border border-[rgba(255,255,255,0.04)] bg-[linear-gradient(180deg,rgba(255,250,244,0.04)_0%,rgba(255,248,240,0.012)_100%)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="grid gap-2 text-sm text-white/80 md:col-span-2">
                     <span>Firmenname / Rechnungsname</span>
@@ -384,7 +420,7 @@ export default async function ProfilePage({
                       type="text"
                       name="legal_name"
                       defaultValue={tenantProfile?.legal_name ?? ""}
-                      className="h-11 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none focus:border-white/20"
+                      className="h-11 rounded-xl border border-[rgba(255,255,255,0.08)] bg-white/[0.04] px-3 text-sm text-white outline-none transition focus:border-[rgba(214,195,163,0.30)] focus:bg-white/[0.05]"
                     />
                   </label>
 
@@ -394,7 +430,7 @@ export default async function ProfilePage({
                       type="text"
                       name="invoice_address_line1"
                       defaultValue={tenantProfile?.invoice_address_line1 ?? ""}
-                      className="h-11 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none focus:border-white/20"
+                      className="h-11 rounded-xl border border-[rgba(255,255,255,0.08)] bg-white/[0.04] px-3 text-sm text-white outline-none transition focus:border-[rgba(214,195,163,0.30)] focus:bg-white/[0.05]"
                     />
                   </label>
 
@@ -404,7 +440,7 @@ export default async function ProfilePage({
                       type="text"
                       name="invoice_address_line2"
                       defaultValue={tenantProfile?.invoice_address_line2 ?? ""}
-                      className="h-11 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none focus:border-white/20"
+                      className="h-11 rounded-xl border border-[rgba(255,255,255,0.08)] bg-white/[0.04] px-3 text-sm text-white outline-none transition focus:border-[rgba(214,195,163,0.30)] focus:bg-white/[0.05]"
                     />
                   </label>
 
@@ -414,7 +450,7 @@ export default async function ProfilePage({
                       type="text"
                       name="zip"
                       defaultValue={tenantProfile?.zip ?? ""}
-                      className="h-11 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none focus:border-white/20"
+                      className="h-11 rounded-xl border border-[rgba(255,255,255,0.08)] bg-white/[0.04] px-3 text-sm text-white outline-none transition focus:border-[rgba(214,195,163,0.30)] focus:bg-white/[0.05]"
                     />
                   </label>
 
@@ -424,7 +460,7 @@ export default async function ProfilePage({
                       type="text"
                       name="city"
                       defaultValue={tenantProfile?.city ?? ""}
-                      className="h-11 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none focus:border-white/20"
+                      className="h-11 rounded-xl border border-[rgba(255,255,255,0.08)] bg-white/[0.04] px-3 text-sm text-white outline-none transition focus:border-[rgba(214,195,163,0.30)] focus:bg-white/[0.05]"
                     />
                   </label>
 
@@ -434,7 +470,7 @@ export default async function ProfilePage({
                       type="text"
                       name="country"
                       defaultValue={tenantProfile?.country ?? "Österreich"}
-                      className="h-11 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none focus:border-white/20"
+                      className="h-11 rounded-xl border border-[rgba(255,255,255,0.08)] bg-white/[0.04] px-3 text-sm text-white outline-none transition focus:border-[rgba(214,195,163,0.30)] focus:bg-white/[0.05]"
                     />
                   </label>
 
@@ -444,7 +480,7 @@ export default async function ProfilePage({
                       type="text"
                       name="iban"
                       defaultValue={tenantProfile?.iban ?? ""}
-                      className="h-11 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none focus:border-white/20"
+                      className="h-11 rounded-xl border border-[rgba(255,255,255,0.08)] bg-white/[0.04] px-3 text-sm text-white outline-none transition focus:border-[rgba(214,195,163,0.30)] focus:bg-white/[0.05]"
                     />
                   </label>
 
@@ -454,7 +490,7 @@ export default async function ProfilePage({
                       type="text"
                       name="bic"
                       defaultValue={tenantProfile?.bic ?? ""}
-                      className="h-11 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none focus:border-white/20"
+                      className="h-11 rounded-xl border border-[rgba(255,255,255,0.08)] bg-white/[0.04] px-3 text-sm text-white outline-none transition focus:border-[rgba(214,195,163,0.30)] focus:bg-white/[0.05]"
                     />
                   </label>
 
@@ -464,7 +500,7 @@ export default async function ProfilePage({
                       type="text"
                       name="bank_name"
                       defaultValue={tenantProfile?.bank_name ?? ""}
-                      className="h-11 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none focus:border-white/20"
+                      className="h-11 rounded-xl border border-[rgba(255,255,255,0.08)] bg-white/[0.04] px-3 text-sm text-white outline-none transition focus:border-[rgba(214,195,163,0.30)] focus:bg-white/[0.05]"
                     />
                   </label>
 
@@ -474,7 +510,7 @@ export default async function ProfilePage({
                       type="text"
                       name="tax_number"
                       defaultValue={(tenantProfile as any)?.tax_number ?? ""}
-                      className="h-11 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none focus:border-white/20"
+                      className="h-11 rounded-xl border border-[rgba(255,255,255,0.08)] bg-white/[0.04] px-3 text-sm text-white outline-none transition focus:border-[rgba(214,195,163,0.30)] focus:bg-white/[0.05]"
                     />
                   </label>
                 </div>
@@ -482,7 +518,7 @@ export default async function ProfilePage({
                 <div>
                   <button
                     type="submit"
-                    className="inline-flex h-11 items-center justify-center rounded-xl bg-[var(--primary)] px-5 text-sm font-semibold text-black transition hover:brightness-105"
+                    className="inline-flex h-11 items-center justify-center rounded-xl bg-[var(--primary)] px-5 text-sm font-semibold text-black shadow-[0_10px_28px_rgba(214,195,163,0.20)] transition hover:brightness-105"
                   >
                     Firmendaten speichern
                   </button>
@@ -490,46 +526,8 @@ export default async function ProfilePage({
               </form>
             </div>
 
-            <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-5">
-              <h2 className="text-lg font-semibold text-white/95">Avatar-Ring-Farbe</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/60">
-                Diese Farbe wird für deinen Avatar-Ring in der App verwendet, zum Beispiel oben rechts und in der Kalender-Legend.
-              </p>
-
-              <form action={updateAvatarRingColor} className="mt-6 grid gap-4 rounded-[22px] border border-white/10 bg-black/20 p-4 md:max-w-xl">
-                <label className="grid gap-2 text-sm text-white/80">
-                  <span>Ring-Farbe</span>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      name="avatar_ring_color"
-                      defaultValue={defaultRingColor}
-                      className="h-11 w-16 rounded-xl border border-white/10 bg-white/[0.04] p-1"
-                    />
-                    <input
-                      type="text"
-                      value={defaultRingColor}
-                      readOnly
-                      className="h-11 flex-1 rounded-xl border border-white/10 bg-white/[0.03] px-3 text-sm text-white/60 outline-none"
-                    />
-                  </div>
-                </label>
-
-                <div>
-                  <button
-                    type="submit"
-                    className="inline-flex h-11 items-center justify-center rounded-xl bg-[var(--primary)] px-5 text-sm font-semibold text-black transition hover:brightness-105"
-                  >
-                    Ring-Farbe speichern
-                  </button>
-                </div>
-              </form>
-            </div>
-
             <ProfilePageClient
               userEmail={user.email ?? null}
-              uploadAvatarAction={uploadAvatar}
-              removeAvatarAction={removeAvatar}
             />
           </div>
         </div>

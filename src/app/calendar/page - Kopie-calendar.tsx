@@ -13,7 +13,6 @@ type ApptRow = {
   id: string;
   start_at: string;
   end_at: string;
-  status: AppointmentStatus | null;
   notes_internal: string | null;
   tenant_id: string;
   person_id: string;
@@ -64,14 +63,6 @@ function parseNotes(notes: string | null) {
   return { title, note, status };
 }
 
-function normalizeAppointmentStatus(value: unknown): AppointmentStatus | null {
-  const raw = String(value ?? "").trim();
-  if (raw === "scheduled" || raw === "completed" || raw === "cancelled" || raw === "no_show") {
-    return raw;
-  }
-  return null;
-}
-
 function firstJoin<T>(x: T | T[] | null | undefined): T | null {
   if (!x) return null;
   return Array.isArray(x) ? (x[0] ?? null) : x;
@@ -94,7 +85,6 @@ export default async function CalendarPage() {
       id,
       start_at,
       end_at,
-      status,
       notes_internal,
       tenant_id,
       person_id,
@@ -195,7 +185,6 @@ export default async function CalendarPage() {
 
   const items = appts.map((a) => {
     const parsed = parseNotes(a.notes_internal);
-    const status = normalizeAppointmentStatus(a.status) ?? parsed.status ?? "scheduled";
     const key = `${a.tenant_id}:${a.person_id}`;
     const customerProfileId = cpMap.get(key) ?? null;
 
@@ -209,7 +198,7 @@ export default async function CalendarPage() {
       end_at: a.end_at,
       title: displayTitle,
       note: parsed.note ?? "",
-      status,
+      status: parsed.status,
       tenantId: a.tenant_id,
       tenantName: tenant?.display_name ?? "Behandler",
       customerProfileId,

@@ -19,7 +19,6 @@ function normalizeConnectionType(value: string | null): OAuthMeta["connectionTyp
   return "calendar_gmail";
 }
 
-
 function isAdminUser(profileRole: unknown, userEmail: unknown) {
   return (
     String(profileRole ?? "").trim().toUpperCase() === "ADMIN" ||
@@ -39,13 +38,46 @@ function parseBooleanFlag(value: string | null | undefined, fallback = false) {
   return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
 }
 
+function requireEnv(name: string) {
+  const value = String(process.env[name] ?? "").trim();
+  if (!value) {
+    throw new Error(`Missing required env: ${name}`);
+  }
+  return value;
+}
+
+function buildSafeRedirectTo(baseUrl: string, redirectToRaw: string | null) {
+  const fallback = `${baseUrl}/calendar/google?success=${encodeURIComponent("Google verbunden ✅")}`;
+  const raw = String(redirectToRaw ?? "").trim();
+  if (!raw) return fallback;
+  if (!raw.startsWith("/")) return fallback;
+  return `${baseUrl}${raw}`;
+}
+
+function buildScopes(connectionType: OAuthMeta["connectionType"]) {
+  const scopes = new Set<string>();
+
+  if (connectionType === "calendar" || connectionType === "calendar_gmail") {
+    scopes.add("https://www.googleapis.com/auth/calendar");
+    scopes.add("https://www.googleapis.com/auth/calendar.events");
+  }
+
+  if (connectionType === "gmail" || connectionType === "calendar_gmail") {
+    scopes.add("https://www.googleapis.com/auth/gmail.send");
+  }
+
+  return Array.from(scopes);
+}
+
 export async function GET(req: Request) {
   const supabase = await supabaseServer();
   const { data } = await supabase.auth.getUser();
   const user = data.user;
 
+  const baseUrl = requireEnv("NEXT_PUBLIC_BASE_URL");
+
   if (!user) {
-    return NextResponse.redirect(new URL("/login?error=1", process.env.NEXT_PUBLIC_BASE_URL));
+    return NextResponse.redirect(new URL("/login?error=1", baseUrl));
   }
 
   const { data: profile } = await supabase
@@ -57,9 +89,8 @@ export async function GET(req: Request) {
   const isAdmin = isAdminUser((profile as any)?.role, user.email);
 
   const requestUrl = new URL(req.url);
-  const clientId = process.env.GOOGLE_CLIENT_ID!;
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI!;
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL!;
+  const clientId = requireEnv("GOOGLE_CLIENT_ID");
+  const redirectUri = requireEnv("GOOGLE_REDIRECT_URI");
 
   const connectionLabelRaw = requestUrl.searchParams.get("connection_label");
   const redirectToRaw = requestUrl.searchParams.get("redirect_to");
@@ -72,16 +103,13 @@ export async function GET(req: Request) {
     !String(connectionLabelRaw ?? "").trim()
   );
 
-  const redirectTo =
-    redirectToRaw && redirectToRaw.startsWith("/")
-      ? `${baseUrl}${redirectToRaw}`
-      : `${baseUrl}/calendar/google?success=${encodeURIComponent("Google verbunden ✅")}`;
-
   if (isStudioRaduRequest(connectionLabelRaw, emailHintRaw) && !isAdmin) {
     return NextResponse.redirect(
       new URL(`/calendar/google?error=${encodeURIComponent("Studio Radu darf nur vom Admin verbunden werden.")}`, baseUrl)
     );
   }
+
+  const redirectTo = buildSafeRedirectTo(baseUrl, redirectToRaw);
 
   const meta: OAuthMeta = {
     redirectTo,
@@ -112,15 +140,11 @@ export async function GET(req: Request) {
     maxAge: 60 * 10,
   });
 
-  const scopes: string[] = [];
-  if (connectionType === "calendar" || connectionType === "calendar_gmail") {
-    scopes.push(
-      "https://www.googleapis.com/auth/calendar",
-      "https://www.googleapis.com/auth/calendar.events"
+  const scopes = buildScopes(connectionType);
+  if (scopes.length === 0) {
+    return NextResponse.redirect(
+      new URL(`/calendar/google?error=${encodeURIComponent("Keine Google-Berechtigungen ausgewählt.")}`, baseUrl)
     );
-  }
-  if (connectionType === "gmail" || connectionType === "calendar_gmail") {
-    scopes.push("https://www.googleapis.com/auth/gmail.send");
   }
 
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
@@ -128,6 +152,8 @@ export async function GET(req: Request) {
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", scopes.join(" "));
+
+  // Critical for long-lived background refresh without noticeable reconnects.
   url.searchParams.set("access_type", "offline");
   url.searchParams.set("prompt", "consent");
   url.searchParams.set("include_granted_scopes", "true");

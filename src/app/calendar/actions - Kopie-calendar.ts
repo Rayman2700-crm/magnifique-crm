@@ -2473,7 +2473,7 @@ export async function updateAppointmentStatusQuick(input: {
 
     const { data: existing, error: findErr } = await admin
       .from("appointments")
-      .select("notes_internal, start_at, end_at, tenant_id, google_calendar_id, google_event_id, google_connection_id, calendar_connection_id, calendar_mode")
+      .select("notes_internal, start_at, end_at, tenant_id, google_calendar_id")
       .eq("id", appointmentId)
       .single();
 
@@ -2556,58 +2556,10 @@ const updErr = await updateAppointmentBestEffort(
       };
     }
 
-    let googleSyncWarning: string | null = null;
-
-    if ((status === "cancelled" || status === "no_show") && (existing as any).google_calendar_id && (existing as any).google_event_id) {
-      try {
-        await ensureWritableGoogleCalendarAppointment(admin, {
-          googleCalendarId: (existing as any).google_calendar_id,
-          notesInternal: (existing as any).notes_internal ?? null,
-          calendarMode: (existing as any).calendar_mode ?? null,
-          calendarConnectionId: (existing as any).calendar_connection_id ?? (existing as any).google_connection_id ?? null,
-        });
-
-        const token = await getGoogleAccessTokenForAppointmentTarget(
-          (existing as any).calendar_connection_id ?? (existing as any).google_connection_id ?? null
-        );
-
-        await googleFetchWithToken(
-          token,
-          `/calendars/${encodeURIComponent((existing as any).google_calendar_id)}/events/${encodeURIComponent((existing as any).google_event_id)}`,
-          { method: "DELETE" }
-        );
-
-        await admin
-          .from("appointments")
-          .update({
-            google_event_id: null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", appointmentId);
-      } catch (e: any) {
-        const msg = String(e?.message ?? "").trim();
-        const normalized = msg.toLowerCase();
-        const alreadyGone = normalized.includes("not found") || normalized.includes("404") || normalized.includes("gone");
-
-        if (alreadyGone) {
-          await admin
-            .from("appointments")
-            .update({
-              google_event_id: null,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", appointmentId);
-        } else {
-          googleSyncWarning = msg || "Google-Termin konnte nicht entfernt werden.";
-        }
-      }
-    }
-
     return {
       ok: true,
       openSlotStatus: status === "cancelled" || status === "no_show" ? "open" : "expired",
       openSlot: slotResult ?? null,
-      googleSyncWarning,
     };
   } catch (e: any) {
     return { ok: false, error: e?.message ?? "Status konnte nicht gespeichert werden." };
