@@ -762,7 +762,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
           style={{
             position: "absolute",
             inset: 0,
-            backgroundColor: "rgba(0,0,0,0.42)",
+            backgroundColor: "rgba(0,0,0,0.68)",
             backdropFilter: "blur(6px)",
             opacity: shown ? 1 : 0,
             transition: "opacity 200ms ease",
@@ -778,12 +778,12 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
             bottom: 18,
             width: 470,
             maxWidth: "calc(100vw - 36px)",
-            transform: shown ? "translateX(0)" : "translateX(18px)",
+            transform: shown ? "translateX(0)" : "translateX(24px)",
             opacity: shown ? 1 : 0,
-            transition: "all 220ms ease",
-            borderRadius: 18,
+            transition: "transform 220ms ease, opacity 220ms ease",
+            borderRadius: 22,
             border: "1px solid rgba(255,255,255,0.12)",
-            background: "linear-gradient(180deg, rgba(16,16,16,0.96) 0%, rgba(10,10,10,0.96) 100%)",
+            background: "linear-gradient(180deg, rgba(16,16,16,0.96), rgba(10,10,10,0.96))",
             color: "white",
             boxShadow: "0 18px 60px rgba(0,0,0,0.55)",
             overflow: "hidden",
@@ -792,7 +792,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
           }}
         >
           <div className="receipt-print-hide">
-            <div style={{ padding: 18, paddingBottom: 12 }}>
+            <div className="p-4 pb-3">
               <div
                 className="grid gap-3"
                 style={{ gridTemplateColumns: receipt.salesOrderId ? "repeat(6, minmax(0, 1fr))" : "repeat(5, minmax(0, 1fr))" }}
@@ -966,9 +966,9 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
               </div>
             </div>
 
-            <div className="mx-[18px] border-t border-white/10" />
+            <div className="mx-4 border-t border-white/10" />
 
-            <div className="px-[18px] pt-3 pb-4">
+            <div className="px-4 pt-3 pb-4">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <div className="text-xs text-white/58">Rechnungen / Belegdetails</div>
@@ -1006,7 +1006,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
               </div>
             </div>
           </div>
-          <div className="receipt-scroll-hidden hide-scrollbar flex-1 overflow-y-auto p-[18px] receipt-print-scroll">
+          <div className="receipt-scroll-hidden hide-scrollbar flex-1 overflow-y-auto p-4 receipt-print-scroll">
             <div className="space-y-4">
               <div className="hidden print:block">
                 <div className="flex items-start justify-between gap-6 border-b border-black/10 pb-4">

@@ -806,7 +806,7 @@ export default async function DashboardPage() {
   let googleStatusConnected = false;
   let selectedStudioLabel = "Kein verbundener Schreibkalender";
   let activeCalendarCount = 0;
-  let extraCalendarLabel = "0 aktiv";
+  let extraCalendarLabel = "0";
   let lastSyncLabel = "—";
 
   if (user) {
@@ -910,7 +910,7 @@ export default async function DashboardPage() {
     const selectedStudioTarget = STUDIO_TARGETS.find((target) => target.calendarId === defaultCalendarId) ?? null;
     selectedStudioLabel = selectedStudioTarget?.label ?? "Kein verbundener Schreibkalender";
     activeCalendarCount = activeCalendarIds.length;
-    extraCalendarLabel = isAdmin ? `${enabledExtraIds.length} aktiv` : "Nur Admin";
+    extraCalendarLabel = String(enabledExtraIds.length);
     lastSyncLabel = formatDateTime((tokenRow as any)?.updated_at ?? primaryWritableConnection?.updated_at ?? null);
   }
 
@@ -1667,7 +1667,7 @@ export default async function DashboardPage() {
         </Card>
       </section>
 
-      <section id="dashboard-calendar-card" className="scroll-mt-[108px]">
+      <section id="dashboard-calendar-card" data-dashboard-calendar="true" className="scroll-mt-[108px]">
         <DashboardCalendarCardClient
           tenants={tenantRows}
           legendUsers={legendUsers}

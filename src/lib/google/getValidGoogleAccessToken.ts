@@ -131,6 +131,42 @@ async function persistConnectionRow(connectionId: string, payload: { access_toke
   }
 }
 
+async function markGoogleConnectionBroken(targetUserId: string, connectionId?: string | null) {
+  const admin = supabaseAdmin();
+  const now = new Date().toISOString();
+
+  await admin
+    .from("google_oauth_tokens")
+    .update({
+      access_token: null,
+      refresh_token: null,
+      expires_at: null,
+      default_calendar_id: null,
+      enabled_calendar_ids: [],
+      updated_at: now,
+    })
+    .eq("user_id", targetUserId);
+
+  let query = admin
+    .from("google_oauth_connections")
+    .update({
+      access_token: null,
+      refresh_token: null,
+      expires_at: null,
+      is_active: false,
+      is_primary: false,
+      updated_at: now,
+    });
+
+  if (connectionId) {
+    query = query.eq("id", connectionId);
+  } else {
+    query = query.eq("owner_user_id", targetUserId);
+  }
+
+  await query;
+}
+
 export async function getValidGoogleAccessToken(
   input?: GetValidGoogleAccessTokenInput | null
 ): Promise<string> {
@@ -202,10 +238,7 @@ export async function getValidGoogleAccessToken(
     } catch (error: any) {
       const message = String(error?.message ?? error ?? "Google Refresh fehlgeschlagen.");
       if (isInvalidGrantMessage(message)) {
-        await admin
-          .from("google_oauth_connections")
-          .update({ access_token: null, updated_at: new Date().toISOString(), is_active: false })
-          .eq("id", row.id);
+        await markGoogleConnectionBroken(ownerUserId || targetUserId, row.id);
       }
       throw new Error("Google Refresh fehlgeschlagen: " + message);
     }
@@ -263,6 +296,9 @@ export async function getValidGoogleAccessToken(
     return refreshed.accessToken;
   } catch (error: any) {
     const message = String(error?.message ?? error ?? "Google Refresh fehlgeschlagen.");
+    if (isInvalidGrantMessage(message)) {
+      await markGoogleConnectionBroken(targetUserId);
+    }
     throw new Error("Google Refresh fehlgeschlagen: " + message);
   }
 }

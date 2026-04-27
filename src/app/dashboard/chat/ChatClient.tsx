@@ -8,6 +8,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 export type ChatMessageDTO = {
@@ -77,15 +78,2773 @@ type MentionState = {
   endIndex: number;
 };
 
-type RealtimeStatus = "connecting" | "connected" | "reconnecting" | "offline";
+export type RealtimeStatus =
+  | "connecting"
+  | "connected"
+  | "reconnecting"
+  | "offline";
 
-const ALLOWED_EMOJIS = ["👍", "❤️", "😂", "😮"];
+const QUICK_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "👏", "🙏"];
 
-function getRealtimeStatusLabel(status: RealtimeStatus) {
-  if (status === "connected") return "Live verbunden";
-  if (status === "reconnecting") return "Synchronisiere...";
-  if (status === "connecting") return "Verbinde...";
-  return "Offline";
+const EMOJI_GROUPS = [
+  {
+    label: "Smileys",
+    emojis: [
+      "😀",
+      "😃",
+      "😄",
+      "😁",
+      "😆",
+      "😅",
+      "😂",
+      "🤣",
+      "🙂",
+      "🙃",
+      "😉",
+      "😊",
+      "😇",
+      "🥰",
+      "😍",
+      "🤩",
+      "😘",
+      "😗",
+      "☺️",
+      "😚",
+      "😙",
+      "🥲",
+      "😋",
+      "😛",
+      "😜",
+      "🤪",
+      "😝",
+      "🤑",
+      "🤗",
+      "🤭",
+      "🫢",
+      "🫣",
+      "🤫",
+      "🤔",
+      "🫡",
+      "🤐",
+      "🤨",
+      "😐",
+      "😑",
+      "😶",
+      "🫥",
+      "😶‍🌫️",
+      "😏",
+      "😒",
+      "🙄",
+      "😬",
+      "😮‍💨",
+      "🤥",
+      "😌",
+      "😔",
+      "😪",
+      "🤤",
+      "😴",
+      "😷",
+      "🤒",
+      "🤕",
+      "🤢",
+      "🤮",
+      "🤧",
+      "🥵",
+      "🥶",
+      "🥴",
+      "😵",
+      "😵‍💫",
+      "🤯",
+      "🤠",
+      "🥳",
+      "🥸",
+      "😎",
+      "🤓",
+      "🧐",
+      "😕",
+      "🫤",
+      "😟",
+      "🙁",
+      "☹️",
+      "😮",
+      "😯",
+      "😲",
+      "😳",
+      "🥺",
+      "🥹",
+      "😦",
+      "😧",
+      "😨",
+      "😰",
+      "😥",
+      "😢",
+      "😭",
+      "😱",
+      "😖",
+      "😣",
+      "😞",
+      "😓",
+      "😩",
+      "😫",
+      "🥱",
+      "😤",
+      "😡",
+      "😠",
+      "🤬",
+      "😈",
+      "👿",
+      "💀",
+      "☠️",
+      "💩",
+      "🤡",
+      "👹",
+      "👺",
+      "👻",
+      "👽",
+      "👾",
+      "🤖",
+    ],
+  },
+  {
+    label: "Gesten",
+    emojis: [
+      "👍",
+      "👎",
+      "👌",
+      "🤌",
+      "🤏",
+      "✌️",
+      "🤞",
+      "🫰",
+      "🤟",
+      "🤘",
+      "🤙",
+      "👈",
+      "👉",
+      "👆",
+      "🖕",
+      "👇",
+      "☝️",
+      "🫵",
+      "👋",
+      "🤚",
+      "🖐️",
+      "✋",
+      "🖖",
+      "🫱",
+      "🫲",
+      "🫳",
+      "🫴",
+      "👏",
+      "🙌",
+      "🫶",
+      "🤲",
+      "🤝",
+      "🙏",
+      "✍️",
+      "💅",
+      "🤳",
+      "💪",
+      "🦾",
+      "🦿",
+      "🦵",
+      "🦶",
+      "👂",
+      "🦻",
+      "👃",
+      "🧠",
+      "🫀",
+      "🫁",
+      "🦷",
+      "🦴",
+      "👀",
+      "👁️",
+      "👅",
+      "👄",
+      "🫦",
+    ],
+  },
+  {
+    label: "Herzen",
+    emojis: [
+      "❤️",
+      "🧡",
+      "💛",
+      "💚",
+      "💙",
+      "💜",
+      "🖤",
+      "🤍",
+      "🤎",
+      "🩷",
+      "🩵",
+      "🩶",
+      "💔",
+      "❤️‍🔥",
+      "❤️‍🩹",
+      "❣️",
+      "💕",
+      "💞",
+      "💓",
+      "💗",
+      "💖",
+      "💘",
+      "💝",
+      "💟",
+      "♥️",
+      "💌",
+      "💋",
+      "💯",
+      "💢",
+      "💥",
+      "💫",
+      "💦",
+      "💨",
+      "🕳️",
+      "💬",
+      "👁️‍🗨️",
+      "🗨️",
+      "🗯️",
+      "💭",
+      "💤",
+    ],
+  },
+  {
+    label: "Menschen",
+    emojis: [
+      "👶",
+      "🧒",
+      "👦",
+      "👧",
+      "🧑",
+      "👱",
+      "👨",
+      "🧔",
+      "🧔‍♂️",
+      "🧔‍♀️",
+      "👨‍🦰",
+      "👨‍🦱",
+      "👨‍🦳",
+      "👨‍🦲",
+      "👩",
+      "👩‍🦰",
+      "🧑‍🦰",
+      "👩‍🦱",
+      "🧑‍🦱",
+      "👩‍🦳",
+      "🧑‍🦳",
+      "👩‍🦲",
+      "🧑‍🦲",
+      "👱‍♀️",
+      "👱‍♂️",
+      "🧓",
+      "👴",
+      "👵",
+      "🙍",
+      "🙎",
+      "🙅",
+      "🙆",
+      "💁",
+      "🙋",
+      "🧏",
+      "🙇",
+      "🤦",
+      "🤷",
+      "🧑‍⚕️",
+      "👨‍⚕️",
+      "👩‍⚕️",
+      "🧑‍🎓",
+      "🧑‍💻",
+      "🧑‍🎨",
+      "🧑‍✈️",
+      "🧑‍🚀",
+      "🧑‍⚖️",
+      "👰",
+      "🤵",
+      "👸",
+      "🤴",
+      "🥷",
+      "🦸",
+      "🦹",
+      "🤶",
+      "🎅",
+      "🧙",
+      "🧝",
+      "🧛",
+      "🧟",
+      "🧞",
+      "🧜",
+      "🧚",
+      "👼",
+      "🤰",
+      "🫄",
+      "🫃",
+      "🤱",
+      "👩‍🍼",
+      "👨‍🍼",
+      "🧑‍🍼",
+      "💃",
+      "🕺",
+      "🕴️",
+      "👯",
+      "🧖",
+      "🧘",
+      "🛀",
+      "🛌",
+    ],
+  },
+  {
+    label: "Tiere & Natur",
+    emojis: [
+      "🐶",
+      "🐱",
+      "🐭",
+      "🐹",
+      "🐰",
+      "🦊",
+      "🐻",
+      "🐼",
+      "🐻‍❄️",
+      "🐨",
+      "🐯",
+      "🦁",
+      "🐮",
+      "🐷",
+      "🐽",
+      "🐸",
+      "🐵",
+      "🙈",
+      "🙉",
+      "🙊",
+      "🐒",
+      "🐔",
+      "🐧",
+      "🐦",
+      "🐤",
+      "🐣",
+      "🐥",
+      "🦆",
+      "🦅",
+      "🦉",
+      "🦇",
+      "🐺",
+      "🐗",
+      "🐴",
+      "🦄",
+      "🐝",
+      "🪱",
+      "🐛",
+      "🦋",
+      "🐌",
+      "🐞",
+      "🐜",
+      "🪰",
+      "🪲",
+      "🪳",
+      "🦟",
+      "🦗",
+      "🕷️",
+      "🕸️",
+      "🦂",
+      "🐢",
+      "🐍",
+      "🦎",
+      "🦖",
+      "🦕",
+      "🐙",
+      "🦑",
+      "🦐",
+      "🦞",
+      "🦀",
+      "🐡",
+      "🐠",
+      "🐟",
+      "🐬",
+      "🐳",
+      "🐋",
+      "🦈",
+      "🦭",
+      "🐊",
+      "🐅",
+      "🐆",
+      "🦓",
+      "🦍",
+      "🦧",
+      "🦣",
+      "🐘",
+      "🦛",
+      "🦏",
+      "🐪",
+      "🐫",
+      "🦒",
+      "🦘",
+      "🦬",
+      "🐃",
+      "🐂",
+      "🐄",
+      "🐎",
+      "🐖",
+      "🐏",
+      "🐑",
+      "🦙",
+      "🐐",
+      "🦌",
+      "🐕",
+      "🐩",
+      "🦮",
+      "🐕‍🦺",
+      "🐈",
+      "🐈‍⬛",
+      "🪶",
+      "🐓",
+      "🦃",
+      "🦤",
+      "🦚",
+      "🦜",
+      "🦢",
+      "🦩",
+      "🕊️",
+      "🐇",
+      "🦝",
+      "🦨",
+      "🦡",
+      "🦫",
+      "🦦",
+      "🦥",
+      "🐁",
+      "🐀",
+      "🐿️",
+      "🦔",
+      "🌵",
+      "🎄",
+      "🌲",
+      "🌳",
+      "🌴",
+      "🪵",
+      "🌱",
+      "🌿",
+      "☘️",
+      "🍀",
+      "🎍",
+      "🪴",
+      "🎋",
+      "🍃",
+      "🍂",
+      "🍁",
+      "🍄",
+      "🐚",
+      "🪨",
+      "🌾",
+      "💐",
+      "🌷",
+      "🌹",
+      "🥀",
+      "🌺",
+      "🌸",
+      "🌼",
+      "🌻",
+      "🌞",
+      "🌝",
+      "🌛",
+      "🌜",
+      "🌚",
+      "🌕",
+      "🌖",
+      "🌗",
+      "🌘",
+      "🌑",
+      "🌒",
+      "🌓",
+      "🌔",
+      "🌙",
+      "🌎",
+      "🌍",
+      "🌏",
+      "🪐",
+      "💫",
+      "⭐",
+      "🌟",
+      "✨",
+      "⚡",
+      "☄️",
+      "💥",
+      "🔥",
+      "🌪️",
+      "🌈",
+      "☀️",
+      "🌤️",
+      "⛅",
+      "🌥️",
+      "☁️",
+      "🌦️",
+      "🌧️",
+      "⛈️",
+      "🌩️",
+      "🌨️",
+      "❄️",
+      "☃️",
+      "⛄",
+      "🌬️",
+      "💨",
+      "💧",
+      "💦",
+      "☔",
+      "☂️",
+      "🌊",
+      "🌫️",
+    ],
+  },
+  {
+    label: "Essen",
+    emojis: [
+      "🍏",
+      "🍎",
+      "🍐",
+      "🍊",
+      "🍋",
+      "🍌",
+      "🍉",
+      "🍇",
+      "🍓",
+      "🫐",
+      "🍈",
+      "🍒",
+      "🍑",
+      "🥭",
+      "🍍",
+      "🥥",
+      "🥝",
+      "🍅",
+      "🍆",
+      "🥑",
+      "🥦",
+      "🥬",
+      "🥒",
+      "🌶️",
+      "🫑",
+      "🌽",
+      "🥕",
+      "🫒",
+      "🧄",
+      "🧅",
+      "🥔",
+      "🍠",
+      "🫘",
+      "🥐",
+      "🥯",
+      "🍞",
+      "🥖",
+      "🥨",
+      "🧀",
+      "🥚",
+      "🍳",
+      "🧈",
+      "🥞",
+      "🧇",
+      "🥓",
+      "🥩",
+      "🍗",
+      "🍖",
+      "🦴",
+      "🌭",
+      "🍔",
+      "🍟",
+      "🍕",
+      "🫓",
+      "🥪",
+      "🥙",
+      "🧆",
+      "🌮",
+      "🌯",
+      "🫔",
+      "🥗",
+      "🥘",
+      "🫕",
+      "🥫",
+      "🍝",
+      "🍜",
+      "🍲",
+      "🍛",
+      "🍣",
+      "🍱",
+      "🥟",
+      "🦪",
+      "🍤",
+      "🍙",
+      "🍚",
+      "🍘",
+      "🍥",
+      "🥠",
+      "🥮",
+      "🍢",
+      "🍡",
+      "🍧",
+      "🍨",
+      "🍦",
+      "🥧",
+      "🧁",
+      "🍰",
+      "🎂",
+      "🍮",
+      "🍭",
+      "🍬",
+      "🍫",
+      "🍿",
+      "🍩",
+      "🍪",
+      "🌰",
+      "🥜",
+      "🍯",
+      "🥛",
+      "🍼",
+      "☕",
+      "🫖",
+      "🍵",
+      "🧃",
+      "🥤",
+      "🧋",
+      "🍶",
+      "🍺",
+      "🍻",
+      "🥂",
+      "🍷",
+      "🥃",
+      "🍸",
+      "🍹",
+      "🧉",
+      "🍾",
+      "🧊",
+      "🥄",
+      "🍴",
+      "🍽️",
+      "🥣",
+      "🥡",
+      "🥢",
+      "🧂",
+    ],
+  },
+  {
+    label: "Aktivität",
+    emojis: [
+      "⚽",
+      "🏀",
+      "🏈",
+      "⚾",
+      "🥎",
+      "🎾",
+      "🏐",
+      "🏉",
+      "🥏",
+      "🎱",
+      "🪀",
+      "🏓",
+      "🏸",
+      "🏒",
+      "🏑",
+      "🥍",
+      "🏏",
+      "🪃",
+      "🥅",
+      "⛳",
+      "🪁",
+      "🏹",
+      "🎣",
+      "🤿",
+      "🥊",
+      "🥋",
+      "🎽",
+      "🛹",
+      "🛼",
+      "🛷",
+      "⛸️",
+      "🥌",
+      "🎿",
+      "⛷️",
+      "🏂",
+      "🪂",
+      "🏋️",
+      "🤼",
+      "🤸",
+      "⛹️",
+      "🤺",
+      "🤾",
+      "🏌️",
+      "🏇",
+      "🧘",
+      "🏄",
+      "🏊",
+      "🤽",
+      "🚣",
+      "🧗",
+      "🚵",
+      "🚴",
+      "🏆",
+      "🥇",
+      "🥈",
+      "🥉",
+      "🏅",
+      "🎖️",
+      "🏵️",
+      "🎗️",
+      "🎫",
+      "🎟️",
+      "🎪",
+      "🤹",
+      "🎭",
+      "🩰",
+      "🎨",
+      "🎬",
+      "🎤",
+      "🎧",
+      "🎼",
+      "🎹",
+      "🥁",
+      "🪘",
+      "🎷",
+      "🎺",
+      "🪗",
+      "🎸",
+      "🪕",
+      "🎻",
+      "🎲",
+      "♟️",
+      "🎯",
+      "🎳",
+      "🎮",
+      "🎰",
+      "🧩",
+    ],
+  },
+  {
+    label: "Objekte",
+    emojis: [
+      "⌚",
+      "📱",
+      "📲",
+      "💻",
+      "⌨️",
+      "🖥️",
+      "🖨️",
+      "🖱️",
+      "🖲️",
+      "🕹️",
+      "🗜️",
+      "💽",
+      "💾",
+      "💿",
+      "📀",
+      "📼",
+      "📷",
+      "📸",
+      "📹",
+      "🎥",
+      "📽️",
+      "🎞️",
+      "📞",
+      "☎️",
+      "📟",
+      "📠",
+      "📺",
+      "📻",
+      "🎙️",
+      "🎚️",
+      "🎛️",
+      "🧭",
+      "⏱️",
+      "⏲️",
+      "⏰",
+      "🕰️",
+      "⌛",
+      "⏳",
+      "📡",
+      "🔋",
+      "🪫",
+      "🔌",
+      "💡",
+      "🔦",
+      "🕯️",
+      "🪔",
+      "🧯",
+      "🛢️",
+      "💸",
+      "💵",
+      "💴",
+      "💶",
+      "💷",
+      "🪙",
+      "💰",
+      "💳",
+      "💎",
+      "⚖️",
+      "🪜",
+      "🧰",
+      "🪛",
+      "🔧",
+      "🔨",
+      "⚒️",
+      "🛠️",
+      "⛏️",
+      "🪓",
+      "🪚",
+      "🔩",
+      "⚙️",
+      "🪤",
+      "🧱",
+      "⛓️",
+      "🧲",
+      "🔫",
+      "💣",
+      "🧨",
+      "🪓",
+      "🔪",
+      "🗡️",
+      "⚔️",
+      "🛡️",
+      "🚬",
+      "⚰️",
+      "🪦",
+      "⚱️",
+      "🏺",
+      "🔮",
+      "📿",
+      "🧿",
+      "💈",
+      "⚗️",
+      "🔭",
+      "🔬",
+      "🕳️",
+      "🩹",
+      "🩺",
+      "💊",
+      "💉",
+      "🩸",
+      "🧬",
+      "🦠",
+      "🧫",
+      "🧪",
+      "🌡️",
+      "🧹",
+      "🪠",
+      "🧺",
+      "🧻",
+      "🚽",
+      "🚰",
+      "🚿",
+      "🛁",
+      "🛀",
+      "🧼",
+      "🪥",
+      "🪒",
+      "🧽",
+      "🪣",
+      "🧴",
+      "🛎️",
+      "🔑",
+      "🗝️",
+      "🚪",
+      "🪑",
+      "🛋️",
+      "🛏️",
+      "🛌",
+      "🧸",
+      "🪆",
+      "🖼️",
+      "🪞",
+      "🪟",
+      "🛍️",
+      "🛒",
+      "🎁",
+      "🎈",
+      "🎏",
+      "🎀",
+      "🪄",
+      "🪅",
+      "🎊",
+      "🎉",
+      "🪩",
+      "📩",
+      "📨",
+      "📧",
+      "💌",
+      "📥",
+      "📤",
+      "📦",
+      "🏷️",
+      "🪧",
+      "📪",
+      "📫",
+      "📬",
+      "📭",
+      "📮",
+      "📯",
+      "📜",
+      "📃",
+      "📄",
+      "📑",
+      "🧾",
+      "📊",
+      "📈",
+      "📉",
+      "🗒️",
+      "🗓️",
+      "📆",
+      "📅",
+      "🗑️",
+      "📇",
+      "🗃️",
+      "🗳️",
+      "🗄️",
+      "📋",
+      "📁",
+      "📂",
+      "🗂️",
+      "🗞️",
+      "📰",
+      "📓",
+      "📔",
+      "📒",
+      "📕",
+      "📗",
+      "📘",
+      "📙",
+      "📚",
+      "📖",
+      "🔖",
+      "🧷",
+      "🔗",
+      "📎",
+      "🖇️",
+      "📐",
+      "📏",
+      "🧮",
+      "📌",
+      "📍",
+      "✂️",
+      "🖊️",
+      "🖋️",
+      "✒️",
+      "🖌️",
+      "🖍️",
+      "📝",
+      "✏️",
+      "🔍",
+      "🔎",
+      "🔏",
+      "🔐",
+      "🔒",
+      "🔓",
+    ],
+  },
+  {
+    label: "Reisen",
+    emojis: [
+      "🚗",
+      "🚕",
+      "🚙",
+      "🚌",
+      "🚎",
+      "🏎️",
+      "🚓",
+      "🚑",
+      "🚒",
+      "🚐",
+      "🛻",
+      "🚚",
+      "🚛",
+      "🚜",
+      "🦯",
+      "🦽",
+      "🦼",
+      "🛴",
+      "🚲",
+      "🛵",
+      "🏍️",
+      "🛺",
+      "🚨",
+      "🚔",
+      "🚍",
+      "🚘",
+      "🚖",
+      "🚡",
+      "🚠",
+      "🚟",
+      "🚃",
+      "🚋",
+      "🚞",
+      "🚝",
+      "🚄",
+      "🚅",
+      "🚈",
+      "🚂",
+      "🚆",
+      "🚇",
+      "🚊",
+      "🚉",
+      "✈️",
+      "🛫",
+      "🛬",
+      "🛩️",
+      "💺",
+      "🛰️",
+      "🚀",
+      "🛸",
+      "🚁",
+      "🛶",
+      "⛵",
+      "🚤",
+      "🛥️",
+      "🛳️",
+      "⛴️",
+      "🚢",
+      "⚓",
+      "🛟",
+      "🪝",
+      "⛽",
+      "🚧",
+      "🚦",
+      "🚥",
+      "🚏",
+      "🗺️",
+      "🗿",
+      "🗽",
+      "🗼",
+      "🏰",
+      "🏯",
+      "🏟️",
+      "🎡",
+      "🎢",
+      "🎠",
+      "⛲",
+      "⛱️",
+      "🏖️",
+      "🏝️",
+      "🏜️",
+      "🌋",
+      "⛰️",
+      "🏔️",
+      "🗻",
+      "🏕️",
+      "⛺",
+      "🛖",
+      "🏠",
+      "🏡",
+      "🏘️",
+      "🏚️",
+      "🏗️",
+      "🏭",
+      "🏢",
+      "🏬",
+      "🏣",
+      "🏤",
+      "🏥",
+      "🏦",
+      "🏨",
+      "🏪",
+      "🏫",
+      "🏩",
+      "💒",
+      "🏛️",
+      "⛪",
+      "🕌",
+      "🕍",
+      "🛕",
+      "🕋",
+      "⛩️",
+      "🛤️",
+      "🛣️",
+      "🗾",
+      "🎑",
+      "🏞️",
+      "🌅",
+      "🌄",
+      "🌠",
+      "🎇",
+      "🎆",
+      "🌇",
+      "🌆",
+      "🏙️",
+      "🌃",
+      "🌌",
+      "🌉",
+      "🌁",
+    ],
+  },
+  {
+    label: "Symbole",
+    emojis: [
+      "✅",
+      "☑️",
+      "✔️",
+      "❌",
+      "❎",
+      "➕",
+      "➖",
+      "➗",
+      "✖️",
+      "🟰",
+      "♾️",
+      "‼️",
+      "⁉️",
+      "❓",
+      "❔",
+      "❕",
+      "❗",
+      "〰️",
+      "💱",
+      "💲",
+      "⚕️",
+      "♻️",
+      "⚜️",
+      "🔱",
+      "📛",
+      "🔰",
+      "⭕",
+      "🟢",
+      "🟡",
+      "🟠",
+      "🔴",
+      "🟣",
+      "🔵",
+      "⚫",
+      "⚪",
+      "🟤",
+      "⬛",
+      "⬜",
+      "◼️",
+      "◻️",
+      "◾",
+      "◽",
+      "▪️",
+      "▫️",
+      "🔶",
+      "🔷",
+      "🔸",
+      "🔹",
+      "🔺",
+      "🔻",
+      "💠",
+      "🔘",
+      "🔳",
+      "🔲",
+      "🏁",
+      "🚩",
+      "🎌",
+      "🏴",
+      "🏳️",
+      "🏳️‍🌈",
+      "🏳️‍⚧️",
+      "🏴‍☠️",
+      "🇦🇹",
+      "🇩🇪",
+      "🇷🇴",
+      "🇪🇺",
+      "🇺🇸",
+      "🇬🇧",
+      "🇨🇭",
+      "🇮🇹",
+      "🇫🇷",
+      "🇪🇸",
+    ],
+  },
+];
+
+const ALL_PICKER_EMOJIS = EMOJI_GROUPS.flatMap((group) => group.emojis);
+
+const EMOJI_SEARCH_ALIASES: Record<string, string> = {
+  "😀": "grinsen lachen smile happy froh",
+  "😃": "lachen smile happy froh",
+  "😄": "lachen smile happy froh",
+  "😁": "grinsen lachen smile happy froh",
+  "😆": "lachen smile happy froh",
+  "😅": "lachen schwitzen erleichtert",
+  "😂": "lachen tränen lachtränen lol haha lustig",
+  "🤣": "lachen tränen lachtränen lol haha lustig rofl",
+  "🙂": "lächeln smile nett",
+  "🙃": "umgedreht scherz ironie",
+  "😉": "zwinkern wink flirt",
+  "😊": "lächeln blush happy froh",
+  "😇": "engel brav unschuldig",
+  "🥰": "liebe verliebt herzen glücklich",
+  "😍": "liebe verliebt herz augen",
+  "🤩": "star begeistert wow",
+  "😘": "kuss liebe",
+  "😗": "kuss",
+  "☺️": "lächeln blush",
+  "😚": "kuss",
+  "😙": "kuss",
+  "😋": "lecker zunge essen",
+  "😛": "zunge frech",
+  "😜": "zunge zwinkern frech",
+  "🤪": "verrückt crazy frech",
+  "🤗": "umarmung hug",
+  "🤭": "oops kichern hand mund",
+  "🤫": "psst ruhig leise",
+  "🤔": "denken nachdenken frage",
+  "😐": "neutral ernst",
+  "😑": "genervt neutral",
+  "🙄": "augen rollen genervt",
+  "😬": "grimasse peinlich",
+  "😌": "erleichtert ruhig",
+  "😔": "traurig traurig nachdenklich",
+  "😪": "müde schläfrig",
+  "😴": "schlafen müde",
+  "😷": "krank maske",
+  "🤒": "krank fieber",
+  "🤕": "krank verletzt",
+  "🤢": "übel krank",
+  "🤮": "kotzen erbrechen krank",
+  "🤧": "krank niesen",
+  "🥵": "heiß warm schwitzen",
+  "🥶": "kalt frieren",
+  "🥴": "benommen dizzy",
+  "😵": "schwindlig tot",
+  "🤯": "explodiert schock wow",
+  "🥳": "party feiern geburtstag",
+  "😎": "cool sonnenbrille",
+  "🤓": "nerd klug brille",
+  "😕": "verwirrt unsicher",
+  "😟": "sorge besorgt",
+  "🙁": "traurig unglücklich",
+  "☹️": "traurig unglücklich",
+  "😮": "überrascht wow offen mund",
+  "😯": "überrascht wow",
+  "😲": "schock überrascht wow",
+  "😳": "rot peinlich überrascht",
+  "🥺": "bitte traurig puppy",
+  "🥹": "gerührt tränen",
+  "😨": "angst schock",
+  "😰": "angst schwitzen",
+  "😥": "traurig erleichtert schwitzen",
+  "😢": "weinen traurig träne cry crying",
+  "😭": "weinen traurig heulen tränen cry crying schluchzen",
+  "😱": "schrei angst schock",
+  "😖": "frustriert traurig",
+  "😣": "frustriert traurig",
+  "😞": "enttäuscht traurig",
+  "😓": "schwitzen traurig",
+  "😩": "erschöpft müde traurig",
+  "😫": "erschöpft müde traurig",
+  "🥱": "gähnen müde",
+  "😤": "wütend sauer dampf",
+  "😡": "wütend sauer rot",
+  "😠": "wütend sauer",
+  "🤬": "fluchen wütend sauer",
+  "👍": "daumen hoch gut like ja ok passt",
+  "👎": "daumen runter schlecht nein dislike",
+  "👌": "ok perfekt gut",
+  "✌️": "peace zwei",
+  "🙏": "bitte danke beten flehen",
+  "👏": "klatschen applaus bravo",
+  "🙌": "jubel hände hoch feiern",
+  "👋": "winken hallo bye",
+  "🤝": "handschlag deal",
+  "💪": "stark muskel kraft",
+  "❤️": "herz liebe rot",
+  "🧡": "herz orange liebe",
+  "💛": "herz gelb liebe",
+  "💚": "herz grün liebe",
+  "💙": "herz blau liebe",
+  "💜": "herz lila liebe",
+  "🖤": "herz schwarz liebe",
+  "🤍": "herz weiß liebe",
+  "💔": "gebrochenes herz traurig",
+  "🔥": "feuer heiß top stark",
+  "✨": "glitzer sparkle schön",
+  "✅": "check erledigt ok ja",
+  "❌": "x nein falsch löschen",
+  "⭐": "stern favorit",
+  "🌟": "stern glitzern favorit",
+  "🎉": "party feiern konfetti",
+  "🎂": "kuchen geburtstag",
+  "☕": "kaffee cafe",
+  "🍾": "sekt feiern",
+};
+
+const EMOJI_UNICODE_SEARCH_ALIASES: Record<string, string> = {
+  "😀": "grinning face gesicht smiley mimik grinsen lachen",
+  "😃": "smiling face with open mouth gesicht smiley mimik lächeln lachen happy glücklich froh mund stift schreiben",
+  "😄": "smiling face with open mouth and smiling eyes gesicht smiley mimik lächeln lachen happy glücklich froh augen sehen auge sehen mund stift schreiben",
+  "😁": "grinning face with smiling eyes gesicht smiley mimik lächeln lachen happy glücklich froh grinsen lachen augen sehen auge sehen",
+  "😆": "smiling face with open mouth and tightly closed eyes gesicht smiley mimik lächeln lachen happy glücklich froh augen sehen auge sehen mund stift schreiben",
+  "😅": "smiling face with open mouth and cold sweat gesicht smiley mimik lächeln lachen happy glücklich froh mund stift schreiben kalt frieren",
+  "😂": "face with tears of joy gesicht smiley mimik tränen weinen träne weinen freude froh glücklich lustig",
+  "🤣": "rolling on the floor laughing lachen lustig haha",
+  "🙂": "slightly smiling face gesicht smiley mimik lächeln lachen happy glücklich froh licht lampe",
+  "🙃": "upside down face gesicht smiley mimik hoch runter",
+  "😉": "winking face gesicht smiley mimik",
+  "😊": "smiling face with smiling eyes gesicht smiley mimik lächeln lachen happy glücklich froh augen sehen auge sehen",
+  "😇": "smiling face with halo gesicht smiley mimik lächeln lachen happy glücklich froh",
+  "🥰": "smiling face with smiling eyes and three hearts gesicht smiley mimik lächeln lachen happy glücklich froh herz liebe augen sehen auge sehen",
+  "😍": "smiling face with heart shaped eyes gesicht smiley mimik lächeln lachen happy glücklich froh herz liebe augen sehen auge sehen",
+  "🤩": "grinning face with star eyes gesicht smiley mimik grinsen lachen augen sehen auge sehen stern",
+  "😘": "face throwing a kiss gesicht smiley mimik kuss liebe",
+  "😗": "kissing face gesicht smiley mimik kuss liebe",
+  "☺️": "white smiling face gesicht smiley mimik lächeln lachen happy glücklich froh weiß weiss",
+  "😚": "kissing face with closed eyes gesicht smiley mimik kuss liebe augen sehen auge sehen",
+  "😙": "kissing face with smiling eyes gesicht smiley mimik lächeln lachen happy glücklich froh kuss liebe augen sehen auge sehen",
+  "🥲": "smiling face with tear gesicht smiley mimik lächeln lachen happy glücklich froh träne weinen",
+  "😋": "face savouring delicious food gesicht smiley mimik essen",
+  "😛": "face with stuck out tongue gesicht smiley mimik zunge",
+  "😜": "face with stuck out tongue and winking eye gesicht smiley mimik auge sehen zunge",
+  "🤪": "grinning face with one large and one small eye gesicht smiley mimik grinsen lachen auge sehen",
+  "😝": "face with stuck out tongue and tightly closed eyes gesicht smiley mimik augen sehen auge sehen zunge",
+  "🤑": "money mouth face gesicht smiley mimik geld euro bezahlen mund",
+  "🤗": "hugging face gesicht smiley mimik",
+  "🤭": "smiling face with smiling eyes and hand covering mouth gesicht smiley mimik lächeln lachen happy glücklich froh augen sehen auge sehen hand mund",
+  "🫢": "face with open eyes and hand over mouth gesicht smiley mimik augen sehen auge sehen hand mund stift schreiben",
+  "🫣": "face with peeking eye gesicht smiley mimik auge sehen",
+  "🤫": "face with finger covering closed lips gesicht smiley mimik lippen mund",
+  "🤔": "thinking face gesicht smiley mimik",
+  "🫡": "saluting face gesicht smiley mimik",
+  "🤐": "zipper mouth face gesicht smiley mimik mund",
+  "🤨": "face with one eyebrow raised gesicht smiley mimik auge sehen",
+  "😐": "neutral face gesicht smiley mimik",
+  "😑": "expressionless face gesicht smiley mimik",
+  "😶": "face without mouth gesicht smiley mimik mund",
+  "🫥": "dotted line face gesicht smiley mimik",
+  "😶‍🌫️": "face without mouth zero width joiner fog gesicht smiley mimik mund",
+  "😏": "smirking face gesicht smiley mimik",
+  "😒": "unamused face gesicht smiley mimik",
+  "🙄": "face with rolling eyes gesicht smiley mimik augen sehen auge sehen",
+  "😬": "grimacing face gesicht smiley mimik",
+  "😮‍💨": "face with open mouth zero width joiner dash symbol gesicht smiley mimik mund stift schreiben",
+  "🤥": "lying face gesicht smiley mimik",
+  "😌": "relieved face gesicht smiley mimik",
+  "😔": "pensive face gesicht smiley mimik stift schreiben",
+  "😪": "sleepy face gesicht smiley mimik schlafen müde",
+  "🤤": "drooling face gesicht smiley mimik",
+  "😴": "sleeping face gesicht smiley mimik schlafen müde schlafen müde",
+  "😷": "face with medical mask gesicht smiley mimik medizin arzt",
+  "🤒": "face with thermometer gesicht smiley mimik",
+  "🤕": "face with head bandage gesicht smiley mimik",
+  "🤢": "nauseated face gesicht smiley mimik",
+  "🤮": "face with open mouth vomiting gesicht smiley mimik mund stift schreiben",
+  "🤧": "sneezing face gesicht smiley mimik",
+  "🥵": "overheated face gesicht smiley mimik",
+  "🥶": "freezing face gesicht smiley mimik",
+  "🥴": "face with uneven eyes and wavy mouth gesicht smiley mimik augen sehen auge sehen mund",
+  "😵": "dizzy face gesicht smiley mimik",
+  "😵‍💫": "dizzy face zero width joiner dizzy symbol gesicht smiley mimik",
+  "🤯": "shocked face with exploding head gesicht smiley mimik",
+  "🤠": "face with cowboy hat gesicht smiley mimik junge kind kuh tier",
+  "🥳": "face with party horn and party hat gesicht smiley mimik party feiern",
+  "🥸": "disguised face gesicht smiley mimik",
+  "😎": "smiling face with sunglasses gesicht smiley mimik lächeln lachen happy glücklich froh sonne wetter",
+  "🤓": "nerd face gesicht smiley mimik",
+  "🧐": "face with monocle gesicht smiley mimik",
+  "😕": "confused face gesicht smiley mimik",
+  "🫤": "face with diagonal mouth gesicht smiley mimik mund",
+  "😟": "worried face gesicht smiley mimik",
+  "🙁": "slightly frowning face gesicht smiley mimik licht lampe",
+  "☹️": "white frowning face gesicht smiley mimik weiß weiss",
+  "😮": "face with open mouth gesicht smiley mimik mund stift schreiben",
+  "😯": "hushed face gesicht smiley mimik",
+  "😲": "astonished face gesicht smiley mimik",
+  "😳": "flushed face gesicht smiley mimik",
+  "🥺": "face with pleading eyes gesicht smiley mimik augen sehen auge sehen",
+  "🥹": "face holding back tears gesicht smiley mimik tränen weinen träne weinen",
+  "😦": "frowning face with open mouth gesicht smiley mimik mund stift schreiben",
+  "😧": "anguished face gesicht smiley mimik",
+  "😨": "fearful face gesicht smiley mimik",
+  "😰": "face with open mouth and cold sweat gesicht smiley mimik mund stift schreiben kalt frieren",
+  "😥": "disappointed but relieved face gesicht smiley mimik",
+  "😢": "crying face gesicht smiley mimik weinen traurig",
+  "😭": "loudly crying face gesicht smiley mimik weinen traurig laut stark",
+  "😱": "face screaming in fear gesicht smiley mimik",
+  "😖": "confounded face gesicht smiley mimik",
+  "😣": "persevering face gesicht smiley mimik",
+  "😞": "disappointed face gesicht smiley mimik",
+  "😓": "face with cold sweat gesicht smiley mimik kalt frieren",
+  "😩": "weary face gesicht smiley mimik",
+  "😫": "tired face gesicht smiley mimik rot",
+  "🥱": "yawning face gesicht smiley mimik",
+  "😤": "face with look of triumph gesicht smiley mimik ok gut",
+  "😡": "pouting face gesicht smiley mimik",
+  "😠": "angry face gesicht smiley mimik wütend sauer",
+  "🤬": "serious face with symbols covering mouth gesicht smiley mimik mund",
+  "😈": "smiling face with horns gesicht smiley mimik lächeln lachen happy glücklich froh",
+  "👿": "imp",
+  "💀": "skull",
+  "☠️": "skull and crossbones kreuz x nein falsch löschen knochen",
+  "💩": "pile of poo",
+  "🤡": "clown face gesicht smiley mimik",
+  "👹": "japanese ogre",
+  "👺": "japanese goblin",
+  "👻": "ghost",
+  "👽": "extraterrestrial alien",
+  "👾": "alien monster",
+  "🤖": "robot face gesicht smiley mimik",
+  "👍": "thumbs up sign daumen daumen hoch",
+  "👎": "thumbs down sign daumen daumen runter",
+  "👌": "ok hand sign hand ok gut",
+  "🤌": "pinched fingers",
+  "🤏": "pinching hand hand",
+  "✌️": "victory hand hand",
+  "🤞": "hand with index and middle fingers crossed hand kreuz x nein falsch löschen",
+  "🫰": "hand with index finger and thumb crossed hand daumen kreuz x nein falsch löschen",
+  "🤟": "i love you hand sign hand",
+  "🤘": "sign of the horns",
+  "🤙": "call me hand hand",
+  "👈": "white left pointing backhand index hand weiß weiss links",
+  "👉": "white right pointing backhand index hand weiß weiss rechts",
+  "👆": "white up pointing backhand index hand weiß weiss hoch",
+  "🖕": "reversed hand with middle finger extended hand",
+  "👇": "white down pointing backhand index hand weiß weiss runter",
+  "☝️": "white up pointing index weiß weiss hoch",
+  "🫵": "index pointing at the viewer",
+  "👋": "waving hand sign hand",
+  "🤚": "raised back of hand hand",
+  "🖐️": "raised hand with fingers splayed hand",
+  "✋": "raised hand hand",
+  "🖖": "raised hand with part between middle and ring fingers hand",
+  "🫱": "rightwards hand hand rechts",
+  "🫲": "leftwards hand hand links",
+  "🫳": "palm down hand hand runter",
+  "🫴": "palm up hand hand hoch",
+  "👏": "clapping hands sign hand hände hand klatschen applaus bravo",
+  "🙌": "person raising both hands in celebration hand hände hand person mensch",
+  "🫶": "heart hands herz liebe hand hände hand",
+  "🤲": "palms up together hoch",
+  "🤝": "handshake hand hände hand",
+  "🙏": "person with folded hands hand hände hand person mensch",
+  "✍️": "writing hand hand",
+  "💅": "nail polish nagel manicure pedicure beauty",
+  "🤳": "selfie",
+  "💪": "flexed biceps",
+  "🦾": "mechanical arm",
+  "🦿": "mechanical leg",
+  "🦵": "leg",
+  "🦶": "foot fuß fuss",
+  "👂": "ear",
+  "🦻": "ear with hearing aid",
+  "👃": "nose",
+  "🧠": "brain regen wetter gehirn",
+  "🫀": "anatomical heart herz liebe",
+  "🫁": "lungs",
+  "🦷": "tooth zahn",
+  "🦴": "bone knochen",
+  "👀": "eyes augen sehen auge sehen",
+  "👁️": "eye auge sehen",
+  "👅": "tongue zunge",
+  "👄": "mouth mund",
+  "🫦": "biting lip",
+  "❤️": "heavy black heart herz liebe schwarz",
+  "🧡": "orange heart herz liebe orange",
+  "💛": "yellow heart herz liebe gelb",
+  "💚": "green heart herz liebe grün",
+  "💙": "blue heart herz liebe blau",
+  "💜": "purple heart herz liebe lila violett",
+  "🖤": "black heart herz liebe schwarz",
+  "🤍": "white heart herz liebe weiß weiss",
+  "🤎": "brown heart herz liebe braun",
+  "🩷": "pink heart herz liebe rosa pink",
+  "🩵": "light blue heart herz liebe blau licht lampe",
+  "🩶": "grey heart herz liebe",
+  "💔": "broken heart herz liebe ok gut",
+  "❤️‍🔥": "heavy black heart zero width joiner fire herz liebe feuer heiß schwarz",
+  "❤️‍🩹": "heavy black heart zero width joiner adhesive bandage herz liebe schwarz",
+  "❣️": "heavy heart exclamation mark ornament herz liebe",
+  "💕": "two hearts herz liebe",
+  "💞": "revolving hearts herz liebe",
+  "💓": "beating heart herz liebe",
+  "💗": "growing heart herz liebe",
+  "💖": "sparkling heart herz liebe",
+  "💘": "heart with arrow herz liebe pfeil",
+  "💝": "heart with ribbon herz liebe",
+  "💟": "heart decoration herz liebe",
+  "♥️": "black heart suit herz liebe schwarz",
+  "💌": "love letter",
+  "💋": "kiss mark kuss liebe",
+  "💯": "hundred points symbol rot",
+  "💢": "anger symbol",
+  "💥": "collision symbol",
+  "💫": "dizzy symbol",
+  "💦": "splashing sweat symbol",
+  "💨": "dash symbol",
+  "🕳️": "hole",
+  "💬": "speech balloon ball sport",
+  "👁️‍🗨️": "eye zero width joiner left speech bubble auge sehen links",
+  "🗨️": "left speech bubble links",
+  "🗯️": "right anger bubble rechts",
+  "💭": "thought balloon ball sport",
+  "💤": "sleeping symbol schlafen müde schlafen müde",
+  "👶": "baby baby kind",
+  "🧒": "child kind",
+  "👦": "boy junge kind",
+  "👧": "girl mädchen kind",
+  "🧑": "adult",
+  "👱": "person with blond hair person mensch",
+  "👨": "man mann mensch",
+  "🧔": "bearded person person mensch bär tier",
+  "🧔‍♂️": "bearded person zero width joiner male sign person mensch bär tier",
+  "🧔‍♀️": "bearded person zero width joiner female sign person mensch bär tier",
+  "👨‍🦰": "man zero width joiner emoji component red hair mann mensch rot",
+  "👨‍🦱": "man zero width joiner emoji component curly hair mann mensch",
+  "👨‍🦳": "man zero width joiner emoji component white hair mann mensch weiß weiss",
+  "👨‍🦲": "man zero width joiner emoji component bald mann mensch",
+  "👩": "woman mann mensch frau mensch",
+  "👩‍🦰": "woman zero width joiner emoji component red hair mann mensch frau mensch rot",
+  "🧑‍🦰": "adult zero width joiner emoji component red hair rot",
+  "👩‍🦱": "woman zero width joiner emoji component curly hair mann mensch frau mensch",
+  "🧑‍🦱": "adult zero width joiner emoji component curly hair",
+  "👩‍🦳": "woman zero width joiner emoji component white hair mann mensch frau mensch weiß weiss",
+  "🧑‍🦳": "adult zero width joiner emoji component white hair weiß weiss",
+  "👩‍🦲": "woman zero width joiner emoji component bald mann mensch frau mensch",
+  "🧑‍🦲": "adult zero width joiner emoji component bald",
+  "👱‍♀️": "person with blond hair zero width joiner female sign person mensch",
+  "👱‍♂️": "person with blond hair zero width joiner male sign person mensch",
+  "🧓": "older adult alt opa oma",
+  "👴": "older man mann mensch alt opa oma",
+  "👵": "older woman mann mensch frau mensch alt opa oma",
+  "🙍": "person frowning person mensch",
+  "🙎": "person with pouting face gesicht smiley mimik person mensch",
+  "🙅": "face with no good gesture gesicht smiley mimik",
+  "🙆": "face with ok gesture gesicht smiley mimik ok gut",
+  "💁": "information desk person person mensch",
+  "🙋": "happy person raising one hand hand person mensch",
+  "🧏": "deaf person person mensch",
+  "🙇": "person bowing deeply person mensch",
+  "🤦": "face palm gesicht smiley mimik",
+  "🤷": "shrug",
+  "🧑‍⚕️": "adult zero width joiner staff of aesculapius",
+  "👨‍⚕️": "man zero width joiner staff of aesculapius mann mensch",
+  "👩‍⚕️": "woman zero width joiner staff of aesculapius mann mensch frau mensch",
+  "🧑‍🎓": "adult zero width joiner graduation cap",
+  "🧑‍💻": "adult zero width joiner personal computer person mensch computer laptop",
+  "🧑‍🎨": "adult zero width joiner artist palette",
+  "🧑‍✈️": "adult zero width joiner airplane flugzeug fliegen",
+  "🧑‍🚀": "adult zero width joiner rocket rakete start",
+  "🧑‍⚖️": "adult zero width joiner scales",
+  "👰": "bride with veil",
+  "🤵": "man in tuxedo mann mensch",
+  "👸": "princess",
+  "🤴": "prince",
+  "🥷": "ninja",
+  "🦸": "superhero hoch",
+  "🦹": "supervillain hoch",
+  "🤶": "mother christmas",
+  "🎅": "father christmas",
+  "🧙": "mage",
+  "🧝": "elf",
+  "🧛": "vampire",
+  "🧟": "zombie",
+  "🧞": "genie",
+  "🧜": "merperson person mensch",
+  "🧚": "fairy",
+  "👼": "baby angel baby kind",
+  "🤰": "pregnant woman mann mensch frau mensch",
+  "🫄": "pregnant person person mensch",
+  "🫃": "pregnant man mann mensch",
+  "🤱": "breast feeding",
+  "👩‍🍼": "woman zero width joiner baby bottle mann mensch frau mensch baby kind",
+  "👨‍🍼": "man zero width joiner baby bottle mann mensch baby kind",
+  "🧑‍🍼": "adult zero width joiner baby bottle baby kind",
+  "💃": "dancer",
+  "🕺": "man dancing mann mensch",
+  "🕴️": "man in business suit levitating mann mensch bus fahrzeug",
+  "👯": "woman with bunny ears mann mensch frau mensch",
+  "🧖": "person in steamy room person mensch",
+  "🧘": "person in lotus position person mensch",
+  "🛀": "bath badewanne bad",
+  "🛌": "sleeping accommodation schlafen müde schlafen müde",
+  "🐶": "dog face gesicht smiley mimik hund tier",
+  "🐱": "cat face gesicht smiley mimik katze tier",
+  "🐭": "mouse face gesicht smiley mimik maus tier",
+  "🐹": "hamster face gesicht smiley mimik",
+  "🐰": "rabbit face gesicht smiley mimik hase tier",
+  "🦊": "fox face gesicht smiley mimik",
+  "🐻": "bear face gesicht smiley mimik bär tier",
+  "🐼": "panda face gesicht smiley mimik",
+  "🐻‍❄️": "bear face zero width joiner snowflake gesicht smiley mimik bär tier schnee wetter",
+  "🐨": "koala",
+  "🐯": "tiger face gesicht smiley mimik tiger tier",
+  "🦁": "lion face gesicht smiley mimik löwe tier",
+  "🐮": "cow face gesicht smiley mimik kuh tier",
+  "🐷": "pig face gesicht smiley mimik schwein tier",
+  "🐽": "pig nose schwein tier",
+  "🐸": "frog face gesicht smiley mimik",
+  "🐵": "monkey face gesicht smiley mimik affe tier schlüssel",
+  "🙈": "see no evil monkey affe tier schlüssel",
+  "🙉": "hear no evil monkey affe tier schlüssel",
+  "🙊": "speak no evil monkey affe tier schlüssel",
+  "🐒": "monkey affe tier schlüssel",
+  "🐔": "chicken huhn tier",
+  "🐧": "penguin stift schreiben",
+  "🐦": "bird vogel tier",
+  "🐤": "baby chick baby kind",
+  "🐣": "hatching chick",
+  "🐥": "front facing baby chick baby kind",
+  "🦆": "duck ente tier",
+  "🦅": "eagle adler tier",
+  "🦉": "owl eule tier",
+  "🦇": "bat",
+  "🐺": "wolf face gesicht smiley mimik wolf tier",
+  "🐗": "boar",
+  "🐴": "horse face gesicht smiley mimik pferd tier",
+  "🦄": "unicorn face gesicht smiley mimik",
+  "🐝": "honeybee",
+  "🪱": "worm",
+  "🐛": "bug",
+  "🦋": "butterfly",
+  "🐌": "snail nagel manicure pedicure beauty",
+  "🐞": "lady beetle",
+  "🐜": "ant",
+  "🪰": "fly",
+  "🪲": "beetle",
+  "🪳": "cockroach",
+  "🦟": "mosquito",
+  "🦗": "cricket",
+  "🕷️": "spider",
+  "🕸️": "spider web",
+  "🦂": "scorpion",
+  "🐢": "turtle",
+  "🐍": "snake",
+  "🦎": "lizard",
+  "🦖": "t rex",
+  "🦕": "sauropod",
+  "🐙": "octopus",
+  "🦑": "squid",
+  "🦐": "shrimp",
+  "🦞": "lobster",
+  "🦀": "crab",
+  "🐡": "blowfish fisch tier",
+  "🐠": "tropical fish fisch tier",
+  "🐟": "fish fisch tier",
+  "🐬": "dolphin",
+  "🐳": "spouting whale",
+  "🐋": "whale",
+  "🦈": "shark",
+  "🦭": "seal",
+  "🐊": "crocodile",
+  "🐅": "tiger tiger tier",
+  "🐆": "leopard",
+  "🦓": "zebra face gesicht smiley mimik",
+  "🦍": "gorilla",
+  "🦧": "orangutan",
+  "🦣": "mammoth",
+  "🐘": "elephant",
+  "🦛": "hippopotamus",
+  "🦏": "rhinoceros",
+  "🐪": "dromedary camel",
+  "🐫": "bactrian camel",
+  "🦒": "giraffe face gesicht smiley mimik",
+  "🦘": "kangaroo",
+  "🦬": "bison",
+  "🐃": "water buffalo wasser",
+  "🐂": "ox",
+  "🐄": "cow kuh tier",
+  "🐎": "horse pferd tier",
+  "🐖": "pig schwein tier",
+  "🐏": "ram",
+  "🐑": "sheep",
+  "🦙": "llama",
+  "🐐": "goat",
+  "🦌": "deer",
+  "🐕": "dog hund tier",
+  "🐩": "poodle",
+  "🦮": "guide dog hund tier",
+  "🐕‍🦺": "dog zero width joiner safety vest hund tier",
+  "🐈": "cat katze tier",
+  "🐈‍⬛": "cat zero width joiner black large square katze tier schwarz",
+  "🪶": "feather",
+  "🐓": "rooster",
+  "🦃": "turkey schlüssel",
+  "🦤": "dodo",
+  "🦚": "peacock",
+  "🦜": "parrot",
+  "🦢": "swan",
+  "🦩": "flamingo",
+  "🕊️": "dove of peace",
+  "🐇": "rabbit hase tier",
+  "🦝": "raccoon",
+  "🦨": "skunk",
+  "🦡": "badger",
+  "🦫": "beaver",
+  "🦦": "otter",
+  "🦥": "sloth",
+  "🐁": "mouse maus tier",
+  "🐀": "rat",
+  "🐿️": "chipmunk",
+  "🦔": "hedgehog",
+  "🌵": "cactus",
+  "🎄": "christmas tree baum natur",
+  "🌲": "evergreen tree baum natur grün",
+  "🌳": "deciduous tree baum natur",
+  "🌴": "palm tree baum natur",
+  "🪵": "wood",
+  "🌱": "seedling",
+  "🌿": "herb",
+  "☘️": "shamrock",
+  "🍀": "four leaf clover blatt natur",
+  "🎍": "pine decoration",
+  "🪴": "potted plant",
+  "🎋": "tanabata tree baum natur",
+  "🍃": "leaf fluttering in wind blatt natur",
+  "🍂": "fallen leaf blatt natur",
+  "🍁": "maple leaf blatt natur",
+  "🍄": "mushroom",
+  "🐚": "spiral shell",
+  "🪨": "rock",
+  "🌾": "ear of rice",
+  "💐": "bouquet",
+  "🌷": "tulip",
+  "🌹": "rose",
+  "🥀": "wilted flower blume natur",
+  "🌺": "hibiscus",
+  "🌸": "cherry blossom",
+  "🌼": "blossom",
+  "🌻": "sunflower blume natur sonne wetter",
+  "🌞": "sun with face gesicht smiley mimik sonne wetter",
+  "🌝": "full moon with face gesicht smiley mimik mond nacht",
+  "🌛": "first quarter moon with face gesicht smiley mimik mond nacht",
+  "🌜": "last quarter moon with face gesicht smiley mimik mond nacht",
+  "🌚": "new moon with face gesicht smiley mimik mond nacht",
+  "🌕": "full moon symbol mond nacht",
+  "🌖": "waning gibbous moon symbol mond nacht",
+  "🌗": "last quarter moon symbol mond nacht",
+  "🌘": "waning crescent moon symbol mond nacht",
+  "🌑": "new moon symbol mond nacht",
+  "🌒": "waxing crescent moon symbol mond nacht",
+  "🌓": "first quarter moon symbol mond nacht",
+  "🌔": "waxing gibbous moon symbol mond nacht",
+  "🌙": "crescent moon mond nacht",
+  "🌎": "earth globe americas",
+  "🌍": "earth globe europe africa",
+  "🌏": "earth globe asia australia",
+  "🪐": "ringed planet",
+  "⭐": "white medium star stern weiß weiss",
+  "🌟": "glowing star stern",
+  "✨": "sparkles",
+  "⚡": "high voltage sign",
+  "☄️": "comet",
+  "🔥": "fire feuer heiß",
+  "🌪️": "cloud with tornado wolke wetter",
+  "🌈": "rainbow regen wetter",
+  "☀️": "black sun with rays sonne wetter schwarz",
+  "🌤️": "white sun with small cloud sonne wetter wolke wetter weiß weiss",
+  "⛅": "sun behind cloud sonne wetter wolke wetter",
+  "🌥️": "white sun behind cloud sonne wetter wolke wetter weiß weiss",
+  "☁️": "cloud wolke wetter",
+  "🌦️": "white sun behind cloud with rain sonne wetter wolke wetter regen wetter weiß weiss",
+  "🌧️": "cloud with rain wolke wetter regen wetter",
+  "⛈️": "thunder cloud and rain wolke wetter regen wetter",
+  "🌩️": "cloud with lightning wolke wetter licht lampe",
+  "🌨️": "cloud with snow wolke wetter schnee wetter",
+  "❄️": "snowflake schnee wetter",
+  "☃️": "snowman mann mensch schnee wetter",
+  "⛄": "snowman without snow mann mensch schnee wetter",
+  "🌬️": "wind blowing face gesicht smiley mimik",
+  "💧": "droplet",
+  "☔": "umbrella with rain drops regen wetter",
+  "☂️": "umbrella",
+  "🌊": "water wave wasser",
+  "🌫️": "fog",
+  "🍏": "green apple apfel obst essen grün",
+  "🍎": "red apple apfel obst essen rot",
+  "🍐": "pear",
+  "🍊": "tangerine",
+  "🍋": "lemon",
+  "🍌": "banana banane obst essen",
+  "🍉": "watermelon wasser",
+  "🍇": "grapes",
+  "🍓": "strawberry",
+  "🫐": "blueberries blau",
+  "🍈": "melon",
+  "🍒": "cherries",
+  "🍑": "peach",
+  "🥭": "mango mann mensch",
+  "🍍": "pineapple apfel obst essen",
+  "🥥": "coconut",
+  "🥝": "kiwifruit",
+  "🍅": "tomato",
+  "🍆": "aubergine",
+  "🥑": "avocado",
+  "🥦": "broccoli",
+  "🥬": "leafy green blatt natur grün",
+  "🥒": "cucumber",
+  "🌶️": "hot pepper heiß warm",
+  "🫑": "bell pepper",
+  "🌽": "ear of maize",
+  "🥕": "carrot auto fahrzeug",
+  "🫒": "olive",
+  "🧄": "garlic",
+  "🧅": "onion",
+  "🥔": "potato",
+  "🍠": "roasted sweet potato",
+  "🫘": "beans",
+  "🥐": "croissant",
+  "🥯": "bagel",
+  "🍞": "bread",
+  "🥖": "baguette bread",
+  "🥨": "pretzel",
+  "🧀": "cheese wedge",
+  "🥚": "egg",
+  "🍳": "cooking ok gut",
+  "🧈": "butter",
+  "🥞": "pancakes kuchen torte geburtstag",
+  "🧇": "waffle",
+  "🥓": "bacon",
+  "🥩": "cut of meat",
+  "🍗": "poultry leg",
+  "🍖": "meat on bone knochen",
+  "🌭": "hot dog hund tier heiß warm",
+  "🍔": "hamburger",
+  "🍟": "french fries",
+  "🍕": "slice of pizza pizza essen",
+  "🫓": "flatbread",
+  "🥪": "sandwich",
+  "🥙": "stuffed flatbread",
+  "🧆": "falafel",
+  "🌮": "taco",
+  "🌯": "burrito",
+  "🫔": "tamale",
+  "🥗": "green salad grün",
+  "🥘": "shallow pan of food essen",
+  "🫕": "fondue",
+  "🥫": "canned food essen",
+  "🍝": "spaghetti",
+  "🍜": "steaming bowl eule tier",
+  "🍲": "pot of food essen",
+  "🍛": "curry and rice",
+  "🍣": "sushi",
+  "🍱": "bento box",
+  "🥟": "dumpling",
+  "🦪": "oyster",
+  "🍤": "fried shrimp",
+  "🍙": "rice ball ball sport",
+  "🍚": "cooked rice ok gut",
+  "🍘": "rice cracker",
+  "🍥": "fish cake with swirl design fisch tier kuchen torte geburtstag",
+  "🥠": "fortune cookie ok gut",
+  "🥮": "moon cake mond nacht kuchen torte geburtstag",
+  "🍢": "oden",
+  "🍡": "dango",
+  "🍧": "shaved ice",
+  "🍨": "ice cream",
+  "🍦": "soft ice cream",
+  "🥧": "pie",
+  "🧁": "cupcake kuchen torte geburtstag hoch",
+  "🍰": "shortcake kuchen torte geburtstag",
+  "🎂": "birthday cake kuchen torte geburtstag",
+  "🍮": "custard stern",
+  "🍭": "lollipop",
+  "🍬": "candy",
+  "🍫": "chocolate bar",
+  "🍿": "popcorn",
+  "🍩": "doughnut",
+  "🍪": "cookie ok gut",
+  "🌰": "chestnut",
+  "🥜": "peanuts",
+  "🍯": "honey pot",
+  "🥛": "glass of milk",
+  "🍼": "baby bottle baby kind",
+  "☕": "hot beverage heiß warm",
+  "🫖": "teapot",
+  "🍵": "teacup without handle hand hoch",
+  "🧃": "beverage box",
+  "🥤": "cup with straw hoch",
+  "🧋": "bubble tea",
+  "🍶": "sake bottle and cup hoch",
+  "🍺": "beer mug bier trinken",
+  "🍻": "clinking beer mugs bier trinken",
+  "🥂": "clinking glasses",
+  "🍷": "wine glass wein trinken",
+  "🥃": "tumbler glass",
+  "🍸": "cocktail glass",
+  "🍹": "tropical drink trinken",
+  "🧉": "mate drink trinken",
+  "🍾": "bottle with popping cork",
+  "🧊": "ice cube",
+  "🥄": "spoon",
+  "🍴": "fork and knife",
+  "🍽️": "fork and knife with plate",
+  "🥣": "bowl with spoon eule tier",
+  "🥡": "takeout box",
+  "🥢": "chopsticks",
+  "🧂": "salt shaker",
+  "⚽": "soccer ball ball sport",
+  "🏀": "basketball and hoop ball sport",
+  "🏈": "american football fuß fuss ball sport",
+  "⚾": "baseball ball sport",
+  "🥎": "softball ball sport",
+  "🎾": "tennis racquet and ball ball sport",
+  "🏐": "volleyball ball sport",
+  "🏉": "rugby football fuß fuss ball sport",
+  "🥏": "flying disc",
+  "🎱": "billiards",
+  "🪀": "yo yo",
+  "🏓": "table tennis paddle and ball ball sport",
+  "🏸": "badminton racquet and shuttlecock",
+  "🏒": "ice hockey stick and puck schlüssel",
+  "🏑": "field hockey stick and ball ball sport schlüssel",
+  "🥍": "lacrosse stick and ball kreuz x nein falsch löschen ball sport",
+  "🏏": "cricket bat and ball ball sport",
+  "🪃": "boomerang",
+  "🥅": "goal net",
+  "⛳": "flag in hole flagge fahne land",
+  "🪁": "kite",
+  "🏹": "bow and arrow pfeil",
+  "🎣": "fishing pole and fish fisch tier",
+  "🤿": "diving mask",
+  "🥊": "boxing glove",
+  "🥋": "martial arts uniform",
+  "🎽": "running shirt with sash",
+  "🛹": "skateboard",
+  "🛼": "roller skate",
+  "🛷": "sled",
+  "⛸️": "ice skate",
+  "🥌": "curling stone",
+  "🎿": "ski and ski boot",
+  "⛷️": "skier",
+  "🏂": "snowboarder schnee wetter",
+  "🪂": "parachute",
+  "🏋️": "weight lifter",
+  "🤼": "wrestlers",
+  "🤸": "person doing cartwheel person mensch auto fahrzeug",
+  "⛹️": "person with ball person mensch ball sport",
+  "🤺": "fencer",
+  "🤾": "handball hand ball sport",
+  "🏌️": "golfer",
+  "🏇": "horse racing pferd tier",
+  "🏄": "surfer",
+  "🏊": "swimmer",
+  "🤽": "water polo wasser",
+  "🚣": "rowboat",
+  "🧗": "person climbing person mensch",
+  "🚵": "mountain bicyclist",
+  "🚴": "bicyclist",
+  "🏆": "trophy",
+  "🥇": "first place medal",
+  "🥈": "second place medal",
+  "🥉": "third place medal",
+  "🏅": "sports medal sport",
+  "🎖️": "military medal",
+  "🏵️": "rosette",
+  "🎗️": "reminder ribbon",
+  "🎫": "ticket",
+  "🎟️": "admission tickets",
+  "🎪": "circus tent",
+  "🤹": "juggling",
+  "🎭": "performing arts",
+  "🩰": "ballet shoes ball sport",
+  "🎨": "artist palette",
+  "🎬": "clapper board",
+  "🎤": "microphone telefon handy",
+  "🎧": "headphone telefon handy",
+  "🎼": "musical score musik",
+  "🎹": "musical keyboard musik schlüssel",
+  "🥁": "drum with drumsticks",
+  "🪘": "long drum",
+  "🎷": "saxophone telefon handy",
+  "🎺": "trumpet",
+  "🪗": "accordion",
+  "🎸": "guitar",
+  "🪕": "banjo",
+  "🎻": "violin",
+  "🎲": "game die",
+  "♟️": "black chess pawn schwarz",
+  "🎯": "direct hit",
+  "🎳": "bowling eule tier",
+  "🎮": "video game",
+  "🎰": "slot machine",
+  "🧩": "jigsaw puzzle piece",
+  "⌚": "watch",
+  "📱": "mobile phone telefon handy",
+  "📲": "mobile phone with rightwards arrow at left telefon handy pfeil links rechts",
+  "💻": "personal computer person mensch computer laptop",
+  "⌨️": "keyboard schlüssel",
+  "🖥️": "desktop computer computer laptop",
+  "🖨️": "printer",
+  "🖱️": "three button mouse maus tier",
+  "🖲️": "trackball ball sport",
+  "🕹️": "joystick freude froh glücklich lustig",
+  "🗜️": "compression",
+  "💽": "minidisc",
+  "💾": "floppy disk",
+  "💿": "optical disc",
+  "📀": "dvd",
+  "📼": "videocassette",
+  "📷": "camera",
+  "📸": "camera with flash",
+  "📹": "video camera",
+  "🎥": "movie camera",
+  "📽️": "film projector",
+  "🎞️": "film frames",
+  "📞": "telephone receiver telefon handy",
+  "☎️": "black telephone telefon handy schwarz",
+  "📟": "pager",
+  "📠": "fax machine",
+  "📺": "television",
+  "📻": "radio",
+  "🎙️": "studio microphone telefon handy",
+  "🎚️": "level slider",
+  "🎛️": "control knobs",
+  "🧭": "compass",
+  "⏱️": "stopwatch",
+  "⏲️": "timer clock uhr zeit schloss",
+  "⏰": "alarm clock uhr zeit schloss",
+  "🕰️": "mantelpiece clock mann mensch uhr zeit schloss",
+  "⌛": "hourglass",
+  "⏳": "hourglass with flowing sand",
+  "📡": "satellite antenna",
+  "🔋": "battery",
+  "🪫": "low battery",
+  "🔌": "electric plug",
+  "💡": "electric light bulb licht lampe",
+  "🔦": "electric torch",
+  "🕯️": "candle",
+  "🪔": "diya lamp",
+  "🧯": "fire extinguisher feuer heiß",
+  "🛢️": "oil drum",
+  "💸": "money with wings geld euro bezahlen",
+  "💵": "banknote with dollar sign",
+  "💴": "banknote with yen sign",
+  "💶": "banknote with euro sign",
+  "💷": "banknote with pound sign",
+  "🪙": "coin",
+  "💰": "money bag geld euro bezahlen",
+  "💳": "credit card auto fahrzeug rot",
+  "💎": "gem stone",
+  "⚖️": "scales",
+  "🪜": "ladder",
+  "🧰": "toolbox",
+  "🪛": "screwdriver",
+  "🔧": "wrench",
+  "🔨": "hammer",
+  "⚒️": "hammer and pick",
+  "🛠️": "hammer and wrench",
+  "⛏️": "pick",
+  "🪓": "axe",
+  "🪚": "carpentry saw auto fahrzeug stift schreiben",
+  "🔩": "nut and bolt",
+  "⚙️": "gear",
+  "🪤": "mouse trap maus tier",
+  "🧱": "brick",
+  "⛓️": "chains",
+  "🧲": "magnet",
+  "🔫": "pistol",
+  "💣": "bomb",
+  "🧨": "firecracker feuer heiß",
+  "🔪": "hocho",
+  "🗡️": "dagger knife",
+  "⚔️": "crossed swords kreuz x nein falsch löschen",
+  "🛡️": "shield",
+  "🚬": "smoking symbol ok gut",
+  "⚰️": "coffin",
+  "🪦": "headstone",
+  "⚱️": "funeral urn",
+  "🏺": "amphora",
+  "🔮": "crystal ball ball sport",
+  "📿": "prayer beads",
+  "🧿": "nazar amulet",
+  "💈": "barber pole",
+  "⚗️": "alembic",
+  "🔭": "telescope",
+  "🔬": "microscope",
+  "🩹": "adhesive bandage",
+  "🩺": "stethoscope",
+  "💊": "pill tablette medizin",
+  "💉": "syringe spritze medizin",
+  "🩸": "drop of blood",
+  "🧬": "dna double helix",
+  "🦠": "microbe",
+  "🧫": "petri dish",
+  "🧪": "test tube",
+  "🌡️": "thermometer",
+  "🧹": "broom",
+  "🪠": "plunger",
+  "🧺": "basket",
+  "🧻": "roll of paper",
+  "🚽": "toilet",
+  "🚰": "potable water symbol wasser",
+  "🚿": "shower",
+  "🛁": "bathtub badewanne bad",
+  "🧼": "bar of soap seife",
+  "🪥": "toothbrush zahn",
+  "🪒": "razor",
+  "🧽": "sponge",
+  "🪣": "bucket",
+  "🧴": "lotion bottle",
+  "🛎️": "bellhop bell",
+  "🔑": "key schlüssel",
+  "🗝️": "old key schlüssel",
+  "🚪": "door",
+  "🪑": "chair",
+  "🛋️": "couch and lamp",
+  "🛏️": "bed bett schlafen",
+  "🧸": "teddy bear bär tier",
+  "🪆": "nesting dolls",
+  "🖼️": "frame with picture",
+  "🪞": "mirror",
+  "🪟": "window",
+  "🛍️": "shopping bags",
+  "🛒": "shopping trolley",
+  "🎁": "wrapped present",
+  "🎈": "balloon ball sport",
+  "🎏": "carp streamer auto fahrzeug",
+  "🎀": "ribbon",
+  "🪄": "magic wand",
+  "🪅": "pinata",
+  "🎊": "confetti ball ball sport konfetti party feiern",
+  "🎉": "party popper party feiern",
+  "🪩": "mirror ball ball sport",
+  "📩": "envelope with downwards arrow above pfeil runter",
+  "📨": "incoming envelope",
+  "📧": "e mail symbol",
+  "📥": "inbox tray",
+  "📤": "outbox tray",
+  "📦": "package",
+  "🏷️": "label",
+  "🪧": "placard auto fahrzeug",
+  "📪": "closed mailbox with lowered flag flagge fahne land rot",
+  "📫": "closed mailbox with raised flag flagge fahne land",
+  "📬": "open mailbox with raised flag flagge fahne land stift schreiben",
+  "📭": "open mailbox with lowered flag flagge fahne land rot stift schreiben",
+  "📮": "postbox",
+  "📯": "postal horn",
+  "📜": "scroll",
+  "📃": "page with curl",
+  "📄": "page facing up hoch",
+  "📑": "bookmark tabs buch ok gut",
+  "🧾": "receipt",
+  "📊": "bar chart",
+  "📈": "chart with upwards trend hoch",
+  "📉": "chart with downwards trend runter",
+  "🗒️": "spiral note pad",
+  "🗓️": "spiral calendar pad kalender datum",
+  "📆": "tear off calendar träne weinen kalender datum",
+  "📅": "calendar kalender datum",
+  "🗑️": "wastebasket",
+  "📇": "card index auto fahrzeug",
+  "🗃️": "card file box auto fahrzeug",
+  "🗳️": "ballot box with ballot ball sport",
+  "🗄️": "file cabinet",
+  "📋": "clipboard",
+  "📁": "file folder alt opa oma",
+  "📂": "open file folder alt opa oma stift schreiben",
+  "🗂️": "card index dividers auto fahrzeug",
+  "🗞️": "rolled up newspaper hoch",
+  "📰": "newspaper",
+  "📓": "notebook buch ok gut",
+  "📔": "notebook with decorative cover buch ok gut",
+  "📒": "ledger",
+  "📕": "closed book buch ok gut",
+  "📗": "green book grün buch ok gut",
+  "📘": "blue book blau buch ok gut",
+  "📙": "orange book orange buch ok gut",
+  "📚": "books buch ok gut",
+  "📖": "open book buch stift schreiben ok gut",
+  "🔖": "bookmark buch ok gut",
+  "🧷": "safety pin",
+  "🔗": "link symbol",
+  "📎": "paperclip",
+  "🖇️": "linked paperclips lippen mund",
+  "📐": "triangular ruler",
+  "📏": "straight ruler",
+  "🧮": "abacus",
+  "📌": "pushpin",
+  "📍": "round pushpin",
+  "✂️": "black scissors schwarz schere",
+  "🖊️": "lower left ballpoint pen ball sport stift schreiben links",
+  "🖋️": "lower left fountain pen stift schreiben links",
+  "✒️": "black nib schwarz",
+  "🖌️": "lower left paintbrush links",
+  "🖍️": "lower left crayon links",
+  "📝": "memo",
+  "✏️": "pencil stift schreiben stift schreiben",
+  "🔍": "left pointing magnifying glass links",
+  "🔎": "right pointing magnifying glass rechts",
+  "🔏": "lock with ink pen schloss stift schreiben",
+  "🔐": "closed lock with key schlüssel schloss",
+  "🔒": "lock schloss",
+  "🔓": "open lock schloss stift schreiben",
+  "🚗": "automobile",
+  "🚕": "taxi",
+  "🚙": "recreational vehicle",
+  "🚌": "bus bus fahrzeug",
+  "🚎": "trolleybus bus fahrzeug",
+  "🏎️": "racing car auto fahrzeug",
+  "🚓": "police car auto fahrzeug",
+  "🚑": "ambulance",
+  "🚒": "fire engine feuer heiß",
+  "🚐": "minibus bus fahrzeug",
+  "🛻": "pickup truck hoch",
+  "🚚": "delivery truck",
+  "🚛": "articulated lorry",
+  "🚜": "tractor",
+  "🦯": "probing cane",
+  "🦽": "manual wheelchair mann mensch",
+  "🦼": "motorized wheelchair",
+  "🛴": "scooter",
+  "🚲": "bicycle",
+  "🛵": "motor scooter",
+  "🏍️": "racing motorcycle",
+  "🛺": "auto rickshaw",
+  "🚨": "police cars revolving light auto fahrzeug licht lampe",
+  "🚔": "oncoming police car auto fahrzeug",
+  "🚍": "oncoming bus bus fahrzeug",
+  "🚘": "oncoming automobile",
+  "🚖": "oncoming taxi",
+  "🚡": "aerial tramway",
+  "🚠": "mountain cableway",
+  "🚟": "suspension railway stift schreiben",
+  "🚃": "railway car auto fahrzeug",
+  "🚋": "tram car auto fahrzeug",
+  "🚞": "mountain railway",
+  "🚝": "monorail",
+  "🚄": "high speed train regen wetter zug bahn",
+  "🚅": "high speed train with bullet nose regen wetter zug bahn",
+  "🚈": "light rail licht lampe",
+  "🚂": "steam locomotive",
+  "🚆": "train regen wetter zug bahn",
+  "🚇": "metro",
+  "🚊": "tram",
+  "🚉": "station",
+  "✈️": "airplane flugzeug fliegen",
+  "🛫": "airplane departure flugzeug fliegen",
+  "🛬": "airplane arriving flugzeug fliegen",
+  "🛩️": "small airplane flugzeug fliegen",
+  "💺": "seat",
+  "🛰️": "satellite",
+  "🚀": "rocket rakete start",
+  "🛸": "flying saucer",
+  "🚁": "helicopter",
+  "🛶": "canoe",
+  "⛵": "sailboat",
+  "🚤": "speedboat",
+  "🛥️": "motor boat",
+  "🛳️": "passenger ship",
+  "⛴️": "ferry",
+  "🚢": "ship",
+  "⚓": "anchor",
+  "🛟": "ring buoy",
+  "🪝": "hook ok gut",
+  "⛽": "fuel pump",
+  "🚧": "construction sign",
+  "🚦": "vertical traffic light licht lampe",
+  "🚥": "horizontal traffic light licht lampe",
+  "🚏": "bus stop bus fahrzeug",
+  "🗺️": "world map",
+  "🗿": "moyai",
+  "🗽": "statue of liberty",
+  "🗼": "tokyo tower ok gut",
+  "🏰": "european castle europa eu flagge",
+  "🏯": "japanese castle",
+  "🏟️": "stadium",
+  "🎡": "ferris wheel",
+  "🎢": "roller coaster",
+  "🎠": "carousel horse pferd tier auto fahrzeug",
+  "⛲": "fountain",
+  "⛱️": "umbrella on ground",
+  "🏖️": "beach with umbrella",
+  "🏝️": "desert island",
+  "🏜️": "desert",
+  "🌋": "volcano",
+  "⛰️": "mountain",
+  "🏔️": "snow capped mountain schnee wetter",
+  "🗻": "mount fuji",
+  "🏕️": "camping",
+  "⛺": "tent",
+  "🛖": "hut",
+  "🏠": "house building haus gebäude gebäude haus",
+  "🏡": "house with garden haus gebäude",
+  "🏘️": "house buildings haus gebäude gebäude haus",
+  "🏚️": "derelict house building haus gebäude gebäude haus",
+  "🏗️": "building construction gebäude haus",
+  "🏭": "factory",
+  "🏢": "office building gebäude haus",
+  "🏬": "department store",
+  "🏣": "japanese post office",
+  "🏤": "european post office europa eu flagge",
+  "🏥": "hospital",
+  "🏦": "bank",
+  "🏨": "hotel heiß warm",
+  "🏪": "convenience store",
+  "🏫": "school",
+  "🏩": "love hotel heiß warm",
+  "💒": "wedding",
+  "🏛️": "classical building gebäude haus",
+  "⛪": "church",
+  "🕌": "mosque",
+  "🕍": "synagogue",
+  "🛕": "hindu temple",
+  "🕋": "kaaba",
+  "⛩️": "shinto shrine",
+  "🛤️": "railway track",
+  "🛣️": "motorway",
+  "🗾": "silhouette of japan",
+  "🎑": "moon viewing ceremony mond nacht",
+  "🏞️": "national park",
+  "🌅": "sunrise sonne wetter",
+  "🌄": "sunrise over mountains sonne wetter",
+  "🌠": "shooting star stern",
+  "🎇": "firework sparkler feuer heiß",
+  "🎆": "fireworks feuer heiß",
+  "🌇": "sunset over buildings sonne wetter gebäude haus",
+  "🌆": "cityscape at dusk",
+  "🏙️": "cityscape",
+  "🌃": "night with stars stern",
+  "🌌": "milky way",
+  "🌉": "bridge at night",
+  "🌁": "foggy",
+  "✅": "white heavy check mark check erledigt ja ok richtig weiß weiss",
+  "☑️": "ballot box with check check erledigt ja ok richtig ball sport",
+  "✔️": "heavy check mark check erledigt ja ok richtig",
+  "❌": "cross mark kreuz x nein falsch löschen",
+  "❎": "negative squared cross mark kreuz x nein falsch löschen rot",
+  "➕": "heavy plus sign",
+  "➖": "heavy minus sign",
+  "➗": "heavy division sign",
+  "✖️": "heavy multiplication x katze tier",
+  "🟰": "heavy equals sign",
+  "♾️": "permanent paper sign mann mensch",
+  "‼️": "double exclamation mark",
+  "⁉️": "exclamation question mark",
+  "❓": "black question mark ornament schwarz",
+  "❔": "white question mark ornament weiß weiss",
+  "❕": "white exclamation mark ornament weiß weiss",
+  "❗": "heavy exclamation mark symbol",
+  "〰️": "wavy dash",
+  "💱": "currency exchange",
+  "💲": "heavy dollar sign",
+  "⚕️": "staff of aesculapius",
+  "♻️": "black universal recycling symbol schwarz",
+  "⚜️": "fleur de lis",
+  "🔱": "trident emblem",
+  "📛": "name badge",
+  "🔰": "japanese symbol for beginner",
+  "⭕": "heavy large circle",
+  "🟢": "large green circle grün",
+  "🟡": "large yellow circle gelb",
+  "🟠": "large orange circle orange",
+  "🔴": "large red circle rot",
+  "🟣": "large purple circle lila violett",
+  "🔵": "large blue circle blau",
+  "⚫": "medium black circle schwarz",
+  "⚪": "medium white circle weiß weiss",
+  "🟤": "large brown circle braun",
+  "⬛": "black large square schwarz",
+  "⬜": "white large square weiß weiss",
+  "◼️": "black medium square schwarz",
+  "◻️": "white medium square weiß weiss",
+  "◾": "black medium small square schwarz",
+  "◽": "white medium small square weiß weiss",
+  "▪️": "black small square schwarz",
+  "▫️": "white small square weiß weiss",
+  "🔶": "large orange diamond orange",
+  "🔷": "large blue diamond blau",
+  "🔸": "small orange diamond orange",
+  "🔹": "small blue diamond blau",
+  "🔺": "up pointing red triangle rot hoch",
+  "🔻": "down pointing red triangle rot runter",
+  "💠": "diamond shape with a dot inside",
+  "🔘": "radio button",
+  "🔳": "white square button weiß weiss",
+  "🔲": "black square button schwarz",
+  "🏁": "chequered flag flagge fahne land rot",
+  "🚩": "triangular flag on post flagge fahne land",
+  "🎌": "crossed flags kreuz x nein falsch löschen flagge fahne land",
+  "🏴": "waving black flag flagge fahne land schwarz",
+  "🏳️": "waving white flag flagge fahne land weiß weiss",
+  "🏳️‍🌈": "waving white flag zero width joiner rainbow regen wetter flagge fahne land weiß weiss",
+  "🏳️‍⚧️": "waving white flag zero width joiner male with stroke and male and female sign flagge fahne land weiß weiss ok gut",
+  "🏴‍☠️": "waving black flag zero width joiner skull and crossbones kreuz x nein falsch löschen flagge fahne land schwarz knochen",
+  "🇦🇹": "regional indicator symbol letter a regional indicator symbol letter t katze tier",
+  "🇩🇪": "regional indicator symbol letter d regional indicator symbol letter e katze tier",
+  "🇷🇴": "regional indicator symbol letter r regional indicator symbol letter o katze tier",
+  "🇪🇺": "regional indicator symbol letter e regional indicator symbol letter u katze tier",
+  "🇺🇸": "regional indicator symbol letter u regional indicator symbol letter s katze tier",
+  "🇬🇧": "regional indicator symbol letter g regional indicator symbol letter b katze tier",
+  "🇨🇭": "regional indicator symbol letter c regional indicator symbol letter h katze tier",
+  "🇮🇹": "regional indicator symbol letter i regional indicator symbol letter t katze tier",
+  "🇫🇷": "regional indicator symbol letter f regional indicator symbol letter r katze tier",
+  "🇪🇸": "regional indicator symbol letter e regional indicator symbol letter s katze tier",
+};
+
+const EMOJI_GROUP_SEARCH_ALIASES: Record<string, string> = {
+  Smileys: "smiley smileys gesicht mimik lachen lächeln weinen traurig glücklich froh wütend sauer krank müde überrascht verliebt kuss party",
+  Gesten: "gesten hand hände körper daumen finger klatschen beten bitte danke ok nagel fuß fuss auge mund zahn körperteil",
+  Herzen: "herzen herz liebe verliebt gefühl kuss symbol funke glitzer sprechblase gedanke schlafen",
+  Menschen: "menschen person mensch mann frau kind baby beruf arzt kosmetik student künstler hochzeit könig weihnachten tanzen bad schlafen",
+  "Tiere & Natur": "tiere natur tier hund katze maus hase vogel fisch blume pflanze baum sonne mond wetter regen schnee feuer wasser",
+  Essen: "essen trinken obst gemüse brot pizza burger kaffee tee kuchen torte geburtstag glas flasche",
+  Aktivität: "aktivität aktivitaet sport spiel musik feiern party kunst hobby ball medaille pokal",
+  Objekte: "objekte ding werkzeug handy telefon computer geld geschenk kosmetik medizin schlüssel schloss lampe buch stift",
+  Reisen: "reisen reise auto bus zug flugzeug boot haus gebäude ort hotel karte uhr zeit",
+  Symbole: "symbole zeichen zahl pfeil check ok ja nein x frage ausrufezeichen warnung flagge fahne land",
+};
+
+
+const EMOJI_SEARCH_ALIAS_FIXES: Record<string, string> = {
+  "😐": "neutral gelangweilt langweilig langeweile uninteressiert egal meh ausdruckslos",
+  "😑": "ausdruckslos gelangweilt langweilig langeweile genervt egal meh",
+  "😒": "unbeeindruckt gelangweilt langweilig langeweile genervt skeptisch meh",
+  "🙄": "augenrollen genervt gelangweilt langweilig nervig",
+  "🥱": "gaehnen gähnen muede müde langweilig langeweile schlaf schlafen",
+  "😴": "schlafen muede müde sleepy zzz langweilig langeweile",
+  "😪": "schlaefrig schläfrig muede müde schlafen langweilig",
+  "💤": "zzz schlafen muede müde schlaf langweilig",
+  "🐌": "schnecke langsam lang langweilig schleim tier",
+  "🦥": "faultier langsam lang langweilig tier muede müde",
+  "🚶": "gehen laufen spazieren langsam lang person mensch",
+  "🚶‍♀️": "gehen laufen spazieren langsam lang frau mensch",
+  "🚶‍♂️": "gehen laufen spazieren langsam lang mann mensch",
+
+  "🥕": "karotte karotten moehre moehren möhre möhren carrot gemuese gemüse essen orange",
+  "🍅": "tomate tomato gemuese gemüse essen rot",
+  "🥦": "brokkoli broccoli gemuese gemüse essen gruen grün",
+  "🥒": "gurke cucumber gemuese gemüse essen gruen grün",
+  "🌽": "mais corn gemuese gemüse essen gelb",
+  "🥔": "kartoffel potato essen gemuese gemüse",
+  "🧅": "zwiebel onion essen gemuese gemüse",
+  "🧄": "knoblauch garlic essen gemuese gemüse",
+  "🍆": "aubergine eggplant gemuese gemüse essen lila",
+  "🥑": "avocado essen gemuese gemüse gruen grün",
+  "🥬": "salat blattsalat leafy green essen gemuese gemüse gruen grün",
+  "🌶️": "chili paprika scharf pepper hot essen gemuese gemüse rot",
+  "🫑": "paprika pepper essen gemuese gemüse",
+  "🍏": "apfel gruen grün apple obst essen",
+  "🍎": "apfel rot apple obst essen",
+  "🍌": "banane banana obst essen gelb",
+  "🍓": "erdbeere strawberry obst essen rot",
+  "🍒": "kirsche kirschen cherries obst essen rot",
+  "🍋": "zitrone lemon obst essen gelb",
+  "🍊": "orange mandarine tangerine obst essen orange",
+  "🍉": "wassermelone watermelon obst essen",
+  "🍇": "trauben grapes obst essen lila",
+  "🍐": "birne pear obst essen",
+  "🍑": "pfirsich peach obst essen",
+  "🍍": "ananas pineapple obst essen",
+  "🥝": "kiwi kiwifruit obst essen gruen grün",
+  "🥭": "mango obst essen",
+  "🫐": "heidelbeeren blaubeeren blueberries obst essen blau",
+  "🥥": "kokosnuss coconut obst essen",
+
+  "🚗": "auto pkw car fahrzeug fahren reise rot",
+  "🚙": "auto suv fahrzeug car fahren reise",
+  "🚕": "taxi auto fahrzeug car fahren",
+  "🚓": "polizei auto polizeiauto fahrzeug",
+  "🚑": "krankenwagen rettung ambulance auto fahrzeug medizin",
+  "🚒": "feuerwehr feuerwehrauto auto fahrzeug",
+  "🚌": "bus autobus fahrzeug reisen",
+  "🚎": "trolleybus bus fahrzeug",
+  "🏎️": "rennwagen auto formel eins sport fahrzeug schnell",
+  "🚚": "lieferwagen lkw truck paket fahrzeug",
+  "🚛": "lkw truck lastwagen fahrzeug",
+  "🚜": "traktor tractor fahrzeug",
+  "🛻": "pickup auto fahrzeug truck",
+  "🚲": "fahrrad bike rad fahrzeug",
+  "🛵": "roller scooter moped fahrzeug",
+  "🏍️": "motorrad motorcycle bike fahrzeug",
+  "✈️": "flugzeug fliegen airplane reise urlaub",
+  "🚀": "rakete rocket start fliegen",
+  "🚂": "zug lokomotive bahn train reise",
+  "🚆": "zug bahn train reise",
+  "🚊": "strassenbahn straßenbahn tram zug reise",
+  "🚁": "hubschrauber helicopter fliegen reise",
+
+  "😀": "grinsen lachen smiley happy freude froh",
+  "😃": "lachen smiley happy freude froh",
+  "😄": "lachen smiley happy freude froh",
+  "😁": "grinsen lachen smiley happy freude",
+  "😂": "lachen lachen tränen traenen lustig lol freude",
+  "🤣": "lachen lachflash tränen traenen lustig lol",
+  "😊": "laecheln lächeln smiley happy zufrieden lieb",
+  "🥰": "verliebt liebe herz happy",
+  "😍": "verliebt liebe herz augen",
+  "😭": "weinen heulen traurig traenen tränen cry",
+  "😢": "weinen traurig traene träne cry",
+  "😔": "traurig traurig traurig niedergeschlagen",
+  "😡": "wuetend wütend sauer angry rot",
+  "😠": "wuetend wütend sauer angry",
+  "🤔": "denken nachdenken frage skeptisch überlegen",
+  "🤷": "keine ahnung egal schultern zucken",
+  "😮": "ueberrascht überrascht erstaunt wow offen mund",
+  "😱": "schock angst erschrocken schreien",
+  "🤢": "krank schlecht übel uebel gruen grün",
+  "🤮": "kotzen erbrechen krank übel uebel",
+  "🤒": "krank fieber thermometer",
+  "😷": "krank maske medizin",
+  "🥳": "party feiern geburtstag konfetti",
+
+  "👍": "daumen hoch like gut ok ja passt top",
+  "👎": "daumen runter schlecht nein dislike",
+  "👌": "ok perfekt passt gut",
+  "🙏": "bitte danke beten namaste",
+  "👏": "klatschen applause bravo gut",
+  "👋": "winken hallo bye tschuess tschüss",
+  "🤝": "handshake hände schütteln deal vereinbarung",
+
+  "❤️": "herz liebe rot verliebt love",
+  "🧡": "herz orange liebe",
+  "💛": "herz gelb liebe",
+  "💚": "herz gruen grün liebe",
+  "💙": "herz blau liebe",
+  "💜": "herz lila violett liebe",
+  "🖤": "herz schwarz liebe",
+  "🤍": "herz weiss weiß liebe",
+  "💔": "gebrochenes herz traurig liebe",
+  "💕": "herzen liebe",
+  "💞": "herzen liebe",
+  "💋": "kuss küssen lippen liebe",
+
+  "🐶": "hund dog tier",
+  "🐕": "hund dog tier",
+  "🐱": "katze cat tier",
+  "🐈": "katze cat tier",
+  "🐰": "hase kaninchen rabbit tier",
+  "🐇": "hase kaninchen rabbit tier",
+  "🐭": "maus mouse tier",
+  "🐹": "hamster tier",
+  "🦊": "fuchs fox tier",
+  "🐻": "baer bär bear tier",
+  "🐼": "panda tier",
+  "🐨": "koala tier",
+  "🐮": "kuh cow tier",
+  "🐷": "schwein pig tier",
+  "🐸": "frosch frog tier",
+  "🐵": "affe monkey tier",
+  "🐔": "huhn chicken tier",
+  "🐦": "vogel bird tier",
+  "🐧": "pinguin penguin tier",
+  "🐴": "pferd horse tier",
+  "🐝": "biene bee tier",
+  "🦋": "schmetterling butterfly tier natur",
+  "🐢": "schildkroete schildkröte turtle tier langsam",
+
+  "☀️": "sonne sun wetter warm",
+  "🌞": "sonne sun gesicht wetter warm",
+  "🌙": "mond moon nacht",
+  "⭐": "stern star favorit",
+  "🌟": "stern star glitzer",
+  "✨": "glitzer funkeln sparkle stern",
+  "🔥": "feuer fire hot heiß heiss",
+  "🌈": "regenbogen rainbow wetter",
+  "🌧️": "regen rain wetter",
+  "❄️": "schnee snow kalt wetter",
+  "💧": "tropfen wasser water",
+
+  "☕": "kaffee coffee trinken",
+  "🍵": "tee tea trinken",
+  "🍺": "bier beer trinken",
+  "🍷": "wein wine trinken",
+  "🥂": "prost sekt champagner feiern trinken",
+  "🍰": "kuchen torte cake geburtstag essen",
+  "🎂": "geburtstag kuchen torte cake party",
+  "🍕": "pizza essen",
+  "🍔": "burger hamburger essen",
+  "🍟": "pommes fries essen",
+  "🍣": "sushi essen",
+  "🍝": "spaghetti pasta nudeln essen",
+
+  "💰": "geld money bezahlen euro reich",
+  "💶": "euro geld bezahlen",
+  "💳": "karte kreditkarte bankomat bezahlen geld",
+  "📞": "telefon phone anruf",
+  "☎️": "telefon phone anruf",
+  "📱": "handy smartphone telefon phone",
+  "💻": "laptop computer pc",
+  "🖥️": "computer monitor pc",
+  "⌚": "uhr zeit watch",
+  "⏰": "wecker uhr zeit alarm",
+  "🔑": "schlüssel schluessel key",
+  "🔒": "schloss lock gesperrt",
+  "🔓": "offen entsperrt schloss",
+  "🎁": "geschenk present geburtstag",
+  "📌": "pin anheften merken",
+  "✂️": "schere schneiden",
+};
+
+const EMOJI_QUERY_PREFERRED: Record<string, string[]> = {
+  lang: ["😒", "😐", "😑", "🥱", "😴", "😪", "🐌", "🦥", "💤", "🚶", "🚶‍♀️", "🚶‍♂️"],
+  langweilig: ["😒", "😐", "😑", "🥱", "😴", "😪", "🐌", "🦥", "💤", "🚶", "🚶‍♀️", "🚶‍♂️"],
+  langeweile: ["😒", "😐", "😑", "🥱", "😴", "😪", "🐌", "🦥", "💤", "🚶", "🚶‍♀️", "🚶‍♂️"],
+  langweilen: ["😒", "😐", "😑", "🥱", "😴", "😪", "🐌", "🦥", "💤", "🚶", "🚶‍♀️", "🚶‍♂️"],
+  muede: ["🥱", "😴", "😪", "💤", "😫", "😩"],
+  mude: ["🥱", "😴", "😪", "💤", "😫", "😩"],
+  schlafen: ["😴", "💤", "😪", "🥱", "🛌"],
+  weinen: ["😭", "😢", "🥲", "😥", "😿"],
+  traurig: ["😔", "😢", "😭", "🙁", "☹️", "🥺"],
+  lachen: ["😂", "🤣", "😄", "😁", "😆", "😀"],
+  karotte: ["🥕"],
+  karotten: ["🥕"],
+  moehre: ["🥕"],
+  moehren: ["🥕"],
+  gemuese: ["🥕", "🥦", "🥒", "🍅", "🌽", "🥔", "🧅", "🧄", "🍆", "🥑", "🥬", "🌶️", "🫑"],
+  gemuse: ["🥕", "🥦", "🥒", "🍅", "🌽", "🥔", "🧅", "🧄", "🍆", "🥑", "🥬", "🌶️", "🫑"],
+  obst: ["🍎", "🍏", "🍌", "🍓", "🍒", "🍋", "🍊", "🍉", "🍇", "🍐", "🍑", "🍍", "🥝", "🥭", "🫐", "🥥"],
+  auto: ["🚗", "🚙", "🚕", "🚓", "🚑", "🚒", "🏎️", "🛻", "🚚", "🚛", "🚜"],
+  autos: ["🚗", "🚙", "🚕", "🚓", "🚑", "🚒", "🏎️", "🛻", "🚚", "🚛", "🚜"],
+  pkw: ["🚗", "🚙", "🚕"],
+  fahrzeug: ["🚗", "🚙", "🚕", "🚓", "🚑", "🚒", "🚌", "🚎", "🏎️", "🚚", "🚛", "🚜", "🚲", "🛵", "🏍️"],
+  bus: ["🚌", "🚎", "🚐"],
+  zug: ["🚂", "🚆", "🚊", "🚉"],
+  flugzeug: ["✈️", "🛩️", "🛫", "🛬"],
+  herz: ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "💕", "💞", "💓", "💗"],
+  liebe: ["❤️", "🥰", "😍", "😘", "💕", "💞", "💋"],
+  danke: ["🙏", "🙌", "👏", "👍", "🤝"],
+  ok: ["👌", "👍", "✅", "🙆"],
+  ja: ["👍", "👌", "✅", "☑️"],
+  nein: ["👎", "❌", "✖️", "🙅"],
+  hund: ["🐶", "🐕", "🦮", "🐕‍🦺", "🐩"],
+  katze: ["🐱", "🐈", "🐈‍⬛", "😺", "😸", "😹", "😻", "😿"],
+  kaffee: ["☕"],
+  geburtstag: ["🎂", "🍰", "🥳", "🎉", "🎁", "🎈"],
+  party: ["🥳", "🎉", "🎊", "🍾", "🥂", "🎈"],
+  geld: ["💰", "💶", "💳", "💸", "🪙"],
+  telefon: ["📞", "☎️", "📱"],
+  handy: ["📱", "🤳"],
+  sonne: ["☀️", "🌞", "🌅", "🌄"],
+  mond: ["🌙", "🌕", "🌝", "🌚"],
+  feuer: ["🔥", "🚒"],
+};
+
+function normalizeEmojiSearchValue(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[︎️]/g, "")
+    .replace(/ß/g, "ss")
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/[^\p{L}\p{N}\p{Emoji_Presentation}\p{Extended_Pictographic}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function expandEmojiSearchQuery(query: string) {
+  const normalized = normalizeEmojiSearchValue(query);
+  const synonyms: Record<string, string> = {
+    lang: "langweilig langeweile langsam muede mude schlafen bored boring slow tired sleepy",
+    langweilig: "langweilig langeweile gelangweilt langsam muede mude schlafen bored boring slow tired sleepy",
+    langeweile: "langweilig langeweile gelangweilt langsam muede mude schlafen bored boring slow tired sleepy",
+    weinen: "weinen traurig traenen traene cry crying",
+    heulen: "weinen traurig traenen traene cry crying",
+    lachen: "lachen lach smile smiley happy haha lol freude lustig",
+    traurig: "traurig weinen ungluecklich sad",
+    sauer: "sauer wuetend angry",
+    wut: "wuetend sauer angry",
+    liebe: "liebe herz kuss verliebt love heart",
+    danke: "danke bitte beten thanks pray",
+    daumen: "daumen thumb like gut schlecht",
+    ok: "ok check ja gut passt erledigt",
+    nein: "nein x falsch schlecht cross",
+    hund: "hund dog tier",
+    katze: "katze cat tier",
+    kaffee: "kaffee coffee trinken",
+    geburtstag: "geburtstag kuchen torte party",
+    party: "party feiern konfetti geburtstag",
+    geld: "geld euro bezahlen money",
+    telefon: "telefon handy phone",
+    handy: "handy telefon phone",
+    auto: "auto pkw car fahrzeug fahren",
+    autos: "auto pkw car fahrzeug fahren",
+    karotte: "karotte karotten moehre moehren carrot gemuese essen",
+    karotten: "karotte karotten moehre moehren carrot gemuese essen",
+    moehre: "karotte karotten moehre moehren carrot gemuese essen",
+    gemuese: "gemuese gemuse karotte tomate brokkoli gurke paprika mais kartoffel",
+    gemuse: "gemuese gemuse karotte tomate brokkoli gurke paprika mais kartoffel",
+    flugzeug: "flugzeug airplane fliegen",
+    sonne: "sonne sun wetter",
+    mond: "mond moon nacht",
+    stern: "stern star favorit",
+    feuer: "feuer fire heiss hot",
+    blume: "blume flower natur",
+    herz: "herz liebe love heart",
+  };
+  return normalizeEmojiSearchValue(`${normalized} ${synonyms[normalized] ?? ""}`);
+}
+
+function getPreferredEmojiSet(query: string) {
+  const normalized = normalizeEmojiSearchValue(query);
+  const preferred = new Set<string>();
+
+  if (!normalized) return preferred;
+
+  for (const [keyword, emojis] of Object.entries(EMOJI_QUERY_PREFERRED)) {
+    const normalizedKeyword = normalizeEmojiSearchValue(keyword);
+
+    if (
+      normalized === normalizedKeyword ||
+      normalized.includes(normalizedKeyword) ||
+      (normalized.length >= 3 && normalizedKeyword.startsWith(normalized))
+    ) {
+      emojis.forEach((emoji) => preferred.add(emoji));
+    }
+  }
+
+  return preferred;
+}
+
+function getEmojiSearchTokens(query: string) {
+  const normalized = expandEmojiSearchQuery(query);
+  return Array.from(
+    new Set(
+      normalized
+        .split(" ")
+        .map((word) => word.trim())
+        .filter((word) => word.length >= 2),
+    ),
+  );
+}
+
+function getEmojiBaseAlias(emoji: string) {
+  return EMOJI_SEARCH_ALIAS_FIXES[emoji] ?? EMOJI_SEARCH_ALIASES[emoji] ?? "";
+}
+
+function getEmojiSearchText(emoji: string, groupLabel: string) {
+  return normalizeEmojiSearchValue(
+    [
+      emoji,
+      groupLabel,
+      getEmojiBaseAlias(emoji),
+      EMOJI_UNICODE_SEARCH_ALIASES[emoji] ?? "",
+    ].join(" "),
+  );
+}
+
+function getEmojiMatchScore(
+  emoji: string,
+  groupLabel: string,
+  query: string,
+  preferredEmojiSet: Set<string>,
+) {
+  const normalizedQuery = normalizeEmojiSearchValue(query);
+  if (!normalizedQuery) return 1;
+
+  const searchText = getEmojiSearchText(emoji, groupLabel);
+  const tokens = getEmojiSearchTokens(query);
+  let score = 0;
+
+  if (preferredEmojiSet.has(emoji)) score += 1000;
+  if (searchText.includes(normalizedQuery)) score += 120;
+
+  const rawWords = normalizedQuery.split(" ").filter((word) => word.length >= 2);
+  rawWords.forEach((word) => {
+    if (searchText.includes(word)) score += 90;
+  });
+
+  let synonymHits = 0;
+  tokens.forEach((word) => {
+    if (searchText.includes(word)) synonymHits += 1;
+  });
+  score += Math.min(synonymHits, 6) * 18;
+
+  const groupAliases = normalizeEmojiSearchValue(
+    `${groupLabel} ${EMOJI_GROUP_SEARCH_ALIASES[groupLabel] ?? ""}`,
+  );
+  if (rawWords.some((word) => groupAliases.split(" ").includes(word))) {
+    score += 8;
+  }
+
+  return score;
+}
+
+function getEmojiSortIndex(emoji: string) {
+  const index = ALL_PICKER_EMOJIS.indexOf(emoji);
+  return index === -1 ? Number.MAX_SAFE_INTEGER : index;
 }
 
 function formatTime(iso: string) {
@@ -143,19 +2902,22 @@ function getAvatarColor(name: string) {
   return "#6366F1";
 }
 
-function isSameGroup(a: ChatMessageDTO | undefined, b: ChatMessageDTO | undefined) {
+function isSameGroup(
+  a: ChatMessageDTO | undefined,
+  b: ChatMessageDTO | undefined,
+) {
   if (!a || !b) return false;
   if (a.senderId !== b.senderId) return false;
 
   const diff = Math.abs(
-    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
   return diff <= 5 * 60 * 1000;
 }
 
 function groupReactions(
   reactions: ReactionRow[],
-  currentUserId: string
+  currentUserId: string,
 ): ReactionGroup[] {
   const grouped = new Map<string, ReactionGroup>();
 
@@ -177,17 +2939,19 @@ function groupReactions(
   }
 
   return Array.from(grouped.values()).sort(
-    (a, b) => ALLOWED_EMOJIS.indexOf(a.emoji) - ALLOWED_EMOJIS.indexOf(b.emoji)
+    (a, b) => getEmojiSortIndex(a.emoji) - getEmojiSortIndex(b.emoji),
   );
 }
 
 function autoResizeTextarea(
   textarea: HTMLTextAreaElement | null,
-  maxHeight = 160
+  maxHeight = 160,
 ) {
   if (!textarea) return;
-  textarea.style.height = "0px";
-  textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
+  textarea.style.height = "44px";
+  const nextHeight = Math.min(Math.max(textarea.scrollHeight, 44), maxHeight);
+  textarea.style.height = `${nextHeight}px`;
+  textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
 }
 
 function getReplyPreview(message: ChatMessageDTO) {
@@ -212,7 +2976,8 @@ function buildReplyMessage(replyTarget: ReplyTarget | null, text: string) {
       ? `📎 ${replyTarget.fileName}`
       : "Nachricht";
 
-  const shortPreview = preview.length > 80 ? `${preview.slice(0, 80)}…` : preview;
+  const shortPreview =
+    preview.length > 80 ? `${preview.slice(0, 80)}…` : preview;
   const replyHeader = `↪ Antwort auf ${replyTarget.senderName}: ${shortPreview}`;
 
   return text ? `${replyHeader}\n${text}` : replyHeader;
@@ -220,7 +2985,9 @@ function buildReplyMessage(replyTarget: ReplyTarget | null, text: string) {
 
 function parseReplyMessage(text: string): ParsedReplyMessage {
   const normalized = String(text ?? "");
-  const match = normalized.match(/^↪ Antwort auf (.+?): ([^\n]*)(?:\n([\s\S]*))?$/);
+  const match = normalized.match(
+    /^↪ Antwort auf (.+?): ([^\n]*)(?:\n([\s\S]*))?$/,
+  );
 
   if (!match) {
     return {
@@ -254,7 +3021,7 @@ function getMentionInsertValue(fullName: string) {
 
 function getMentionMatch(
   value: string,
-  caretPosition?: number | null
+  caretPosition?: number | null,
 ): MentionState {
   const caret =
     typeof caretPosition === "number" && caretPosition >= 0
@@ -323,7 +3090,7 @@ function renderTextWithMentions(text: string, mine: boolean) {
 function upsertMentionUser(
   map: Map<string, MentionUser>,
   userId: unknown,
-  fullName: unknown
+  fullName: unknown,
 ) {
   const normalizedUserId = String(userId ?? "").trim();
   const normalizedFullName = String(fullName ?? "").trim();
@@ -342,13 +3109,133 @@ function upsertMentionUser(
 
   if (
     existing.fullName.length <= 1 ||
-    normalizeMentionValue(existing.fullName) === normalizeMentionValue(existing.userId)
+    normalizeMentionValue(existing.fullName) ===
+      normalizeMentionValue(existing.userId)
   ) {
     map.set(normalizedUserId, {
       userId: normalizedUserId,
       fullName: normalizedFullName,
     });
   }
+}
+
+function EmojiPicker({
+  onSelect,
+  onClose,
+  title = "Emoji auswählen",
+}: {
+  onSelect: (emoji: string) => void;
+  onClose?: () => void;
+  title?: string;
+}) {
+  const [query, setQuery] = useState("");
+  const normalizedQuery = useMemo(() => normalizeEmojiSearchValue(query), [query]);
+  const preferredEmojiSet = useMemo(() => getPreferredEmojiSet(query), [query]);
+
+  const visibleGroups = useMemo(() => {
+    if (!normalizedQuery) return EMOJI_GROUPS;
+
+    return EMOJI_GROUPS.map((group) => ({
+      ...group,
+      emojis: group.emojis
+        .map((emoji) => ({
+          emoji,
+          score: getEmojiMatchScore(emoji, group.label, query, preferredEmojiSet),
+        }))
+        .filter((item) => item.score > 0)
+        .sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          return getEmojiSortIndex(a.emoji) - getEmojiSortIndex(b.emoji);
+        })
+        .map((item) => item.emoji),
+    })).filter((group) => group.emojis.length > 0);
+  }, [normalizedQuery, preferredEmojiSet, query]);
+
+  return (
+    <div className="flex max-h-[min(82dvh,690px)] w-[min(92vw,430px)] flex-col overflow-hidden rounded-[28px] border border-[#d8c1a0]/18 bg-[#1b1511]/95 shadow-[0_24px_80px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-xl">
+      <div className="flex items-start justify-between gap-4 px-5 pb-3 pt-5">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#d8c1a0]/70">
+            {title}
+          </div>
+        </div>
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] text-lg text-white/85 transition-colors hover:bg-[#d8c1a0]/[0.10] hover:text-white"
+            aria-label="Emoji-Auswahl schließen"
+          >
+            ×
+          </button>
+        ) : null}
+      </div>
+
+      <div className="px-5 pb-3">
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Emoji suchen oder auswählen…"
+          className="h-11 w-full rounded-[16px] border border-[#d8c1a0]/16 bg-black/20 px-3 text-sm text-white outline-none placeholder:text-white/35 transition focus:border-[#d8c1a0]/45 focus:bg-black/25"
+        />
+      </div>
+
+      <div className="mx-5 mb-5 min-h-0 flex-1 overflow-y-auto rounded-2xl border border-[#d8c1a0]/12 bg-black/20 p-3 [scrollbar-color:rgba(216,193,160,0.45)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-button]:hidden [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#d8c1a0]/45 hover:[&::-webkit-scrollbar-thumb]:bg-[#d8c1a0]/65">
+        {visibleGroups.length === 0 ? (
+          <div className="px-3 py-6 text-center text-sm text-white/45">
+            Kein Emoji gefunden.
+          </div>
+        ) : null}
+
+        {visibleGroups.map((group) => (
+          <div key={group.label} className="mb-4 last:mb-0">
+            <div className="mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.20em] text-[#d8c1a0]/55">
+              {group.label}
+            </div>
+            <div className="grid grid-cols-7 gap-1.5 sm:grid-cols-8">
+              {group.emojis.map((emoji, index) => (
+                <button
+                  key={`${group.label}-${emoji}-${index}`}
+                  type="button"
+                  onClick={() => onSelect(emoji)}
+                  className="inline-flex aspect-square w-full items-center justify-center rounded-[14px] border border-transparent text-[22px] transition hover:border-white/10 hover:bg-white/[0.08] active:scale-95"
+                  title={emoji}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EmojiMiniSlideover({
+  title,
+  onSelect,
+  onClose,
+}: {
+  title: string;
+  onSelect: (emoji: string) => void;
+  onClose: () => void;
+}) {
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 px-4 py-6 backdrop-blur-[7px]"
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <EmojiPicker title={title} onClose={onClose} onSelect={onSelect} />
+    </div>,
+    document.body,
+  );
 }
 
 const ChatMessageItem = memo(function ChatMessageItem({
@@ -365,6 +3252,9 @@ const ChatMessageItem = memo(function ChatMessageItem({
   onStartEdit,
   onDelete,
   onToggleReaction,
+  openReactionPickerMessageId,
+  onOpenReactionPicker,
+  onCloseEmojiPicker,
   onOpenPreviewImage,
   onSwipeReply,
   onJumpToReplySource,
@@ -385,6 +3275,9 @@ const ChatMessageItem = memo(function ChatMessageItem({
   onStartEdit: (message: ChatMessageDTO) => void;
   onDelete: (messageId: string) => void;
   onToggleReaction: (messageId: string, emoji: string) => void;
+  openReactionPickerMessageId: string | null;
+  onOpenReactionPicker: (messageId: string) => void;
+  onCloseEmojiPicker: () => void;
   onOpenPreviewImage: (image: PreviewImage) => void;
   onSwipeReply: (message: ChatMessageDTO) => void;
   onJumpToReplySource: (parsedReply: ParsedReplyMessage) => void;
@@ -396,12 +3289,13 @@ const ChatMessageItem = memo(function ChatMessageItem({
   const name = message.senderName || (mine ? currentUserName : "Team");
   const showHeader = !isSameGroup(prevMessage, message);
   const reactionGroups = groupReactions(reactions, currentUserId);
+  const reactionPickerOpen = openReactionPickerMessageId === message.id;
   const isDeleted = Boolean(message.deletedAt);
   const isEditing = editingMessageId === message.id;
   const hasAttachment = Boolean(message.fileUrl && message.fileName);
   const parsedReply = parseReplyMessage(message.text ?? "");
   const messageHasVisibleText = Boolean(
-    (parsedReply.isReply ? parsedReply.bodyText : message.text)?.trim()
+    (parsedReply.isReply ? parsedReply.bodyText : message.text)?.trim(),
   );
 
   const [swipeOffset, setSwipeOffset] = useState(0);
@@ -431,14 +3325,15 @@ const ChatMessageItem = memo(function ChatMessageItem({
       swipeLockRef.current = null;
       didTriggerReplyRef.current = false;
     },
-    [isDeleted, isEditing]
+    [isDeleted, isEditing],
   );
 
   const handleTouchMove = useCallback(
     (e: React.TouchEvent<HTMLDivElement>) => {
       if (isEditing || isDeleted) return;
       if (e.touches.length !== 1) return;
-      if (touchStartXRef.current == null || touchStartYRef.current == null) return;
+      if (touchStartXRef.current == null || touchStartYRef.current == null)
+        return;
 
       const dx = e.touches[0].clientX - touchStartXRef.current;
       const dy = e.touches[0].clientY - touchStartYRef.current;
@@ -464,7 +3359,7 @@ const ChatMessageItem = memo(function ChatMessageItem({
         onSwipeReply(message);
       }
     },
-    [isDeleted, isEditing, message, onSwipeReply]
+    [isDeleted, isEditing, message, onSwipeReply],
   );
 
   const handleTouchEnd = useCallback(() => {
@@ -521,31 +3416,33 @@ const ChatMessageItem = memo(function ChatMessageItem({
             onTouchEnd={handleTouchEnd}
             onTouchCancel={handleTouchEnd}
             style={{
-              transform: swipeOffset ? `translateX(${swipeOffset}px)` : undefined,
+              transform: swipeOffset
+                ? `translateX(${swipeOffset}px)`
+                : undefined,
               transition: swipeOffset === 0 ? "transform 160ms ease" : "none",
             }}
           >
             {isEditing ? (
-              <div className="rounded-xl border border-white/10 bg-white/5 p-2">
+              <div className="rounded-[16px] border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] p-2">
                 <textarea
                   ref={editTextareaRef}
                   value={editingText}
                   onChange={(e) => onEditingTextChange(e.target.value)}
                   rows={3}
-                  className="w-full resize-none rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-white/30"
+                  className="w-full resize-none rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 transition focus:border-[#d8c1a0]/45 focus:bg-black/30"
                 />
                 <div className="mt-2 flex gap-2">
                   <button
                     type="button"
                     onClick={() => onSaveEdit(message.id)}
-                    className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-black"
+                    className="rounded-lg border border-[#d8c1a0]/45 bg-[#d8c1a0]/18 px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#d8c1a0]/28"
                   >
                     Speichern
                   </button>
                   <button
                     type="button"
                     onClick={onCancelEdit}
-                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white"
+                    className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white hover:bg-white/[0.08]"
                   >
                     Abbrechen
                   </button>
@@ -555,20 +3452,20 @@ const ChatMessageItem = memo(function ChatMessageItem({
               <div className="space-y-2">
                 {isDeleted ? (
                   <div
-                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm italic leading-6 text-white/40"
+                    className="rounded-[16px] border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] px-3 py-2 text-sm italic leading-6 text-white/40"
                     style={{ whiteSpace: "pre-wrap" }}
                   >
                     Nachricht gelöscht
                   </div>
                 ) : (
                   <>
-                    {(parsedReply.isReply || messageHasVisibleText) ? (
+                    {parsedReply.isReply || messageHasVisibleText ? (
                       <div
                         className={
                           "rounded-xl px-3 py-2 text-sm leading-6 " +
                           (mine
-                            ? "bg-white text-black"
-                            : "border border-white/10 bg-white/10 text-white")
+                            ? "border border-[#d8c1a0]/24 bg-[#d8c1a0]/[0.16] text-[#f6f0e8] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                            : "border border-white/10 bg-white/[0.055] text-white/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]")
                         }
                       >
                         {parsedReply.isReply ? (
@@ -578,14 +3475,14 @@ const ChatMessageItem = memo(function ChatMessageItem({
                             className={
                               "mb-2 block w-full rounded-lg border-l-4 px-3 py-2 text-left transition " +
                               (mine
-                                ? "border-black/20 bg-black/5 hover:bg-black/10"
-                                : "border-indigo-300/60 bg-white/5 hover:bg-white/10")
+                                ? "border-[#d8c1a0]/45 bg-black/15 hover:bg-black/20"
+                                : "border-[#d8c1a0]/45 bg-[#d8c1a0]/[0.045] hover:bg-[#d8c1a0]/[0.10]")
                             }
                           >
                             <div
                               className={
                                 "text-[11px] font-semibold " +
-                                (mine ? "text-black/70" : "text-indigo-200")
+                                (mine ? "text-[#d8c1a0]" : "text-indigo-200")
                               }
                             >
                               {parsedReply.replySender}
@@ -593,13 +3490,13 @@ const ChatMessageItem = memo(function ChatMessageItem({
                             <div
                               className={
                                 "mt-0.5 text-xs leading-5 " +
-                                (mine ? "text-black/60" : "text-white/60")
+                                (mine ? "text-white/62" : "text-white/60")
                               }
                               style={{ whiteSpace: "pre-wrap" }}
                             >
                               {renderTextWithMentions(
                                 parsedReply.replyPreview || "Nachricht",
-                                mine
+                                mine,
                               )}
                             </div>
                           </button>
@@ -611,7 +3508,7 @@ const ChatMessageItem = memo(function ChatMessageItem({
                               parsedReply.isReply
                                 ? parsedReply.bodyText
                                 : message.text,
-                              mine
+                              mine,
                             )}
                           </div>
                         ) : null}
@@ -631,8 +3528,8 @@ const ChatMessageItem = memo(function ChatMessageItem({
                           className={
                             "block w-full overflow-hidden rounded-xl border text-left text-sm transition " +
                             (mine
-                              ? "border-white/20 bg-white/90 text-black hover:bg-white"
-                              : "border-white/10 bg-white/5 text-white hover:bg-white/10")
+                              ? "border-[#d8c1a0]/24 bg-[#d8c1a0]/[0.14] text-white hover:bg-[#d8c1a0]/[0.18]"
+                              : "border-white/10 bg-white/5 text-white hover:bg-[#d8c1a0]/[0.10]")
                           }
                         >
                           <img
@@ -649,7 +3546,7 @@ const ChatMessageItem = memo(function ChatMessageItem({
                               <div
                                 className={
                                   "mt-1 text-xs " +
-                                  (mine ? "text-black/60" : "text-white/50")
+                                  (mine ? "text-white/62" : "text-white/50")
                                 }
                               >
                                 {message.fileType || "Datei"}
@@ -663,7 +3560,7 @@ const ChatMessageItem = memo(function ChatMessageItem({
                               className={
                                 "shrink-0 rounded-lg px-2 py-1 text-xs font-semibold " +
                                 (mine
-                                  ? "bg-black/10 text-black"
+                                  ? "bg-[#d8c1a0]/16 text-white"
                                   : "bg-white/10 text-white")
                               }
                             >
@@ -679,8 +3576,8 @@ const ChatMessageItem = memo(function ChatMessageItem({
                           className={
                             "block overflow-hidden rounded-xl border text-sm transition " +
                             (mine
-                              ? "border-white/20 bg-white/90 text-black hover:bg-white"
-                              : "border-white/10 bg-white/5 text-white hover:bg-white/10")
+                              ? "border-[#d8c1a0]/24 bg-[#d8c1a0]/[0.14] text-white hover:bg-[#d8c1a0]/[0.18]"
+                              : "border-white/10 bg-white/5 text-white hover:bg-[#d8c1a0]/[0.10]")
                           }
                         >
                           <div className="flex items-center justify-between gap-3 px-3 py-3">
@@ -691,7 +3588,7 @@ const ChatMessageItem = memo(function ChatMessageItem({
                               <div
                                 className={
                                   "mt-1 text-xs " +
-                                  (mine ? "text-black/60" : "text-white/50")
+                                  (mine ? "text-white/62" : "text-white/50")
                                 }
                               >
                                 {message.fileType || "Datei"}
@@ -705,7 +3602,7 @@ const ChatMessageItem = memo(function ChatMessageItem({
                               className={
                                 "shrink-0 rounded-lg px-2 py-1 text-xs font-semibold " +
                                 (mine
-                                  ? "bg-black/10 text-black"
+                                  ? "bg-[#d8c1a0]/16 text-white"
                                   : "bg-white/10 text-white")
                               }
                             >
@@ -769,7 +3666,7 @@ const ChatMessageItem = memo(function ChatMessageItem({
                     "shrink-0 inline-flex min-h-9 items-center gap-1 rounded-full border px-3 py-1.5 text-xs transition sm:min-h-8 sm:px-2 sm:py-1 " +
                     (reaction.reactedByMe
                       ? "border-white/30 bg-white/20 text-white"
-                      : "border-white/10 bg-white/5 text-white/80 hover:bg-white/10")
+                      : "border-white/10 bg-white/5 text-white/80 hover:bg-[#d8c1a0]/[0.10]")
                   }
                 >
                   <span className="text-sm">{reaction.emoji}</span>
@@ -777,18 +3674,38 @@ const ChatMessageItem = memo(function ChatMessageItem({
                 </button>
               ))}
 
-              {ALLOWED_EMOJIS.map((emoji) => (
+              {QUICK_REACTION_EMOJIS.map((emoji) => (
                 <button
                   key={`${message.id}-${emoji}`}
                   type="button"
                   onClick={() => onToggleReaction(message.id, emoji)}
-                  className="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-base text-white/80 transition hover:bg-white/10 sm:h-8 sm:w-8 sm:text-sm"
+                  className="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.055] text-base text-white/80 transition hover:bg-[#d8c1a0]/[0.10] sm:h-8 sm:w-8 sm:text-sm"
                   title={`Mit ${emoji} reagieren`}
                 >
                   {emoji}
                 </button>
               ))}
+
+              <button
+                type="button"
+                onClick={() => onOpenReactionPicker(message.id)}
+                className="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.055] text-base text-white/80 transition hover:bg-[#d8c1a0]/[0.10] sm:h-8 sm:w-8 sm:text-sm"
+                title="Weitere Emojis"
+              >
+                +
+              </button>
             </div>
+
+            {reactionPickerOpen ? (
+              <EmojiMiniSlideover
+                title="Reaktion auswählen"
+                onClose={onCloseEmojiPicker}
+                onSelect={(emoji) => {
+                  onToggleReaction(message.id, emoji);
+                  onCloseEmojiPicker();
+                }}
+              />
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -802,12 +3719,14 @@ export default function ChatClient({
   currentUserName,
   initialMessages,
   embedded = false,
+  onRealtimeStatusChange,
 }: {
   tenantId: string | null;
   currentUserId: string;
   currentUserName: string;
   initialMessages: ChatMessageDTO[];
   embedded?: boolean;
+  onRealtimeStatusChange?: (status: RealtimeStatus) => void;
 }) {
   const supabase = useMemo(() => supabaseBrowser(), []);
   const [messages, setMessages] = useState<ChatMessageDTO[]>(initialMessages);
@@ -823,8 +3742,12 @@ export default function ChatClient({
   const [previewImage, setPreviewImage] = useState<PreviewImage | null>(null);
   const [keyboardInset, setKeyboardInset] = useState(0);
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
-  const [lastReadMessageId, setLastReadMessageId] = useState<string | null>(null);
-  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [lastReadMessageId, setLastReadMessageId] = useState<string | null>(
+    null,
+  );
+  const [highlightedMessageId, setHighlightedMessageId] = useState<
+    string | null
+  >(null);
   const [mentionUsers, setMentionUsers] = useState<MentionUser[]>([]);
   const [mentionState, setMentionState] = useState<MentionState>({
     active: false,
@@ -833,7 +3756,11 @@ export default function ChatClient({
     endIndex: -1,
   });
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
-  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("connecting");
+  const [realtimeStatus, setRealtimeStatus] =
+    useState<RealtimeStatus>("connecting");
+  const [openReactionPickerMessageId, setOpenReactionPickerMessageId] =
+    useState<string | null>(null);
+  const [composerEmojiPickerOpen, setComposerEmojiPickerOpen] = useState(false);
 
   const endRef = useRef<HTMLDivElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -842,14 +3769,18 @@ export default function ChatClient({
   const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const mentionDropdownRef = useRef<HTMLDivElement | null>(null);
   const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const [autoScroll, setAutoScroll] = useState(true);
 
   const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(
-    null
+    null,
   );
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const hasFetchedRealtimeFallbackRef = useRef(false);
 
   const storageKey = useMemo(() => {
@@ -896,7 +3827,7 @@ export default function ChatClient({
 
       return Array.from(map.values()).sort(
         (a, b) =>
-          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
       );
     });
   }, []);
@@ -910,7 +3841,7 @@ export default function ChatClient({
 
       return Array.from(new Set(ids));
     },
-    [messages]
+    [messages],
   );
 
   const setReactionRow = useCallback((row: ReactionRow) => {
@@ -929,7 +3860,9 @@ export default function ChatClient({
     setReactionsByMessage((prev) => {
       const next: Record<string, ReactionRow[]> = {};
 
-      for (const [messageId, rows] of Object.entries(prev)) {
+      for (const [messageId, rows] of Object.entries(prev) as Array<
+        [string, ReactionRow[]]
+      >) {
         const filtered = rows.filter((r) => r.id !== rowId);
         if (filtered.length) next[messageId] = filtered;
       }
@@ -947,7 +3880,9 @@ export default function ChatClient({
 
   const refetchMessages = useCallback(async () => {
     try {
-      const messagesRes = await fetch("/api/chat/messages", { cache: "no-store" });
+      const messagesRes = await fetch("/api/chat/messages", {
+        cache: "no-store",
+      });
 
       if (!messagesRes.ok) return;
 
@@ -1022,9 +3957,7 @@ export default function ChatClient({
           .select("user_id, full_name, tenant_id")
           .eq("tenant_id", tenantId),
         fetch("/api/chat/messages", { cache: "no-store" }),
-        supabase
-          .from("team_message_reactions")
-          .select("user_id, user_name"),
+        supabase.from("team_message_reactions").select("user_id, user_name"),
       ]);
 
       const userMap = new Map<string, MentionUser>();
@@ -1036,7 +3969,10 @@ export default function ChatClient({
           upsertMentionUser(userMap, row?.user_id, row?.full_name);
         }
       } else {
-        console.error("[chat] load mention users from profiles failed", profilesRes.error.message);
+        console.error(
+          "[chat] load mention users from profiles failed",
+          profilesRes.error.message,
+        );
       }
 
       if (messagesRes.ok) {
@@ -1047,7 +3983,10 @@ export default function ChatClient({
           upsertMentionUser(userMap, row?.sender_id, row?.sender_name);
         }
       } else {
-        console.error("[chat] load mention users from messages failed", messagesRes.status);
+        console.error(
+          "[chat] load mention users from messages failed",
+          messagesRes.status,
+        );
       }
 
       if (!reactionsRes.error) {
@@ -1055,11 +3994,14 @@ export default function ChatClient({
           upsertMentionUser(userMap, row?.user_id, row?.user_name);
         }
       } else {
-        console.error("[chat] load mention users from reactions failed", reactionsRes.error.message);
+        console.error(
+          "[chat] load mention users from reactions failed",
+          reactionsRes.error.message,
+        );
       }
 
       const users = Array.from(userMap.values()).sort((a, b) =>
-        a.fullName.localeCompare(b.fullName, "de")
+        a.fullName.localeCompare(b.fullName, "de"),
       );
 
       setMentionUsers(users);
@@ -1088,7 +4030,7 @@ export default function ChatClient({
         console.error("[typing] send failed", e);
       }
     },
-    [tenantId, currentUserId, currentUserName]
+    [tenantId, currentUserId, currentUserName],
   );
 
   const markLatestAsRead = useCallback(() => {
@@ -1132,7 +4074,7 @@ export default function ChatClient({
 
       return null;
     },
-    [messages, currentUserId]
+    [messages, currentUserId],
   );
 
   const jumpToMessage = useCallback((messageId: string) => {
@@ -1162,7 +4104,7 @@ export default function ChatClient({
     const currentText = text;
     const currentMention = getMentionMatch(
       currentText,
-      textarea.selectionStart ?? currentText.length
+      textarea.selectionStart ?? currentText.length,
     );
 
     if (!currentMention.active || currentMention.startIndex < 0) return;
@@ -1170,7 +4112,8 @@ export default function ChatClient({
     const mention = getMentionInsertValue(user.fullName);
     const before = currentText.slice(0, currentMention.startIndex);
     const after = currentText.slice(currentMention.endIndex);
-    const needsSpaceAfter = after.startsWith(" ") || after.length === 0 ? "" : " ";
+    const needsSpaceAfter =
+      after.startsWith(" ") || after.length === 0 ? "" : " ";
     const nextText = `${before}${mention}${needsSpaceAfter}${after}`;
 
     setText(nextText);
@@ -1264,6 +4207,10 @@ export default function ChatClient({
   }, [text]);
 
   useEffect(() => {
+    onRealtimeStatusChange?.(realtimeStatus);
+  }, [onRealtimeStatusChange, realtimeStatus]);
+
+  useEffect(() => {
     autoResizeTextarea(editTextareaRef.current, 220);
   }, [editingText, editingMessageId]);
 
@@ -1347,7 +4294,7 @@ export default function ChatClient({
     const updateInset = () => {
       const inset = Math.max(
         0,
-        Math.round(window.innerHeight - viewport.height - viewport.offsetTop)
+        Math.round(window.innerHeight - viewport.height - viewport.offsetTop),
       );
       setKeyboardInset(inset);
     };
@@ -1395,24 +4342,33 @@ export default function ChatClient({
   }, []);
 
   useEffect(() => {
-  const onMentionUser = (event: Event) => {
-    const customEvent = event as CustomEvent<{ userId: string; fullName: string }>;
-    const detail = customEvent.detail;
+    const onMentionUser = (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        userId: string;
+        fullName: string;
+      }>;
+      const detail = customEvent.detail;
 
-    if (!detail?.userId || !detail?.fullName) return;
+      if (!detail?.userId || !detail?.fullName) return;
 
-    insertMentionAtCursor({
-      userId: detail.userId,
-      fullName: detail.fullName,
-    });
-  };
+      insertMentionAtCursor({
+        userId: detail.userId,
+        fullName: detail.fullName,
+      });
+    };
 
-  window.addEventListener("chat:mention-user", onMentionUser as EventListener);
+    window.addEventListener(
+      "chat:mention-user",
+      onMentionUser as EventListener,
+    );
 
-  return () => {
-    window.removeEventListener("chat:mention-user", onMentionUser as EventListener);
-  };
-}, [text, scrollToBottom]);
+    return () => {
+      window.removeEventListener(
+        "chat:mention-user",
+        onMentionUser as EventListener,
+      );
+    };
+  }, [text, scrollToBottom]);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -1463,7 +4419,10 @@ export default function ChatClient({
               const row = (payload.new || payload.old) as any;
               if (!row) return;
 
-              if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+              if (
+                payload.eventType === "INSERT" ||
+                payload.eventType === "UPDATE"
+              ) {
                 const normalizedRow: ChatMessageDTO = {
                   id: String(row.id ?? ""),
                   text: String(row.text ?? ""),
@@ -1510,7 +4469,7 @@ export default function ChatClient({
                   refetchMessages();
                 }
               }
-            }
+            },
           )
           .subscribe((status: string) => {
             console.log("[realtime] messages status:", status);
@@ -1539,27 +4498,33 @@ export default function ChatClient({
               broadcast: { self: false },
             },
           })
-          .on("broadcast", { event: "typing" }, ({ payload }: { payload: any }) => {
-            const userId = String(payload?.userId ?? "");
-            const userName = String(payload?.userName ?? "Team");
-            const isTyping = Boolean(payload?.isTyping);
+          .on(
+            "broadcast",
+            { event: "typing" },
+            ({ payload }: { payload: any }) => {
+              const userId = String(payload?.userId ?? "");
+              const userName = String(payload?.userName ?? "Team");
+              const isTyping = Boolean(payload?.isTyping);
 
-            if (!userId || userId === currentUserId) return;
+              if (!userId || userId === currentUserId) return;
 
-            if (isTyping) {
-              setTypingUsers((prev) => {
-                const next = prev.filter((u) => u.userId !== userId);
-                next.push({
-                  userId,
-                  userName,
-                  expiresAt: Date.now() + 3000,
+              if (isTyping) {
+                setTypingUsers((prev) => {
+                  const next = prev.filter((u) => u.userId !== userId);
+                  next.push({
+                    userId,
+                    userName,
+                    expiresAt: Date.now() + 3000,
+                  });
+                  return next;
                 });
-                return next;
-              });
-            } else {
-              setTypingUsers((prev) => prev.filter((u) => u.userId !== userId));
-            }
-          })
+              } else {
+                setTypingUsers((prev) =>
+                  prev.filter((u) => u.userId !== userId),
+                );
+              }
+            },
+          )
           .subscribe((status: string) => {
             console.log("[realtime] typing status:", status);
           });
@@ -1578,7 +4543,10 @@ export default function ChatClient({
               const messageId = String(row.message_id ?? "");
 
               if (!messageId) return;
-              if (!messageRefs.current[messageId] && !messages.some((m) => m.id === messageId)) {
+              if (
+                !messageRefs.current[messageId] &&
+                !messages.some((m) => m.id === messageId)
+              ) {
                 return;
               }
 
@@ -1590,7 +4558,7 @@ export default function ChatClient({
                 emoji: String(row.emoji),
                 created_at: String(row.created_at),
               });
-            }
+            },
           )
           .on(
             "postgres_changes",
@@ -1602,7 +4570,7 @@ export default function ChatClient({
             (payload: any) => {
               const row = payload.old as any;
               removeReactionRow(String(row.id));
-            }
+            },
           )
           .subscribe((status: string) => {
             console.log("[realtime] reactions status:", status);
@@ -1708,6 +4676,23 @@ export default function ChatClient({
     }
   }
 
+  function insertEmojiIntoComposer(emoji: string) {
+    const textarea = composerTextareaRef.current;
+    const start = textarea?.selectionStart ?? text.length;
+    const end = textarea?.selectionEnd ?? text.length;
+    const nextText = `${text.slice(0, start)}${emoji}${text.slice(end)}`;
+    const nextCaret = start + emoji.length;
+
+    setText(nextText);
+    setMentionState({ active: false, query: "", startIndex: -1, endIndex: -1 });
+
+    requestAnimationFrame(() => {
+      composerTextareaRef.current?.focus();
+      composerTextareaRef.current?.setSelectionRange(nextCaret, nextCaret);
+      autoResizeTextarea(composerTextareaRef.current);
+    });
+  }
+
   async function toggleReaction(messageId: string, emoji: string) {
     try {
       const res = await fetch("/api/chat/reactions", {
@@ -1771,6 +4756,7 @@ export default function ChatClient({
 
   function handleTyping(value: string) {
     setText(value);
+    setComposerEmojiPickerOpen(false);
 
     const caret = composerTextareaRef.current?.selectionStart ?? value.length;
     const mention = getMentionMatch(value, caret);
@@ -1797,7 +4783,7 @@ export default function ChatClient({
       setEditingText(message.text);
       setTimeout(() => scrollToBottom("smooth"), 100);
     },
-    [scrollToBottom]
+    [scrollToBottom],
   );
 
   const handleCancelEdit = useCallback(() => {
@@ -1822,7 +4808,7 @@ export default function ChatClient({
         scrollToBottom("smooth");
       }, 50);
     },
-    [currentUserId, scrollToBottom]
+    [currentUserId, scrollToBottom],
   );
 
   const handleJumpToReplySource = useCallback(
@@ -1836,7 +4822,7 @@ export default function ChatClient({
 
       jumpToMessage(sourceMessage.id);
     },
-    [findReplySourceMessage, jumpToMessage]
+    [findReplySourceMessage, jumpToMessage],
   );
 
   const unreadDividerIndex = useMemo(() => {
@@ -1870,34 +4856,13 @@ export default function ChatClient({
     <>
       <div
         className={
-          "flex min-h-0 flex-col rounded-2xl border border-white/10 bg-white/[0.03] " +
+          "flex min-h-0 flex-col " +
           (embedded ? "h-full" : "h-[calc(100dvh-220px)]")
         }
       >
-        <div className="flex items-center justify-between border-b border-white/10 px-3 py-2 text-[11px]">
-          <span className="font-semibold uppercase tracking-wide text-white/40">
-            Realtime Status
-          </span>
-          <span
-            className={
-              "rounded-full border px-2.5 py-1 font-medium " +
-              (realtimeStatus === "connected"
-                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                : realtimeStatus === "reconnecting"
-                  ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
-                  : realtimeStatus === "connecting"
-                    ? "border-white/15 bg-white/5 text-white/70"
-                    : "border-red-500/30 bg-red-500/10 text-red-300")
-            }
-            title="Zeigt nur den Live-Verbindungsstatus des Chats an"
-          >
-            {getRealtimeStatusLabel(realtimeStatus)}
-          </span>
-        </div>
-
         <div
           ref={listRef}
-          className="flex-1 overflow-y-auto overscroll-contain px-2 py-3 sm:px-4 sm:py-4"
+          className="flex-1 overflow-y-auto overscroll-contain px-2 py-3 sm:px-4 sm:py-4 [scrollbar-color:rgba(216,193,160,0.34)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-button]:hidden [&::-webkit-scrollbar-corner]:bg-transparent [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-[#d8c1a0]/32 [&::-webkit-scrollbar-thumb]:bg-clip-content hover:[&::-webkit-scrollbar-thumb]:bg-[#d8c1a0]/52"
           style={{
             WebkitOverflowScrolling: "touch",
             paddingBottom: "7rem",
@@ -1906,8 +4871,9 @@ export default function ChatClient({
         >
           <div className="flex flex-col gap-1">
             {messages.length === 0 ? (
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center text-sm text-white/60">
-                Noch keine Nachrichten. Schreib die erste Nachricht an dein Team 👋
+              <div className="rounded-2xl border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] p-6 text-center text-sm text-white/60">
+                Noch keine Nachrichten. Schreib die erste Nachricht an dein Team
+                👋
               </div>
             ) : null}
 
@@ -1937,6 +4903,16 @@ export default function ChatClient({
                   onStartEdit={handleStartEdit}
                   onDelete={deleteMessage}
                   onToggleReaction={toggleReaction}
+                  openReactionPickerMessageId={openReactionPickerMessageId}
+                  onOpenReactionPicker={(messageId) => {
+                    setComposerEmojiPickerOpen(false);
+                    setOpenReactionPickerMessageId((current) =>
+                      current === messageId ? null : messageId,
+                    );
+                  }}
+                  onCloseEmojiPicker={() =>
+                    setOpenReactionPickerMessageId(null)
+                  }
                   onOpenPreviewImage={setPreviewImage}
                   onSwipeReply={handleSwipeReply}
                   onJumpToReplySource={handleJumpToReplySource}
@@ -1961,15 +4937,15 @@ export default function ChatClient({
         </div>
 
         <div
-          className="border-t border-white/10 bg-black/70 backdrop-blur supports-[backdrop-filter]:bg-black/55"
+          className="bg-transparent px-3 pb-3 pt-2 sm:px-4 sm:pb-4"
           style={{
-            paddingBottom: `calc(env(safe-area-inset-bottom, 0px) + ${keyboardInset}px)`,
+            paddingBottom: `calc(env(safe-area-inset-bottom, 0px) + ${keyboardInset}px + 12px)`,
           }}
         >
-          <div className="p-3 sm:p-4">
-            <div className="mx-auto max-w-3xl">
+          <div className="w-full rounded-[24px] border border-[#d8c1a0]/16 bg-[#1a130f]/94 p-3 shadow-[0_18px_44px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.035)] backdrop-blur supports-[backdrop-filter]:bg-[#1a130f]/88 sm:p-3.5">
+            <div className="w-full">
               {replyTarget ? (
-                <div className="mb-3 flex items-start justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                <div className="mb-3 flex items-start justify-between gap-3 rounded-[16px] border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] px-3 py-2">
                   <div className="min-w-0">
                     <div className="text-xs font-semibold uppercase tracking-wide text-white/50">
                       Antwort
@@ -1985,7 +4961,7 @@ export default function ChatClient({
                   <button
                     type="button"
                     onClick={() => setReplyTarget(null)}
-                    className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white"
+                    className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white hover:bg-white/[0.08]"
                   >
                     Entfernen
                   </button>
@@ -1993,7 +4969,7 @@ export default function ChatClient({
               ) : null}
 
               {selectedFile ? (
-                <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                <div className="mb-3 flex items-center justify-between gap-3 rounded-[16px] border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] px-3 py-2">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium text-white">
                       📎 {selectedFile.name}
@@ -2010,7 +4986,7 @@ export default function ChatClient({
                       setSelectedFile(null);
                       if (fileInputRef.current) fileInputRef.current.value = "";
                     }}
-                    className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white"
+                    className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white hover:bg-white/[0.08]"
                   >
                     Entfernen
                   </button>
@@ -2020,13 +4996,13 @@ export default function ChatClient({
               {showMentionDropdown ? (
                 <div
                   ref={mentionDropdownRef}
-                  className="mb-3 overflow-hidden rounded-xl border border-white/10 bg-[#0f0f10] shadow-2xl"
+                  className="mb-3 overflow-hidden rounded-[16px] border border-[#d8c1a0]/14 bg-[#1b1511]/95 shadow-2xl"
                 >
                   <div className="border-b border-white/10 px-3 py-2 text-[11px] uppercase tracking-wide text-white/40">
                     Person erwähnen
                   </div>
 
-                  <div className="max-h-64 overflow-y-auto">
+                  <div className="max-h-64 overflow-y-auto [scrollbar-color:rgba(216,193,160,0.34)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-button]:hidden [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#d8c1a0]/32">
                     {filteredMentionUsers.map((user, index) => {
                       const active = index === selectedMentionIndex;
                       const mentionValue = getMentionInsertValue(user.fullName);
@@ -2042,16 +5018,18 @@ export default function ChatClient({
                           className={
                             "flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition " +
                             (active
-                              ? "bg-white text-black"
+                              ? "border border-[#d8c1a0]/24 bg-[#d8c1a0]/[0.16] text-[#f6f0e8] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
                               : "text-white hover:bg-white/5")
                           }
                         >
                           <div className="min-w-0">
-                            <div className="truncate font-medium">{user.fullName}</div>
+                            <div className="truncate font-medium">
+                              {user.fullName}
+                            </div>
                             <div
                               className={
                                 "truncate text-xs " +
-                                (active ? "text-black/60" : "text-white/40")
+                                (active ? "text-white/62" : "text-white/40")
                               }
                             >
                               {mentionValue}
@@ -2064,9 +5042,15 @@ export default function ChatClient({
                 </div>
               ) : null}
 
-              <div className="mb-2 text-[11px] text-white/35">
-                Live-Updates laufen direkt über Realtime, nicht über Push-Benachrichtigungen.
-              </div>
+              {composerEmojiPickerOpen ? (
+                <EmojiMiniSlideover
+                  title="Emoji einfügen"
+                  onClose={() => setComposerEmojiPickerOpen(false)}
+                  onSelect={(emoji) => {
+                    insertEmojiIntoComposer(emoji);
+                  }}
+                />
+              ) : null}
 
               <div className="flex items-end gap-2">
                 <input
@@ -2083,10 +5067,28 @@ export default function ChatClient({
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-lg text-white transition hover:bg-white/10 active:scale-[0.98]"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] text-lg text-white/85 transition-colors hover:bg-[#d8c1a0]/[0.10] hover:text-white active:scale-[0.98]"
                   title="Datei anhängen"
                 >
                   📎
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenReactionPickerMessageId(null);
+                    setComposerEmojiPickerOpen((open) => !open);
+                  }}
+                  className={
+                    "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] border border-[#d8c1a0]/14 text-lg text-white transition active:scale-[0.98] " +
+                    (composerEmojiPickerOpen
+                      ? "bg-[#d8c1a0]/16"
+                      : "bg-[#d8c1a0]/[0.045] hover:bg-[#d8c1a0]/[0.10]")
+                  }
+                  title="Emoji einfügen"
+                  aria-label="Emoji einfügen"
+                >
+                  ☺️
                 </button>
 
                 <textarea
@@ -2100,7 +5102,7 @@ export default function ChatClient({
                     const target = e.currentTarget;
                     const mention = getMentionMatch(
                       target.value,
-                      target.selectionStart ?? target.value.length
+                      target.selectionStart ?? target.value.length,
                     );
                     setMentionState(mention);
                   }}
@@ -2109,7 +5111,9 @@ export default function ChatClient({
                       if (e.key === "ArrowDown") {
                         e.preventDefault();
                         setSelectedMentionIndex((prev) =>
-                          prev >= filteredMentionUsers.length - 1 ? 0 : prev + 1
+                          prev >= filteredMentionUsers.length - 1
+                            ? 0
+                            : prev + 1,
                         );
                         return;
                       }
@@ -2117,14 +5121,17 @@ export default function ChatClient({
                       if (e.key === "ArrowUp") {
                         e.preventDefault();
                         setSelectedMentionIndex((prev) =>
-                          prev <= 0 ? filteredMentionUsers.length - 1 : prev - 1
+                          prev <= 0
+                            ? filteredMentionUsers.length - 1
+                            : prev - 1,
                         );
                         return;
                       }
 
                       if (e.key === "Enter" || e.key === "Tab") {
                         e.preventDefault();
-                        const selectedUser = filteredMentionUsers[selectedMentionIndex];
+                        const selectedUser =
+                          filteredMentionUsers[selectedMentionIndex];
                         if (selectedUser) {
                           insertMention(selectedUser);
                         }
@@ -2151,19 +5158,44 @@ export default function ChatClient({
                   placeholder={
                     replyTarget
                       ? `Antwort an ${replyTarget.senderName}...`
-                      : "Nachricht schreiben... Mit @ jemanden erwähnen"
+                      : "Gib eine Nachricht ein."
                   }
                   rows={1}
-                  className="min-h-[44px] max-h-40 flex-1 resize-none rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-white/30"
+                  className="h-11 min-h-[44px] max-h-40 flex-1 resize-none overflow-y-auto rounded-[16px] border border-[#d8c1a0]/14 bg-black/25 px-3 py-[11px] text-sm leading-[20px] text-white outline-none placeholder:text-white/35 transition focus:border-[#d8c1a0]/45 focus:bg-black/30 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 />
 
                 <button
                   type="button"
                   onClick={send}
-                  disabled={sending || (!text.trim() && !selectedFile && !replyTarget)}
-                  className="inline-flex h-11 items-center justify-center rounded-xl bg-white px-4 text-sm font-semibold text-black transition active:scale-[0.98] disabled:opacity-50"
+                  disabled={
+                    sending || (!text.trim() && !selectedFile && !replyTarget)
+                  }
+                  className={
+                    "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] text-white transition-colors active:scale-[0.98] " +
+                    (sending || (!text.trim() && !selectedFile && !replyTarget)
+                      ? "cursor-not-allowed opacity-45 pointer-events-none"
+                      : "hover:bg-[#d8c1a0]/[0.10]")
+                  }
+                  aria-label="Nachricht senden"
+                  title="Senden"
                 >
-                  Senden
+                  {sending ? (
+                    <span className="text-sm font-bold">…</span>
+                  ) : (
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-[18px] w-[18px]"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 19V5" />
+                      <path d="M5 12l7-7 7 7" />
+                    </svg>
+                  )}
                 </button>
               </div>
             </div>

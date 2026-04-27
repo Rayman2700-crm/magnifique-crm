@@ -808,11 +808,51 @@ export default function StudioAssistantSlideover({
 
       {open &&
         createPortal(
-          <div className="studio-assistant-overlay" role="dialog" aria-modal="true" aria-label="GIGI Studio-Assistent">
-            <button type="button" className="studio-assistant-overlay__backdrop" onClick={close} aria-label="Schließen" />
+          <div
+            className="studio-assistant-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-label="GIGI Studio-Assistent"
+            style={{ position: "fixed", inset: 0, zIndex: 1350, isolation: "isolate" }}
+          >
+            <button
+              type="button"
+              className="studio-assistant-overlay__backdrop"
+              onClick={close}
+              aria-label="Schließen"
+              style={{
+                position: "absolute",
+                inset: 0,
+                backgroundColor: "rgba(0,0,0,0.42)",
+                backdropFilter: "blur(6px)",
+                opacity: shown ? 1 : 0,
+                transition: "opacity 200ms ease",
+                pointerEvents: shown ? "auto" : "none",
+              }}
+            />
 
-            <section className={`studio-assistant-panel relative ${shown ? "studio-assistant-panel--shown" : ""}`}>
-              <header className="studio-assistant-panel__header">
+            <section
+              className={`studio-assistant-panel relative ${shown ? "studio-assistant-panel--shown" : ""}`}
+              style={{
+                position: "absolute",
+                top: 18,
+                right: 18,
+                bottom: 18,
+                width: 470,
+                maxWidth: "calc(100vw - 36px)",
+                borderRadius: 18,
+                border: "1px solid rgba(255,255,255,0.12)",
+                boxShadow: "0 18px 60px rgba(0,0,0,0.55)",
+                transform: shown ? "translateX(0)" : "translateX(18px)",
+                opacity: shown ? 1 : 0,
+                transition: "all 220ms ease",
+                overflow: "hidden",
+                display: "flex",
+                flexDirection: "column",
+                color: "white",
+              }}
+            >
+              <header className="studio-assistant-panel__header" style={{ padding: 18, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
                 <div>
                   <div className="studio-assistant-panel__eyebrow">GIGI · deine Studio-KI</div>
                   <h2 className="studio-assistant-panel__title" style={{ fontSize: 23, lineHeight: 1.08 }}>GIGI erkennt Leistungen smarter ✨</h2>

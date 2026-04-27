@@ -117,6 +117,61 @@ function isExpiringSoon(expiresAtIso: string | null | undefined) {
   return exp - Date.now() < 2 * 60 * 1000;
 }
 
+function isGoogleAuthFailure(error: any) {
+  const message = String(error?.message ?? error ?? "").toLowerCase();
+  const status = Number(error?.status ?? error?.googleStatus ?? 0);
+
+  return (
+    status === 401 ||
+    status === 403 ||
+    message.includes("invalid_grant") ||
+    message.includes("token has been expired") ||
+    message.includes("expired or revoked") ||
+    message.includes("revoked") ||
+    message.includes("invalid authentication credentials") ||
+    message.includes("invalid credentials") ||
+    message.includes("unauthorized")
+  );
+}
+
+async function markGoogleConnectionDisconnected(
+  admin: any,
+  connection: Pick<GoogleOauthConnectionRow, "id" | "owner_user_id" | "connection_label" | "google_account_email"> | null | undefined,
+  reason?: unknown
+) {
+  const connectionId = String(connection?.id ?? "").trim();
+  const ownerUserId = String(connection?.owner_user_id ?? "").trim();
+  const now = new Date().toISOString();
+
+  const reasonMessage = String((reason as any)?.message ?? reason ?? "Google Verbindung ungültig").trim();
+  const label = String(connection?.connection_label ?? connection?.google_account_email ?? connectionId ?? "Google").trim();
+
+  console.warn(`[Google] Verbindung wird getrennt: ${label} – ${reasonMessage}`);
+
+  if (connectionId) {
+    await admin
+      .from("google_oauth_connections")
+      .update({
+        is_active: false,
+        access_token: null,
+        expires_at: null,
+        updated_at: now,
+      })
+      .eq("id", connectionId);
+  }
+
+  if (ownerUserId) {
+    await admin
+      .from("google_oauth_tokens")
+      .update({
+        access_token: null,
+        expires_at: null,
+        updated_at: now,
+      })
+      .eq("user_id", ownerUserId);
+  }
+}
+
 async function refreshGoogleAccessTokenByRefreshToken(refreshToken: string) {
   const clientId = process.env.GOOGLE_CLIENT_ID!;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET!;
@@ -159,7 +214,18 @@ async function getAccessTokenForGoogleConnection(admin: any, connection: GoogleO
     throw new Error(`Für ${connection.connection_label || "die Google Verbindung"} fehlt ein refresh_token.`);
   }
 
-  const refreshed = await refreshGoogleAccessTokenByRefreshToken(refreshToken);
+  let refreshed: Awaited<ReturnType<typeof refreshGoogleAccessTokenByRefreshToken>>;
+
+  try {
+    refreshed = await refreshGoogleAccessTokenByRefreshToken(refreshToken);
+  } catch (error: any) {
+    if (isGoogleAuthFailure(error)) {
+      await markGoogleConnectionDisconnected(admin, connection, error);
+    }
+
+    throw error;
+  }
+
   if (!refreshed.accessToken) {
     throw new Error(`Für ${connection.connection_label || "die Google Verbindung"} konnte kein access_token geladen werden.`);
   }
@@ -170,8 +236,20 @@ async function getAccessTokenForGoogleConnection(admin: any, connection: GoogleO
       access_token: refreshed.accessToken,
       expires_at: refreshed.expiresAt,
       updated_at: new Date().toISOString(),
+      is_active: true,
     })
     .eq("id", connection.id);
+
+  if (connection.owner_user_id) {
+    await admin
+      .from("google_oauth_tokens")
+      .update({
+        access_token: refreshed.accessToken,
+        expires_at: refreshed.expiresAt,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", connection.owner_user_id);
+  }
 
   return refreshed.accessToken;
 }
@@ -189,8 +267,12 @@ async function googleFetchWithToken(token: string, path: string, init?: RequestI
 
   const json: any = await res.json().catch(() => null);
   if (!res.ok) {
-    const msg = json?.error?.message ?? "Google API error";
-    throw new Error(msg);
+    const msg = json?.error?.message ?? json?.error_description ?? json?.error ?? "Google API error";
+    const error: any = new Error(msg);
+    error.status = res.status;
+    error.googleStatus = res.status;
+    error.googleError = json?.error ?? null;
+    throw error;
   }
   return json;
 }
@@ -493,6 +575,12 @@ function normalizeStatus(value: string): AppointmentStatus {
   if (value === "cancelled") return "cancelled";
   if (value === "no_show") return "no_show";
   return "scheduled";
+}
+
+const REMINDER_DELETED_NOTE_PREFIX = "Reminder gelöscht:";
+
+function hasReminderDeletedMarker(existing: string | null | undefined) {
+  return String(existing ?? "").toLowerCase().includes(REMINDER_DELETED_NOTE_PREFIX.toLowerCase());
 }
 
 function parseMetadataLines(existing: string | null) {
@@ -1460,15 +1548,22 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
     });
 
     if (matchedDefaultConnection?.id) {
-      const defaultToken = await getAccessTokenForGoogleConnection(admin, matchedDefaultConnection);
+      try {
+        const defaultToken = await getAccessTokenForGoogleConnection(admin, matchedDefaultConnection);
 
-      syncTargets.push({
-        calendarId: normalizeGoogleCalendarId(defaultCalendarId),
-        tenantId: resolveStudioTenantId(defaultCalendarId),
-        ownerLabel: String(matchedDefaultConnection.connection_label ?? matchedDefaultConnection.google_account_name ?? matchedDefaultConnection.google_account_email ?? ownerProfile?.full_name ?? "Google Kalender").trim() || "Google Kalender",
-        accessToken: defaultToken,
-        connectionId: String(matchedDefaultConnection.id),
-      });
+        syncTargets.push({
+          calendarId: normalizeGoogleCalendarId(defaultCalendarId),
+          tenantId: resolveStudioTenantId(defaultCalendarId),
+          ownerLabel: String(matchedDefaultConnection.connection_label ?? matchedDefaultConnection.google_account_name ?? matchedDefaultConnection.google_account_email ?? ownerProfile?.full_name ?? "Google Kalender").trim() || "Google Kalender",
+          accessToken: defaultToken,
+          connectionId: String(matchedDefaultConnection.id),
+        });
+      } catch (error: any) {
+        if (isGoogleAuthFailure(error)) {
+          await markGoogleConnectionDisconnected(admin, matchedDefaultConnection, error);
+        }
+        console.warn("Google Standardkalender-Sync übersprungen:", error?.message ?? error);
+      }
     }
   }
 
@@ -1479,7 +1574,18 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
     const matchedCalendarId = STUDIO_WRITE_TARGETS[target].calendarId;
     if (syncTargets.some((entry) => entry.calendarId === matchedCalendarId)) continue;
 
-    const connectionToken = await getAccessTokenForGoogleConnection(admin, connection);
+    let connectionToken = "";
+
+    try {
+      connectionToken = await getAccessTokenForGoogleConnection(admin, connection);
+    } catch (error: any) {
+      if (isGoogleAuthFailure(error)) {
+        await markGoogleConnectionDisconnected(admin, connection, error);
+      }
+      console.warn("Google Verbindung für Sync übersprungen:", error?.message ?? error);
+      continue;
+    }
+
     const mappedTenantId = resolveStudioTenantId(matchedCalendarId);
 
     syncTargets.push({
@@ -1602,7 +1708,11 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
       );
       googleEvents = Array.isArray(response?.items) ? response.items : [];
     } catch (error: any) {
-      console.error(`Google Sync für Kalender ${calendarId} fehlgeschlagen`, error?.message ?? error);
+      if (isGoogleAuthFailure(error) && syncTarget.connectionId) {
+        const failingConnection = studioConnectionList.find((connection) => String(connection.id) === String(syncTarget.connectionId)) ?? null;
+        await markGoogleConnectionDisconnected(admin, failingConnection, error);
+      }
+      console.warn(`Google Sync für Kalender ${calendarId} übersprungen`, error?.message ?? error);
       continue;
     }
 
@@ -1665,6 +1775,8 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
         notesInternal = addStudioGoogleExternalMarker(notesInternal);
       }
 
+      const reminderWasDeleted = hasReminderDeletedMarker(notesInternal);
+
       if (existing?.id) {
         const updErr = await updateAppointmentBestEffort(
           admin,
@@ -1674,8 +1786,8 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
             person_id: personId,
             start_at: start.toISOString(),
             end_at: end.toISOString(),
-            reminder_at: buildReminderAt(start).toISOString(),
-            reminder_sent_at: null,
+            reminder_at: reminderWasDeleted ? null : buildReminderAt(start).toISOString(),
+            reminder_sent_at: reminderWasDeleted ? ((existing as any).reminder_sent_at ?? null) : null,
             notes_internal: notesInternal || null,
             google_calendar_id: calendarId,
             google_event_id: googleEventId,
@@ -2340,6 +2452,7 @@ export async function updateAppointmentFromCalendar(appointmentId: string, formD
     walkInPhone,
     preserveRest: true,
   });
+  const reminderWasDeleted = hasReminderDeletedMarker(notesInternal);
 
   try {
     if (existing.google_calendar_id && existing.google_event_id) {
@@ -2368,8 +2481,8 @@ export async function updateAppointmentFromCalendar(appointmentId: string, formD
     {
       start_at: start.toISOString(),
       end_at: end.toISOString(),
-      reminder_at: buildReminderAt(start).toISOString(),
-      reminder_sent_at: null,
+      reminder_at: reminderWasDeleted ? null : buildReminderAt(start).toISOString(),
+      reminder_sent_at: reminderWasDeleted ? ((existing as any).reminder_sent_at ?? null) : null,
       notes_internal: notesInternal || null,
     },
     status

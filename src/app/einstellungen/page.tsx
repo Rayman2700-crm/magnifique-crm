@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getValidGoogleAccessToken } from "@/lib/google/getValidGoogleAccessToken";
 
 function resolveStorageAvatarUrl(raw: string | null | undefined, admin: ReturnType<typeof supabaseAdmin>) {
   const value = String(raw ?? "").trim();
@@ -87,7 +88,7 @@ export default async function EinstellungenPage() {
       .maybeSingle(),
     admin
       .from("google_oauth_tokens")
-      .select("default_calendar_id, enabled_calendar_ids, updated_at")
+      .select("default_calendar_id, enabled_calendar_ids, updated_at, refresh_token")
       .eq("user_id", user.id)
       .maybeSingle(),
     admin
@@ -110,7 +111,55 @@ export default async function EinstellungenPage() {
     : { data: null as any };
 
   const connections = (Array.isArray(connectionRows) ? connectionRows : []) as GoogleConnectionRow[];
-  const activeConnections = connections.filter((row) => row.is_active === true);
+  const storedActiveConnections = connections.filter((row) => row.is_active === true);
+  const hasStoredGoogleRefreshToken = Boolean(String((tokenRow as any)?.refresh_token ?? "").trim());
+  let googleConnectionHealthy = false;
+
+  if (storedActiveConnections.length > 0 && hasStoredGoogleRefreshToken) {
+    try {
+      const token = await getValidGoogleAccessToken();
+      const response = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=1", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        const json: any = await response.json().catch(() => null);
+        if ([400, 401, 403].includes(response.status)) {
+          const now = new Date().toISOString();
+          await Promise.all([
+            admin
+              .from("google_oauth_tokens")
+              .update({
+                access_token: null,
+                refresh_token: null,
+                expires_at: null,
+                default_calendar_id: null,
+                enabled_calendar_ids: [],
+                updated_at: now,
+              })
+              .eq("user_id", user.id),
+            admin
+              .from("google_oauth_connections")
+              .update({
+                access_token: null,
+                refresh_token: null,
+                expires_at: null,
+                is_active: false,
+                is_primary: false,
+                updated_at: now,
+              })
+              .eq("owner_user_id", user.id),
+          ]);
+        }
+        throw new Error(json?.error?.message ?? "Google Kalenderliste konnte nicht geladen werden");
+      }
+      googleConnectionHealthy = true;
+    } catch {
+      googleConnectionHealthy = false;
+    }
+  }
+
+  const activeConnections = googleConnectionHealthy ? storedActiveConnections : [];
   const writableConnections = activeConnections.filter((row) => row.is_read_only !== true);
   const primaryWritableConnection =
     writableConnections.find((row) => row.is_primary) ?? writableConnections[0] ?? null;
@@ -306,7 +355,7 @@ export default async function EinstellungenPage() {
                     </div>
                     <div className="flex items-start justify-between gap-3">
                       <span className="text-white/60">Zusatzkalender</span>
-                      <span className="text-right font-medium text-white">{isAdmin ? `${enabledExtraIds.length} aktiv` : "Nur Admin"}</span>
+                      <span className="text-right font-medium text-white">{enabledExtraIds.length}</span>
                     </div>
                     <div className="flex items-start justify-between gap-3">
                       <span className="text-white/60">Zuletzt aktualisiert</span>

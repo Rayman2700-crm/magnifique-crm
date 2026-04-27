@@ -3,9 +3,35 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import ChatClient, { type ChatMessageDTO } from "@/app/dashboard/chat/ChatClient";
+import ChatClient, { type ChatMessageDTO, type RealtimeStatus } from "@/app/dashboard/chat/ChatClient";
 import ChatTeamAvatars from "@/components/chat/ChatTeamAvatars";
+
+function getRealtimeStatusLabel(status: RealtimeStatus) {
+  if (status === "connected") return "Live verbunden";
+  if (status === "reconnecting") return "Synchronisiere...";
+  if (status === "connecting") return "Verbinde...";
+  return "Offline";
+}
+
+function realtimeStatusChipClass(status: RealtimeStatus) {
+  if (status === "connected") {
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
+  }
+
+  if (status === "reconnecting") {
+    return "border-amber-500/30 bg-amber-500/10 text-amber-300";
+  }
+
+  if (status === "connecting") {
+    return "border-white/15 bg-white/5 text-white/70";
+  }
+
+  return "border-red-500/30 bg-red-500/10 text-red-300";
+}
+
+function closeIconButtonClass() {
+  return "inline-flex h-12 w-12 items-center justify-center rounded-[16px] border border-white/12 bg-white/[0.04] text-white/85 transition-colors hover:bg-white/[0.10] hover:text-white";
+}
 
 export default function ChatSlideover({
   tenantId,
@@ -24,6 +50,7 @@ export default function ChatSlideover({
   const [visible, setVisible] = useState(false);
   const [shown, setShown] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("connecting");
   const [initialMessages, setInitialMessages] = useState<ChatMessageDTO[]>([]);
 
   const open = searchParams?.get("openChat") === "1";
@@ -133,7 +160,7 @@ export default function ChatSlideover({
         style={{
           position: "absolute",
           inset: 0,
-          backgroundColor: "rgba(0,0,0,0.60)",
+          backgroundColor: "rgba(0,0,0,0.64)",
           backdropFilter: "blur(6px)",
           opacity: shown ? 1 : 0,
           transition: "opacity 200ms ease",
@@ -150,10 +177,10 @@ export default function ChatSlideover({
           width: 620,
           maxWidth: "calc(100vw - 36px)",
           borderRadius: 18,
-          border: "1px solid rgba(255,255,255,0.12)",
+          border: "1px solid rgba(216,193,160,0.16)",
           background:
-            "linear-gradient(180deg, rgba(16,16,16,0.94) 0%, rgba(10,10,10,0.94) 100%)",
-          boxShadow: "0 18px 60px rgba(0,0,0,0.55)",
+            "linear-gradient(180deg, rgba(31,24,19,0.97) 0%, rgba(18,13,10,0.96) 100%)",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.58), inset 0 1px 0 rgba(255,255,255,0.05)",
           transform: shown ? "translateX(0)" : "translateX(18px)",
           opacity: shown ? 1 : 0,
           transition: "all 220ms ease",
@@ -164,54 +191,88 @@ export default function ChatSlideover({
       >
         <div
           style={{
-            padding: 16,
-            borderBottom: "1px solid rgba(255,255,255,0.08)",
-            display: "grid",
-            gridTemplateColumns: "auto 1fr auto",
-            alignItems: "center",
-            gap: 14,
+            padding: "16px 16px 14px",
+            borderBottom: "1px solid rgba(216,193,160,0.12)",
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 16,
           }}
         >
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>MAGNIFIQUE BEAUTY INSTITUT</div>
+          <div style={{ minWidth: 145, flexShrink: 0 }}>
             <div
               style={{
-                marginTop: 6,
                 fontSize: 18,
                 fontWeight: 800,
-                color: "rgba(255,255,255,0.95)",
+                color: "rgba(246,240,232,0.96)",
                 whiteSpace: "nowrap",
+                lineHeight: 1.1,
               }}
             >
               Team Chat
+            </div>
+            <div style={{ marginTop: 10, display: "flex" }}>
+              <span
+                className={
+                  "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold " +
+                  realtimeStatusChipClass(realtimeStatus)
+                }
+                title="Zeigt nur den Live-Verbindungsstatus des Chats an"
+              >
+                {getRealtimeStatusLabel(realtimeStatus)}
+              </span>
             </div>
           </div>
 
           <div
             style={{
               minWidth: 0,
+              flex: 1,
               display: "flex",
-              alignItems: "center",
-              justifyContent: "flex-start",
-              overflow: "hidden",
+              alignItems: "flex-start",
+              justifyContent: "flex-end",
+              gap: 12,
             }}
           >
-            <ChatTeamAvatars />
+            <div
+              data-chat-team-avatar-wrap="true"
+              style={{
+                minWidth: 0,
+                flex: "1 1 auto",
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "flex-end",
+                overflow: "visible",
+              }}
+            >
+              <ChatTeamAvatars />
+            </div>
+
+            <button
+              type="button"
+              onClick={close}
+              className={closeIconButtonClass()}
+              aria-label="Schließen"
+              title="Schließen"
+              style={{ flexShrink: 0 }}
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              justifySelf: "end",
-              flexShrink: 0,
-            }}
-          >
-            <Button variant="secondary" onClick={close}>
-              Schließen
-            </Button>
-          </div>
+          <style jsx global>{`
+            [data-chat-team-avatar-wrap] > * {
+              max-width: 100% !important;
+              display: flex !important;
+              flex-wrap: wrap !important;
+              align-items: center !important;
+              justify-content: flex-end !important;
+              gap: 8px !important;
+              overflow: visible !important;
+            }
+          `}</style>
         </div>
 
         <div
@@ -219,7 +280,8 @@ export default function ChatSlideover({
             flex: 1,
             minHeight: 0,
             overflow: "hidden",
-            padding: 16,
+            padding: 14,
+            background: "rgba(0,0,0,0.10)",
             display: "flex",
             flexDirection: "column",
           }}
@@ -235,6 +297,7 @@ export default function ChatSlideover({
               currentUserName={currentUserName}
               initialMessages={initialMessages}
               embedded
+              onRealtimeStatusChange={setRealtimeStatus}
             />
           )}
         </div>

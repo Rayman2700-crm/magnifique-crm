@@ -36,6 +36,25 @@ function hasExtraGoogleCalendarMarker(notes: string | null | undefined) {
   return String(notes ?? "").toLowerCase().includes("google zusatzkalender: ja");
 }
 
+const REMINDER_DELETED_NOTE_PREFIX = "Reminder gelöscht:";
+
+function hasReminderDeletedMarker(notes: string | null | undefined) {
+  return String(notes ?? "").toLowerCase().includes(REMINDER_DELETED_NOTE_PREFIX.toLowerCase());
+}
+
+function addReminderDeletedMarker(notes: string | null | undefined, userEmail: string | null | undefined) {
+  const lines = String(notes ?? "")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter(Boolean)
+    .filter((line) => !line.trimStart().toLowerCase().startsWith(REMINDER_DELETED_NOTE_PREFIX.toLowerCase()));
+
+  const stamp = new Date().toISOString();
+  const by = String(userEmail ?? "").trim();
+  lines.push(REMINDER_DELETED_NOTE_PREFIX + " " + stamp + (by ? " von " + by : ""));
+  return lines.join("\n").trim();
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await supabaseServer();
@@ -94,6 +113,7 @@ export async function GET(request: NextRequest) {
         const status = parseStatus(row.notes_internal);
         return (
           !hasExtraGoogleCalendarMarker(row.notes_internal) &&
+          !hasReminderDeletedMarker(row.notes_internal) &&
           status !== "cancelled" &&
           status !== "completed" &&
           status !== "no_show"
@@ -138,6 +158,7 @@ export async function GET(request: NextRequest) {
       const status = parseStatus(row.notes_internal);
       return (
         !hasExtraGoogleCalendarMarker(row.notes_internal) &&
+        !hasReminderDeletedMarker(row.notes_internal) &&
         status !== "cancelled" &&
         status !== "completed" &&
         status !== "no_show"
@@ -202,6 +223,97 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({ count: filtered.length, items });
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: error?.message ?? "Unknown server error" },
+      { status: 500 }
+    );
+  }
+}
+
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = await supabaseServer();
+    const admin = supabaseAdmin();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = (await request.json().catch(() => null)) as { appointmentId?: string } | null;
+    const appointmentId = String(body?.appointmentId ?? "").trim();
+
+    if (!appointmentId) {
+      return NextResponse.json({ error: "appointmentId fehlt." }, { status: 400 });
+    }
+
+    const { data: profile, error: profileErr } = await supabase
+      .from("user_profiles")
+      .select("role, tenant_id, calendar_tenant_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (profileErr) {
+      return NextResponse.json({ error: profileErr.message }, { status: 500 });
+    }
+
+    const isAdmin =
+      String(profile?.role ?? "").toUpperCase() === "ADMIN" ||
+      String(user.email ?? "").toLowerCase().includes("radu") ||
+      String(user.email ?? "").toLowerCase().includes("admin");
+
+    const effectiveTenantId = await getEffectiveTenantId({
+      role: profile?.role ?? "PRACTITIONER",
+      tenant_id: profile?.tenant_id ?? null,
+      calendar_tenant_id: profile?.calendar_tenant_id ?? null,
+    });
+
+    const { data: appointment, error: findErr } = await admin
+      .from("appointments")
+      .select("id, tenant_id, notes_internal")
+      .eq("id", appointmentId)
+      .maybeSingle();
+
+    if (findErr) {
+      return NextResponse.json({ error: findErr.message }, { status: 500 });
+    }
+
+    if (!appointment) {
+      return NextResponse.json({ error: "Termin nicht gefunden." }, { status: 404 });
+    }
+
+    const appointmentTenantId = String((appointment as any).tenant_id ?? "").trim();
+
+    if (!isAdmin && effectiveTenantId && appointmentTenantId !== effectiveTenantId) {
+      return NextResponse.json({ error: "Keine Berechtigung für diesen Reminder." }, { status: 403 });
+    }
+
+    if (hasExtraGoogleCalendarMarker((appointment as any).notes_internal ?? null)) {
+      return NextResponse.json(
+        { error: "Für Zusatzkalender-Termine werden keine CRM-Reminder gelöscht." },
+        { status: 403 }
+      );
+    }
+
+    const { error: updateErr } = await admin
+      .from("appointments")
+      .update({
+        reminder_at: null,
+        reminder_sent_at: null,
+        notes_internal: addReminderDeletedMarker((appointment as any).notes_internal ?? null, user.email ?? null) || null,
+      })
+      .eq("id", appointmentId);
+
+    if (updateErr) {
+      return NextResponse.json({ error: updateErr.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true, appointmentId });
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message ?? "Unknown server error" },

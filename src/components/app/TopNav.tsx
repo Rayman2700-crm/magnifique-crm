@@ -578,6 +578,7 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
   const [mobileMenuShown, setMobileMenuShown] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [locationHash, setLocationHash] = useState("");
 
   const openAssistant = () => {
     const params = new URLSearchParams(searchParams?.toString() ?? "");
@@ -610,6 +611,17 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
     syncIsMobile();
     window.addEventListener("resize", syncIsMobile);
     return () => window.removeEventListener("resize", syncIsMobile);
+  }, []);
+
+  useEffect(() => {
+    const syncHash = () => setLocationHash(window.location.hash || "");
+    syncHash();
+    window.addEventListener("hashchange", syncHash);
+    window.addEventListener("popstate", syncHash);
+    return () => {
+      window.removeEventListener("hashchange", syncHash);
+      window.removeEventListener("popstate", syncHash);
+    };
   }, []);
 
   useEffect(() => {
@@ -728,8 +740,7 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
   const dashboardRootActive = pathname === "/dashboard" && !chatOpen;
   const calendarIslandActive =
     pathname === "/calendar" ||
-    (pathname === "/dashboard" &&
-      (typeof window !== "undefined" ? window.location.hash === "#dashboard-calendar-card" : false));
+    (pathname === "/dashboard" && locationHash === "#dashboard-calendar-card");
   const receiptsIslandActive = pathname === "/rechnungen";
   const chatIslandActive = Boolean(pathname?.startsWith("/dashboard/chat")) || chatOpen;
 
@@ -745,18 +756,37 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
     closeSettingsMenu();
     closeUserMenu();
 
-    if (typeof window !== "undefined" && pathname === "/dashboard") {
-      const target = document.getElementById("dashboard-calendar-card");
-      if (target) {
-        const topOffset = 112;
-        const top = target.getBoundingClientRect().top + window.scrollY - topOffset;
-        window.history.replaceState(null, "", "/dashboard#dashboard-calendar-card");
-        window.scrollTo({ top, behavior: "smooth" });
+    const markScrollRequest = () => {
+      try {
+        window.sessionStorage.setItem("dashboard-scroll-to-calendar", "1");
+      } catch {
+        // ignorieren
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      markScrollRequest();
+
+      if (pathname === "/dashboard") {
+        const target = document.getElementById("dashboard-calendar-card");
+        if (target) {
+          const topOffset = 112;
+          const top = target.getBoundingClientRect().top + window.scrollY - topOffset;
+          window.history.replaceState(null, "", "/dashboard#dashboard-calendar-card");
+          setLocationHash("#dashboard-calendar-card");
+          window.scrollTo({ top, behavior: "smooth" });
+          return;
+        }
+
+        router.replace("/dashboard?scrollToCalendar=1#dashboard-calendar-card", { scroll: false });
         return;
       }
+
+      window.location.assign("/dashboard?scrollToCalendar=1#dashboard-calendar-card");
+      return;
     }
 
-    router.push("/dashboard#dashboard-calendar-card");
+    router.push("/dashboard?scrollToCalendar=1#dashboard-calendar-card");
   }
 
   function navigateReceipts() {

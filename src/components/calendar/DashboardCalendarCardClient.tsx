@@ -2623,6 +2623,85 @@ export default function DashboardCalendarCardClient({
   isAdmin?: boolean;
 }) {
   const supabase = useMemo(() => supabaseBrowser(), []);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let shouldScroll =
+      searchParams?.get("scrollToCalendar") === "1" ||
+      window.location.hash === "#dashboard-calendar-card" ||
+      window.location.hash === "#dashboard-calendar";
+
+    try {
+      if (window.sessionStorage.getItem("dashboard-scroll-to-calendar") === "1") {
+        shouldScroll = true;
+        window.sessionStorage.removeItem("dashboard-scroll-to-calendar");
+      }
+      if (window.localStorage.getItem("dashboard-scroll-to-calendar") === "1") {
+        shouldScroll = true;
+        window.localStorage.removeItem("dashboard-scroll-to-calendar");
+      }
+    } catch {
+      // ignorieren
+    }
+
+    if (!shouldScroll) return;
+
+    let cancelled = false;
+    let tries = 0;
+
+    const findTarget = () => {
+      const target =
+        document.getElementById("dashboard-calendar-card") ||
+        document.getElementById("dashboard-calendar") ||
+        document.getElementById("calendar") ||
+        document.querySelector('[data-dashboard-calendar="true"]') ||
+        Array.from(document.querySelectorAll("h1,h2,h3")).find((node) => String(node.textContent ?? "").trim().toLowerCase() === "kalender");
+
+      return target instanceof HTMLElement ? target : null;
+    };
+
+    const scrollToCalendar = () => {
+      if (cancelled) return;
+      tries += 1;
+
+      const target = findTarget();
+      if (target) {
+        const offset = 96;
+        const top = Math.max(0, target.getBoundingClientRect().top + window.scrollY - offset);
+        window.scrollTo({ top, behavior: tries <= 2 ? "auto" : "smooth" });
+
+        // Ein zweites Mal nach Layout-Stabilisierung scrollen. Das verhindert,
+        // dass spät geladene Dashboard-Karten den Kalender wieder nach unten schieben.
+        if (tries < 12) {
+          window.setTimeout(scrollToCalendar, tries < 4 ? 180 : 320);
+          return;
+        }
+
+        const cleanUrl = pathname || "/dashboard";
+        window.setTimeout(() => {
+          if (!cancelled && window.location.pathname === "/dashboard") {
+            window.history.replaceState(null, "", cleanUrl);
+          }
+        }, 700);
+        return;
+      }
+
+      if (tries < 40) {
+        window.setTimeout(scrollToCalendar, 100);
+      }
+    };
+
+    window.setTimeout(scrollToCalendar, 120);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname, searchParams]);
+
   const normalizedServices = useMemo<ServiceOption[]>(
     () =>
       (services ?? []).map((service) => ({

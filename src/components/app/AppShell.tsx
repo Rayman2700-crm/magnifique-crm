@@ -197,6 +197,33 @@ export default async function AppShell({
       const json: any = await res.json().catch(() => null);
 
       if (!res.ok) {
+        if ([400, 401, 403].includes(res.status)) {
+          const now = new Date().toISOString();
+          await Promise.all([
+            admin
+              .from("google_oauth_tokens")
+              .update({
+                access_token: null,
+                refresh_token: null,
+                expires_at: null,
+                default_calendar_id: null,
+                enabled_calendar_ids: [],
+                updated_at: now,
+              })
+              .eq("user_id", userId),
+            admin
+              .from("google_oauth_connections")
+              .update({
+                access_token: null,
+                refresh_token: null,
+                expires_at: null,
+                is_active: false,
+                is_primary: false,
+                updated_at: now,
+              })
+              .eq("owner_user_id", userId),
+          ]);
+        }
         throw new Error(json?.error?.message ?? "Kalenderliste konnte nicht geladen werden");
       }
 

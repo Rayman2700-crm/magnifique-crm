@@ -310,7 +310,7 @@ export default async function GoogleCalendarSettingsPage({
   const AVAILABLE_STUDIO_TARGET_IDS = new Set<string>(availableStudioTargets.map((target) => target.calendarId));
   googleConnections = (connectionRows ?? []) as GoogleConnectionRow[];
 
-  const activeConnections = googleConnections.filter((row) => row.is_active === true);
+  let activeConnections = googleConnections.filter((row) => row.is_active === true);
   const hasStoredGoogleRefreshToken = Boolean(String((tok as any)?.refresh_token ?? "").trim());
 
   if (activeConnections.length > 0 && hasStoredGoogleRefreshToken) {
@@ -324,12 +324,43 @@ export default async function GoogleCalendarSettingsPage({
 
       const json: any = await res.json();
       if (!res.ok) {
+        if ([400, 401, 403].includes(res.status)) {
+          const now = new Date().toISOString();
+          await Promise.all([
+            supabase
+              .from("google_oauth_tokens")
+              .update({
+                access_token: null,
+                refresh_token: null,
+                expires_at: null,
+                default_calendar_id: null,
+                enabled_calendar_ids: [],
+                updated_at: now,
+              })
+              .eq("user_id", user.id),
+            supabase
+              .from("google_oauth_connections")
+              .update({
+                access_token: null,
+                refresh_token: null,
+                expires_at: null,
+                is_active: false,
+                is_primary: false,
+                updated_at: now,
+              })
+              .eq("owner_user_id", user.id),
+          ]);
+        }
         throw new Error(json?.error?.message ?? "Kalenderliste konnte nicht geladen werden");
       }
 
       calendars = (json?.items ?? []) as CalendarListItem[];
     } catch (e: any) {
       loadError = e?.message ?? String(e);
+      activeConnections = [];
+      googleConnections = googleConnections.map((row) =>
+        row.is_active === true ? { ...row, is_active: false, is_primary: false } : row
+      );
     }
   }
 
@@ -513,11 +544,16 @@ export default async function GoogleCalendarSettingsPage({
                 <div className="mt-3 text-base font-semibold text-white break-words">{selectedStudioTarget?.label ?? "Kein verbundener Schreibkalender"}{effectiveStudioCalendarId ? ` · ${effectiveStudioCalendarId}` : ""}</div>
               </div>
               <div className={infoBoxClass()}>
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="text-[11px] uppercase tracking-[0.22em] text-[#d7c097]">Aktive Kalender</div>
-                  <span className="rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-white/80">
-                    {activeCalendarIds.length}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-white/80">
+                      {activeCalendarIds.length}
+                    </span>
+                    <span className="rounded-full border border-[#d7c097]/20 bg-[#d7c097]/10 px-2.5 py-1 text-[11px] font-semibold text-[#f0dfbd]">
+                      Zusatzkalender {enabledExtraIds.length}
+                    </span>
+                  </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {activeCalendarIds.length > 0 ? (

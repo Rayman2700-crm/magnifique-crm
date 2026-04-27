@@ -165,6 +165,12 @@ function cardIconButtonClass(disabled = false) {
   }`;
 }
 
+function cardDangerIconButtonClass(disabled = false) {
+  return `inline-flex h-10 w-10 items-center justify-center rounded-[14px] border border-red-400/20 bg-red-500/[0.07] text-red-200 transition-colors ${
+    disabled ? "cursor-not-allowed opacity-45 pointer-events-none" : "hover:border-red-400/35 hover:bg-red-500/15 hover:text-red-100"
+  }`;
+}
+
 function pickColor(source: any, keys: string[]) {
   if (!source || typeof source !== "object") return null;
   for (const key of keys) {
@@ -451,6 +457,7 @@ export default function ReminderSlideover({
   const [visible, setVisible] = useState(false);
   const [shown, setShown] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [deletePendingId, setDeletePendingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [liveItems, setLiveItems] = useState<ReminderItem[]>(items ?? []);
@@ -644,6 +651,38 @@ export default function ReminderSlideover({
     });
   }
 
+  async function handleDeleteReminder(item: ReminderItem) {
+    const confirmed = window.confirm(
+      `Reminder für „${item.customerName ?? item.title ?? "diesen Termin"}“ wirklich löschen?`
+    );
+
+    if (!confirmed) return;
+
+    setErrorMsg(null);
+    setDeletePendingId(item.id);
+
+    try {
+      const res = await fetch("/api/reminders/count", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appointmentId: item.id }),
+      });
+
+      const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error ?? "Reminder konnte nicht gelöscht werden.");
+      }
+
+      setLiveItems((current) => current.filter((entry) => entry.id !== item.id));
+      router.refresh();
+    } catch (error: any) {
+      setErrorMsg(error?.message ?? "Reminder konnte nicht gelöscht werden.");
+    } finally {
+      setDeletePendingId(null);
+    }
+  }
+
   if (!mounted || !visible || typeof document === "undefined") return null;
 
   return createPortal(
@@ -653,7 +692,7 @@ export default function ReminderSlideover({
         style={{
           position: "absolute",
           inset: 0,
-          backgroundColor: "rgba(0,0,0,0.60)",
+          backgroundColor: "rgba(0,0,0,0.42)",
           backdropFilter: "blur(6px)",
           opacity: shown ? 1 : 0,
           transition: "opacity 200ms ease",
@@ -770,6 +809,7 @@ export default function ReminderSlideover({
                 const urgency = getUrgencyMeta(item.start_at);
                 const hasWhatsApp = Boolean(item.customerPhone && buildReminderWhatsAppUrl(item));
                 const whatsappDisabled = !item.customerPhone || !hasWhatsApp || (isPending && pendingId === item.id);
+                const deleteDisabled = deletePendingId === item.id;
                 const customerHref = smartCustomerHref(item);
                 const calendarHref = smartCalendarHref(item);
                 const whatsappHref = buildReminderWhatsAppUrl(item);
@@ -949,6 +989,35 @@ export default function ReminderSlideover({
                           >
                             <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
                             <path d="M9 17a3 3 0 0 0 6 0" />
+                          </svg>
+                        </button>
+
+                        <button
+                          type="button"
+                          className={`${cardDangerIconButtonClass(deleteDisabled)} ml-auto`}
+                          disabled={deleteDisabled}
+                          onClick={() => {
+                            if (deleteDisabled) return;
+                            void handleDeleteReminder(item);
+                          }}
+                          aria-label="Reminder löschen"
+                          title="Reminder löschen"
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            className="h-4.5 w-4.5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path d="M3 6h18" />
+                            <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                            <path d="M10 11v6" />
+                            <path d="M14 11v6" />
                           </svg>
                         </button>
                       </div>
