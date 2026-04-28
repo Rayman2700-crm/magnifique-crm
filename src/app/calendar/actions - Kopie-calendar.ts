@@ -456,33 +456,61 @@ function resolveEnabledCalendarIds(tokenRow: GoogleTokenSelectionRow | null | un
   };
 }
 
-function getCalendarIdsFromConnection(row: Partial<GoogleOauthConnectionRow> | null | undefined) {
-  if (!row) return [];
+async function ensureExtraCalendarMirrorPersonId(admin: any, tenantId: string) {
+  const cleanName = EXTRA_GOOGLE_CALENDAR_PERSON_NAME;
 
-  const enabledIds = Array.isArray(row.enabled_calendar_ids)
-    ? row.enabled_calendar_ids.map((value) => normalizeGoogleCalendarId(value))
-    : [];
+  const { data: existingProfiles } = await admin
+    .from("customer_profiles")
+    .select(`id, person_id, person:persons ( id, full_name )`)
+    .eq("tenant_id", tenantId)
+    .limit(500);
 
-  return sanitizeCalendarIdList([
-    normalizeGoogleCalendarId(row.default_calendar_id ?? null),
-    ...enabledIds,
-    normalizeGoogleCalendarId(row.google_account_email ?? null),
-    normalizeGoogleCalendarId(row.google_account_name ?? null),
-    normalizeGoogleCalendarId(row.connection_label ?? null),
-  ]).filter(Boolean);
-}
+  const existingProfile = (Array.isArray(existingProfiles) ? existingProfiles : []).find((row: any) => {
+    const personJoin = Array.isArray(row?.person) ? row.person[0] : row?.person;
+    return String(personJoin?.full_name ?? "").trim().toLowerCase() === cleanName.toLowerCase();
+  });
 
-function isReadOnlyExtraCalendarId(calendarId: string | null | undefined) {
-  const normalized = normalizeGoogleCalendarId(calendarId);
-  return Boolean(normalized && !isStudioWriteCalendarId(normalized));
-}
+  if (existingProfile?.person_id) {
+    return String(existingProfile.person_id);
+  }
 
-async function ensureExtraCalendarMirrorPersonId(_admin: any, _tenantId: string) {
-  // Sicherheitsbremse:
-  // Zusatzkalender/private Kalender sind read-only und dürfen niemals CRM-Personen
-  // oder Kundenprofile erzeugen. Diese Funktion bleibt nur noch als Schutz gegen
-  // alte Codepfade bestehen.
-  throw new Error("Zusatzkalender sind read-only und dürfen keine CRM-Daten schreiben.");
+  const { data: existingPersons } = await admin
+    .from("persons")
+    .select("id, full_name")
+    .limit(1000);
+
+  const existingPerson = (Array.isArray(existingPersons) ? existingPersons : []).find((row: any) => {
+    return String(row?.full_name ?? "").trim().toLowerCase() === cleanName.toLowerCase();
+  });
+
+  if (existingPerson?.id) {
+    return String(existingPerson.id);
+  }
+
+  const { data: insertedPerson, error: personError } = await admin
+    .from("persons")
+    .insert({ full_name: cleanName })
+    .select("id")
+    .single();
+
+  if (!personError && insertedPerson?.id) {
+    return String(insertedPerson.id);
+  }
+
+  const { data: retryPersons } = await admin
+    .from("persons")
+    .select("id, full_name")
+    .limit(1000);
+
+  const retryPerson = (Array.isArray(retryPersons) ? retryPersons : []).find((row: any) => {
+    return String(row?.full_name ?? "").trim().toLowerCase() === cleanName.toLowerCase();
+  });
+
+  if (retryPerson?.id) {
+    return String(retryPerson.id);
+  }
+
+  throw new Error("Zusatzkalender-Spiegelperson konnte nicht erstellt werden.");
 }
 
 async function isReadOnlyExtraCalendarAppointment(
@@ -1256,7 +1284,13 @@ export async function getReadOnlyExtraGoogleCalendarEventsForRange(input: { star
   // aber der tatsächlich gewählte Kalender ist fenster.lenhardt@gmail.com.
   // Deshalb dürfen wir NICHT nur google_account_email/connection_label als Kalender-ID verwenden.
   const readOnlyEnabledIds = sanitizeCalendarIdList(
-    readOnlyConnections.flatMap((row) => getCalendarIdsFromConnection(row))
+    readOnlyConnections.flatMap((row) => {
+      const rowDefaultId = normalizeGoogleCalendarId(row.default_calendar_id ?? null);
+      const rowEnabledIds = Array.isArray(row.enabled_calendar_ids)
+        ? row.enabled_calendar_ids.map((value) => normalizeGoogleCalendarId(value))
+        : [];
+      return [rowDefaultId, ...rowEnabledIds];
+    })
   );
 
   const candidateExtraCalendarIds = readOnlyEnabledIds.length > 0 ? readOnlyEnabledIds : tokenEnabledIds;
@@ -1275,7 +1309,17 @@ export async function getReadOnlyExtraGoogleCalendarEventsForRange(input: { star
 
   const connectionByCalendarId = new Map<string, GoogleOauthConnectionRow>();
   for (const row of readOnlyConnections) {
-    const candidates = getCalendarIdsFromConnection(row);
+    const rowDefaultId = normalizeGoogleCalendarId(row.default_calendar_id ?? null);
+    const rowEnabledIds = Array.isArray(row.enabled_calendar_ids)
+      ? row.enabled_calendar_ids.map((value) => normalizeGoogleCalendarId(value))
+      : [];
+    const candidates = sanitizeCalendarIdList([
+      rowDefaultId,
+      ...rowEnabledIds,
+      normalizeGoogleCalendarId(row.google_account_email),
+      normalizeGoogleCalendarId(row.google_account_name),
+      normalizeGoogleCalendarId(row.connection_label),
+    ]);
 
     for (const normalized of candidates) {
       if (!normalized || !extraCalendarIds.includes(normalized) || connectionByCalendarId.has(normalized)) continue;
@@ -1448,7 +1492,7 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
 
   const { data: connectionRows, error: connectionRowsError } = await admin
     .from("google_oauth_connections")
-    .select("id, owner_user_id, provider, connection_type, connection_label, google_account_email, google_account_name, is_active, is_read_only, default_calendar_id, enabled_calendar_ids")
+    .select("google_account_email, google_account_name, connection_label, is_active")
     .eq("owner_user_id", ownerUserId);
 
   if (connectionRowsError) {
@@ -1456,25 +1500,21 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
   }
 
   const activeConnectionRows = Array.isArray(connectionRows)
-    ? (connectionRows as GoogleOauthConnectionRow[]).filter((row: any) => row?.is_active === true)
+    ? connectionRows.filter((row: any) => row?.is_active === true)
     : [];
 
-  const tokenSelection = resolveEnabledCalendarIds((tokenRow ?? null) as GoogleTokenSelectionRow | null);
-  const defaultCalendarId = normalizeGoogleCalendarId(tokenSelection.defaultCalendarId ?? null);
+  const allowedIds = new Set<string>(
+    activeConnectionRows
+      .flatMap((row: any) => [row?.google_account_email, row?.google_account_name, row?.connection_label])
+      .map((value: any) => String(value ?? "").trim())
+      .filter(Boolean)
+  );
 
-  // Private/Zusatzkalender sind ausschließlich read-only.
-  // Sie werden in getReadOnlyExtraGoogleCalendarEventsForRange(...) direkt von Google geladen
-  // und dürfen hier niemals als syncTargets in public.appointments landen.
-  const readOnlyConnectionRows = activeConnectionRows.filter((row) => row.is_read_only === true);
-  const readOnlyCalendarIds = sanitizeCalendarIdList(
-    readOnlyConnectionRows.flatMap((row) => getCalendarIdsFromConnection(row)).filter(isReadOnlyExtraCalendarId)
+  const tokenSelection = resolveEnabledCalendarIds((tokenRow ?? null) as GoogleTokenSelectionRow | null);
+  const defaultCalendarId = String(tokenSelection.defaultCalendarId ?? "").trim();
+  const extraCalendarIds = sanitizeCalendarIdList(
+    tokenSelection.enabledIds.filter((calendarId) => String(calendarId).trim() !== defaultCalendarId && allowedIds.has(String(calendarId).trim()))
   );
-  const tokenExtraCalendarIds = sanitizeCalendarIdList(
-    tokenSelection.enabledIds
-      .map((calendarId) => normalizeGoogleCalendarId(calendarId))
-      .filter((calendarId) => calendarId !== defaultCalendarId && isReadOnlyExtraCalendarId(calendarId))
-  );
-  const extraCalendarIds = sanitizeCalendarIdList([...readOnlyCalendarIds, ...tokenExtraCalendarIds]);
   const sharedDefaultCalendarIds = await loadSharedDefaultCalendarIdSet(admin);
 
   const syncTargets: Array<{
@@ -1655,14 +1695,7 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
   const seenGoogleKeys = new Set<string>();
 
   for (const syncTarget of syncTargets) {
-    const calendarId = normalizeGoogleCalendarId(syncTarget.calendarId);
-
-    // Absolute Zukunftssperre:
-    // Nur die zwei definierten Studio-Schreibkalender dürfen CRM-appointments schreiben.
-    // Alles andere (private Kalender, zusätzliche Google-Kalender, reconnectete Tokens)
-    // wird hier übersprungen und bleibt read-only UI-only.
-    if (!isStudioWriteCalendarId(calendarId)) continue;
-
+    const calendarId = syncTarget.calendarId;
     const ownerInfo = ownerByCalendarId.get(calendarId);
     if (!ownerInfo?.tenantId) continue;
 

@@ -1070,57 +1070,8 @@ export default async function KommunikationPage({
 
   const { data: conversationsRaw, error: conversationsError } =
     await conversationsQuery;
-  let allConversations = (conversationsRaw ?? []) as ConversationRow[];
-
-  // Direkter Deep-Link aus dem Kundenprofil: /kommunikation?status=all&c=<conversation_id>
-  // Der ausgewählte Chat muss auch dann geladen werden, wenn er durch Status, Suche
-  // oder das 80er-Limit nicht in der normalen Liste enthalten ist.
-  if (selectedParam && !allConversations.some((conversation) => conversation.id === selectedParam)) {
-    let selectedConversationQuery = supabase
-      .from("customer_conversations")
-      .select(
-        `
-          id,
-          tenant_id,
-          person_id,
-          customer_profile_id,
-          channel,
-          status,
-          subject,
-          external_contact,
-          external_contact_normalized,
-          unread_count,
-          last_message_at,
-          last_message_preview,
-          created_at,
-          person:persons (
-            id,
-            full_name,
-            phone,
-            email
-          ),
-          tenant:tenants (
-            id,
-            display_name
-          )
-        `,
-      )
-      .eq("id", selectedParam);
-
-    if (role !== "ADMIN" && effectiveTenantId) {
-      selectedConversationQuery = selectedConversationQuery.eq("tenant_id", effectiveTenantId);
-    } else if (role === "ADMIN" && effectiveTenantId) {
-      selectedConversationQuery = selectedConversationQuery.eq("tenant_id", effectiveTenantId);
-    }
-
-    const { data: selectedConversationRaw } = await selectedConversationQuery.maybeSingle();
-
-    if (selectedConversationRaw) {
-      allConversations = [selectedConversationRaw as ConversationRow, ...allConversations];
-    }
-  }
-
-  let conversations = chatSearch
+  const allConversations = (conversationsRaw ?? []) as ConversationRow[];
+  const conversations = chatSearch
     ? allConversations.filter((conversation) => {
         const person = firstJoin<any>(conversation.person);
         const haystack = [
@@ -1138,19 +1089,6 @@ export default async function KommunikationPage({
         return haystack.includes(chatSearch);
       })
     : allConversations;
-
-  // Wenn ein Chat per Link geöffnet wird, bleibt er trotz aktiver Suche sichtbar/ausgewählt.
-  if (selectedParam) {
-    const selectedConversationForLink = allConversations.find(
-      (conversation) => conversation.id === selectedParam,
-    );
-    if (
-      selectedConversationForLink &&
-      !conversations.some((conversation) => conversation.id === selectedConversationForLink.id)
-    ) {
-      conversations = [selectedConversationForLink, ...conversations];
-    }
-  }
 
   let searchableCustomersQuery = supabase
     .from("customer_profiles")

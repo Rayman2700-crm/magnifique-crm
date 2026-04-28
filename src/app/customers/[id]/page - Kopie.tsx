@@ -782,8 +782,8 @@ export default async function CustomerDetailPage({
     (conversation) => String(conversation.status ?? "OPEN").toUpperCase() === "OPEN"
   ).length;
   const communicationOpenHref = latestCommunicationConversation
-    ? `/kommunikation?tab=customers&status=all&c=${latestCommunicationConversation.id}&panel=chats`
-    : `/kommunikation?tab=customers&status=all&panel=chats`;
+    ? `/kommunikation?status=all&c=${latestCommunicationConversation.id}&panel=chats`
+    : `/kommunikation?status=all&panel=chats`;
 
   const { data: waitlistEntriesRaw, error: waitlistError } = await supabase
     .from("appointment_waitlist")
@@ -1314,7 +1314,7 @@ export default async function CustomerDetailPage({
                     return (
                       <Link
                         key={conversation.id}
-                        href={`/kommunikation?tab=customers&status=all&c=${conversation.id}&panel=chats`}
+                        href={`/kommunikation?status=all&c=${conversation.id}&panel=chats`}
                         className={`block rounded-[22px] border p-4 no-underline transition hover:bg-white/[0.06] ${
                           isLatest ? "border-[#d8c1a0]/30 bg-[#d8c1a0]/10" : "border-white/10 bg-black/20"
                         }`}
@@ -1361,7 +1361,7 @@ export default async function CustomerDetailPage({
                           </div>
                         </div>
                         <Link
-                          href={`/kommunikation?tab=customers&status=all&c=${latestCommunicationConversation.id}&panel=chats`}
+                          href={`/kommunikation?status=all&c=${latestCommunicationConversation.id}&panel=chats`}
                           className="inline-flex h-9 items-center justify-center rounded-[14px] border border-white/15 bg-white/10 px-3 text-sm font-semibold text-white no-underline hover:bg-white/[0.14]"
                         >
                           Verlauf öffnen

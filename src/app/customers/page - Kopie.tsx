@@ -935,14 +935,9 @@ export default async function CustomersPage({
                         key={row.id}
                         data-customer-entry="mobile"
                         data-search-text={`${person?.full_name ?? ""} ${(person?.phone ?? "")} ${(person?.email ?? "")} ${tenantLabel}`.toLowerCase()}
-                        className="relative rounded-[22px] border border-white/8 bg-white/[0.02] px-4 py-4 transition hover:bg-white/[0.035]"
+                        className="rounded-[22px] border border-white/8 bg-white/[0.02] px-4 py-4 transition hover:bg-white/[0.035]"
                       >
-                        {role === "ADMIN" ? (
-                          <div className="customers-delete-icon-action absolute right-4 top-4 z-10">
-                            <DeleteCustomerButton customerProfileId={row.id} />
-                          </div>
-                        ) : null}
-                        <Link href={`/customers/${row.id}`} className="block pr-14">
+                        <Link href={`/customers/${row.id}`} className="block">
                           <div className="flex items-start gap-3">
                             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border text-sm font-semibold" style={{ backgroundColor: theme.pillBg, borderColor: theme.border, color: theme.pillText }}>{shortCode}</div>
                             <div className="min-w-0 flex-1">
@@ -959,6 +954,7 @@ export default async function CustomersPage({
                           {analytics?.isWithoutFollowUp ? <div className="mt-3 inline-flex rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-200">Ohne Folgetermin</div> : null}
                           <div className="mt-3 text-xs text-white/40">Erstellt: {formatShortDate(row.created_at)}</div>
                         </Link>
+                        {role === "ADMIN" ? <div className="customers-delete-icon-action mt-3 flex justify-end"><DeleteCustomerButton customerProfileId={row.id} /></div> : null}
                       </div>
                     );
                   })}
@@ -969,38 +965,22 @@ export default async function CustomersPage({
               )}
             </div>
 
-            <div className="hidden overflow-hidden lg:block">
-              <table className="w-full table-fixed text-sm">
-                <colgroup>
-                  {role === "ADMIN" ? (
-                    <>
-                      <col className="w-[42%]" />
-                      <col className="w-[20%]" />
-                      <col className="w-[17%]" />
-                      <col className="w-[13%]" />
-                      <col className="w-[8%]" />
-                    </>
-                  ) : (
-                    <>
-                      <col className="w-[46%]" />
-                      <col className="w-[22%]" />
-                      <col className="w-[18%]" />
-                      <col className="w-[14%]" />
-                    </>
-                  )}
-                </colgroup>
+            <div className="hidden overflow-x-auto lg:block">
+              <table className="w-max min-w-full table-auto text-sm">
                 <thead className="bg-white/[0.03]">
                   <tr className="text-left text-white/60">
-                    <th className="px-6 py-3.5 font-semibold">Kunde</th>
-                    <th className="px-4 py-3.5 font-semibold">Verlauf</th>
-                    <th className="px-4 py-3.5 font-semibold">Nächster Termin</th>
-                    <th className="px-4 py-3.5 font-semibold">Erstellt</th>
-                    {role === "ADMIN" && <th className="px-5 py-3.5 text-right font-semibold">Aktion</th>}
+                    <th className="whitespace-nowrap px-6 py-4 font-semibold">Kunde</th>
+                    <th className="whitespace-nowrap px-5 py-4 font-semibold">Kontakt</th>
+                    <th className="whitespace-nowrap px-5 py-4 text-center font-semibold">Besuche</th>
+                    <th className="whitespace-nowrap px-5 py-4 font-semibold">Letzter Besuch</th>
+                    <th className="whitespace-nowrap px-5 py-4 font-semibold">Nächster Termin</th>
+                    <th className="whitespace-nowrap px-5 py-4 font-semibold">Erstellt</th>
+                    {role === "ADMIN" && <th className="whitespace-nowrap px-6 py-4 text-right font-semibold">Aktion</th>}
                   </tr>
                 </thead>
                 <tbody id="customers-desktop-tbody">
                   {filteredRows.length === 0 ? (
-                    <tr><td colSpan={role === "ADMIN" ? 5 : 4} className="px-6 py-8 text-sm text-white/55">Keine Kunden gefunden.</td></tr>
+                    <tr><td colSpan={role === "ADMIN" ? 7 : 6} className="px-6 py-8 text-sm text-white/55">Keine Kunden gefunden.</td></tr>
                   ) : filteredRows.map((row) => {
                     const person = firstJoin(row.person);
                     const tenant = firstJoin(row.tenant);
@@ -1008,7 +988,6 @@ export default async function CustomersPage({
                     const theme = tenantThemeByName(tenantLabel);
                     const analytics = analyticsByCustomerId.get(row.id);
                     const shortCode = getUserShortCode(tenantLabel);
-                    const contactLine = [person?.phone, person?.email].filter(Boolean).join(" · ") || "—";
                     return (
                       <tr
                         key={row.id}
@@ -1016,42 +995,38 @@ export default async function CustomersPage({
                         data-search-text={`${person?.full_name ?? ""} ${(person?.phone ?? "")} ${(person?.email ?? "")} ${tenantLabel}`.toLowerCase()}
                         className="border-t border-white/8 transition hover:bg-white/[0.025]"
                       >
-                        <td className="px-6 py-3.5 align-middle">
-                          <Link href={`/customers/${row.id}`} className="block min-w-0">
-                            <div className="flex min-w-0 items-center gap-3">
-                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-xs font-semibold" style={{ backgroundColor: theme.pillBg, borderColor: theme.border, color: theme.pillText }}>{shortCode}</div>
-                              <div className="min-w-0 flex-1">
-                                <div className="truncate font-semibold text-white">{person?.full_name ?? "—"}</div>
-                                <div className="mt-0.5 truncate text-xs text-white/50">{contactLine}</div>
-                                {analytics?.isWithoutFollowUp ? <div className="mt-1 inline-flex max-w-full rounded-full border border-amber-400/20 bg-amber-400/10 px-2 py-0.5 text-[11px] font-semibold text-amber-200">Ohne Folgetermin</div> : null}
+                        <td className="whitespace-nowrap px-6 py-4 align-middle">
+                          <Link href={`/customers/${row.id}`} className="block">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-sm font-semibold" style={{ backgroundColor: theme.pillBg, borderColor: theme.border, color: theme.pillText }}>{shortCode}</div>
+                              <div className="min-w-0">
+                                <div className="font-semibold text-white">{person?.full_name ?? "—"}</div>
+                                {analytics?.isWithoutFollowUp ? <div className="mt-1 text-xs text-amber-300">Ohne Folgetermin</div> : null}
                               </div>
                             </div>
                           </Link>
                         </td>
-                        <td className="px-4 py-3.5 align-middle">
-                          <Link href={`/customers/${row.id}`} className="block min-w-0">
-                            <div className="font-semibold text-white">{analytics?.visitCount ?? 0} Besuche</div>
-                            <div className="mt-0.5 truncate text-xs text-white/50">Letzter Besuch: {formatShortDate(analytics?.lastVisitAt)}</div>
-                            {(analytics?.noShowCount ?? 0) > 0 ? <div className="mt-0.5 truncate text-[11px] font-medium text-orange-300">{analytics?.noShowCount} No-Show</div> : null}
-                          </Link>
+                        <td className="whitespace-nowrap px-5 py-4 align-middle text-white/75">
+                          <div>{person?.phone ?? "—"}</div>
+                          <div className="mt-1 text-xs text-white/45">{person?.email ?? "—"}</div>
                         </td>
-                        <td className="px-4 py-3.5 align-middle text-white/75">
-                          <Link href={`/customers/${row.id}`} className="block truncate">{formatShortDate(analytics?.nextAppointmentAt)}</Link>
+                        <td className="whitespace-nowrap px-5 py-4 align-middle text-center font-semibold text-white">
+                          <div>{analytics?.visitCount ?? 0}</div>
+                          {(analytics?.noShowCount ?? 0) > 0 ? <div className="mt-1 text-[11px] font-medium text-orange-300">{analytics?.noShowCount} No-Show</div> : null}
                         </td>
-                        <td className="px-4 py-3.5 align-middle text-white/50">
-                          <Link href={`/customers/${row.id}`} className="block truncate">{formatShortDate(row.created_at)}</Link>
-                        </td>
-                        {role === "ADMIN" ? <td className="customers-delete-icon-action px-5 py-3.5 align-middle text-right"><DeleteCustomerButton customerProfileId={row.id} /></td> : null}
+                        <td className="whitespace-nowrap px-5 py-4 align-middle text-white/70">{formatShortDate(analytics?.lastVisitAt)}</td>
+                        <td className="whitespace-nowrap px-5 py-4 align-middle text-white/70">{formatShortDate(analytics?.nextAppointmentAt)}</td>
+                        <td className="whitespace-nowrap px-5 py-4 align-middle text-white/50">{formatShortDate(row.created_at)}</td>
+                        {role === "ADMIN" ? <td className="customers-delete-icon-action whitespace-nowrap px-6 py-4 align-middle text-right"><DeleteCustomerButton customerProfileId={row.id} /></td> : null}
                       </tr>
                     );
                   })}
-                  <tr id="customers-desktop-empty" className="hidden">
-                    <td colSpan={role === "ADMIN" ? 5 : 4} className="px-6 py-8 text-sm text-white/55">Keine Kunden gefunden.</td>
+                                  <tr id="customers-desktop-empty" className="hidden">
+                    <td colSpan={role === "ADMIN" ? 7 : 6} className="px-6 py-8 text-sm text-white/55">Keine Kunden gefunden.</td>
                   </tr>
                 </tbody>
               </table>
             </div>
-
           </CardContent>
         </Card>
       </section>

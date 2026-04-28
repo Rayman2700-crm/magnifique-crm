@@ -935,14 +935,9 @@ export default async function CustomersPage({
                         key={row.id}
                         data-customer-entry="mobile"
                         data-search-text={`${person?.full_name ?? ""} ${(person?.phone ?? "")} ${(person?.email ?? "")} ${tenantLabel}`.toLowerCase()}
-                        className="relative rounded-[22px] border border-white/8 bg-white/[0.02] px-4 py-4 transition hover:bg-white/[0.035]"
+                        className="rounded-[22px] border border-white/8 bg-white/[0.02] px-4 py-4 transition hover:bg-white/[0.035]"
                       >
-                        {role === "ADMIN" ? (
-                          <div className="customers-delete-icon-action absolute right-4 top-4 z-10">
-                            <DeleteCustomerButton customerProfileId={row.id} />
-                          </div>
-                        ) : null}
-                        <Link href={`/customers/${row.id}`} className="block pr-14">
+                        <Link href={`/customers/${row.id}`} className="block">
                           <div className="flex items-start gap-3">
                             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border text-sm font-semibold" style={{ backgroundColor: theme.pillBg, borderColor: theme.border, color: theme.pillText }}>{shortCode}</div>
                             <div className="min-w-0 flex-1">
@@ -959,6 +954,7 @@ export default async function CustomersPage({
                           {analytics?.isWithoutFollowUp ? <div className="mt-3 inline-flex rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-200">Ohne Folgetermin</div> : null}
                           <div className="mt-3 text-xs text-white/40">Erstellt: {formatShortDate(row.created_at)}</div>
                         </Link>
+                        {role === "ADMIN" ? <div className="customers-delete-icon-action mt-3 flex justify-end"><DeleteCustomerButton customerProfileId={row.id} /></div> : null}
                       </div>
                     );
                   })}
