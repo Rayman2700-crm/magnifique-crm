@@ -44,3 +44,11 @@ next-env.d.ts
 
 # secrets
 client_secret_*.json
+Twilio recovery Code.txt 
+.env 
+.env.local 
+*.env 
+Twilio recovery Code.txt 
+.env 
+.env.local 
+*.env 
