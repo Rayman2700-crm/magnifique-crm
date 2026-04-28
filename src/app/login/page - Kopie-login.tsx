@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { Logo } from "@/components/brand/Logo";
@@ -107,9 +108,16 @@ export default async function LoginPage({
             </Button>
           </form>
 
-          <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.035] p-4 text-center text-xs leading-5 text-white/55">
-            Neuer Zugang? Radu lädt neue Benutzer über <span className="font-semibold text-white/75">Einstellungen → Benutzer einladen</span> ein.
-            Danach kommt der Aktivierungslink per E-Mail von Studio Magnifique Beauty Institut.
+          <div className="mt-4 grid gap-3">
+            <Link
+              href="/register"
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+            >
+              Registrieren
+            </Link>
+            <p className="text-center text-xs text-white/45">
+              Neue Behandler registrieren sich zuerst, bestätigen dann ihre E-Mail und schließen danach das Pflicht-Onboarding ab.
+            </p>
           </div>
         </div>
       </div>

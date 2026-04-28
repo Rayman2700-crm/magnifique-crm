@@ -2,7 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getEffectiveTenantId } from "@/lib/effectiveTenant";
-import KommunikationComposerClient from "./KommunikationComposerClient";
 
 export const dynamic = "force-dynamic";
 
@@ -136,7 +135,6 @@ type MessageRow = {
   sent_at: string | null;
   received_at: string | null;
   error_message: string | null;
-  metadata?: any;
 };
 
 type TemplateRow = {
@@ -261,7 +259,6 @@ async function sendTwilioWhatsapp(params: {
   to: string;
   body: string;
   statusCallback?: string;
-  mediaUrl?: string | null;
 }) {
   const endpoint = `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(params.accountSid)}/Messages.json`;
   const payload = new URLSearchParams();
@@ -271,7 +268,6 @@ async function sendTwilioWhatsapp(params: {
   payload.set("Body", params.body);
   if (params.statusCallback)
     payload.set("StatusCallback", params.statusCallback);
-  if (params.mediaUrl) payload.set("MediaUrl", params.mediaUrl);
 
   const response = await fetch(endpoint, {
     method: "POST",
@@ -506,14 +502,9 @@ async function sendCommunicationReply(formData: FormData) {
   const conversationId = String(formData.get("conversation_id") ?? "").trim();
   const statusFilter =
     String(formData.get("status_filter") ?? "open").trim() || "open";
-  const rawBody = String(formData.get("body") ?? "").trim();
-  const attachmentValue = formData.get("attachment");
-  const attachmentFile =
-    attachmentValue instanceof File && attachmentValue.size > 0
-      ? attachmentValue
-      : null;
+  const body = String(formData.get("body") ?? "").trim();
 
-  if (!conversationId || (!rawBody && !attachmentFile)) {
+  if (!conversationId || !body) {
     redirect(
       `/kommunikation?status=${encodeURIComponent(statusFilter)}${conversationId ? `&c=${encodeURIComponent(conversationId)}` : ""}`,
     );
@@ -547,55 +538,6 @@ async function sendCommunicationReply(formData: FormData) {
     redirect(`/kommunikation?status=${encodeURIComponent(statusFilter)}`);
   }
 
-  let body = rawBody;
-  let attachmentMetadata: Record<string, any> | null = null;
-  let attachmentMediaUrl: string | null = null;
-
-  if (attachmentFile) {
-    const bucket =
-      process.env.SUPABASE_COMMUNICATION_ATTACHMENTS_BUCKET ||
-      "communication-attachments";
-    const safeName = attachmentFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const storagePath = `${conversation.tenant_id}/${conversation.id}/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from(bucket)
-      .upload(storagePath, attachmentFile, {
-        contentType: attachmentFile.type || "application/octet-stream",
-        upsert: false,
-      });
-
-    if (!uploadError) {
-      const { data: publicUrlData } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(storagePath);
-
-      attachmentMediaUrl = publicUrlData.publicUrl || null;
-      attachmentMetadata = {
-        attachment: {
-          bucket,
-          path: storagePath,
-          name: attachmentFile.name,
-          type: attachmentFile.type || "application/octet-stream",
-          size: attachmentFile.size,
-          public_url: attachmentMediaUrl,
-        },
-      };
-    } else {
-      attachmentMetadata = {
-        attachment: {
-          name: attachmentFile.name,
-          type: attachmentFile.type || "application/octet-stream",
-          size: attachmentFile.size,
-          upload_error: uploadError.message,
-        },
-      };
-    }
-
-    const attachmentLine = `📎 ${attachmentFile.name}`;
-    body = body ? `${body}\n\n${attachmentLine}` : attachmentLine;
-  }
-
   if (conversation.channel !== "WHATSAPP") {
     await supabase.from("customer_messages").insert({
       conversation_id: conversation.id,
@@ -613,7 +555,6 @@ async function sendCommunicationReply(formData: FormData) {
         "Aktuell unterstützt das echte Senden nur WhatsApp-Konversationen.",
       metadata: {
         source: "kommunikation_page_templates_v5",
-        ...(attachmentMetadata ?? {}),
       },
     });
 
@@ -660,7 +601,6 @@ async function sendCommunicationReply(formData: FormData) {
       error_message: "Twilio ist noch nicht vollständig konfiguriert.",
       metadata: {
         source: "kommunikation_page_templates_v5",
-        ...(attachmentMetadata ?? {}),
         missing: {
           accountSid: !accountSid,
           authToken: !authToken,
@@ -683,7 +623,6 @@ async function sendCommunicationReply(formData: FormData) {
       to,
       body,
       statusCallback,
-      mediaUrl: attachmentMediaUrl,
     });
 
     const status = mapInitialTwilioStatus(twilioMessage.status);
@@ -708,7 +647,6 @@ async function sendCommunicationReply(formData: FormData) {
         source: "kommunikation_page_templates_v5",
         twilio_initial_status: twilioMessage.status ?? null,
         status_callback: statusCallback ?? null,
-        ...(attachmentMetadata ?? {}),
       },
     });
 
@@ -736,7 +674,6 @@ async function sendCommunicationReply(formData: FormData) {
       error_message: errorMessage,
       metadata: {
         source: "kommunikation_page_templates_v5",
-        ...(attachmentMetadata ?? {}),
       },
     });
   }
@@ -925,8 +862,7 @@ export default async function KommunikationPage({
           created_at,
           sent_at,
           received_at,
-          error_message,
-          metadata
+          error_message
         `,
       )
       .eq("conversation_id", selectedConversation.id)
@@ -1587,19 +1523,6 @@ export default async function KommunikationPage({
                             <div className="whitespace-pre-wrap text-sm leading-6">
                               {message.body}
                             </div>
-                            {message.metadata?.attachment?.public_url ? (
-                              <a
-                                href={message.metadata.attachment.public_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="mt-2 flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold text-[#f7efe2] hover:bg-black/30"
-                              >
-                                <span aria-hidden="true">📎</span>
-                                <span className="truncate">
-                                  {message.metadata.attachment.name || "Datei öffnen"}
-                                </span>
-                              </a>
-                            ) : null}
                             <div className="mt-1.5 flex items-center justify-end gap-2 text-[10px] text-white/40">
                               <span>
                                 {formatDateTime(
@@ -1629,13 +1552,82 @@ export default async function KommunikationPage({
                 </div>
               </div>
 
-              <KommunikationComposerClient
+              <form
                 action={sendCommunicationReply}
-                conversationId={selectedConversation.id}
-                statusFilter={statusFilter}
-                draftBody={draftBody}
-                selectedTemplateTitle={selectedTemplate?.title ?? null}
-              />
+                className="shrink-0 border-t border-white/[0.07] bg-transparent px-2 pb-2 pt-1 md:px-4 md:pb-4 md:pt-2"
+              >
+                <input
+                  type="hidden"
+                  name="conversation_id"
+                  value={selectedConversation.id}
+                />
+                <input
+                  type="hidden"
+                  name="status_filter"
+                  value={statusFilter}
+                />
+
+                <div className="w-full bg-transparent p-0">
+                  <div className="relative w-full">
+                    {selectedTemplate ? (
+                      <div className="mb-3 flex items-start justify-between gap-3 rounded-[16px] border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] px-3 py-2">
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-white/50">
+                            Vorlage eingefügt
+                          </div>
+                          <div className="mt-1 truncate text-sm font-medium text-white">
+                            {selectedTemplate.title}
+                          </div>
+                          <div className="truncate text-xs text-white/60">
+                            Text kann vor dem Senden angepasst werden.
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div className="relative flex w-full items-end">
+                      <button
+                        type="button"
+                        disabled
+                        className="absolute bottom-1.5 left-1.5 z-10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] text-lg font-semibold leading-none text-white transition active:scale-[0.98] disabled:cursor-default disabled:opacity-80"
+                        title="Aktion hinzufügen"
+                        aria-label="Aktion hinzufügen"
+                      >
+                        +
+                      </button>
+
+                      <textarea
+                        name="body"
+                        rows={1}
+                        defaultValue={draftBody}
+                        placeholder="Gib eine Nachricht ein."
+                        className="clientique-scrollbar h-11 min-h-[44px] max-h-36 w-full resize-none overflow-y-auto rounded-[22px] border border-[#d8c1a0]/16 bg-black/25 py-[12px] pl-12 pr-12 text-sm leading-[20px] text-white outline-none placeholder:text-white/38 transition focus:border-[#d8c1a0]/45 focus:bg-black/30"
+                      />
+
+                      <button
+                        type="submit"
+                        className="absolute bottom-1.5 right-1.5 z-10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] text-white transition-colors active:scale-[0.98] hover:bg-[#d8c1a0]/[0.10]"
+                        aria-label="Nachricht senden"
+                        title="Senden"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="h-[16px] w-[16px]"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.4"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M12 19V5" />
+                          <path d="M5 12l7-7 7 7" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </form>
             </>
           ) : (
             <div className="flex h-full min-h-0 items-center justify-center p-8 text-center">
