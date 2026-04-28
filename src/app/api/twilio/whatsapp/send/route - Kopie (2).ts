@@ -49,57 +49,6 @@ function extensionFromMime(mimeType: string) {
   return "bin";
 }
 
-function mimeFromFileName(name: string) {
-  const lower = String(name || "").toLowerCase();
-  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
-  if (lower.endsWith(".png")) return "image/png";
-  if (lower.endsWith(".webp")) return "image/webp";
-  if (lower.endsWith(".gif")) return "image/gif";
-  if (lower.endsWith(".mp4")) return "video/mp4";
-  if (lower.endsWith(".pdf")) return "application/pdf";
-  return "application/octet-stream";
-}
-
-function normalizeMimeType(file: File) {
-  const fromFile = String(file.type || "").toLowerCase().trim();
-  const fromName = mimeFromFileName(file.name || "");
-  const mimeType = fromFile && fromFile !== "application/octet-stream" ? fromFile : fromName;
-
-  // HEIC/HEIF wird von vielen WhatsApp/Twilio-Flows nicht sauber als Vorschau geöffnet.
-  // Lieber hart stoppen als dem Kunden eine kaputte Datei zu schicken.
-  if (["image/heic", "image/heif"].includes(mimeType)) {
-    throw new Error("HEIC/HEIF wird für WhatsApp nicht unterstützt. Bitte als JPG oder PNG senden.");
-  }
-
-  const allowed = new Set([
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "image/gif",
-    "video/mp4",
-    "application/pdf",
-  ]);
-
-  if (!allowed.has(mimeType)) {
-    throw new Error(`Dateityp ${mimeType || "unbekannt"} wird für WhatsApp aktuell nicht unterstützt.`);
-  }
-
-  return mimeType;
-}
-
-async function assertPublicMediaUrl(publicUrl: string, expectedMimeType: string) {
-  const response = await fetch(publicUrl, { method: "HEAD", cache: "no-store" });
-
-  if (!response.ok) {
-    throw new Error(`Die hochgeladene Datei ist öffentlich nicht abrufbar (${response.status}).`);
-  }
-
-  const contentType = response.headers.get("content-type") || "";
-  if (contentType && !contentType.toLowerCase().includes(expectedMimeType.toLowerCase())) {
-    throw new Error(`Falscher Content-Type im Storage: ${contentType}. Erwartet: ${expectedMimeType}.`);
-  }
-}
-
 async function uploadAttachment(params: {
   admin: ReturnType<typeof supabaseAdmin>;
   file: File;
@@ -107,15 +56,11 @@ async function uploadAttachment(params: {
   conversationId: string;
 }) {
   const bucket = process.env.SUPABASE_COMMUNICATION_ATTACHMENTS_BUCKET || "communication-attachments";
-  const mimeType = normalizeMimeType(params.file);
+  const mimeType = params.file.type || "application/octet-stream";
   const originalName = safeFileName(params.file.name || `attachment.${extensionFromMime(mimeType)}`);
   const storagePath = `${params.tenantId}/${params.conversationId}/${Date.now()}-${crypto.randomUUID()}-${originalName}`;
 
-  const arrayBuffer = await params.file.arrayBuffer();
-  const uploadBlob = new Blob([arrayBuffer], { type: mimeType });
-
-  const { error: uploadError } = await params.admin.storage.from(bucket).upload(storagePath, uploadBlob, {
-    cacheControl: "3600",
+  const { error: uploadError } = await params.admin.storage.from(bucket).upload(storagePath, params.file, {
     contentType: mimeType,
     upsert: false,
   });
@@ -130,8 +75,6 @@ async function uploadAttachment(params: {
   if (!publicUrl) {
     throw new Error("Für die hochgeladene Datei konnte keine öffentliche URL erzeugt werden.");
   }
-
-  await assertPublicMediaUrl(publicUrl, mimeType);
 
   return {
     bucket,
@@ -159,7 +102,7 @@ async function sendTwilioWhatsapp(params: {
   payload.set("To", params.to);
   if (params.body?.trim()) payload.set("Body", params.body.trim());
   if (params.statusCallback) payload.set("StatusCallback", params.statusCallback);
-  if (params.mediaUrl) payload.append("MediaUrl", params.mediaUrl);
+  if (params.mediaUrl) payload.set("MediaUrl", params.mediaUrl);
 
   const response = await fetch(endpoint, {
     method: "POST",

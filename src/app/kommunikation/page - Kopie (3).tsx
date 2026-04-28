@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getEffectiveTenantId } from "@/lib/effectiveTenant";
 import KommunikationComposerClient from "./KommunikationComposerClient";
-import KommunikationChatSearchClient from "./KommunikationChatSearchClient";
 
 export const dynamic = "force-dynamic";
 
@@ -860,41 +859,51 @@ export default async function KommunikationPage({
       })
     : allConversations;
 
-  let searchableCustomersQuery = supabase
-    .from("customer_profiles")
-    .select(
-      `
-        id,
-        tenant_id,
-        person_id,
-        created_at,
-        person:persons (
+  let searchedCustomers: CustomerCandidateRow[] = [];
+  if (chatSearch) {
+    let searchedCustomersQuery = supabase
+      .from("customer_profiles")
+      .select(
+        `
           id,
-          full_name,
-          phone,
-          email
-        )
-      `,
-    )
-    .order("created_at", { ascending: false })
-    .limit(600);
+          tenant_id,
+          person_id,
+          created_at,
+          person:persons (
+            id,
+            full_name,
+            phone,
+            email
+          )
+        `,
+      )
+      .order("created_at", { ascending: false })
+      .limit(200);
 
-  if (role !== "ADMIN" && effectiveTenantId) {
-    searchableCustomersQuery = searchableCustomersQuery.eq(
-      "tenant_id",
-      effectiveTenantId,
-    );
-  } else if (role === "ADMIN" && effectiveTenantId) {
-    searchableCustomersQuery = searchableCustomersQuery.eq(
-      "tenant_id",
-      effectiveTenantId,
-    );
+    if (role !== "ADMIN" && effectiveTenantId) {
+      searchedCustomersQuery = searchedCustomersQuery.eq(
+        "tenant_id",
+        effectiveTenantId,
+      );
+    } else if (role === "ADMIN" && effectiveTenantId) {
+      searchedCustomersQuery = searchedCustomersQuery.eq(
+        "tenant_id",
+        effectiveTenantId,
+      );
+    }
+
+    const { data: searchedCustomersRaw } = await searchedCustomersQuery;
+    searchedCustomers = ((searchedCustomersRaw ?? []) as CustomerCandidateRow[])
+      .filter((candidate) => {
+        const person = firstJoin<any>(candidate.person);
+        const haystack = [person?.full_name, person?.phone, person?.email]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(chatSearch);
+      })
+      .slice(0, 10);
   }
-
-  const { data: searchableCustomersRaw } = await searchableCustomersQuery;
-  const searchableCustomers = (
-    searchableCustomersRaw ?? []
-  ) as CustomerCandidateRow[];
 
   const selectedConversation = wantsMobileChatList
     ? null
@@ -1350,32 +1359,152 @@ export default async function KommunikationPage({
                 />
               </div>
 
-              <KommunikationChatSearchClient
-                statusFilter={statusFilter}
-                selectedConversationId={selectedConversation?.id ?? null}
-                initialSearch={chatSearchRaw}
-                conversations={conversations.map((conversation) => ({
-                  id: conversation.id,
-                  channel: conversation.channel,
-                  status: conversation.status,
-                  subject: conversation.subject,
-                  external_contact: conversation.external_contact,
-                  external_contact_normalized: conversation.external_contact_normalized,
-                  unread_count: conversation.unread_count,
-                  last_message_at: conversation.last_message_at,
-                  last_message_preview: conversation.last_message_preview,
-                  created_at: conversation.created_at,
-                  person: firstJoin<any>(conversation.person),
-                  tenant: firstJoin<any>(conversation.tenant),
-                }))}
-                customers={searchableCustomers.map((customer) => ({
-                  id: customer.id,
-                  tenant_id: customer.tenant_id,
-                  person_id: customer.person_id,
-                  created_at: customer.created_at ?? null,
-                  person: firstJoin<any>(customer.person),
-                }))}
-              />
+              <form className="mb-3" action="/kommunikation" method="get">
+                <input type="hidden" name="status" value={statusFilter} />
+                <input type="hidden" name="panel" value="chats" />
+                {selectedConversation ? (
+                  <input
+                    type="hidden"
+                    name="c"
+                    value={selectedConversation.id}
+                  />
+                ) : null}
+                <label className="sr-only" htmlFor="kommunikation-kundensuche">
+                  Kundensuche
+                </label>
+                <div className="flex items-center gap-2 rounded-full border border-white/[0.07] bg-white/[0.055] px-4 py-3 text-sm text-white/70 focus-within:border-[#d6c3a3]/30">
+                  <span className="text-white/42">⌕</span>
+                  <input
+                    id="kommunikation-kundensuche"
+                    name="q"
+                    defaultValue={chatSearchRaw}
+                    placeholder="Kundensuche"
+                    className="min-w-0 flex-1 border-none bg-transparent text-sm text-[#f7efe2] outline-none placeholder:text-white/36"
+                  />
+                </div>
+              </form>
+
+              <div className="mb-4 flex gap-2">
+                <Link
+                  href="/kommunikation?status=open&panel=chats"
+                  className={`rounded-full border px-4 py-2 text-xs font-semibold ${statusFilter !== "closed" && statusFilter !== "all" ? "border-[#d6c3a3]/30 bg-[#d6c3a3]/16 text-[#f7efe2]" : "border-white/10 bg-white/[0.035] text-white/55"}`}
+                >
+                  Offen
+                </Link>
+                <Link
+                  href="/kommunikation?status=all&panel=chats"
+                  className={`rounded-full border px-4 py-2 text-xs font-semibold ${statusFilter === "all" ? "border-[#d6c3a3]/30 bg-[#d6c3a3]/16 text-[#f7efe2]" : "border-white/10 bg-white/[0.035] text-white/55"}`}
+                >
+                  Alle
+                </Link>
+              </div>
+
+              {chatSearch ? (
+                <div className="mb-4 rounded-[22px] border border-white/[0.07] bg-white/[0.025] p-3">
+                  <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-[#d6c3a3]/65">
+                    Kunden
+                  </div>
+                  {searchedCustomers.length === 0 ? (
+                    <div className="text-xs leading-5 text-white/42">
+                      Keine Kunden zur Suche gefunden.
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {searchedCustomers.map((customer) => (
+                        <Link
+                          key={customer.id}
+                          href={`/customers/${customer.id}`}
+                          className="flex items-center gap-3 rounded-2xl px-2 py-2 transition hover:bg-white/[0.045]"
+                        >
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#d6c3a3]/20 bg-[#d6c3a3]/10 text-xs font-bold text-[#f7efe2]">
+                            {customerCandidateName(customer)
+                              .split(" ")
+                              .filter(Boolean)
+                              .slice(0, 2)
+                              .map((part: string) => part[0])
+                              .join("")
+                              .toUpperCase() || "?"}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-semibold text-[#f7efe2]">
+                              {customerCandidateName(customer)}
+                            </div>
+                            <div className="truncate text-xs text-white/42">
+                              {customerCandidateMeta(customer)}
+                            </div>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              <div className="space-y-2">
+                {conversations.length === 0 ? (
+                  <div className="rounded-[24px] border border-dashed border-white/10 p-5 text-sm leading-6 text-white/45">
+                    Noch keine WhatsApp-Konversationen.
+                  </div>
+                ) : (
+                  conversations.map((conversation) => {
+                    const active = selectedConversation?.id === conversation.id;
+                    const name = conversationName(conversation);
+                    const initials =
+                      name
+                        .split(" ")
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .map((part: string) => part[0])
+                        .join("")
+                        .toUpperCase() || "?";
+                    const unread = Number(conversation.unread_count ?? 0);
+
+                    return (
+                      <Link
+                        key={conversation.id}
+                        href={
+                          communicationHref({
+                            statusFilter,
+                            conversationId: conversation.id,
+                          }) + "&panel=chats"
+                        }
+                        className={`group relative flex gap-3 rounded-[22px] border p-3 transition ${active ? "border-[#d6c3a3]/20 bg-[#d6c3a3]/12 shadow-[0_16px_40px_rgba(0,0,0,0.22)]" : "border-transparent bg-transparent hover:bg-white/[0.035]"}`}
+                      >
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#d6c3a3]/22 bg-[#d6c3a3]/12 text-sm font-bold text-[#f7efe2]">
+                          {initials}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="truncate text-sm font-semibold text-[#f7efe2]">
+                              {name}
+                            </div>
+                            <div className="shrink-0 text-[11px] text-white/40">
+                              {formatDateTime(
+                                conversation.last_message_at ??
+                                  conversation.created_at,
+                              )}
+                            </div>
+                          </div>
+                          <div className="mt-0.5 truncate text-[12px] font-medium text-[#d6c3a3]/48">
+                            {tenantName(conversation)} ·{" "}
+                            {channelLabel(conversation.channel)}
+                          </div>
+                          <div className="mt-1 line-clamp-2 text-xs leading-5 text-white/46">
+                            {conversation.last_message_preview ||
+                              conversation.subject ||
+                              "Keine Nachrichten"}
+                          </div>
+                        </div>
+                        {unread > 0 ? (
+                          <span className="absolute right-3 top-10 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#2f79ff] px-1 text-[10px] font-bold text-white">
+                            {unread}
+                          </span>
+                        ) : null}
+                      </Link>
+                    );
+                  })
+                )}
+              </div>
             </div>
           )}
         </aside>

@@ -68,35 +68,6 @@ function fileKindLabel(file: File) {
   return file.type || "Datei";
 }
 
-function validateWhatsappAttachment(file: File) {
-  const lowerName = file.name.toLowerCase();
-  const type = file.type.toLowerCase();
-  const isSupported =
-    type === "image/jpeg" ||
-    type === "image/png" ||
-    type === "image/webp" ||
-    type === "image/gif" ||
-    type === "video/mp4" ||
-    type === "application/pdf" ||
-    lowerName.endsWith(".jpg") ||
-    lowerName.endsWith(".jpeg") ||
-    lowerName.endsWith(".png") ||
-    lowerName.endsWith(".webp") ||
-    lowerName.endsWith(".gif") ||
-    lowerName.endsWith(".mp4") ||
-    lowerName.endsWith(".pdf");
-
-  if (!isSupported) {
-    return "Bitte nur JPG, PNG, WEBP, GIF, MP4 oder PDF senden.";
-  }
-
-  if (file.size > 15 * 1024 * 1024) {
-    return "Die Datei ist zu groß. Bitte unter 15 MB bleiben.";
-  }
-
-  return null;
-}
-
 function SendIcon() {
   return (
     <svg
@@ -326,21 +297,9 @@ export default function KommunikationComposerClient({
               type="file"
               name="attachment"
               className="hidden"
-              accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,application/pdf,.jpg,.jpeg,.png,.webp,.gif,.mp4,.pdf"
+              accept="image/*,video/*,application/pdf"
               onChange={(event) => {
                 const file = event.target.files?.[0] ?? null;
-
-                if (file) {
-                  const validationError = validateWhatsappAttachment(file);
-                  if (validationError) {
-                    setSelectedFile(null);
-                    setErrorMessage(validationError);
-                    if (fileInputRef.current) fileInputRef.current.value = "";
-                    return;
-                  }
-                }
-
-                setErrorMessage(null);
                 setSelectedFile(file);
                 setMenuOpen(false);
                 setEmojiOpen(false);

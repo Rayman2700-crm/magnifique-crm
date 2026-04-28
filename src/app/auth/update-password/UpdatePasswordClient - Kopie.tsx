@@ -1,75 +1,31 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-
-function readHashParams() {
-  if (typeof window === "undefined") return new URLSearchParams();
-  const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
-  return new URLSearchParams(hash);
-}
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
 export default function UpdatePasswordClient() {
   const router = useRouter();
-  const supabase = useMemo(() => supabaseBrowser(), []);
-
+  const supabase = supabaseBrowser();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
-  const [isBooting, setIsBooting] = useState(true);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     let mounted = true;
 
-    async function prepareSession() {
-      setIsBooting(true);
-      setError(null);
-
-      const hashParams = readHashParams();
-      const accessToken = hashParams.get("access_token");
-      const refreshToken = hashParams.get("refresh_token");
-      const errorDescription = hashParams.get("error_description");
-
-      if (errorDescription) {
-        if (!mounted) return;
-        setReady(false);
-        setError(decodeURIComponent(errorDescription.replace(/\+/g, " ")));
-        setIsBooting(false);
-        return;
-      }
-
-      if (accessToken && refreshToken) {
-        const { error: sessionError } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-
-        if (typeof window !== "undefined") {
-          window.history.replaceState(null, "", window.location.pathname);
-        }
-
-        if (sessionError) {
-          if (!mounted) return;
-          setReady(false);
-          setError(sessionError.message);
-          setIsBooting(false);
-          return;
-        }
-      }
-
+    async function checkSession() {
       const { data } = await supabase.auth.getSession();
       if (!mounted) return;
       setReady(Boolean(data.session));
-      setIsBooting(false);
     }
 
-    prepareSession();
+    checkSession();
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       if (!mounted) return;
@@ -85,11 +41,6 @@ export default function UpdatePasswordClient() {
   function submit() {
     setError(null);
     setMessage(null);
-
-    if (!ready) {
-      setError("Die Einladungssitzung ist noch nicht aktiv. Öffne den Einladungslink bitte erneut direkt aus der E-Mail.");
-      return;
-    }
 
     if (password.length < 8) {
       setError("Das Passwort muss mindestens 8 Zeichen haben.");
@@ -115,20 +66,12 @@ export default function UpdatePasswordClient() {
     });
   }
 
-  const passwordIsValid = password.length >= 8 && password === confirmPassword;
-
   return (
     <div className="mt-6 space-y-4">
-      {isBooting ? (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-6 text-white/70">
-          Einladung wird vorbereitet …
-        </div>
-      ) : null}
-
-      {!isBooting && !ready && !error ? (
+      {!ready ? (
         <div className="rounded-2xl border border-amber-400/25 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
-          Falls du über einen Einladungslink hier gelandet bist, konnte die Sitzung noch nicht erkannt werden. Öffne den
-          Einladungslink bitte erneut direkt aus der E-Mail, am besten in einem Inkognito-Fenster.
+          Falls du über einen Einladungslink hier gelandet bist, wird deine Sitzung gerade vorbereitet. Wenn diese Meldung bleibt,
+          öffne den Einladungslink bitte nochmal direkt aus der E-Mail.
         </div>
       ) : null}
 
@@ -168,7 +111,7 @@ export default function UpdatePasswordClient() {
         />
       </div>
 
-      <Button type="button" onClick={submit} disabled={!ready || !passwordIsValid || isPending || isBooting} className="w-full">
+      <Button type="button" onClick={submit} disabled={!ready || isPending} className="w-full">
         {isPending ? "Wird gespeichert …" : "Passwort speichern und starten"}
       </Button>
 
