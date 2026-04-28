@@ -279,6 +279,26 @@ function formatCompactCustomerDate(value: string | null | undefined) {
   }).format(date);
 }
 
+function formatBirthdayDueLabel(value: Date | null | undefined) {
+  if (!value) return "—";
+
+  const target = new Date(value);
+  target.setHours(0, 0, 0, 0);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
+  if (diffDays === 0) return "Heute";
+  if (diffDays === 1) return "Morgen";
+  if (diffDays > 1 && diffDays <= 6) return `in ${diffDays} Tagen`;
+
+  return new Intl.DateTimeFormat("de-AT", {
+    day: "2-digit",
+    month: "2-digit",
+  }).format(target);
+}
+
 function formatNextAppointmentLabel(value: string | null | undefined) {
   if (!value) return "Kein Termin";
   const date = new Date(value);
@@ -416,19 +436,23 @@ function DashboardActionPill({
   icon?: React.ReactNode;
   compact?: boolean;
 }) {
+  const actionStyle = {
+    "--action-bg": accentColor ? `${accentColor}16` : "rgba(255,255,255,0.05)",
+    "--action-bg-hover": accentColor ? `${accentColor}28` : "rgba(255,255,255,0.10)",
+    "--action-border": accentColor ? `${accentColor}38` : "rgba(255,255,255,0.12)",
+    "--action-border-hover": accentColor ? `${accentColor}70` : "rgba(255,255,255,0.22)",
+    "--action-color": compact ? (accentColor ?? "rgba(255,255,255,0.82)") : "rgba(255,255,255,0.80)",
+    "--action-color-hover": "#ffffff",
+  } as React.CSSProperties;
+
   return (
     <span
-      className={`inline-flex items-center justify-center border font-semibold uppercase tracking-[0.12em] transition ${
+      className={`inline-flex items-center justify-center border border-[color:var(--action-border)] bg-[color:var(--action-bg)] font-semibold uppercase tracking-[0.12em] text-[color:var(--action-color)] shadow-[0_10px_28px_rgba(0,0,0,0.16)] transition duration-200 ease-out hover:-translate-y-[2px] hover:border-[color:var(--action-border-hover)] hover:bg-[color:var(--action-bg-hover)] hover:text-[color:var(--action-color-hover)] hover:shadow-[0_16px_36px_rgba(0,0,0,0.24)] active:translate-y-0 active:scale-[0.97] ${
         compact
-          ? "h-10 w-10 rounded-full px-0 text-white/82 hover:-translate-y-[1px] hover:bg-white/[0.10] hover:text-white active:scale-[0.98] md:h-9 md:w-9 md:text-white/70 md:hover:bg-white/[0.08]"
-          : "h-9 rounded-[16px] px-3 text-[9px] text-white/80 hover:bg-white/[0.08] hover:text-white"
+          ? "h-10 w-10 rounded-full px-0 md:h-9 md:w-9 [&_svg]:transition-transform [&_svg]:duration-200 hover:[&_svg]:scale-110"
+          : "h-9 rounded-[16px] px-3 text-[9px]"
       }`}
-      style={{
-        backgroundColor: accentColor ? `${accentColor}16` : "rgba(255,255,255,0.05)",
-        borderColor: accentColor ? `${accentColor}38` : "rgba(255,255,255,0.12)",
-        color: compact ? (accentColor ?? "rgba(255,255,255,0.82)") : "rgba(255,255,255,0.80)",
-        boxShadow: compact ? "0 10px 28px rgba(0,0,0,0.16)" : "0 10px 28px rgba(0,0,0,0.16)",
-      }}
+      style={actionStyle}
     >
       {icon ?? label}
     </span>
@@ -502,7 +526,7 @@ function AppointmentsOverviewCard({
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
-              <span className="shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/12 bg-white/[0.05] text-[#d6c3a3] shadow-[0_10px_28px_rgba(0,0,0,0.16)] transition hover:-translate-y-[1px] hover:border-white/18 hover:bg-white/[0.10] active:scale-[0.98] md:h-9 md:w-9 md:border-white/10 md:bg-white/[0.04] md:hover:border-white/15 md:hover:bg-white/[0.08] [&_*]:!shadow-none [&_button]:!m-0 [&_button]:!items-center [&_button]:!justify-center [&_button]:!rounded-full [&_button]:!border-0 [&_button]:!bg-transparent [&_button]:!p-0 [&_button]:!text-[#d6c3a3] [&_button]:!shadow-none [&_button:hover]:!bg-transparent md:[&_button]:!h-9 md:[&_button]:!w-9 [&_svg]:!h-[24px] [&_svg]:!w-[24px] md:[&_svg]:!h-[24px] md:[&_svg]:!w-[24px]]">
+              <span className="shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/12 bg-white/[0.05] text-[#d6c3a3] shadow-[0_10px_28px_rgba(0,0,0,0.16)] transition duration-200 ease-out hover:-translate-y-[2px] hover:border-white/24 hover:bg-white/[0.12] hover:shadow-[0_16px_36px_rgba(0,0,0,0.24)] active:translate-y-0 active:scale-[0.97] md:h-9 md:w-9 md:border-white/10 md:bg-white/[0.04] md:hover:border-white/20 md:hover:bg-white/[0.10] [&_*]:!shadow-none [&_button]:!m-0 [&_button]:!items-center [&_button]:!justify-center [&_button]:!rounded-full [&_button]:!border-0 [&_button]:!bg-transparent [&_button]:!p-0 [&_button]:!text-[#d6c3a3] [&_button]:!shadow-none [&_button:hover]:!bg-transparent md:[&_button]:!h-9 md:[&_button]:!w-9 [&_svg]:!h-[24px] [&_svg]:!w-[24px] md:[&_svg]:!h-[24px] md:[&_svg]:!w-[24px]]">
                 <OpenCreateAppointmentButton accentColor="#d6c3a3" />
               </span>
               <Link href="/calendar" className="shrink-0" aria-label="Kalender öffnen">
@@ -558,6 +582,9 @@ function CustomerOverviewCard({
   subtext,
   newThisWeek,
   birthdaysNext7Days,
+  nextBirthdayCustomerName,
+  nextBirthdayCustomerHref,
+  nextBirthdayLabel,
   latestCustomerName,
   latestCustomerDateLabel,
 }: {
@@ -565,6 +592,9 @@ function CustomerOverviewCard({
   subtext?: string;
   newThisWeek: string;
   birthdaysNext7Days: string;
+  nextBirthdayCustomerName: string;
+  nextBirthdayCustomerHref: string | null;
+  nextBirthdayLabel: string;
   latestCustomerName: string;
   latestCustomerDateLabel: string;
 }) {
@@ -602,12 +632,33 @@ function CustomerOverviewCard({
               </div>
             </div>
 
-            <div className="rounded-[20px] border border-[rgba(255,255,255,0.035)] bg-[linear-gradient(180deg,rgba(255,250,244,0.038)_0%,rgba(255,248,240,0.012)_100%)] backdrop-blur-md px-3.5 py-3 shadow-[0_12px_30px_rgba(0,0,0,0.12)]">
-              <div className="text-[9px] uppercase tracking-[0.12em] text-white/45">Geburtstage</div>
-              <div className="mt-1 text-[19px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[21px]">
-                {birthdaysNext7Days}
+            {nextBirthdayCustomerHref ? (
+              <Link
+                href={nextBirthdayCustomerHref}
+                className="group rounded-[20px] border border-[rgba(255,255,255,0.04)] bg-[linear-gradient(180deg,rgba(255,250,244,0.044)_0%,rgba(255,248,240,0.014)_100%)] px-3.5 py-3 shadow-[0_12px_30px_rgba(0,0,0,0.12)] backdrop-blur-md transition duration-200 hover:-translate-y-0.5 hover:border-[rgba(214,195,163,0.20)] hover:bg-[rgba(214,195,163,0.055)]"
+                aria-label={`Geburtstagskunden öffnen: ${nextBirthdayCustomerName}`}
+              >
+                <div className="min-w-0">
+                  <div className="text-[9px] uppercase tracking-[0.12em] text-white/45">Geburtstage</div>
+                  <div className="mt-1 text-[19px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[21px]">
+                    {birthdaysNext7Days}
+                  </div>
+                  <div className="mt-1.5 break-words text-[11px] font-semibold leading-tight text-white/84">
+                    {nextBirthdayCustomerName}
+                  </div>
+                  <div className="mt-1 whitespace-nowrap text-[9px] font-medium text-[#d6c3a3]">{nextBirthdayLabel}</div>
+                </div>
+              </Link>
+            ) : (
+              <div className="rounded-[20px] border border-[rgba(255,255,255,0.035)] bg-[linear-gradient(180deg,rgba(255,250,244,0.038)_0%,rgba(255,248,240,0.012)_100%)] px-3.5 py-3 shadow-[0_12px_30px_rgba(0,0,0,0.12)] backdrop-blur-md">
+                <div className="text-[9px] uppercase tracking-[0.12em] text-white/45">Geburtstage</div>
+                <div className="mt-1 text-[19px] font-semibold leading-none tracking-tight text-[var(--text)] sm:text-[21px]">
+                  {birthdaysNext7Days}
+                </div>
+                <div className="mt-1.5 break-words text-[11px] font-semibold leading-tight text-white/38">Keine fälligen Geburtstage</div>
+                <div className="mt-1 whitespace-nowrap text-[9px] font-medium text-white/32">—</div>
               </div>
-            </div>
+            )}
           </div>
 
           <div className="rounded-[20px] border border-[rgba(255,255,255,0.035)] bg-[linear-gradient(180deg,rgba(255,250,244,0.038)_0%,rgba(255,248,240,0.012)_100%)] backdrop-blur-md px-3.5 py-3 shadow-[0_12px_30px_rgba(0,0,0,0.12)]">
@@ -806,7 +857,7 @@ export default async function DashboardPage() {
   let googleStatusConnected = false;
   let selectedStudioLabel = "Kein verbundener Schreibkalender";
   let activeCalendarCount = 0;
-  let extraCalendarLabel = "0";
+  let extraCalendarLabel = "0 aktiv";
   let lastSyncLabel = "—";
 
   if (user) {
@@ -910,7 +961,7 @@ export default async function DashboardPage() {
     const selectedStudioTarget = STUDIO_TARGETS.find((target) => target.calendarId === defaultCalendarId) ?? null;
     selectedStudioLabel = selectedStudioTarget?.label ?? "Kein verbundener Schreibkalender";
     activeCalendarCount = activeCalendarIds.length;
-    extraCalendarLabel = String(enabledExtraIds.length);
+    extraCalendarLabel = isAdmin ? `${enabledExtraIds.length} aktiv` : "Nur Admin";
     lastSyncLabel = formatDateTime((tokenRow as any)?.updated_at ?? primaryWritableConnection?.updated_at ?? null);
   }
 
@@ -1425,11 +1476,26 @@ export default async function DashboardPage() {
     return !Number.isNaN(createdAt.getTime()) && isDateWithinNextDays(createdAt, 6);
   }).length;
 
-  const birthdaysNext7Days = dashboardCustomerRows.filter((row) => {
-    const person = firstJoin(row.person);
-    const nextBirthday = getNextBirthdayDate(person?.birthday ?? null);
-    return Boolean(nextBirthday && isDateWithinNextDays(nextBirthday, 6));
-  }).length;
+  const birthdayCandidates = dashboardCustomerRows
+    .map((row) => {
+      const person = firstJoin(row.person);
+      const nextBirthday = getNextBirthdayDate(person?.birthday ?? null);
+      if (!nextBirthday || !isDateWithinNextDays(nextBirthday, 6)) return null;
+
+      return {
+        customerProfileId: row.id,
+        customerName: String(person?.full_name ?? "").trim() || "Unbenannter Kunde",
+        nextBirthday,
+      };
+    })
+    .filter((x): x is { customerProfileId: string; customerName: string; nextBirthday: Date } => Boolean(x))
+    .sort((a, b) => a.nextBirthday.getTime() - b.nextBirthday.getTime() || a.customerName.localeCompare(b.customerName));
+
+  const birthdaysNext7Days = birthdayCandidates.length;
+  const nextBirthdayCustomer = birthdayCandidates[0] ?? null;
+  const nextBirthdayCustomerHref = nextBirthdayCustomer ? `/customers/${nextBirthdayCustomer.customerProfileId}` : null;
+  const nextBirthdayCustomerName = nextBirthdayCustomer?.customerName ?? "Keine fälligen Geburtstage";
+  const nextBirthdayLabel = formatBirthdayDueLabel(nextBirthdayCustomer?.nextBirthday ?? null);
 
   const latestCustomerRow = dashboardCustomerRows[0] ?? null;
   const latestCustomerPerson = firstJoin(latestCustomerRow?.person ?? null);
@@ -1601,6 +1667,9 @@ export default async function DashboardPage() {
                 subtext="Gespeicherte Profile"
                 newThisWeek={String(newCustomers7Days)}
                 birthdaysNext7Days={String(birthdaysNext7Days)}
+                nextBirthdayCustomerName={nextBirthdayCustomerName}
+                nextBirthdayCustomerHref={nextBirthdayCustomerHref}
+                nextBirthdayLabel={nextBirthdayLabel}
                 latestCustomerName={latestCustomerName}
                 latestCustomerDateLabel={latestCustomerDateLabel}
               />
@@ -1667,7 +1736,7 @@ export default async function DashboardPage() {
         </Card>
       </section>
 
-      <section id="dashboard-calendar-card" data-dashboard-calendar="true" className="scroll-mt-[108px]">
+      <section id="dashboard-calendar-card" className="scroll-mt-[108px]">
         <DashboardCalendarCardClient
           tenants={tenantRows}
           legendUsers={legendUsers}

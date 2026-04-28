@@ -213,7 +213,7 @@ export default function ChatSlideover({
             >
               Team Chat
             </div>
-            <div style={{ marginTop: 10, display: "flex" }}>
+            <div data-chat-status-row="true" style={{ marginTop: 10, display: "flex" }}>
               <span
                 className={
                   "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold " +
@@ -275,16 +275,38 @@ export default function ChatSlideover({
               }
 
               [data-chat-header="true"] {
-                padding: 16px 14px 15px !important;
+                padding: 16px 14px 12px !important;
                 grid-template-columns: minmax(0, 1fr) auto !important;
-                column-gap: 12px !important;
-                row-gap: 12px !important;
+                column-gap: 10px !important;
+                row-gap: 6px !important;
+                align-items: start !important;
               }
 
               [data-chat-title="true"] {
                 min-width: 0 !important;
                 grid-column: 1 / 2 !important;
                 grid-row: 1 / 2 !important;
+                display: flex !important;
+                align-items: center !important;
+                gap: 8px !important;
+                flex-wrap: nowrap !important;
+              }
+
+              [data-chat-title="true"] > div:first-child {
+                white-space: nowrap !important;
+                flex-shrink: 0 !important;
+              }
+
+              [data-chat-status-row="true"] {
+                position: static !important;
+                margin-top: 0 !important;
+                display: flex !important;
+                align-items: center !important;
+                z-index: auto !important;
+              }
+
+              [data-chat-status-row="true"] span {
+                white-space: nowrap !important;
               }
 
               [data-chat-team-avatar-wrap="true"] {
@@ -294,7 +316,8 @@ export default function ChatSlideover({
                 justify-content: flex-start !important;
                 overflow-x: auto !important;
                 overflow-y: hidden !important;
-                padding: 1px 2px 4px 0 !important;
+                padding: 0 2px 2px 0 !important;
+                margin-top: 0 !important;
                 scrollbar-width: none !important;
                 -webkit-overflow-scrolling: touch !important;
               }
@@ -309,6 +332,18 @@ export default function ChatSlideover({
                 gap: 8px !important;
                 width: max-content !important;
                 max-width: none !important;
+              }
+            }
+
+            @media (max-width: 390px) {
+              [data-chat-title="true"] {
+                gap: 6px !important;
+              }
+
+              [data-chat-status-row="true"] span {
+                padding-left: 8px !important;
+                padding-right: 8px !important;
+                font-size: 10px !important;
               }
             }
           `}</style>

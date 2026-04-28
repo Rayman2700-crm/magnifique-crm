@@ -46,12 +46,12 @@ type CustomerPickerRow = {
 
 function menuIconButtonClass(active = false, danger = false) {
   if (danger) {
-    return "inline-flex h-12 min-w-[56px] items-center justify-center rounded-[16px] border border-white/10 bg-white/10 px-4 text-sm font-semibold text-white transition-colors hover:bg-red-600/90 hover:text-white";
+    return "inline-flex h-12 min-w-0 flex-1 basis-0 items-center justify-center rounded-[16px] border border-white/10 bg-white/10 px-3 text-sm font-semibold text-white transition-colors hover:bg-red-600/90 hover:text-white";
   }
 
-  return `inline-flex h-12 min-w-[56px] items-center justify-center rounded-[16px] border ${
+  return `inline-flex h-12 min-w-0 flex-1 basis-0 items-center justify-center rounded-[16px] border ${
     active ? "border-white/18 bg-white/12" : "border-white/12 bg-white/[0.04]"
-  } px-4 text-sm font-semibold text-white transition-colors hover:bg-white/[0.10]`;
+  } px-3 text-sm font-semibold text-white transition-colors hover:bg-white/[0.10]`;
 }
 
 
@@ -1109,7 +1109,8 @@ export default function CreateAppointmentSlideover({
         style={{
           position: "absolute",
           inset: 0,
-          
+          backgroundColor: "rgba(0,0,0,0.42)",
+          backdropFilter: "blur(6px)",
           opacity: createShown ? 1 : 0,
           transition: "opacity 200ms ease",
           pointerEvents: createShown ? "auto" : "none",
@@ -1126,7 +1127,7 @@ export default function CreateAppointmentSlideover({
           maxWidth: "calc(100vw - 36px)",
           borderRadius: 18,
           border: "1px solid rgba(255,255,255,0.12)",
-          background: "linear-gradient(180deg, rgba(16,16,16,0.92) 0%, rgba(10,10,10,0.92) 100%)",
+          background: "linear-gradient(180deg, rgba(16,16,16,0.96) 0%, rgba(10,10,10,0.96) 100%)",
           boxShadow: "0 18px 60px rgba(0,0,0,0.55)",
           transform: createShown ? "translateX(0)" : "translateX(18px)",
           opacity: createShown ? 1 : 0,
@@ -1138,22 +1139,67 @@ export default function CreateAppointmentSlideover({
       >
         <div
           style={{
-            padding: 16,
+            padding: 18,
             borderBottom: "1px solid rgba(255,255,255,0.08)",
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
           }}
         >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>Kalender</div>
-              <div style={{ marginTop: 6, fontSize: 18, fontWeight: 800, color: "rgba(255,255,255,0.95)" }}>
-                Neuer Termin
-              </div>
-            </div>
+          <div className="flex flex-nowrap items-center gap-3 overflow-x-auto pb-3">
+            <button
+              type="submit"
+              form="create-appointment-form"
+              className={
+                canSubmit
+                  ? "inline-flex h-12 min-w-0 flex-1 basis-0 items-center justify-center rounded-[16px] border border-emerald-400/35 bg-emerald-500/16 px-3 text-sm font-semibold text-emerald-50 transition-colors hover:bg-emerald-500/24"
+                  : "inline-flex h-12 min-w-0 flex-1 basis-0 cursor-not-allowed items-center justify-center rounded-[16px] border border-white/10 bg-white/[0.04] px-3 text-sm font-semibold text-white/38 transition-colors"
+              }
+              aria-label="Termin erstellen"
+              title={canSubmit ? "Termin erstellen" : "Pflichtfelder fehlen noch"}
+              disabled={!canSubmit}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
+            </button>
 
-            <div className="flex items-center gap-3 self-start">
+            <button
+              type="button"
+              onClick={onClose}
+              className={menuIconButtonClass(false, true)}
+              aria-label="Schließen"
+              title="Schließen"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="border-t border-white/10 pt-3">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div style={{ marginTop: 4, fontSize: 20, fontWeight: 800, color: "rgba(255,255,255,0.95)" }}>
+                  Neuer Termin
+                </div>
+              </div>
+
               {selectedTenantId && practitionerProfile?.user_id ? (
                 <div
                   className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full border bg-white/5 shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_10px_24px_rgba(0,0,0,0.28)]"
@@ -1175,59 +1221,38 @@ export default function CreateAppointmentSlideover({
                   <div className="pointer-events-none absolute inset-0 rounded-full" style={{ boxShadow: `inset 0 0 0 2px ${selectedTenantRingColor}` }} />
                 </div>
               ) : null}
-
-              <button
-                type="submit"
-                form="create-appointment-form"
-                className={canSubmit
-                  ? "inline-flex h-12 min-w-[56px] items-center justify-center rounded-[16px] border border-emerald-500/30 bg-emerald-600/70 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-600"
-                  : "inline-flex h-12 min-w-[56px] items-center justify-center rounded-[16px] border border-white/12 bg-white/[0.04] px-4 text-sm font-semibold text-white/45 transition-colors cursor-not-allowed opacity-100"}
-                aria-label="Termin erstellen"
-                title={canSubmit ? "Termin erstellen" : "Pflichtfelder fehlen noch"}
-                disabled={!canSubmit}
-              >
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-              </button>
-
-              <button type="button" onClick={onClose} className={menuIconButtonClass(false, true)} aria-label="Schließen" title="Schließen">
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
-                  <path d="M6 6l12 12M18 6L6 18" />
-                </svg>
-              </button>
             </div>
-          </div>
 
-          <div className="crm-slideover-summary w-full min-w-0 px-3 py-3">
-            <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-[11px] leading-4 sm:grid-cols-3">
-              <div className="col-span-2 sm:col-span-3">
-                <div className="text-white/45">Dienstleistung</div>
-                <div className="mt-0.5 break-words font-medium text-white/92">{summaryServiceLabel}</div>
-              </div>
-              <div className="col-span-2 sm:col-span-3">
-                <div className="text-white/45">Kunde</div>
-                <div className="mt-0.5 break-words font-medium text-white/92">{summaryCustomerLabel}</div>
-              </div>
-              <div className="col-span-2 sm:col-span-3">
-                <div className="text-white/45">Start</div>
-                <div className="mt-0.5 break-words font-medium text-white/92">{summaryDateTimeLabel}</div>
-              </div>
-              <div>
-                <div className="text-white/45">Dauer</div>
-                <div className="mt-0.5 font-medium text-white/92">{durationValue} Min</div>
-              </div>
-              <div>
-                <div className="text-white/45">Buffer</div>
-                <div className="mt-0.5 font-medium text-white/92">{bufferValue} Min</div>
-              </div>
-              <div>
-                <div className="text-white/45">Preis</div>
-                <div className="mt-0.5 break-words font-medium text-white/92">{priceLabel ?? "—"}</div>
-              </div>
-              <div className="col-span-2 sm:col-span-3">
-                <div className="text-white/45">Notiz</div>
-                <div className="mt-0.5 break-words font-medium text-white/78">{summaryNoteLabel}</div>
+            <div className="crm-slideover-summary mt-4 w-full min-w-0 px-3 py-3">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[11px] leading-4">
+                <div className="min-w-0">
+                  <div className="text-white/45">Dienstleistung</div>
+                  <div className="mt-0.5 break-words font-medium text-white/92">{summaryServiceLabel}</div>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-white/45">Kunde</div>
+                  <div className="mt-0.5 break-words font-medium text-white/92">{summaryCustomerLabel}</div>
+                </div>
+                <div>
+                  <div className="text-white/45">Start</div>
+                  <div className="mt-0.5 break-words font-medium text-white/92">{summaryDateTimeLabel}</div>
+                </div>
+                <div>
+                  <div className="grid grid-cols-3 gap-x-3">
+                    <div>
+                      <div className="text-white/45">Dauer</div>
+                      <div className="mt-0.5 font-medium text-white/92">{durationValue} Min</div>
+                    </div>
+                    <div>
+                      <div className="text-white/45">Buffer</div>
+                      <div className="mt-0.5 font-medium text-white/92">{bufferValue} Min</div>
+                    </div>
+                    <div>
+                      <div className="text-white/45">Preis</div>
+                      <div className="mt-0.5 break-words font-medium text-white/92">{priceLabel ?? "—"}</div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

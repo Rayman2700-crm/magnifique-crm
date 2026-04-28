@@ -234,9 +234,29 @@ function ServiceSheet({
             <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,0.50)" }}>{subtitle}</div>
           </div>
 
-          <Button variant="secondary" onClick={onClose}>
-            Schließen
-          </Button>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Schließen"
+            title="Schließen"
+            style={{
+              width: 72,
+              height: 48,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: 16,
+              border: "1px solid rgba(255,255,255,0.12)",
+              background: "rgba(255,255,255,0.08)",
+              color: "rgba(255,255,255,0.95)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+              cursor: "pointer",
+            }}
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
         </div>
 
         <div style={{ padding: 16, overflow: "auto" }}>{children}</div>

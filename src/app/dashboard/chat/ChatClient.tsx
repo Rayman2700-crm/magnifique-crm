@@ -3761,6 +3761,7 @@ export default function ChatClient({
   const [openReactionPickerMessageId, setOpenReactionPickerMessageId] =
     useState<string | null>(null);
   const [composerEmojiPickerOpen, setComposerEmojiPickerOpen] = useState(false);
+  const [mobileComposerMenuOpen, setMobileComposerMenuOpen] = useState(false);
 
   const endRef = useRef<HTMLDivElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -4615,6 +4616,7 @@ export default function ChatClient({
   ]);
 
   async function send() {
+    setMobileComposerMenuOpen(false);
     const value = text.trim();
     const file = selectedFile;
 
@@ -4937,13 +4939,13 @@ export default function ChatClient({
         </div>
 
         <div
-          className="bg-transparent px-3 pb-3 pt-2 sm:px-4 sm:pb-4"
+          className="bg-transparent px-2 pb-2 pt-1 sm:px-4 sm:pb-4 sm:pt-2"
           style={{
-            paddingBottom: `calc(env(safe-area-inset-bottom, 0px) + ${keyboardInset}px + 12px)`,
+            paddingBottom: `calc(env(safe-area-inset-bottom, 0px) + ${keyboardInset}px + 6px)`,
           }}
         >
-          <div className="w-full rounded-[24px] border border-[#d8c1a0]/16 bg-[#1a130f]/94 p-3 shadow-[0_18px_44px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.035)] backdrop-blur supports-[backdrop-filter]:bg-[#1a130f]/88 sm:p-3.5">
-            <div className="w-full">
+          <div className="w-full bg-transparent p-0">
+            <div className="relative w-full">
               {replyTarget ? (
                 <div className="mb-3 flex items-start justify-between gap-3 rounded-[16px] border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] px-3 py-2">
                   <div className="min-w-0">
@@ -5052,7 +5054,35 @@ export default function ChatClient({
                 />
               ) : null}
 
-              <div className="flex items-end gap-2">
+              {mobileComposerMenuOpen ? (
+                <div className="mb-2 flex gap-2 rounded-[18px] border border-[#d8c1a0]/16 bg-[#211813]/96 p-2 shadow-[0_14px_34px_rgba(0,0,0,0.35)]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileComposerMenuOpen(false);
+                      fileInputRef.current?.click();
+                    }}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-[14px] border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.06] px-3 py-2 text-sm font-semibold text-[#f6f0e8] active:scale-[0.98]"
+                  >
+                    <span aria-hidden="true">📎</span>
+                    Datei
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileComposerMenuOpen(false);
+                      setOpenReactionPickerMessageId(null);
+                      setComposerEmojiPickerOpen(true);
+                    }}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-[14px] border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.06] px-3 py-2 text-sm font-semibold text-[#f6f0e8] active:scale-[0.98]"
+                  >
+                    <span aria-hidden="true">☺️</span>
+                    Emoji
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="relative flex w-full items-end">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -5066,29 +5096,17 @@ export default function ChatClient({
 
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] text-lg text-white/85 transition-colors hover:bg-[#d8c1a0]/[0.10] hover:text-white active:scale-[0.98]"
-                  title="Datei anhängen"
-                >
-                  📎
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpenReactionPickerMessageId(null);
-                    setComposerEmojiPickerOpen((open) => !open);
-                  }}
+                  onClick={() => setMobileComposerMenuOpen((open) => !open)}
                   className={
-                    "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] border border-[#d8c1a0]/14 text-lg text-white transition active:scale-[0.98] " +
-                    (composerEmojiPickerOpen
+                    "absolute bottom-1.5 left-1.5 z-10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#d8c1a0]/14 text-lg font-semibold text-white transition active:scale-[0.98] " +
+                    (mobileComposerMenuOpen || composerEmojiPickerOpen
                       ? "bg-[#d8c1a0]/16"
-                      : "bg-[#d8c1a0]/[0.045] hover:bg-[#d8c1a0]/[0.10]")
+                      : "bg-[#d8c1a0]/[0.045]")
                   }
-                  title="Emoji einfügen"
-                  aria-label="Emoji einfügen"
+                  title="Aktion hinzufügen"
+                  aria-label="Aktion hinzufügen"
                 >
-                  ☺️
+                  +
                 </button>
 
                 <textarea
@@ -5161,7 +5179,7 @@ export default function ChatClient({
                       : "Gib eine Nachricht ein."
                   }
                   rows={1}
-                  className="h-11 min-h-[44px] max-h-40 flex-1 resize-none overflow-y-auto rounded-[16px] border border-[#d8c1a0]/14 bg-black/25 px-3 py-[11px] text-sm leading-[20px] text-white outline-none placeholder:text-white/35 transition focus:border-[#d8c1a0]/45 focus:bg-black/30 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  className="h-11 min-h-[44px] max-h-36 w-full resize-none overflow-y-auto rounded-[22px] border border-[#d8c1a0]/16 bg-black/25 py-[12px] pl-12 pr-12 text-sm leading-[20px] text-white outline-none placeholder:text-white/38 transition focus:border-[#d8c1a0]/45 focus:bg-black/30 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 />
 
                 <button
@@ -5171,7 +5189,7 @@ export default function ChatClient({
                     sending || (!text.trim() && !selectedFile && !replyTarget)
                   }
                   className={
-                    "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] text-white transition-colors active:scale-[0.98] " +
+                    "absolute bottom-1.5 right-1.5 z-10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] text-white transition-colors active:scale-[0.98] " +
                     (sending || (!text.trim() && !selectedFile && !replyTarget)
                       ? "cursor-not-allowed opacity-45 pointer-events-none"
                       : "hover:bg-[#d8c1a0]/[0.10]")
@@ -5184,7 +5202,7 @@ export default function ChatClient({
                   ) : (
                     <svg
                       viewBox="0 0 24 24"
-                      className="h-[18px] w-[18px]"
+                      className="h-[16px] w-[16px]"
                       fill="none"
                       stroke="currentColor"
                       strokeWidth="2.4"
@@ -5198,6 +5216,8 @@ export default function ChatClient({
                   )}
                 </button>
               </div>
+
+
             </div>
           </div>
         </div>

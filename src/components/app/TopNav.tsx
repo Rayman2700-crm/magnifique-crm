@@ -180,6 +180,34 @@ function SettingsIcon() {
   );
 }
 
+function UserCircleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="3.25" />
+      <path d="M5 20a7 7 0 0 1 14 0" />
+    </svg>
+  );
+}
+
+function LogoutIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H6.5A2.5 2.5 0 0 1 4 18.5v-13A2.5 2.5 0 0 1 6.5 3H9" />
+      <path d="M16 17l5-5-5-5" />
+      <path d="M21 12H9" />
+    </svg>
+  );
+}
+
+
+function ChevronDownIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
 function MenuIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -326,6 +354,121 @@ function SettingsMenuPopover({ open, shown, onClose, onOpenGoogleSetup, googleSe
   );
 }
 
+function InvoiceMenuPopover({ open, shown, onClose, anchorRef, onSelect }: { open: boolean; shown: boolean; onClose: () => void; anchorRef: React.RefObject<HTMLButtonElement | null>; onSelect: (href: string) => void; }) {
+  const [mounted, setMounted] = useState(false);
+  const [position, setPosition] = useState({ top: 92, left: 320 });
+
+  useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (!open) return;
+    const syncPosition = () => {
+      const rect = anchorRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setPosition({
+        top: rect.bottom + 10,
+        left: Math.min(Math.max(12, rect.left), window.innerWidth - 288),
+      });
+    };
+    syncPosition();
+    window.addEventListener("resize", syncPosition);
+    window.addEventListener("scroll", syncPosition, true);
+    return () => {
+      window.removeEventListener("resize", syncPosition);
+      window.removeEventListener("scroll", syncPosition, true);
+    };
+  }, [open, anchorRef]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
+  if (!mounted || !open || typeof document === "undefined") return null;
+
+  const items = [
+    { label: "Rechnungen öffnen", href: "/rechnungen", hint: "Übersicht & Belege" },
+    { label: "+ Rechnung", href: "/rechnungen?invoice=1", hint: "Neue Rechnung erstellen", emphasis: true },
+    { label: "Tagesabschluss", href: "/rechnungen?closingPanel=day", hint: "Heute prüfen" },
+    { label: "Monatsabschluss", href: "/rechnungen?closingPanel=month", hint: "Monat prüfen" },
+    { label: "Jahresabschluss", href: "/rechnungen?closingPanel=year", hint: "Jahr prüfen" },
+  ];
+
+  return createPortal(
+    <div style={{ position: "fixed", inset: 0, zIndex: 1195, isolation: "isolate" }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "transparent" }} />
+      <div
+        style={{
+          position: "absolute",
+          top: position.top,
+          left: position.left,
+          width: 276,
+          maxWidth: "calc(100vw - 24px)",
+          borderRadius: 24,
+          border: "1px solid rgba(214,195,163,0.16)",
+          background: "linear-gradient(180deg, rgba(35,28,23,0.98) 0%, rgba(20,16,13,0.98) 100%)",
+          boxShadow: "0 28px 80px rgba(0,0,0,0.42)",
+          overflow: "hidden",
+          transform: shown ? "translateY(0) scale(1)" : "translateY(-6px) scale(0.985)",
+          opacity: shown ? 1 : 0,
+          transformOrigin: "top left",
+          transition: "transform 180ms ease, opacity 180ms ease",
+          backdropFilter: "blur(22px) saturate(135%)",
+        }}
+      >
+        <div style={{ padding: "13px 14px 11px", borderBottom: "1px solid rgba(214,195,163,0.10)", background: "linear-gradient(180deg, rgba(255,248,240,0.06) 0%, rgba(255,248,240,0.025) 100%)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ display: "inline-flex", height: 34, width: 34, alignItems: "center", justifyContent: "center", borderRadius: 14, border: "1px solid rgba(214,195,163,0.16)", background: "rgba(255,248,240,0.05)", color: "#d6c3a3" }}>
+              <ReceiptIcon />
+            </span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,0.95)", lineHeight: 1.15 }}>Rechnungen</div>
+              <div style={{ marginTop: 3, fontSize: 11, color: "rgba(214,195,163,0.62)", lineHeight: 1.15 }}>Abrechnen & Abschlüsse</div>
+            </div>
+          </div>
+        </div>
+        <div style={{ padding: 8, display: "grid", gap: 5 }}>
+          {items.map((item) => (
+            <button
+              key={item.href}
+              type="button"
+              onClick={() => onSelect(item.href)}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                minHeight: 46,
+                borderRadius: 16,
+                border: item.emphasis ? "1px solid rgba(214,195,163,0.28)" : "1px solid transparent",
+                background: item.emphasis ? "linear-gradient(180deg, rgba(214,195,163,0.20) 0%, rgba(214,195,163,0.12) 100%)" : "transparent",
+                color: item.emphasis ? "#fff4df" : "rgba(255,255,255,0.90)",
+                padding: "8px 11px",
+                textAlign: "left",
+                cursor: "pointer",
+              }}
+              onMouseEnter={(event) => { event.currentTarget.style.background = item.emphasis ? "linear-gradient(180deg, rgba(214,195,163,0.24) 0%, rgba(214,195,163,0.15) 100%)" : "rgba(255,248,240,0.055)"; }}
+              onMouseLeave={(event) => { event.currentTarget.style.background = item.emphasis ? "linear-gradient(180deg, rgba(214,195,163,0.20) 0%, rgba(214,195,163,0.12) 100%)" : "transparent"; }}
+            >
+              <span style={{ minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: 13, fontWeight: 700, lineHeight: 1.1 }}>{item.label}</span>
+                <span style={{ display: "block", marginTop: 4, fontSize: 11, color: "rgba(247,247,245,0.48)", lineHeight: 1.1 }}>{item.hint}</span>
+              </span>
+              <span style={{ color: "rgba(214,195,163,0.72)", fontSize: 16, lineHeight: 1 }}>›</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function MobileNavDrawer({ open, shown, onClose, pathname, remindersOpen, waitlistOpen, openChat, openReminders, openWaitlist, unreadCount, liveReminderCount, liveWaitlistCount, chatPulse, reminderPulse, waitlistPulse }: { open: boolean; shown: boolean; onClose: () => void; pathname: string | null; remindersOpen: boolean; waitlistOpen: boolean; openChat: () => void; openReminders: () => void; openWaitlist: () => void; unreadCount: number; liveReminderCount: number; liveWaitlistCount: number; chatPulse: boolean; reminderPulse: boolean; waitlistPulse: boolean; }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -444,7 +587,7 @@ function MobileNavDrawer({ open, shown, onClose, pathname, remindersOpen, waitli
   );
 }
 
-function SidebarItem({ icon, label, active = false, badgeCount = 0, pulse = false, expanded, href, onClick, divider = false }: { icon: React.ReactNode; label: string; active?: boolean; badgeCount?: number; pulse?: boolean; expanded: boolean; href?: string; onClick?: () => void; divider?: boolean; }) {
+function SidebarItem({ icon, label, active = false, badgeCount = 0, pulse = false, expanded, href, onClick, divider = false, chevronOpen, showChevron = false }: { icon: React.ReactNode; label: string; active?: boolean; badgeCount?: number; pulse?: boolean; expanded: boolean; href?: string; onClick?: () => void; divider?: boolean; chevronOpen?: boolean; showChevron?: boolean; }) {
   const content = (
     <>
       <span className={cn("relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] border transition-colors duration-200", active ? "border-white/[0.16] bg-[linear-gradient(180deg,rgba(255,248,240,0.06)_0%,rgba(255,248,240,0.028)_100%)] text-[var(--text)] shadow-[0_10px_24px_rgba(0,0,0,0.12)]" : "border-white/[0.06] bg-[linear-gradient(180deg,rgba(255,250,244,0.05)_0%,rgba(255,248,240,0.016)_100%)] text-white/72 group-hover:border-white/[0.10] group-hover:bg-[linear-gradient(180deg,rgba(255,250,244,0.06)_0%,rgba(255,248,240,0.025)_100%)] group-hover:text-white")}>{icon}
@@ -452,9 +595,16 @@ function SidebarItem({ icon, label, active = false, badgeCount = 0, pulse = fals
           <span className="absolute -right-1 -top-1"><BrandBadge count={badgeCount} pulse={pulse} /></span>
         ) : null}
       </span>
-      <span className={cn("flex min-w-0 items-center justify-between overflow-hidden transition-all duration-200", expanded ? "ml-2.5 w-[112px] opacity-100" : "ml-0 w-0 opacity-0") }>
+      <span className={cn("flex min-w-0 items-center justify-between overflow-hidden transition-all duration-200", expanded ? "ml-2.5 w-[154px] opacity-100" : "ml-0 w-0 opacity-0") }>
         <span className="truncate text-sm font-medium">{label}</span>
-        {badgeCount > 0 ? <BrandBadge count={badgeCount} pulse={pulse} /> : null}
+        <span className="ml-2 inline-flex shrink-0 items-center gap-1.5">
+          {badgeCount > 0 ? <BrandBadge count={badgeCount} pulse={pulse} /> : null}
+          {showChevron ? (
+            <span className={cn("inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.035] text-[#d6c3a3]/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all duration-200 group-hover:border-white/[0.13] group-hover:bg-white/[0.065] group-hover:text-[#f4eadc]", chevronOpen && "rotate-180 border-[#d6c3a3]/18 bg-[#d6c3a3]/10 text-[#f4eadc]")}>
+              <ChevronDownIcon className="h-[16px] w-[16px]" />
+            </span>
+          ) : null}
+        </span>
       </span>
     </>
   );
@@ -574,6 +724,10 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
   const [userMenuShown, setUserMenuShown] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [settingsMenuShown, setSettingsMenuShown] = useState(false);
+  const [invoiceMenuOpen, setInvoiceMenuOpen] = useState(false);
+  const [invoiceMenuShown, setInvoiceMenuShown] = useState(false);
+  const [sidebarInvoicesOpen, setSidebarInvoicesOpen] = useState(false);
+  const invoiceTopbarRef = useRef<HTMLButtonElement | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileMenuShown, setMobileMenuShown] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -605,6 +759,7 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
   useEffect(() => { const next = Math.max(0, Number.isFinite(waitlistCount) ? Math.trunc(waitlistCount) : 0); setLiveWaitlistCount(next); previousWaitlistCount.current = next; }, [waitlistCount]);
   useEffect(() => { if (!userMenuOpen) return; const t = window.setTimeout(() => setUserMenuShown(true), 10); return () => window.clearTimeout(t); }, [userMenuOpen]);
   useEffect(() => { if (!settingsMenuOpen) return; const t = window.setTimeout(() => setSettingsMenuShown(true), 10); return () => window.clearTimeout(t); }, [settingsMenuOpen]);
+  useEffect(() => { if (!invoiceMenuOpen) return; const t = window.setTimeout(() => setInvoiceMenuShown(true), 10); return () => window.clearTimeout(t); }, [invoiceMenuOpen]);
   useEffect(() => { if (!mobileMenuOpen) return; const t = window.setTimeout(() => setMobileMenuShown(true), 10); return () => window.clearTimeout(t); }, [mobileMenuOpen]);
   useEffect(() => {
     const syncIsMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -716,19 +871,31 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
   function openWaitlist() { const params = new URLSearchParams(searchParams?.toString() ?? ""); params.set("openWaitlist", "1"); const qs = params.toString(); router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }); }
   function closeUserMenu() { setUserMenuShown(false); window.setTimeout(() => setUserMenuOpen(false), 160); }
   function closeSettingsMenu() { setSettingsMenuShown(false); window.setTimeout(() => setSettingsMenuOpen(false), 160); }
+  function closeInvoiceMenu() { setInvoiceMenuShown(false); window.setTimeout(() => setInvoiceMenuOpen(false), 160); }
   function closeMobileMenu() { setMobileMenuShown(false); window.setTimeout(() => setMobileMenuOpen(false), 160); }
-  function toggleSettingsMenu() { if (settingsMenuOpen) { closeSettingsMenu(); return; } closeMobileMenu(); setUserMenuShown(false); setUserMenuOpen(false); setSettingsMenuOpen(true); }
+  function toggleSettingsMenu() { if (settingsMenuOpen) { closeSettingsMenu(); return; } closeInvoiceMenu(); closeMobileMenu(); setUserMenuShown(false); setUserMenuOpen(false); setSettingsMenuOpen(true); }
+  function toggleInvoiceMenu() { if (invoiceMenuOpen) { closeInvoiceMenu(); return; } closeSettingsMenu(); closeMobileMenu(); setUserMenuShown(false); setUserMenuOpen(false); setInvoiceMenuOpen(true); }
   function toggleMobileDrawer() {
     if (mobileMenuOpen) {
       closeMobileMenu();
       return;
     }
     closeSettingsMenu();
+    closeInvoiceMenu();
     setUserMenuShown(false);
     setUserMenuOpen(false);
     setMobileMenuOpen(true);
   }
   function openGoogleSetup() { const params = new URLSearchParams(searchParams?.toString() ?? ""); params.set("openGoogleSetup", "1"); params.delete("success"); params.delete("error"); params.delete("link"); const qs = params.toString(); closeSettingsMenu(); router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }); }
+  function openInvoiceTarget(href: string) { closeInvoiceMenu(); closeSettingsMenu(); closeUserMenu(); closeMobileMenu(); router.push(href); }
+
+  function toggleSidebarInvoices() {
+    if (!expanded) {
+      openInvoiceTarget("/rechnungen");
+      return;
+    }
+    setSidebarInvoicesOpen((value) => !value);
+  }
 
   const googleSetupActive = pathname?.startsWith("/calendar/google") || searchParams?.get("openGoogleSetup") === "1";
   const showGoogleSetupAlert = googleSetupAlertCount > 0;
@@ -747,6 +914,7 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
   function navigateDashboard() {
     closeMobileMenu();
     closeSettingsMenu();
+    closeInvoiceMenu();
     closeUserMenu();
     router.push("/dashboard");
   }
@@ -754,6 +922,7 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
   function navigateDashboardCalendar() {
     closeMobileMenu();
     closeSettingsMenu();
+    closeInvoiceMenu();
     closeUserMenu();
 
     const markScrollRequest = () => {
@@ -792,6 +961,7 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
   function navigateReceipts() {
     closeMobileMenu();
     closeSettingsMenu();
+    closeInvoiceMenu();
     closeUserMenu();
     router.push("/rechnungen");
   }
@@ -801,7 +971,7 @@ return (
 <aside
   className={cn(
     "fixed inset-y-0 left-0 z-50 border-r border-white/[0.05] bg-[linear-gradient(180deg,rgba(255,250,244,0.05)_0%,rgba(255,248,240,0.018)_100%)] shadow-[0_24px_72px_rgba(0,0,0,0.22)] backdrop-blur-[24px] saturate-[138%] transition-[width] duration-200",
-    isMobile ? "hidden" : expanded ? "block w-[216px]" : "block w-[60px]"
+    isMobile ? "hidden" : expanded ? "block w-[248px]" : "block w-[72px]"
   )}
   onMouseEnter={() => { if (!isMobile) setExpanded(true); }}
   onMouseLeave={() => { if (!isMobile) setExpanded(false); }}
@@ -812,15 +982,15 @@ return (
     toggleMobileDrawer();
   }}
 >
-  <div className="flex h-full flex-col px-2 pb-3">
-    <div className="flex h-[100px] items-center">
+  <div className="flex h-full flex-col px-3 pb-3">
+    <div className="flex h-[112px] items-center">
       <button
         type="button"
         onClick={() => { if (typeof window !== "undefined" && window.innerWidth < 768) { toggleMobileDrawer(); return; } setExpanded((value) => !value); }}
-        className="flex h-10 w-full items-center rounded-[18px] px-1.5 text-left transition hover:bg-white/[0.04]"
+        className="flex h-[58px] w-full items-center rounded-[22px] px-0 text-left transition hover:bg-white/[0.04]"
         aria-label="Sidebar ein- oder ausklappen"
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#111216] shadow-[0_0_0_2px_rgba(11,11,12,0.95),0_0_0_4px_#D6C3A3]">
+        <span className="flex h-[46px] w-[46px] shrink-0 items-center justify-center overflow-hidden rounded-full border-[3px] border-[#111216] shadow-[0_0_0_2px_rgba(11,11,12,0.95),0_0_0_4px_#D6C3A3,0_12px_28px_rgba(0,0,0,0.20)]">
           <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[#0d0d10] [&_img]:h-full [&_img]:w-full [&_img]:object-cover">
             <Logo showText={false} />
           </span>
@@ -829,12 +999,12 @@ return (
         <span
           className={cn(
             "overflow-hidden transition-all duration-200",
-            expanded ? "ml-2.5 w-[112px] opacity-80" : "ml-0 w-0 opacity-50"
+            expanded ? "ml-3 w-[166px] opacity-100" : "ml-0 w-0 opacity-0"
           )}
         >
-          <span className="flex h-10 flex-col justify-center leading-tight">
-            <span className="block text-sm font-semibold tracking-[0.01em] text-[#f4eadc]">Magnifique CRM</span>
-            <span className="block text-[11px] text-[#d6c3a3]/55">Navigation</span>
+          <span className="flex h-[46px] min-w-0 flex-col justify-center leading-tight">
+            <span className="block truncate text-[14px] font-semibold tracking-[0.01em] text-[#f4eadc]">Magnifique CRM</span>
+            <span className="mt-0.5 block truncate text-[11px] text-[#d6c3a3]/58">Navigation</span>
           </span>
         </span>
       </button>
@@ -846,7 +1016,25 @@ return (
         <SidebarItem icon={<CalendarIcon />} label="Kalender" href={isMobile ? undefined : "/calendar"} onClick={isMobile ? toggleMobileDrawer : undefined} active={isActive("/calendar")} expanded={expanded} />
         <SidebarItem icon={<UsersIcon />} label="Kunden" href={isMobile ? undefined : "/customers"} onClick={isMobile ? toggleMobileDrawer : undefined} active={isActive("/customers")} expanded={expanded} />
         <SidebarItem icon={<ServicesIcon />} label="Dienstleistungen" href={isMobile ? undefined : "/services"} onClick={isMobile ? toggleMobileDrawer : undefined} active={isActive("/services")} expanded={expanded} />
-        <SidebarItem icon={<ReceiptIcon />} label="Rechnungen" href={isMobile ? undefined : "/rechnungen"} onClick={isMobile ? toggleMobileDrawer : undefined} active={isActive("/rechnungen")} expanded={expanded} />
+        <SidebarItem
+          icon={<ReceiptIcon />}
+          label="Rechnungen"
+          onClick={toggleSidebarInvoices}
+          href={expanded ? undefined : "/rechnungen"}
+          active={isActive("/rechnungen")}
+          expanded={expanded}
+          showChevron={expanded}
+          chevronOpen={sidebarInvoicesOpen}
+        />
+        {expanded && sidebarInvoicesOpen ? (
+          <div className="ml-[47px] mt-1 space-y-0.5 border-l border-[rgba(214,195,163,0.11)] pl-3">
+            <Link href="/rechnungen" className={cn("block w-full rounded-[12px] px-2 py-1.5 text-left text-[12px] font-medium transition hover:bg-white/[0.045] hover:text-white", pathname === "/rechnungen" && !searchParams?.get("invoice") && !searchParams?.get("closingPanel") ? "text-[#f4eadc]" : "text-white/62")}>Rechnungen öffnen</Link>
+            <Link href="/rechnungen?invoice=1" className={cn("block w-full rounded-[12px] px-2 py-1.5 text-left text-[12px] font-semibold transition hover:bg-[rgba(214,195,163,0.09)] hover:text-[#fff3dc]", searchParams?.get("invoice") === "1" ? "bg-[rgba(214,195,163,0.09)] text-[#fff3dc]" : "text-[#ead1a4]")}>+ Rechnung</Link>
+            <Link href="/rechnungen?closingPanel=day" className={cn("block w-full rounded-[12px] px-2 py-1.5 text-left text-[12px] font-medium transition hover:bg-white/[0.045] hover:text-white", searchParams?.get("closingPanel") === "day" ? "text-[#f4eadc]" : "text-white/62")}>Tagesabschluss</Link>
+            <Link href="/rechnungen?closingPanel=month" className={cn("block w-full rounded-[12px] px-2 py-1.5 text-left text-[12px] font-medium transition hover:bg-white/[0.045] hover:text-white", searchParams?.get("closingPanel") === "month" ? "text-[#f4eadc]" : "text-white/62")}>Monatsabschluss</Link>
+            <Link href="/rechnungen?closingPanel=year" className={cn("block w-full rounded-[12px] px-2 py-1.5 text-left text-[12px] font-medium transition hover:bg-white/[0.045] hover:text-white", searchParams?.get("closingPanel") === "year" ? "text-[#f4eadc]" : "text-white/62")}>Jahresabschluss</Link>
+          </div>
+        ) : null}
         <SidebarItem icon={<ChatIcon />} label="Team Chat" onClick={isMobile ? toggleMobileDrawer : openChat} active={Boolean(pathname?.startsWith("/dashboard/chat")) || chatOpen} badgeCount={unreadCount} pulse={chatPulse} expanded={expanded} />
         <SidebarItem icon={<BellIcon />} label="Reminder" onClick={isMobile ? toggleMobileDrawer : openReminders} active={remindersOpen} badgeCount={liveReminderCount} pulse={reminderPulse} expanded={expanded} />
         <SidebarItem icon={<ClockIcon />} label="Warteliste" onClick={isMobile ? toggleMobileDrawer : openWaitlist} active={waitlistOpen} badgeCount={liveWaitlistCount} pulse={waitlistPulse} expanded={expanded} />
@@ -854,7 +1042,59 @@ return (
     </div>
 
     <div className="border-t border-[rgba(214,195,163,0.10)] pt-2.5">
-      <SidebarItem icon={<SettingsIcon />} label="Einstellungen" onClick={isMobile ? toggleMobileDrawer : toggleSettingsMenu} active={settingsMenuOpen || googleSetupActive} badgeCount={showGoogleSetupAlert ? googleSetupAlertCount : 0} expanded={expanded} />
+      {expanded ? (
+        <div className="space-y-1">
+          <div className="mb-2 flex min-w-0 items-center gap-2 px-1.5 py-2">
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#111216]"
+              style={{ boxShadow: `0 0 0 2px rgba(11,11,12,0.92), 0 0 0 4px ${avatarTheme.color}`, background: avatarTheme.soft ?? `${avatarTheme.color}22` }}
+            >
+              <img src={avatarSrc} alt="Benutzerfoto" className="block h-full w-full object-cover" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13px] font-semibold text-[#f4eadc]">{userLabel ?? "Benutzer"}</span>
+              <span className="mt-0.5 block truncate text-[11px] text-[#d6c3a3]/55">Konto & Einstellungen</span>
+            </span>
+          </div>
+
+          <SidebarItem icon={<UserCircleIcon />} label="Profil" href="/profile" active={isActive("/profile")} expanded={expanded} />
+          <SidebarItem icon={<SettingsIcon />} label="Einstellungen" href="/einstellungen" active={isActive("/einstellungen") || googleSetupActive} badgeCount={showGoogleSetupAlert ? googleSetupAlertCount : 0} expanded={expanded} />
+
+          <form action="/auth/sign-out" method="post" className="m-0">
+            <button
+              type="submit"
+              className="clientique-touchable clientique-touchable--soft group flex h-10 w-full items-center rounded-[16px] px-1.5 text-left text-red-300/90 transition-colors duration-200 hover:bg-red-500/[0.07] hover:text-red-200"
+            >
+              <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] border border-red-400/[0.14] bg-red-500/[0.07] text-red-300/90 transition-colors duration-200 group-hover:border-red-300/[0.20] group-hover:bg-red-500/[0.10] group-hover:text-red-200">
+                <LogoutIcon />
+              </span>
+              <span className="ml-2.5 flex min-w-0 items-center overflow-hidden transition-all duration-200">
+                <span className="truncate text-sm font-medium">Abmelden</span>
+              </span>
+            </button>
+          </form>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => { closeSettingsMenu(); closeMobileMenu(); setUserMenuOpen(true); }}
+          className="clientique-touchable clientique-touchable--soft group relative flex h-11 w-full items-center justify-center rounded-[18px] transition-colors duration-200 hover:bg-white/[0.04]"
+          aria-label="Konto öffnen"
+          title="Profil, Einstellungen, Abmelden"
+        >
+          <span
+            className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#111216]"
+            style={{ boxShadow: `0 0 0 2px rgba(11,11,12,0.92), 0 0 0 4px ${avatarTheme.color}`, background: avatarTheme.soft ?? `${avatarTheme.color}22` }}
+          >
+            <img src={avatarSrc} alt="Benutzerfoto" className="block h-full w-full object-cover" />
+          </span>
+          {showGoogleSetupAlert ? (
+            <span className="absolute right-1 top-0">
+              <BrandBadge count={googleSetupAlertCount} pulse />
+            </span>
+          ) : null}
+        </button>
+      )}
     </div>
   </div>
 </aside>
@@ -864,7 +1104,7 @@ return (
         "fixed inset-x-0 z-40 bg-transparent shadow-none backdrop-blur-0",
         isMobile
           ? "px-1 pt-[max(env(safe-area-inset-top),10px)]"
-          : "top-4 px-5 lg:pl-[88px] lg:pr-2 xl:top-3"
+          : "top-4 px-5 lg:pl-[100px] lg:pr-2 xl:top-3"
       )}
       style={isMobile ? { paddingTop: "max(env(safe-area-inset-top), 10px)" } : undefined}
     >
@@ -945,6 +1185,27 @@ return (
                   return (
                     <button key={item.href} type="button" onClick={openChat} className={commonClass}>
                       {content}
+                    </button>
+                  );
+                }
+
+                if (item.key === "receipts") {
+                  return (
+                    <button
+                      key={item.href}
+                      ref={invoiceTopbarRef}
+                      type="button"
+                      onClick={toggleInvoiceMenu}
+                      className={cn(commonClass, "group", invoiceMenuOpen && "clientique-nav-pill-active")}
+                      aria-haspopup="menu"
+                      aria-expanded={invoiceMenuOpen}
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        Rechnungen
+                        <span className={cn("inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.035] text-[#d6c3a3]/72 transition-all duration-200 group-hover:border-white/[0.13] group-hover:bg-white/[0.065] group-hover:text-[#f4eadc]", invoiceMenuOpen && "rotate-180 border-[#d6c3a3]/18 bg-[#d6c3a3]/10 text-[#f4eadc]")}>
+                          <ChevronDownIcon className="h-[15px] w-[15px]" />
+                        </span>
+                      </span>
                     </button>
                   );
                 }
@@ -1073,6 +1334,7 @@ return (
       reminderPulse={reminderPulse}
       waitlistPulse={waitlistPulse}
     />
+    <InvoiceMenuPopover open={invoiceMenuOpen} shown={invoiceMenuShown} onClose={closeInvoiceMenu} anchorRef={invoiceTopbarRef} onSelect={openInvoiceTarget} />
     <UserMenuPopover open={userMenuOpen} shown={userMenuShown} onClose={closeUserMenu} userLabel={userLabel} userEmail={userEmail} currentUserId={currentUserId} avatarUrl={avatarUrl} avatarRingColor={avatarRingColor} googleSetupAlertCount={googleSetupAlertCount} />
   </>
 );
