@@ -723,7 +723,6 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
   const searchParams = useSearchParams();
 
   const [unreadCount, setUnreadCount] = useState(0);
-  const [customerUnreadCount, setCustomerUnreadCount] = useState(0);
   const [liveReminderCount, setLiveReminderCount] = useState(Math.max(0, Number.isFinite(reminderCount) ? Math.trunc(reminderCount) : 0));
   const [liveWaitlistCount, setLiveWaitlistCount] = useState(Math.max(0, Number.isFinite(waitlistCount) ? Math.trunc(waitlistCount) : 0));
   const [chatPulse, setChatPulse] = useState(false);
@@ -755,7 +754,6 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
   };
 
   const previousChatCount = useRef(0);
-  const previousCustomerUnreadCount = useRef(0);
   const previousReminderCount = useRef(reminderCount);
   const previousWaitlistCount = useRef(waitlistCount);
   const avatarTheme = getAvatarTheme(userLabel, avatarRingColor);
@@ -764,8 +762,6 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
     if (!tenantId || !currentUserId) return null;
     return `team-chat:last-read:${tenantId}:${currentUserId}`;
   }, [tenantId, currentUserId]);
-
-  const communicationUnreadCount = Math.max(0, unreadCount + customerUnreadCount);
 
   useEffect(() => { const next = Math.max(0, Number.isFinite(reminderCount) ? Math.trunc(reminderCount) : 0); setLiveReminderCount(next); previousReminderCount.current = next; }, [reminderCount]);
   useEffect(() => { const next = Math.max(0, Number.isFinite(waitlistCount) ? Math.trunc(waitlistCount) : 0); setLiveWaitlistCount(next); previousWaitlistCount.current = next; }, [waitlistCount]);
@@ -840,44 +836,6 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
   }, [storageKey, currentUserId, pathname, searchParams]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadCustomerUnreadCount() {
-      try {
-        const res = await fetch("/api/kommunikation/counts", { cache: "no-store" });
-        if (!res.ok) {
-          if (!cancelled) setCustomerUnreadCount(0);
-          return;
-        }
-
-        const json = await res.json();
-        const nextCount = Math.max(0, Math.trunc(Number(json?.customerUnreadCount ?? 0)));
-        if (nextCount > previousCustomerUnreadCount.current) {
-          setChatPulse(true);
-          window.setTimeout(() => setChatPulse(false), 3000);
-        }
-        previousCustomerUnreadCount.current = nextCount;
-        if (!cancelled) setCustomerUnreadCount(nextCount);
-      } catch {
-        if (!cancelled) setCustomerUnreadCount(0);
-      }
-    }
-
-    loadCustomerUnreadCount();
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") loadCustomerUnreadCount();
-    }, 3000);
-    const onFocus = () => loadCustomerUnreadCount();
-    window.addEventListener("focus", onFocus);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, [pathname, searchParams]);
-
-  useEffect(() => {
     const nextReminderCount = Math.max(0, Number.isFinite(reminderCount) ? Math.trunc(reminderCount) : 0);
     if (nextReminderCount > previousReminderCount.current) {
       setReminderPulse(true);
@@ -913,8 +871,8 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
 
   useEffect(() => {
     const baseTitle = "Clientique";
-    document.title = communicationUnreadCount > 0 ? `(${communicationUnreadCount}) ${baseTitle}` : baseTitle;
-  }, [communicationUnreadCount]);
+    document.title = unreadCount > 0 ? `(${unreadCount}) ${baseTitle}` : baseTitle;
+  }, [unreadCount]);
 
   function openChat() { closeMobileMenu(); closeSettingsMenu(); closeInvoiceMenu(); closeUserMenu(); router.push("/kommunikation?tab=team"); }
   function openReminders() { const params = new URLSearchParams(searchParams?.toString() ?? ""); params.set("openReminders", "1"); const qs = params.toString(); router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }); }
@@ -1085,7 +1043,7 @@ return (
             <Link href="/rechnungen?closingPanel=year" className={cn("block w-full rounded-[12px] px-2 py-1.5 text-left text-[12px] font-medium transition hover:bg-white/[0.045] hover:text-white", searchParams?.get("closingPanel") === "year" ? "text-[#f4eadc]" : "text-white/62")}>Jahresabschluss</Link>
           </div>
         ) : null}
-        <SidebarItem icon={<CustomerChatIcon />} label="Kommunikation" href={isMobile ? undefined : "/kommunikation"} onClick={isMobile ? toggleMobileDrawer : undefined} active={isActive("/kommunikation") || chatOpen} badgeCount={communicationUnreadCount} pulse={chatPulse} expanded={expanded} />
+        <SidebarItem icon={<CustomerChatIcon />} label="Kommunikation" href={isMobile ? undefined : "/kommunikation"} onClick={isMobile ? toggleMobileDrawer : undefined} active={isActive("/kommunikation") || chatOpen} badgeCount={unreadCount} pulse={chatPulse} expanded={expanded} />
         <SidebarItem icon={<BellIcon />} label="Reminder" onClick={isMobile ? toggleMobileDrawer : openReminders} active={remindersOpen} badgeCount={liveReminderCount} pulse={reminderPulse} expanded={expanded} />
         <SidebarItem icon={<ClockIcon />} label="Warteliste" onClick={isMobile ? toggleMobileDrawer : openWaitlist} active={waitlistOpen} badgeCount={liveWaitlistCount} pulse={waitlistPulse} expanded={expanded} />
       </div>
@@ -1229,7 +1187,7 @@ return (
                 const content = (
                   <span className="inline-flex items-center gap-2">
                     {item.label}
-                    {item.key === "communication" && communicationUnreadCount > 0 ? <BrandBadge count={communicationUnreadCount} pulse={chatPulse} /> : null}
+                    {item.key === "communication" && unreadCount > 0 ? <BrandBadge count={unreadCount} pulse={chatPulse} /> : null}
                   </span>
                 );
 
@@ -1358,7 +1316,7 @@ return (
       isReceiptsActive={receiptsIslandActive}
       isRemindersActive={remindersOpen}
       isChatActive={chatIslandActive}
-      unreadCount={communicationUnreadCount}
+      unreadCount={unreadCount}
       reminderCount={liveReminderCount}
       chatPulse={chatPulse}
       reminderPulse={reminderPulse}
@@ -1379,7 +1337,7 @@ return (
       openChat={openChat}
       openReminders={openReminders}
       openWaitlist={openWaitlist}
-      unreadCount={communicationUnreadCount}
+      unreadCount={unreadCount}
       liveReminderCount={liveReminderCount}
       liveWaitlistCount={liveWaitlistCount}
       chatPulse={chatPulse}

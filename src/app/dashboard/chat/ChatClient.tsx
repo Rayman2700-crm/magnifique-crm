@@ -3718,6 +3718,7 @@ export default function ChatClient({
   currentUserId,
   currentUserName,
   initialMessages,
+  initialDraft = "",
   embedded = false,
   onRealtimeStatusChange,
 }: {
@@ -3725,12 +3726,13 @@ export default function ChatClient({
   currentUserId: string;
   currentUserName: string;
   initialMessages: ChatMessageDTO[];
+  initialDraft?: string;
   embedded?: boolean;
   onRealtimeStatusChange?: (status: RealtimeStatus) => void;
 }) {
   const supabase = useMemo(() => supabaseBrowser(), []);
   const [messages, setMessages] = useState<ChatMessageDTO[]>(initialMessages);
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialDraft);
   const [sending, setSending] = useState(false);
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   const [reactionsByMessage, setReactionsByMessage] = useState<
@@ -3774,6 +3776,14 @@ export default function ChatClient({
     null,
   );
   const [autoScroll, setAutoScroll] = useState(true);
+
+  useEffect(() => {
+    if (!initialDraft) return;
+    setText((current) => (current.trim() ? current : initialDraft));
+    requestAnimationFrame(() => {
+      composerTextareaRef.current?.focus();
+    });
+  }, [initialDraft]);
 
   const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(
     null,

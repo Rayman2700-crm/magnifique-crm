@@ -4,6 +4,8 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { getEffectiveTenantId } from "@/lib/effectiveTenant";
 import KommunikationComposerClient from "./KommunikationComposerClient";
 import KommunikationChatSearchClient from "./KommunikationChatSearchClient";
+import KommunikationTeamChatPanel from "./KommunikationTeamChatPanel";
+import KommunikationTeamUnreadBadge from "./KommunikationTeamUnreadBadge";
 
 export const dynamic = "force-dynamic";
 
@@ -98,6 +100,8 @@ type SearchParams =
       panel?: string;
       q?: string;
       mobileList?: string;
+      tab?: string;
+      teamChatDraft?: string;
     }
   | Promise<{
       c?: string;
@@ -107,6 +111,8 @@ type SearchParams =
       panel?: string;
       q?: string;
       mobileList?: string;
+      tab?: string;
+      teamChatDraft?: string;
     }>;
 
 type ConversationRow = {
@@ -238,6 +244,49 @@ function cleanPhoneForCustomer(value: string | null | undefined) {
   return raw.replace(/[^0-9+]/g, "");
 }
 
+function buildInternalDiscussionDraft(params: {
+  conversation: ConversationRow;
+  messages: MessageRow[];
+}) {
+  const conversation = params.conversation;
+  const lastMessages = params.messages.slice(-6);
+  const customerName = conversationName(conversation);
+  const phone =
+    conversation.external_contact ||
+    conversation.external_contact_normalized ||
+    "—";
+  const profileLink = conversation.customer_profile_id
+    ? `/customers/${conversation.customer_profile_id}`
+    : null;
+  const communicationLink = `/kommunikation?status=all&c=${conversation.id}`;
+
+  const messageLines = lastMessages.length
+    ? lastMessages
+        .map((message) => {
+          const author = message.direction === "INBOUND" ? customerName : "CRM";
+          const body = String(message.body || "").replace(/\s+/g, " ").trim();
+          const preview = body.length > 260 ? `${body.slice(0, 260)}…` : body;
+          return `- ${author}: ${preview || "(Anhang/Datei)"}`;
+        })
+        .join("\n")
+    : "- Noch keine Nachrichten vorhanden.";
+
+  return [
+    "📣 Kundenanfrage intern besprechen",
+    "",
+    `Kunde: ${customerName}`,
+    `Kanal: ${channelLabel(conversation.channel)} · ${tenantName(conversation)}`,
+    `Telefon: ${phone}`,
+    `Status: ${conversation.status}`,
+    "",
+    "Letzte Nachrichten:",
+    messageLines,
+    "",
+    `Kommunikation öffnen: ${communicationLink}`,
+    profileLink ? `Kundenprofil öffnen: ${profileLink}` : "Kundenprofil: noch nicht zugeordnet",
+  ].join("\n");
+}
+
 function normalizePhoneDigits(value: string | null | undefined) {
   return String(value ?? "")
     .replace(/[^0-9+]/g, "")
@@ -311,6 +360,66 @@ function mapInitialTwilioStatus(status: string | null | undefined) {
   if (["failed", "undelivered", "canceled"].includes(normalized))
     return "FAILED";
   return "QUEUED";
+}
+
+function messageStatusLabel(status: string | null | undefined) {
+  const normalized = String(status ?? "").toUpperCase();
+  switch (normalized) {
+    case "READ":
+      return "Gelesen";
+    case "DELIVERED":
+      return "Zugestellt";
+    case "SENT":
+      return "Gesendet";
+    case "QUEUED":
+      return "Wartet";
+    case "FAILED":
+      return "Fehler";
+    case "RECEIVED":
+      return "Empfangen";
+    case "DRAFT":
+      return "Entwurf";
+    default:
+      return normalized ? normalized : "—";
+  }
+}
+
+function outboundStatusMarks(status: string | null | undefined) {
+  const normalized = String(status ?? "").toUpperCase();
+  if (normalized === "READ") {
+    return <span className="font-bold text-[#53b6ff]">✓✓</span>;
+  }
+  if (normalized === "DELIVERED") {
+    return <span className="font-bold text-white/55">✓✓</span>;
+  }
+  if (normalized === "SENT") {
+    return <span className="font-bold text-white/50">✓</span>;
+  }
+  if (normalized === "QUEUED") {
+    return <span className="text-white/40">◷</span>;
+  }
+  if (normalized === "FAILED") {
+    return <span className="font-bold text-red-300">!</span>;
+  }
+  return <span className="font-bold text-white/45">✓</span>;
+}
+
+function inboundStatusMark(status: string | null | undefined) {
+  const normalized = String(status ?? "").toUpperCase();
+  if (normalized === "FAILED") {
+    return <span className="font-bold text-red-300">!</span>;
+  }
+  return <span className="text-white/36">↙</span>;
+}
+
+function CountBadge({ count }: { count: number }) {
+  const safeCount = Math.max(0, Math.trunc(Number(count) || 0));
+  if (safeCount <= 0) return null;
+  return (
+    <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#2f79ff] px-1.5 text-[10px] font-extrabold leading-none text-white shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_5px_14px_rgba(47,121,255,0.32)]">
+      {safeCount > 99 ? "99+" : safeCount}
+    </span>
+  );
 }
 
 async function assignConversationToCustomer(formData: FormData) {
@@ -498,6 +607,52 @@ async function createCustomerFromConversation(formData: FormData) {
 
   redirect(
     `/kommunikation?status=${encodeURIComponent(statusFilter)}&c=${encodeURIComponent(conversation.id)}`,
+  );
+}
+
+
+async function toggleConversationStatus(formData: FormData) {
+  "use server";
+
+  const conversationId = String(formData.get("conversation_id") ?? "").trim();
+  const nextStatusRaw = String(formData.get("next_status") ?? "").trim().toUpperCase();
+  const nextStatus = nextStatusRaw === "CLOSED" ? "CLOSED" : "OPEN";
+
+  if (!conversationId) {
+    redirect("/kommunikation?status=open&panel=chats");
+  }
+
+  const supabase = await supabaseServer();
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData.user;
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const { data: conversation } = await supabase
+    .from("customer_conversations")
+    .select("id, status")
+    .eq("id", conversationId)
+    .maybeSingle();
+
+  if (!conversation) {
+    redirect("/kommunikation?status=open&panel=chats");
+  }
+
+  await supabase
+    .from("customer_conversations")
+    .update({
+      status: nextStatus,
+      ...(nextStatus === "CLOSED" ? { unread_count: 0 } : {}),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", conversation.id);
+
+  const targetStatus = nextStatus === "CLOSED" ? "all" : "open";
+
+  redirect(
+    `/kommunikation?status=${encodeURIComponent(targetStatus)}&c=${encodeURIComponent(conversation.id)}&panel=chats`,
   );
 }
 
@@ -764,6 +919,8 @@ export default async function KommunikationPage({
   const wantsMobileChatList = sp?.mobileList === "1";
   const chatSearchRaw = typeof sp?.q === "string" ? sp.q : "";
   const chatSearch = chatSearchRaw.trim().toLowerCase();
+  const selectedTab = sp?.tab === "team" ? "team" : "customers";
+  const teamChatDraft = typeof sp?.teamChatDraft === "string" ? sp.teamChatDraft : "";
 
   const supabase = await supabaseServer();
   const { data: userData } = await supabase.auth.getUser();
@@ -790,6 +947,79 @@ export default async function KommunikationPage({
     role: profile?.role ?? "PRACTITIONER",
     tenant_id: profile?.tenant_id ?? null,
   });
+
+
+  let communicationCountsQuery = supabase
+    .from("customer_conversations")
+    .select("status, unread_count");
+
+  if (role !== "ADMIN" && effectiveTenantId) {
+    communicationCountsQuery = communicationCountsQuery.eq("tenant_id", effectiveTenantId);
+  } else if (role === "ADMIN" && effectiveTenantId) {
+    communicationCountsQuery = communicationCountsQuery.eq("tenant_id", effectiveTenantId);
+  }
+
+  const { data: communicationCountsRaw } = await communicationCountsQuery;
+  const communicationCountRows = (communicationCountsRaw ?? []) as Array<{
+    status: string | null;
+    unread_count: number | null;
+  }>;
+  const openConversationCount = communicationCountRows.filter(
+    (row) => String(row.status ?? "OPEN").toUpperCase() === "OPEN",
+  ).length;
+  const closedConversationCount = communicationCountRows.filter(
+    (row) => String(row.status ?? "").toUpperCase() === "CLOSED",
+  ).length;
+  const allConversationCount = communicationCountRows.length;
+  const customerUnreadCount = communicationCountRows.reduce(
+    (sum, row) => sum + Math.max(0, Math.trunc(Number(row.unread_count ?? 0))),
+    0,
+  );
+
+  if (selectedTab === "team") {
+    return (
+      <main className="fixed inset-x-0 bottom-[calc(74px+env(safe-area-inset-bottom))] top-[88px] z-[60] w-full min-w-0 max-w-none overflow-hidden rounded-none border-y border-white/[0.08] bg-[linear-gradient(180deg,rgba(35,28,22,0.98)_0%,rgba(15,12,9,0.99)_100%)] text-white shadow-[-30px_30px_90px_rgba(0,0,0,0.48)] md:bottom-4 md:left-auto md:right-4 md:top-[96px] md:w-[min(760px,calc(100vw-112px))] md:min-w-[620px] md:max-w-[calc(100vw-112px)] md:resize-x md:rounded-[30px] md:border">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,rgba(214,195,163,0.15),transparent_32%),radial-gradient(circle_at_100%_0%,rgba(88,65,45,0.18),transparent_34%)]" />
+        <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
+          <header className="flex h-[74px] shrink-0 items-center justify-between border-b border-white/[0.08] bg-white/[0.035] px-4 md:px-5">
+            <div className="min-w-0">
+              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#d6c3a3]/72">Kommunikation</div>
+              <div className="mt-2 flex items-center gap-2">
+                <Link href="/kommunikation?tab=customers" className="rounded-full border border-white/[0.10] bg-white/[0.04] px-4 py-2 text-xs font-semibold text-white/58 transition hover:bg-white/[0.07] hover:text-white">
+                  <span className="inline-flex items-center">Kunden<CountBadge count={customerUnreadCount} /></span>
+                </Link>
+                <Link href="/kommunikation?tab=team" className="rounded-full border border-[#d6c3a3]/28 bg-[#d6c3a3]/16 px-4 py-2 text-xs font-semibold text-[#f7efe2] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                  <span className="inline-flex items-center">Team<KommunikationTeamUnreadBadge tenantId={effectiveTenantId} currentUserId={user.id} /></span>
+                </Link>
+              </div>
+            </div>
+            <Link href="/dashboard" aria-label="Kommunikation schließen" className="flex h-11 w-11 items-center justify-center rounded-[16px] border border-white/12 bg-white/[0.04] text-white/80 transition hover:bg-white/[0.10]">
+              <IconClose />
+            </Link>
+          </header>
+          <section className="min-h-0 flex-1 p-3 md:p-4">
+            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[24px] border border-white/[0.10] bg-black/[0.18] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <div className="flex shrink-0 items-center justify-between border-b border-white/[0.08] px-4 py-3">
+                <div>
+                  <h1 className="text-xl font-bold tracking-[-0.04em] text-[#f7efe2]">Team Chat</h1>
+                  <p className="mt-1 text-xs text-white/45">Interne Studio-Kommunikation</p>
+                </div>
+                <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-bold text-emerald-300">Live</span>
+              </div>
+              <div className="min-h-0 flex-1">
+                <KommunikationTeamChatPanel
+                  tenantId={effectiveTenantId}
+                  currentUserId={user.id}
+                  currentUserName={String(profile?.full_name ?? user.email ?? "Du")}
+                  initialDraft={teamChatDraft}
+                />
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+    );
+  }
 
   let conversationsQuery = supabase
     .from("customer_conversations")
@@ -1007,6 +1237,12 @@ export default async function KommunikationPage({
           tenantName: tenantName(selectedConversation),
         })
       : "";
+  const internalDiscussionDraft = selectedConversation
+    ? buildInternalDiscussionDraft({ conversation: selectedConversation, messages })
+    : "";
+  const internalDiscussionHref = selectedConversation
+    ? `/kommunikation?tab=team&teamChatDraft=${encodeURIComponent(internalDiscussionDraft)}`
+    : "/kommunikation?tab=team";
   const activeMobilePanel = selectedPanel || "chats";
   const showMobileSidePanel = !selectedConversation || activeMobilePanel !== "chats";
 
@@ -1334,21 +1570,35 @@ export default async function KommunikationPage({
             </div>
           ) : (
             <div className="p-4">
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-2xl font-semibold tracking-[-0.05em] text-[#f7efe2]">
-                    Chats
-                  </h2>
-                  <p className="mt-1 text-xs text-white/45">
-                    {conversations.length} Konversation(en)
-                  </p>
+              <div className="mb-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 shrink-0">
+                    <h2 className="text-2xl font-semibold tracking-[-0.05em] text-[#f7efe2]">
+                      Chats
+                    </h2>
+                    <p className="mt-1 text-xs text-white/45">
+                      {conversations.length} Konversation(en)
+                    </p>
+                  </div>
+
+                  <div className="grid min-w-[132px] flex-1 grid-cols-2 gap-2">
+                    <Link href="/kommunikation?tab=customers" className="inline-flex h-10 items-center justify-center rounded-full border border-[#d6c3a3]/28 bg-[#d6c3a3]/16 px-3 text-center text-xs font-semibold text-[#f7efe2] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:bg-[#d6c3a3]/20">
+                      <span className="inline-flex items-center justify-center">Kunden<CountBadge count={customerUnreadCount} /></span>
+                    </Link>
+                    <Link href="/kommunikation?tab=team" className="inline-flex h-10 items-center justify-center rounded-full border border-white/[0.10] bg-white/[0.04] px-3 text-center text-xs font-semibold text-white/58 transition hover:bg-white/[0.07] hover:text-white">
+                      <span className="inline-flex items-center justify-center">Team<KommunikationTeamUnreadBadge tenantId={effectiveTenantId} currentUserId={user.id} /></span>
+                    </Link>
+                  </div>
+
+                  <MobilePanelMenu
+                    statusFilter={statusFilter}
+                    selectedConversationId={selectedConversation?.id}
+                    activePanel={activeMobilePanel}
+                  />
                 </div>
-                <MobilePanelMenu
-                  statusFilter={statusFilter}
-                  selectedConversationId={selectedConversation?.id}
-                  activePanel={activeMobilePanel}
-                />
               </div>
+
+              <div className="mb-4 h-px w-full bg-white/[0.075] shadow-[0_1px_0_rgba(214,195,163,0.035)]" aria-hidden="true" />
 
               <KommunikationChatSearchClient
                 statusFilter={statusFilter}
@@ -1375,6 +1625,9 @@ export default async function KommunikationPage({
                   created_at: customer.created_at ?? null,
                   person: firstJoin<any>(customer.person),
                 }))}
+                openCount={openConversationCount}
+                closedCount={closedConversationCount}
+                allCount={allConversationCount}
               />
             </div>
           )}
@@ -1408,11 +1661,58 @@ export default async function KommunikationPage({
                     <div className="mt-0.5 truncate text-xs text-white/45">
                       {channelLabel(selectedConversation.channel)} ·{" "}
                       {tenantName(selectedConversation)} · Status{" "}
-                      {selectedConversation.status}
+                      {selectedConversation.status === "CLOSED" ? "Erledigt" : "Offen"}
                     </div>
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                  <Link
+                    href={internalDiscussionHref}
+                    scroll={false}
+                    className="hidden rounded-full border border-[#d6c3a3]/20 bg-[#d6c3a3]/10 px-4 py-2 text-xs font-semibold text-[#f7efe2]/80 transition hover:bg-[#d6c3a3]/15 lg:inline-flex"
+                    title="Diesen Kundenchat im Team Chat intern besprechen"
+                  >
+                    Intern besprechen
+                  </Link>
+                  <Link
+                    href={internalDiscussionHref}
+                    scroll={false}
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-[#d6c3a3]/18 bg-[#d6c3a3]/10 text-sm font-bold text-[#f7efe2]/75 transition hover:bg-[#d6c3a3]/15 lg:hidden"
+                    aria-label="Intern besprechen"
+                    title="Intern besprechen"
+                  >
+                    💬
+                  </Link>
+                  <form action={toggleConversationStatus} className="hidden sm:block">
+                    <input type="hidden" name="conversation_id" value={selectedConversation.id} />
+                    <input
+                      type="hidden"
+                      name="next_status"
+                      value={selectedConversation.status === "CLOSED" ? "OPEN" : "CLOSED"}
+                    />
+                    <button
+                      type="submit"
+                      className={`rounded-full border px-4 py-2 text-xs font-semibold transition ${selectedConversation.status === "CLOSED" ? "border-emerald-300/18 bg-emerald-300/10 text-emerald-100/75 hover:bg-emerald-300/15" : "border-[#d6c3a3]/20 bg-[#d6c3a3]/10 text-[#f7efe2]/80 hover:bg-[#d6c3a3]/15"}`}
+                      title={selectedConversation.status === "CLOSED" ? "Chat wieder öffnen" : "Chat als erledigt schließen"}
+                    >
+                      {selectedConversation.status === "CLOSED" ? "Wieder öffnen" : "Erledigt"}
+                    </button>
+                  </form>
+                  <form action={toggleConversationStatus} className="sm:hidden">
+                    <input type="hidden" name="conversation_id" value={selectedConversation.id} />
+                    <input
+                      type="hidden"
+                      name="next_status"
+                      value={selectedConversation.status === "CLOSED" ? "OPEN" : "CLOSED"}
+                    />
+                    <button
+                      type="submit"
+                      className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.045] text-xs font-bold text-white/72 hover:bg-white/[0.075]"
+                      aria-label={selectedConversation.status === "CLOSED" ? "Chat wieder öffnen" : "Chat erledigen"}
+                    >
+                      {selectedConversation.status === "CLOSED" ? "↻" : "✓"}
+                    </button>
+                  </form>
                   <MobilePanelMenu
                     statusFilter={statusFilter}
                     selectedConversationId={selectedConversation.id}
@@ -1480,11 +1780,14 @@ export default async function KommunikationPage({
                                 )}
                               </span>
                               {outbound ? (
-                                <span>
-                                  {message.status === "READ" ? "✓✓" : "✓"}
+                                <span title={messageStatusLabel(message.status)}>
+                                  {outboundStatusMarks(message.status)}
                                 </span>
                               ) : (
-                                <span>{message.status}</span>
+                                <span className="inline-flex items-center gap-1" title={messageStatusLabel(message.status)}>
+                                  {inboundStatusMark(message.status)}
+                                  <span>{messageStatusLabel(message.status)}</span>
+                                </span>
                               )}
                             </div>
                             {failed && message.error_message ? (

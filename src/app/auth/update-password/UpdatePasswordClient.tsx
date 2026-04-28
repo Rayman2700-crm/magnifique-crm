@@ -12,6 +12,11 @@ function readHashParams() {
   return new URLSearchParams(hash);
 }
 
+function cleanAuthUrlHash() {
+  if (typeof window === "undefined") return;
+  window.history.replaceState(null, "", window.location.pathname);
+}
+
 export default function UpdatePasswordClient() {
   const router = useRouter();
   const supabase = useMemo(() => supabaseBrowser(), []);
@@ -50,9 +55,7 @@ export default function UpdatePasswordClient() {
           refresh_token: refreshToken,
         });
 
-        if (typeof window !== "undefined") {
-          window.history.replaceState(null, "", window.location.pathname);
-        }
+        cleanAuthUrlHash();
 
         if (sessionError) {
           if (!mounted) return;
@@ -105,11 +108,25 @@ export default function UpdatePasswordClient() {
       const { error: updateError } = await supabase.auth.updateUser({ password });
 
       if (updateError) {
-        setError(updateError.message);
+        setError(updateError.message || "Passwort konnte nicht gespeichert werden.");
         return;
       }
 
-      setMessage("Passwort wurde gespeichert. Du wirst weitergeleitet …");
+      setMessage("Passwort wurde gespeichert. Benutzerprofil wird vorbereitet …");
+
+      const acceptResponse = await fetch("/api/auth/accept-invite-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const acceptPayload = (await acceptResponse.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+
+      if (!acceptResponse.ok || !acceptPayload?.ok) {
+        setError(acceptPayload?.error || "Benutzerprofil konnte nach der Einladung nicht erstellt werden.");
+        return;
+      }
+
+      setMessage("Profil wurde erstellt. Du wirst weitergeleitet …");
       router.replace("/dashboard");
       router.refresh();
     });
@@ -129,6 +146,12 @@ export default function UpdatePasswordClient() {
         <div className="rounded-2xl border border-amber-400/25 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
           Falls du über einen Einladungslink hier gelandet bist, konnte die Sitzung noch nicht erkannt werden. Öffne den
           Einladungslink bitte erneut direkt aus der E-Mail, am besten in einem Inkognito-Fenster.
+        </div>
+      ) : null}
+
+      {ready && !error ? (
+        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-100">
+          Einladung erkannt. Lege jetzt dein Passwort fest.
         </div>
       ) : null}
 

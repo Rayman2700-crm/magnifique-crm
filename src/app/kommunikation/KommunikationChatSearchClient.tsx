@@ -105,18 +105,34 @@ function matchesQuery(values: Array<unknown>, query: string) {
   return values.some((value) => normalize(value).includes(q));
 }
 
+function CountBadge({ count }: { count: number }) {
+  const safeCount = Math.max(0, Math.trunc(Number(count) || 0));
+  if (safeCount <= 0) return null;
+  return (
+    <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#2f79ff] px-1.5 text-[10px] font-extrabold leading-none text-white shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_5px_14px_rgba(47,121,255,0.32)]">
+      {safeCount > 99 ? "99+" : safeCount}
+    </span>
+  );
+}
+
 export default function KommunikationChatSearchClient({
   statusFilter,
   selectedConversationId,
   initialSearch,
   conversations,
   customers,
+  openCount = 0,
+  closedCount = 0,
+  allCount = 0,
 }: {
   statusFilter: string;
   selectedConversationId: string | null;
   initialSearch?: string;
   conversations: ConversationItem[];
   customers: CustomerItem[];
+  openCount?: number;
+  closedCount?: number;
+  allCount?: number;
 }) {
   const [query, setQuery] = useState(initialSearch ?? "");
   const trimmedQuery = query.trim();
@@ -186,20 +202,28 @@ export default function KommunikationChatSearchClient({
         </div>
       </div>
 
-      <div className="mb-4 flex gap-2">
+      <div className="mb-3 grid grid-cols-3 gap-2">
         <Link
           href="/kommunikation?status=open&panel=chats"
-          className={`rounded-full border px-4 py-2 text-xs font-semibold ${statusFilter !== "closed" && statusFilter !== "all" ? "border-[#d6c3a3]/30 bg-[#d6c3a3]/16 text-[#f7efe2]" : "border-white/10 bg-white/[0.035] text-white/55"}`}
+          className={`inline-flex h-10 items-center justify-center rounded-full border px-2 text-center text-xs font-semibold transition ${statusFilter !== "closed" && statusFilter !== "all" ? "border-[#d6c3a3]/30 bg-[#d6c3a3]/16 text-[#f7efe2] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]" : "border-white/10 bg-white/[0.035] text-white/55 hover:bg-white/[0.06] hover:text-white/75"}`}
         >
-          Offen
+          <span className="inline-flex items-center justify-center">Offen<CountBadge count={openCount} /></span>
+        </Link>
+        <Link
+          href="/kommunikation?status=closed&panel=chats"
+          className={`inline-flex h-10 items-center justify-center rounded-full border px-2 text-center text-xs font-semibold transition ${statusFilter === "closed" ? "border-[#d6c3a3]/30 bg-[#d6c3a3]/16 text-[#f7efe2] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]" : "border-white/10 bg-white/[0.035] text-white/55 hover:bg-white/[0.06] hover:text-white/75"}`}
+        >
+          <span className="inline-flex items-center justify-center">Erledigt<CountBadge count={closedCount} /></span>
         </Link>
         <Link
           href="/kommunikation?status=all&panel=chats"
-          className={`rounded-full border px-4 py-2 text-xs font-semibold ${statusFilter === "all" ? "border-[#d6c3a3]/30 bg-[#d6c3a3]/16 text-[#f7efe2]" : "border-white/10 bg-white/[0.035] text-white/55"}`}
+          className={`inline-flex h-10 items-center justify-center rounded-full border px-2 text-center text-xs font-semibold transition ${statusFilter === "all" ? "border-[#d6c3a3]/30 bg-[#d6c3a3]/16 text-[#f7efe2] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]" : "border-white/10 bg-white/[0.035] text-white/55 hover:bg-white/[0.06] hover:text-white/75"}`}
         >
-          Alle
+          <span className="inline-flex items-center justify-center">Alle<CountBadge count={allCount} /></span>
         </Link>
       </div>
+
+      <div className="mb-4 h-px w-full bg-white/[0.09] shadow-[0_1px_0_rgba(214,195,163,0.045)]" aria-hidden="true" />
 
       {trimmedQuery ? (
         <div className="mb-4 rounded-[22px] border border-white/[0.07] bg-white/[0.025] p-3">
@@ -282,8 +306,15 @@ export default function KommunikationChatSearchClient({
                       )}
                     </div>
                   </div>
-                  <div className="mt-0.5 truncate text-xs font-semibold text-[#d6c3a3]/48">
-                    {tenantName(conversation)} · {channelLabel(conversation.channel)}
+                  <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs font-semibold text-[#d6c3a3]/48">
+                    <span className="truncate">
+                      {tenantName(conversation)} · {channelLabel(conversation.channel)}
+                    </span>
+                    {conversation.status === "CLOSED" ? (
+                      <span className="shrink-0 rounded-full bg-emerald-300/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-emerald-100/60">
+                        Erledigt
+                      </span>
+                    ) : null}
                   </div>
                   <div className="mt-2 line-clamp-2 text-sm leading-5 text-white/48">
                     {conversation.last_message_preview ||

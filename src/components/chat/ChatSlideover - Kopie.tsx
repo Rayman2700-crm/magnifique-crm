@@ -54,13 +54,11 @@ export default function ChatSlideover({
   const [initialMessages, setInitialMessages] = useState<ChatMessageDTO[]>([]);
 
   const open = searchParams?.get("openChat") === "1";
-  const teamChatDraft = searchParams?.get("teamChatDraft") ?? "";
 
   const close = useMemo(() => {
     return () => {
       const params = new URLSearchParams(searchParams?.toString() ?? "");
       params.delete("openChat");
-      params.delete("teamChatDraft");
       const qs = params.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     };
@@ -372,7 +370,6 @@ export default function ChatSlideover({
               currentUserId={currentUserId}
               currentUserName={currentUserName}
               initialMessages={initialMessages}
-              initialDraft={teamChatDraft}
               embedded
               onRealtimeStatusChange={setRealtimeStatus}
             />

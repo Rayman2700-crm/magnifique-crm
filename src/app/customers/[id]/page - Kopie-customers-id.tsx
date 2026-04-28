@@ -48,6 +48,37 @@ type AppointmentRow = {
   tenant?: { display_name: string | null } | { display_name: string | null }[] | null;
 };
 
+type SalesOrderRow = {
+  id: string;
+  customer_id: string | null;
+  appointment_id: string | null;
+  status: string | null;
+  currency_code: string | null;
+  grand_total: number | null;
+  created_at: string | null;
+};
+
+type SalesOrderLineRow = {
+  id: string;
+  sales_order_id: string | null;
+  name: string | null;
+  quantity: number | null;
+  unit_price_gross: number | null;
+  line_total_gross: number | null;
+  sort_order?: number | null;
+  created_at: string | null;
+};
+
+type PaymentRow = {
+  id: string;
+  sales_order_id: string | null;
+  amount: number | null;
+  currency_code: string | null;
+  status: string | null;
+  paid_at: string | null;
+  created_at: string | null;
+};
+
 type WaitlistRow = {
   id: string;
   customer_profile_id: string;
@@ -427,6 +458,27 @@ function SectionCard({
   );
 }
 
+
+function formatEuroFromGross(value: number | null | undefined, currencyCode: string | null | undefined = "EUR") {
+  if (typeof value !== "number" || Number.isNaN(value)) return "—";
+  return new Intl.NumberFormat("de-AT", {
+    style: "currency",
+    currency: currencyCode || "EUR",
+  }).format(value);
+}
+
+function formatPercent(value: number) {
+  return `${value.toFixed(1).replace(".", ",")} %`;
+}
+
+function normalizeSalesOrderStatus(value: string | null | undefined) {
+  return String(value ?? "").trim().toUpperCase();
+}
+
+function normalizePaymentStatus(value: string | null | undefined) {
+  return String(value ?? "").trim().toUpperCase();
+}
+
 export default async function CustomerDetailPage({
   params,
   searchParams,
@@ -648,6 +700,129 @@ export default async function CustomerDetailPage({
     : { data: [] };
 
   const services = ((servicesRaw ?? []) as ServiceRow[]).filter((service) => !!service.name);
+
+  const { data: salesOrdersRaw } = personId
+    ? await supabase
+        .from("sales_orders")
+        .select("id, customer_id, appointment_id, status, currency_code, grand_total, created_at")
+        .eq("customer_id", personId)
+        .order("created_at", { ascending: false })
+        .limit(250)
+    : { data: [] };
+
+  const salesOrders = ((salesOrdersRaw ?? []) as SalesOrderRow[]).filter((row) => !!row.id);
+  const salesOrderIds = salesOrders.map((row) => row.id);
+
+  const { data: salesOrderLinesRaw } = salesOrderIds.length
+    ? await supabase
+        .from("sales_order_lines")
+        .select("id, sales_order_id, name, quantity, unit_price_gross, line_total_gross, sort_order, created_at")
+        .in("sales_order_id", salesOrderIds)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true })
+    : { data: [] };
+
+  const salesOrderLines = (salesOrderLinesRaw ?? []) as SalesOrderLineRow[];
+
+  const { data: paymentsRaw } = salesOrderIds.length
+    ? await supabase
+        .from("payments")
+        .select("id, sales_order_id, amount, currency_code, status, paid_at, created_at")
+        .in("sales_order_id", salesOrderIds)
+        .order("created_at", { ascending: false })
+    : { data: [] };
+
+  const payments = (paymentsRaw ?? []) as PaymentRow[];
+
+  const paymentRowsByOrderId = new Map<string, PaymentRow[]>();
+  for (const payment of payments) {
+    const key = String(payment.sales_order_id ?? "").trim();
+    if (!key) continue;
+    const group = paymentRowsByOrderId.get(key) ?? [];
+    group.push(payment);
+    paymentRowsByOrderId.set(key, group);
+  }
+
+  const linesByOrderId = new Map<string, SalesOrderLineRow[]>();
+  for (const line of salesOrderLines) {
+    const key = String(line.sales_order_id ?? "").trim();
+    if (!key) continue;
+    const group = linesByOrderId.get(key) ?? [];
+    group.push(line);
+    linesByOrderId.set(key, group);
+  }
+
+  let totalRevenueGross = 0;
+  let paidOrderCount = 0;
+  let totalAddonRevenueGross = 0;
+  const mostBookedServiceCounts = new Map<string, number>();
+  const addonCounts = new Map<string, { qty: number; revenue: number }>();
+
+  for (const order of salesOrders) {
+    const orderId = String(order.id ?? "").trim();
+    if (!orderId) continue;
+
+    const orderPayments = paymentRowsByOrderId.get(orderId) ?? [];
+    const completedPayments = orderPayments.filter((payment) => normalizePaymentStatus(payment.status) === "COMPLETED");
+    const orderIsCompleted = normalizeSalesOrderStatus(order.status) === "COMPLETED";
+
+    let realizedGross = 0;
+    if (completedPayments.length > 0) {
+      realizedGross = completedPayments.reduce((sum, payment) => sum + (Number(payment.amount ?? 0) || 0), 0);
+    } else if (orderIsCompleted) {
+      realizedGross = Number(order.grand_total ?? 0) || 0;
+    }
+
+    if (realizedGross > 0) {
+      totalRevenueGross += realizedGross;
+      paidOrderCount += 1;
+    }
+
+    const orderLines = [...(linesByOrderId.get(orderId) ?? [])].sort((a, b) => {
+      const sa = Number(a.sort_order ?? 0);
+      const sb = Number(b.sort_order ?? 0);
+      if (sa !== sb) return sa - sb;
+      return new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime();
+    });
+
+    const primaryLine = orderLines[0] ?? null;
+    if (primaryLine?.name && realizedGross > 0) {
+      mostBookedServiceCounts.set(primaryLine.name, (mostBookedServiceCounts.get(primaryLine.name) ?? 0) + 1);
+    }
+
+    for (const extraLine of orderLines.slice(1)) {
+      const extraName = String(extraLine.name ?? "").trim();
+      if (!extraName || realizedGross <= 0) continue;
+      const quantity = Number(extraLine.quantity ?? 0) || 1;
+      const revenue = Number(extraLine.line_total_gross ?? 0) || (Number(extraLine.unit_price_gross ?? 0) || 0) * quantity;
+      totalAddonRevenueGross += revenue;
+      const current = addonCounts.get(extraName) ?? { qty: 0, revenue: 0 };
+      current.qty += quantity;
+      current.revenue += revenue;
+      addonCounts.set(extraName, current);
+    }
+  }
+
+  const topServiceEntries = [...mostBookedServiceCounts.entries()].sort((a, b) => b[1] - a[1]);
+  const mostBookedService = topServiceEntries[0]?.[0] ?? "—";
+  const mostBookedServiceCount = topServiceEntries[0]?.[1] ?? 0;
+  const topAddonEntries = [...addonCounts.entries()]
+    .sort((a, b) => b[1].qty - a[1].qty || b[1].revenue - a[1].revenue)
+    .slice(0, 3);
+
+  const historicalAppointmentCount = appointments.filter((appointment) => {
+    if (!appointment.start_at) return false;
+    const startDate = new Date(appointment.start_at);
+    return !Number.isNaN(startDate.getTime()) && startDate < now;
+  }).length;
+
+  const attendedRate = historicalAppointmentCount > 0 ? (visitCount / historicalAppointmentCount) * 100 : 0;
+  const cancelledRate = historicalAppointmentCount > 0 ? (cancelledCount / historicalAppointmentCount) * 100 : 0;
+  const noShowRate = historicalAppointmentCount > 0 ? (noShowCount / historicalAppointmentCount) * 100 : 0;
+
+  const averageRevenuePerVisitGross = visitCount > 0 ? totalRevenueGross / visitCount : 0;
+  const averageRevenuePerPaidOrderGross = paidOrderCount > 0 ? totalRevenueGross / paidOrderCount : 0;
+
   const waitlistTimeOptions = buildWaitlistTimeOptions();
 
   return (
@@ -796,6 +971,24 @@ export default async function CustomerDetailPage({
               </div>
             ) : null}
 
+            <div className="mt-6 flex flex-wrap gap-2">
+              <a href="#customer-value" className="inline-flex h-10 items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]">
+                Kundenwert
+              </a>
+              <a href="#appointments" className="inline-flex h-10 items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]">
+                Termine
+              </a>
+              <a href="#waitlist" className="inline-flex h-10 items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]">
+                Warteliste
+              </a>
+              <a href="#notes" className="inline-flex h-10 items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]">
+                Notizen
+              </a>
+              <a href="#files" className="inline-flex h-10 items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]">
+                Dateien
+              </a>
+            </div>
+
             <div className="mt-6 grid grid-cols-1 gap-4 items-stretch sm:grid-cols-2 lg:grid-cols-5">
               <MetricCard
                 label="Besuche"
@@ -829,6 +1022,100 @@ export default async function CustomerDetailPage({
 
       <div className="mt-6 space-y-6">
         <section className="space-y-6">
+          <SectionCard
+            id="customer-value"
+            title="Kundenwert"
+            description="Umsatz, Lieblingsleistungen, Zusatzkäufe und Terminverhalten dieses Kunden."
+          >
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <MetricCard
+                label="Gesamtumsatz"
+                value={formatEuroFromGross(totalRevenueGross)}
+                subtext={paidOrderCount > 0 ? `${paidOrderCount} bezahlte Rechnung${paidOrderCount === 1 ? "" : "en"}` : "Noch kein Umsatz"}
+              />
+              <MetricCard
+                label="Ø pro Besuch"
+                value={visitCount > 0 ? formatEuroFromGross(averageRevenuePerVisitGross) : "—"}
+                subtext={visitCount > 0 ? `Ø je Besuch · ${String(visitCount)} Besuch${visitCount === 1 ? "" : "e"}` : "Noch keine Besuchsdaten"}
+              />
+              <MetricCard
+                label="Meistgebuchte Leistung"
+                value={mostBookedService}
+                subtext={mostBookedServiceCount > 0 ? `${mostBookedServiceCount}× gebucht` : "Noch keine Leistungsdaten"}
+              />
+              <MetricCard
+                label="Zusatzkäufe"
+                value={topAddonEntries.length > 0 ? String(topAddonEntries.reduce((sum, entry) => sum + entry[1].qty, 0)) : "0"}
+                subtext={totalAddonRevenueGross > 0 ? `${formatEuroFromGross(totalAddonRevenueGross)} Zusatzumsatz` : "Noch keine Zusatzkäufe"}
+              />
+            </div>
+
+            <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-3">
+              <div className="rounded-[24px] border border-white/10 bg-black/20 p-4">
+                <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Terminquote</div>
+                <div className="mt-4 grid grid-cols-3 gap-3">
+                  <div className="rounded-[18px] border border-emerald-400/20 bg-emerald-400/10 px-3 py-3 text-center">
+                    <div className="text-xs text-emerald-200/80">Gekommen</div>
+                    <div className="mt-2 text-lg font-semibold text-emerald-100">{formatPercent(attendedRate)}</div>
+                  </div>
+                  <div className="rounded-[18px] border border-white/10 bg-white/5 px-3 py-3 text-center">
+                    <div className="text-xs text-white/70">Abgesagt</div>
+                    <div className="mt-2 text-lg font-semibold text-white">{formatPercent(cancelledRate)}</div>
+                  </div>
+                  <div className="rounded-[18px] border border-red-400/20 bg-red-400/10 px-3 py-3 text-center">
+                    <div className="text-xs text-red-200/80">Nicht gekommen</div>
+                    <div className="mt-2 text-lg font-semibold text-red-100">{formatPercent(noShowRate)}</div>
+                  </div>
+                </div>
+                <div className="mt-3 text-sm text-white/50">
+                  Basis: {historicalAppointmentCount} vergangene Termin{historicalAppointmentCount === 1 ? "" : "e"}
+                </div>
+              </div>
+
+              <div className="rounded-[24px] border border-white/10 bg-black/20 p-4">
+                <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Top Leistungen</div>
+                <div className="mt-4 space-y-3">
+                  {topServiceEntries.slice(0, 3).length > 0 ? topServiceEntries.slice(0, 3).map(([serviceName, count]) => (
+                    <div key={serviceName} className="flex items-center justify-between gap-3 rounded-[18px] border border-white/10 bg-white/5 px-3 py-3">
+                      <div className="min-w-0 truncate text-sm font-medium text-white/90">{serviceName}</div>
+                      <div className="shrink-0 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold text-white/70">
+                        {count}×
+                      </div>
+                    </div>
+                  )) : (
+                    <div className="rounded-[18px] border border-white/10 bg-white/5 px-3 py-4 text-sm text-white/55">
+                      Noch keine Leistungsdaten vorhanden.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-[24px] border border-white/10 bg-black/20 p-4">
+                <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Zusatzprodukte / Extras</div>
+                <div className="mt-4 space-y-3">
+                  {topAddonEntries.length > 0 ? topAddonEntries.map(([addonName, info]) => (
+                    <div key={addonName} className="flex items-center justify-between gap-3 rounded-[18px] border border-white/10 bg-white/5 px-3 py-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium text-white/90">{addonName}</div>
+                        <div className="mt-1 text-xs text-white/50">{formatEuroFromGross(info.revenue)} Umsatz</div>
+                      </div>
+                      <div className="shrink-0 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold text-white/70">
+                        {info.qty}×
+                      </div>
+                    </div>
+                  )) : (
+                    <div className="rounded-[18px] border border-white/10 bg-white/5 px-3 py-4 text-sm text-white/55">
+                      Noch keine Zusatzkäufe vorhanden.
+                    </div>
+                  )}
+                </div>
+                <div className="mt-3 text-sm text-white/50">
+                  Ø Rechnung: {paidOrderCount > 0 ? formatEuroFromGross(averageRevenuePerPaidOrderGross) : "—"}
+                </div>
+              </div>
+            </div>
+          </SectionCard>
+
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <SectionCard
               id="appointments"
@@ -1161,6 +1448,7 @@ export default async function CustomerDetailPage({
             </SectionCard>
 
             <SectionCard
+              id="files"
               title="Dateien"
               description="Fotos und Dokumente dieses Kunden."
             >

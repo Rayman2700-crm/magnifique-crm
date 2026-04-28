@@ -15,6 +15,7 @@ const nav = [
   { href: "/services", label: "Dienstleistungen", key: "services" },
   { href: "/rechnungen", label: "Rechnungen", key: "receipts" },
   { href: "/kommunikation", label: "Kommunikation", key: "communication" },
+  { href: "/dashboard/chat", label: "Team Chat", key: "chat" },
   { href: "#reminders", label: "Reminder", key: "reminders" },
   { href: "#waitlist", label: "Warteliste", key: "waitlist" },
 ] as const;
@@ -573,7 +574,13 @@ function MobileNavDrawer({ open, shown, onClose, pathname, remindersOpen, waitli
               active={Boolean(isActive(item.href))}
             />
           ))}
-
+          <DrawerLink
+            label="Team Chat"
+            icon={<ChatIcon />}
+            active={Boolean(pathname?.startsWith("/dashboard/chat"))}
+            badge={unreadCount > 0 ? <BrandBadge count={unreadCount} pulse={chatPulse} /> : null}
+            onClick={() => { onClose(); openChat(); }}
+          />
           <DrawerLink
             label="Reminder"
             icon={<BellIcon />}
@@ -723,7 +730,6 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
   const searchParams = useSearchParams();
 
   const [unreadCount, setUnreadCount] = useState(0);
-  const [customerUnreadCount, setCustomerUnreadCount] = useState(0);
   const [liveReminderCount, setLiveReminderCount] = useState(Math.max(0, Number.isFinite(reminderCount) ? Math.trunc(reminderCount) : 0));
   const [liveWaitlistCount, setLiveWaitlistCount] = useState(Math.max(0, Number.isFinite(waitlistCount) ? Math.trunc(waitlistCount) : 0));
   const [chatPulse, setChatPulse] = useState(false);
@@ -755,7 +761,6 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
   };
 
   const previousChatCount = useRef(0);
-  const previousCustomerUnreadCount = useRef(0);
   const previousReminderCount = useRef(reminderCount);
   const previousWaitlistCount = useRef(waitlistCount);
   const avatarTheme = getAvatarTheme(userLabel, avatarRingColor);
@@ -764,8 +769,6 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
     if (!tenantId || !currentUserId) return null;
     return `team-chat:last-read:${tenantId}:${currentUserId}`;
   }, [tenantId, currentUserId]);
-
-  const communicationUnreadCount = Math.max(0, unreadCount + customerUnreadCount);
 
   useEffect(() => { const next = Math.max(0, Number.isFinite(reminderCount) ? Math.trunc(reminderCount) : 0); setLiveReminderCount(next); previousReminderCount.current = next; }, [reminderCount]);
   useEffect(() => { const next = Math.max(0, Number.isFinite(waitlistCount) ? Math.trunc(waitlistCount) : 0); setLiveWaitlistCount(next); previousWaitlistCount.current = next; }, [waitlistCount]);
@@ -840,44 +843,6 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
   }, [storageKey, currentUserId, pathname, searchParams]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadCustomerUnreadCount() {
-      try {
-        const res = await fetch("/api/kommunikation/counts", { cache: "no-store" });
-        if (!res.ok) {
-          if (!cancelled) setCustomerUnreadCount(0);
-          return;
-        }
-
-        const json = await res.json();
-        const nextCount = Math.max(0, Math.trunc(Number(json?.customerUnreadCount ?? 0)));
-        if (nextCount > previousCustomerUnreadCount.current) {
-          setChatPulse(true);
-          window.setTimeout(() => setChatPulse(false), 3000);
-        }
-        previousCustomerUnreadCount.current = nextCount;
-        if (!cancelled) setCustomerUnreadCount(nextCount);
-      } catch {
-        if (!cancelled) setCustomerUnreadCount(0);
-      }
-    }
-
-    loadCustomerUnreadCount();
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") loadCustomerUnreadCount();
-    }, 3000);
-    const onFocus = () => loadCustomerUnreadCount();
-    window.addEventListener("focus", onFocus);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, [pathname, searchParams]);
-
-  useEffect(() => {
     const nextReminderCount = Math.max(0, Number.isFinite(reminderCount) ? Math.trunc(reminderCount) : 0);
     if (nextReminderCount > previousReminderCount.current) {
       setReminderPulse(true);
@@ -913,10 +878,10 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
 
   useEffect(() => {
     const baseTitle = "Clientique";
-    document.title = communicationUnreadCount > 0 ? `(${communicationUnreadCount}) ${baseTitle}` : baseTitle;
-  }, [communicationUnreadCount]);
+    document.title = unreadCount > 0 ? `(${unreadCount}) ${baseTitle}` : baseTitle;
+  }, [unreadCount]);
 
-  function openChat() { closeMobileMenu(); closeSettingsMenu(); closeInvoiceMenu(); closeUserMenu(); router.push("/kommunikation?tab=team"); }
+  function openChat() { const params = new URLSearchParams(searchParams?.toString() ?? ""); params.set("openChat", "1"); const qs = params.toString(); router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }); }
   function openReminders() { const params = new URLSearchParams(searchParams?.toString() ?? ""); params.set("openReminders", "1"); const qs = params.toString(); router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }); }
   function openWaitlist() { const params = new URLSearchParams(searchParams?.toString() ?? ""); params.set("openWaitlist", "1"); const qs = params.toString(); router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }); }
   function closeUserMenu() { setUserMenuShown(false); window.setTimeout(() => setUserMenuOpen(false), 160); }
@@ -959,7 +924,7 @@ export function TopNav({ userLabel, userEmail, avatarUrl, avatarRingColor, right
     pathname === "/calendar" ||
     (pathname === "/dashboard" && locationHash === "#dashboard-calendar-card");
   const receiptsIslandActive = pathname === "/rechnungen";
-  const chatIslandActive = Boolean(pathname?.startsWith("/kommunikation")) || chatOpen;
+  const chatIslandActive = Boolean(pathname?.startsWith("/dashboard/chat")) || chatOpen;
 
   function navigateDashboard() {
     closeMobileMenu();
@@ -1085,7 +1050,8 @@ return (
             <Link href="/rechnungen?closingPanel=year" className={cn("block w-full rounded-[12px] px-2 py-1.5 text-left text-[12px] font-medium transition hover:bg-white/[0.045] hover:text-white", searchParams?.get("closingPanel") === "year" ? "text-[#f4eadc]" : "text-white/62")}>Jahresabschluss</Link>
           </div>
         ) : null}
-        <SidebarItem icon={<CustomerChatIcon />} label="Kommunikation" href={isMobile ? undefined : "/kommunikation"} onClick={isMobile ? toggleMobileDrawer : undefined} active={isActive("/kommunikation") || chatOpen} badgeCount={communicationUnreadCount} pulse={chatPulse} expanded={expanded} />
+        <SidebarItem icon={<CustomerChatIcon />} label="Kommunikation" href={isMobile ? undefined : "/kommunikation"} onClick={isMobile ? toggleMobileDrawer : undefined} active={isActive("/kommunikation")} expanded={expanded} />
+        <SidebarItem icon={<ChatIcon />} label="Team Chat" onClick={isMobile ? toggleMobileDrawer : openChat} active={Boolean(pathname?.startsWith("/dashboard/chat")) || chatOpen} badgeCount={unreadCount} pulse={chatPulse} expanded={expanded} />
         <SidebarItem icon={<BellIcon />} label="Reminder" onClick={isMobile ? toggleMobileDrawer : openReminders} active={remindersOpen} badgeCount={liveReminderCount} pulse={reminderPulse} expanded={expanded} />
         <SidebarItem icon={<ClockIcon />} label="Warteliste" onClick={isMobile ? toggleMobileDrawer : openWaitlist} active={waitlistOpen} badgeCount={liveWaitlistCount} pulse={waitlistPulse} expanded={expanded} />
       </div>
@@ -1196,7 +1162,7 @@ return (
               <button
                 type="button"
                 onClick={() => { closeSettingsMenu(); closeMobileMenu(); setUserMenuOpen(true); }}
-                className="relative z-10 inline-flex h-[46px] w-[46px] items-center justify-center overflow-hidden rounded-full border-[3px] border-[#111216] shadow-[0_0_0_2px_rgba(11,11,12,0.92),0_12px_28px_rgba(0,0,0,0.22)]"
+                className="relative z-10 inline-flex h-[46px] w-[46px] items-center justify-center rounded-full border-[3px] border-[#111216] shadow-[0_0_0_2px_rgba(11,11,12,0.92),0_12px_28px_rgba(0,0,0,0.22)]"
                 style={{ boxShadow: `0 0 0 2px rgba(11,11,12,0.92), 0 0 0 4px ${avatarTheme.color}`, background: avatarTheme.soft ?? `${avatarTheme.color}22` }}
                 aria-label="Benutzermenü öffnen"
                 title={userLabel ?? "Benutzermenü"}
@@ -1204,6 +1170,11 @@ return (
                 <span className="block h-full w-full overflow-hidden rounded-full border border-white/10">
                   <img src={avatarSrc} alt="Benutzerfoto" className="block h-full w-full object-cover" />
                 </span>
+                {showGoogleSetupAlert ? (
+                  <span className="absolute -right-1 -top-1 z-20">
+                    <BrandBadge count={googleSetupAlertCount} pulse />
+                  </span>
+                ) : null}
               </button>
             </div>
           ) : (
@@ -1211,15 +1182,13 @@ return (
             <div className="pointer-events-none absolute inset-[6px] rounded-[22px] border border-white/[0.04] bg-[linear-gradient(180deg,rgba(255,248,240,0.045)_0%,rgba(255,248,240,0.016)_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]" />
             <div className="pointer-events-none absolute inset-y-[8px] right-[84px] hidden w-px bg-[linear-gradient(180deg,transparent_0%,rgba(214,195,163,0.06)_16%,rgba(214,195,163,0.06)_84%,transparent_100%)] md:block" />
             <nav className="relative z-10 hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto pl-2.5 md:flex [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-              {nav.slice(0, 6).map((item) => {
+              {nav.slice(0, 7).map((item) => {
                 const isChat = item.href === "/dashboard/chat";
                 const active = isChat
                   ? pathname?.startsWith("/dashboard/chat") || searchParams?.get("openChat") === "1"
                   : item.href === "/dashboard"
                     ? pathname === "/dashboard"
-                    : item.key === "communication"
-                      ? pathname?.startsWith("/kommunikation") || searchParams?.get("openChat") === "1"
-                      : pathname?.startsWith(item.href);
+                    : pathname?.startsWith(item.href);
 
                 const commonClass = cn(
                   "clientique-nav-pill shrink-0 inline-flex items-center gap-1.5 rounded-[18px] border border-transparent px-3.5 py-[9px] text-[12px] font-medium text-[var(--text-muted)] hover:border-[rgba(214,195,163,0.16)] hover:bg-[rgba(255,248,240,0.055)] hover:text-[#fbf3e7]",
@@ -1229,7 +1198,7 @@ return (
                 const content = (
                   <span className="inline-flex items-center gap-2">
                     {item.label}
-                    {item.key === "communication" && communicationUnreadCount > 0 ? <BrandBadge count={communicationUnreadCount} pulse={chatPulse} /> : null}
+                    {isChat && unreadCount > 0 ? <BrandBadge count={unreadCount} pulse={chatPulse} /> : null}
                   </span>
                 );
 
@@ -1358,7 +1327,7 @@ return (
       isReceiptsActive={receiptsIslandActive}
       isRemindersActive={remindersOpen}
       isChatActive={chatIslandActive}
-      unreadCount={communicationUnreadCount}
+      unreadCount={unreadCount}
       reminderCount={liveReminderCount}
       chatPulse={chatPulse}
       reminderPulse={reminderPulse}
@@ -1379,7 +1348,7 @@ return (
       openChat={openChat}
       openReminders={openReminders}
       openWaitlist={openWaitlist}
-      unreadCount={communicationUnreadCount}
+      unreadCount={unreadCount}
       liveReminderCount={liveReminderCount}
       liveWaitlistCount={liveWaitlistCount}
       chatPulse={chatPulse}
