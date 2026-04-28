@@ -1553,24 +1553,25 @@ export default async function DashboardPage() {
                   <div className="mt-1.5 text-[13px] text-[var(--primary)] sm:text-[15px]">{currentTimeLabel} Uhr</div>
                 </div>
 
-                <details className="group col-start-1 row-start-2 w-[435px] max-w-[calc(100vw-180px)] rounded-[20px] border border-[rgba(214,195,163,0.12)] bg-[linear-gradient(180deg,rgba(255,248,240,0.05)_0%,rgba(255,248,240,0.028)_100%)] shadow-[0_12px_30px_rgba(0,0,0,0.12)] backdrop-blur-[18px]">
+                <details className="group col-start-1 row-start-2 w-fit max-w-[calc(100vw-180px)] rounded-[20px] border border-[rgba(214,195,163,0.12)] bg-[linear-gradient(180deg,rgba(255,248,240,0.05)_0%,rgba(255,248,240,0.028)_100%)] shadow-[0_12px_30px_rgba(0,0,0,0.12)] backdrop-blur-[18px]">
                   <summary className="list-none cursor-pointer px-4 py-3.5 [&::-webkit-details-marker]:hidden">
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="min-w-0">
-                        <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--primary)]">Google Kalender</div>
-                        <div className="mt-2 flex items-center gap-3 text-[13px] sm:text-[14px]">
-                          <span className="text-[var(--text-muted)]">Status</span>
-                          <span
-                            className={googleStatusConnected
-                              ? "inline-flex h-7 items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 text-[12px] font-semibold text-emerald-200"
-                              : "inline-flex h-7 items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-3 text-[12px] font-semibold text-amber-200"}
-                          >
-                            {googleStatusLabel}
-                          </span>
-                        </div>
-                      </div>
+                    <div className="flex items-center gap-3 whitespace-nowrap">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--primary)]">Google Kalender</span>
+                      <span
+                        className={googleStatusConnected
+                          ? "inline-flex h-7 items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 text-[12px] font-semibold text-emerald-200"
+                          : "inline-flex h-7 items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-3 text-[12px] font-semibold text-amber-200"}
+                      >
+                        {googleStatusLabel}
+                      </span>
+                      <Link
+                        href="/calendar/google"
+                        className="inline-flex h-9 shrink-0 items-center rounded-[14px] border border-white/10 bg-white/[0.04] px-3 text-[13px] font-semibold text-white/92 transition hover:border-white/20 hover:bg-white/[0.08]"
+                      >
+                        Google öffnen
+                      </Link>
 
-                      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/70 transition group-open:rotate-180">
+                      <span className="ml-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/70 transition group-open:rotate-180">
                         <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                           <path d="m5 8 5 5 5-5" />
                         </svg>
@@ -1581,14 +1582,6 @@ export default async function DashboardPage() {
                   <div className="border-t border-[rgba(214,195,163,0.10)] px-4 pb-3.5 pt-3">
                     <div className="grid gap-2.5 text-[13px] sm:text-[14px]">
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                        <span className="text-[var(--text-muted)]">Status</span>
-                        <span
-                          className={googleStatusConnected
-                            ? "inline-flex h-7 items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 text-[12px] font-semibold text-emerald-200"
-                            : "inline-flex h-7 items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-3 text-[12px] font-semibold text-amber-200"}
-                        >
-                          {googleStatusLabel}
-                        </span>
                         <span className="text-[var(--text-muted)]">Schreibkalender</span>
                         <span className="font-medium text-[var(--text)]">{selectedStudioLabel}</span>
                       </div>
@@ -1603,12 +1596,6 @@ export default async function DashboardPage() {
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                         <span className="text-[var(--text-muted)]">Zuletzt aktualisiert</span>
                         <span className="font-medium text-[var(--text)]">{lastSyncLabel}</span>
-                        <Link
-                          href="/calendar/google"
-                          className="ml-auto inline-flex h-9 shrink-0 items-center rounded-[14px] border border-white/10 bg-white/[0.04] px-3 text-[13px] font-semibold text-white/92 transition hover:bg-white/[0.08]"
-                        >
-                          Google öffnen
-                        </Link>
                       </div>
                     </div>
                   </div>

@@ -14,6 +14,7 @@ const nav = [
   { href: "/customers", label: "Kunden", key: "customers" },
   { href: "/services", label: "Dienstleistungen", key: "services" },
   { href: "/rechnungen", label: "Rechnungen", key: "receipts" },
+  { href: "/kommunikation", label: "Kommunikation", key: "communication" },
   { href: "/dashboard/chat", label: "Team Chat", key: "chat" },
   { href: "#reminders", label: "Reminder", key: "reminders" },
   { href: "#waitlist", label: "Warteliste", key: "waitlist" },
@@ -38,6 +39,8 @@ function getNavIcon(key: string) {
       return <ServicesIcon />;
     case "receipts":
       return <ReceiptIcon />;
+    case "communication":
+      return <CustomerChatIcon />;
     case "chat":
       return <ChatIcon />;
     case "reminders":
@@ -139,6 +142,18 @@ function ChatIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
+function CustomerChatIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 13.5a6.5 6.5 0 0 1-6.5 6.5H8l-4 2v-5.2A6.5 6.5 0 1 1 20 13.5Z" />
+      <path d="M8.5 12h7" />
+      <path d="M8.5 15h4.5" />
+      <circle cx="17.5" cy="6.5" r="3.5" />
+      <path d="M16.2 6.7l.8.8 1.6-1.8" />
     </svg>
   );
 }
@@ -549,7 +564,7 @@ function MobileNavDrawer({ open, shown, onClose, pathname, remindersOpen, waitli
           <button type="button" onClick={onClose} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/80" aria-label="Menü schließen">✕</button>
         </div>
         <div className="flex-1 space-y-3 overflow-y-auto p-4">
-          {nav.slice(0, 5).map((item) => (
+          {nav.slice(0, 6).map((item) => (
             <DrawerLink
               key={item.key}
               href={item.href}
@@ -1035,6 +1050,7 @@ return (
             <Link href="/rechnungen?closingPanel=year" className={cn("block w-full rounded-[12px] px-2 py-1.5 text-left text-[12px] font-medium transition hover:bg-white/[0.045] hover:text-white", searchParams?.get("closingPanel") === "year" ? "text-[#f4eadc]" : "text-white/62")}>Jahresabschluss</Link>
           </div>
         ) : null}
+        <SidebarItem icon={<CustomerChatIcon />} label="Kommunikation" href={isMobile ? undefined : "/kommunikation"} onClick={isMobile ? toggleMobileDrawer : undefined} active={isActive("/kommunikation")} expanded={expanded} />
         <SidebarItem icon={<ChatIcon />} label="Team Chat" onClick={isMobile ? toggleMobileDrawer : openChat} active={Boolean(pathname?.startsWith("/dashboard/chat")) || chatOpen} badgeCount={unreadCount} pulse={chatPulse} expanded={expanded} />
         <SidebarItem icon={<BellIcon />} label="Reminder" onClick={isMobile ? toggleMobileDrawer : openReminders} active={remindersOpen} badgeCount={liveReminderCount} pulse={reminderPulse} expanded={expanded} />
         <SidebarItem icon={<ClockIcon />} label="Warteliste" onClick={isMobile ? toggleMobileDrawer : openWaitlist} active={waitlistOpen} badgeCount={liveWaitlistCount} pulse={waitlistPulse} expanded={expanded} />
@@ -1146,7 +1162,7 @@ return (
               <button
                 type="button"
                 onClick={() => { closeSettingsMenu(); closeMobileMenu(); setUserMenuOpen(true); }}
-                className="relative z-10 inline-flex h-[46px] w-[46px] items-center justify-center overflow-hidden rounded-full border-[3px] border-[#111216] shadow-[0_0_0_2px_rgba(11,11,12,0.92),0_12px_28px_rgba(0,0,0,0.22)]"
+                className="relative z-10 inline-flex h-[46px] w-[46px] items-center justify-center rounded-full border-[3px] border-[#111216] shadow-[0_0_0_2px_rgba(11,11,12,0.92),0_12px_28px_rgba(0,0,0,0.22)]"
                 style={{ boxShadow: `0 0 0 2px rgba(11,11,12,0.92), 0 0 0 4px ${avatarTheme.color}`, background: avatarTheme.soft ?? `${avatarTheme.color}22` }}
                 aria-label="Benutzermenü öffnen"
                 title={userLabel ?? "Benutzermenü"}
@@ -1154,6 +1170,11 @@ return (
                 <span className="block h-full w-full overflow-hidden rounded-full border border-white/10">
                   <img src={avatarSrc} alt="Benutzerfoto" className="block h-full w-full object-cover" />
                 </span>
+                {showGoogleSetupAlert ? (
+                  <span className="absolute -right-1 -top-1 z-20">
+                    <BrandBadge count={googleSetupAlertCount} pulse />
+                  </span>
+                ) : null}
               </button>
             </div>
           ) : (
@@ -1161,7 +1182,7 @@ return (
             <div className="pointer-events-none absolute inset-[6px] rounded-[22px] border border-white/[0.04] bg-[linear-gradient(180deg,rgba(255,248,240,0.045)_0%,rgba(255,248,240,0.016)_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]" />
             <div className="pointer-events-none absolute inset-y-[8px] right-[84px] hidden w-px bg-[linear-gradient(180deg,transparent_0%,rgba(214,195,163,0.06)_16%,rgba(214,195,163,0.06)_84%,transparent_100%)] md:block" />
             <nav className="relative z-10 hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto pl-2.5 md:flex [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-              {nav.slice(0, 6).map((item) => {
+              {nav.slice(0, 7).map((item) => {
                 const isChat = item.href === "/dashboard/chat";
                 const active = isChat
                   ? pathname?.startsWith("/dashboard/chat") || searchParams?.get("openChat") === "1"

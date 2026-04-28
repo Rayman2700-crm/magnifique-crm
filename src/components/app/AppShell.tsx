@@ -169,17 +169,33 @@ export default async function AppShell({
   let googleSavedDefault: string | null = null;
 
   if (userId) {
-    const { data: googleTokenRow } = await supabase
-      .from("google_oauth_tokens")
-      .select("refresh_token, default_calendar_id")
-      .eq("user_id", userId)
-      .maybeSingle();
+    const [{ data: googleTokenRow }, { data: googleConnectionRows }] = await Promise.all([
+      supabase
+        .from("google_oauth_tokens")
+        .select("refresh_token, default_calendar_id")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("google_oauth_connections")
+        .select("is_active, is_read_only, default_calendar_id")
+        .eq("owner_user_id", userId),
+    ]);
+
+    const activeGoogleConnections = Array.isArray(googleConnectionRows)
+      ? googleConnectionRows.filter((row: any) => row?.is_active === true)
+      : [];
+    const writableGoogleConnection =
+      activeGoogleConnections.find((row: any) => row?.is_read_only !== true) ?? activeGoogleConnections[0] ?? null;
 
     const hasRefreshToken = Boolean(googleTokenRow?.refresh_token);
-    const hasDefaultCalendar = Boolean(googleTokenRow?.default_calendar_id);
-    googleSavedDefault = (googleTokenRow as any)?.default_calendar_id ?? null;
+    const tokenDefaultCalendar = String((googleTokenRow as any)?.default_calendar_id ?? "").trim();
+    const connectionDefaultCalendar = String((writableGoogleConnection as any)?.default_calendar_id ?? "").trim();
 
-    if (!googleTokenRow || !hasRefreshToken || !hasDefaultCalendar) {
+    googleSavedDefault = tokenDefaultCalendar || connectionDefaultCalendar || null;
+
+    const hasAnyUsableGoogleConnection = hasRefreshToken || activeGoogleConnections.length > 0;
+
+    if (!hasAnyUsableGoogleConnection) {
       googleSetupAlertCount = 1;
     }
 
@@ -232,7 +248,13 @@ export default async function AppShell({
       );
     } catch (e: any) {
       googleLoadError = e?.message ?? String(e);
-      googleSetupAlertCount = 1;
+
+      // Nicht jede Kalenderlisten-Störung ist ein Setup-Problem.
+      // Wenn bereits eine aktive Google-Verbindung existiert, darf der Avatar-Badge
+      // nicht fälschlich "1" anzeigen, während /calendar/google korrekt "Verbunden" zeigt.
+      if (!hasAnyUsableGoogleConnection) {
+        googleSetupAlertCount = 1;
+      }
     }
   }
 
