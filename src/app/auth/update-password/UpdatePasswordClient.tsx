@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
 export default function UpdatePasswordClient() {
   const router = useRouter();
@@ -26,7 +27,7 @@ export default function UpdatePasswordClient() {
 
     checkSession();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       if (!mounted) return;
       setReady(Boolean(session));
     });
