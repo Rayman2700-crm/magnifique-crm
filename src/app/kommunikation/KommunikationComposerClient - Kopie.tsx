@@ -1,11 +1,10 @@
-
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
 
 type Props = {
-  action?: (formData: FormData) => void | Promise<void>;
+  action: (formData: FormData) => void | Promise<void>;
   conversationId: string;
   statusFilter: string;
   draftBody?: string;
@@ -61,44 +60,54 @@ function autoResizeTextarea(textarea: HTMLTextAreaElement | null) {
   textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
 }
 
-function fileKindLabel(file: File) {
-  if (file.type.startsWith("image/")) return "Bild";
-  if (file.type.startsWith("video/")) return "Video";
-  if (file.type === "application/pdf") return "PDF";
-  return file.type || "Datei";
-}
+function SubmitButton({ disabled }: { disabled: boolean }) {
+  const { pending } = useFormStatus();
 
-function SendIcon() {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-[16px] w-[16px]"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.4"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
+    <button
+      type="submit"
+      disabled={pending || disabled}
+      className={
+        "absolute bottom-1.5 right-1.5 z-10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] text-white transition-colors active:scale-[0.98] " +
+        (pending || disabled
+          ? "pointer-events-none cursor-not-allowed opacity-45"
+          : "hover:bg-[#d8c1a0]/[0.10]")
+      }
+      aria-label="Nachricht senden"
+      title="Senden"
     >
-      <path d="M12 19V5" />
-      <path d="M5 12l7-7 7 7" />
-    </svg>
+      {pending ? (
+        <span className="text-sm font-bold">…</span>
+      ) : (
+        <svg
+          viewBox="0 0 24 24"
+          className="h-[16px] w-[16px]"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M12 19V5" />
+          <path d="M5 12l7-7 7 7" />
+        </svg>
+      )}
+    </button>
   );
 }
 
 export default function KommunikationComposerClient({
+  action,
   conversationId,
   statusFilter,
   draftBody = "",
   selectedTemplateTitle = null,
 }: Props) {
-  const router = useRouter();
   const [text, setText] = useState(draftBody);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -127,56 +136,9 @@ export default function KommunikationComposerClient({
 
   const canSend = Boolean(text.trim() || selectedFile);
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!canSend || isPending) return;
-
-    setErrorMessage(null);
-
-    const formData = new FormData();
-    formData.set("conversationId", conversationId);
-    formData.set("conversation_id", conversationId);
-    formData.set("statusFilter", statusFilter);
-    formData.set("status_filter", statusFilter);
-    formData.set("body", text.trim());
-    if (selectedFile) formData.set("attachment", selectedFile);
-
-    startTransition(async () => {
-      try {
-        const response = await fetch("/api/twilio/whatsapp/send", {
-          method: "POST",
-          body: formData,
-        });
-
-        const result = await response.json().catch(() => null);
-
-        if (!response.ok || !result?.ok) {
-          const message =
-            typeof result?.error === "string"
-              ? result.error
-              : "Nachricht konnte nicht gesendet werden.";
-          setErrorMessage(message);
-          return;
-        }
-
-        setText("");
-        setSelectedFile(null);
-        setMenuOpen(false);
-        setEmojiOpen(false);
-        if (fileInputRef.current) fileInputRef.current.value = "";
-        requestAnimationFrame(() => autoResizeTextarea(textareaRef.current));
-        router.refresh();
-      } catch (error) {
-        setErrorMessage(
-          error instanceof Error ? error.message : "Nachricht konnte nicht gesendet werden.",
-        );
-      }
-    });
-  }
-
   return (
     <form
-      onSubmit={handleSubmit}
+      action={action}
       className="shrink-0 bg-transparent px-2 pb-2 pt-1 sm:px-4 sm:pb-4 sm:pt-2"
       style={{
         paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 6px)",
@@ -203,12 +165,6 @@ export default function KommunikationComposerClient({
             </div>
           ) : null}
 
-          {errorMessage ? (
-            <div className="mb-3 rounded-[16px] border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm leading-5 text-red-100">
-              {errorMessage}
-            </div>
-          ) : null}
-
           {selectedFile ? (
             <div className="mb-3 flex items-center justify-between gap-3 rounded-[16px] border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] px-3 py-2">
               <div className="min-w-0">
@@ -216,7 +172,7 @@ export default function KommunikationComposerClient({
                   📎 {selectedFile.name}
                 </div>
                 <div className="text-xs text-white/50">
-                  {fileKindLabel(selectedFile)} • {formatFileSize(selectedFile.size)}
+                  {selectedFile.type || "Datei"} • {formatFileSize(selectedFile.size)}
                 </div>
               </div>
 
@@ -297,12 +253,9 @@ export default function KommunikationComposerClient({
               type="file"
               name="attachment"
               className="hidden"
-              accept="image/*,video/*,application/pdf"
               onChange={(event) => {
                 const file = event.target.files?.[0] ?? null;
                 setSelectedFile(file);
-                setMenuOpen(false);
-                setEmojiOpen(false);
               }}
             />
 
@@ -344,20 +297,7 @@ export default function KommunikationComposerClient({
               className="h-11 min-h-[44px] max-h-36 w-full resize-none overflow-y-auto rounded-[22px] border border-[#d8c1a0]/16 bg-black/25 py-[12px] pl-12 pr-12 text-sm leading-[20px] text-white outline-none placeholder:text-white/38 transition focus:border-[#d8c1a0]/45 focus:bg-black/30 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             />
 
-            <button
-              type="submit"
-              disabled={isPending || !canSend}
-              className={
-                "absolute bottom-1.5 right-1.5 z-10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] text-white transition-colors active:scale-[0.98] " +
-                (isPending || !canSend
-                  ? "pointer-events-none cursor-not-allowed opacity-45"
-                  : "hover:bg-[#d8c1a0]/[0.10]")
-              }
-              aria-label="Nachricht senden"
-              title="Senden"
-            >
-              {isPending ? <span className="text-sm font-bold">…</span> : <SendIcon />}
-            </button>
+            <SubmitButton disabled={!canSend} />
           </div>
         </div>
       </div>
