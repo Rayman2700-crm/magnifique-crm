@@ -96,6 +96,36 @@ type WaitlistRow = {
   created_at: string;
 };
 
+
+type CustomerConversationRow = {
+  id: string;
+  tenant_id: string | null;
+  person_id: string | null;
+  customer_profile_id: string | null;
+  channel: string | null;
+  status: string | null;
+  subject: string | null;
+  external_contact: string | null;
+  last_message_at: string | null;
+  last_message_preview: string | null;
+  unread_count: number | null;
+  created_at: string | null;
+};
+
+type CustomerMessageRow = {
+  id: string;
+  conversation_id: string;
+  direction: string | null;
+  channel: string | null;
+  body: string | null;
+  status: string | null;
+  provider: string | null;
+  provider_message_id: string | null;
+  sent_at: string | null;
+  received_at: string | null;
+  created_at: string | null;
+};
+
 type IntakeRow = {
   id: string;
   created_at: string | null;
@@ -357,6 +387,54 @@ function waitlistRecentRequestLabel(value?: string | null) {
   if (requestedAt >= todayStart) return "Heute angefragt";
   if (requestedAt >= yesterdayStart) return "Gestern angefragt";
   return `Anfrage: ${fmtDateTimeOrDash(value)}`;
+}
+
+
+function communicationStatusLabel(status?: string | null) {
+  const normalized = String(status ?? "").toUpperCase();
+  if (normalized === "CLOSED") return "Erledigt";
+  if (normalized === "ARCHIVED") return "Archiviert";
+  return "Offen";
+}
+
+function communicationStatusClasses(status?: string | null) {
+  const normalized = String(status ?? "").toUpperCase();
+  if (normalized === "CLOSED") return "border-emerald-400/20 bg-emerald-400/10 text-emerald-200";
+  if (normalized === "ARCHIVED") return "border-white/10 bg-white/5 text-white/55";
+  return "border-amber-400/20 bg-amber-400/10 text-amber-200";
+}
+
+function communicationChannelLabel(channel?: string | null) {
+  const normalized = String(channel ?? "").toUpperCase();
+  if (normalized === "WHATSAPP") return "WhatsApp";
+  if (normalized === "EMAIL") return "E-Mail";
+  if (normalized === "SMS") return "SMS";
+  if (normalized === "PORTAL") return "Portal";
+  return "Kommunikation";
+}
+
+function communicationDirectionLabel(direction?: string | null) {
+  const normalized = String(direction ?? "").toUpperCase();
+  if (normalized === "INBOUND") return "Empfangen";
+  if (normalized === "OUTBOUND") return "Gesendet";
+  if (normalized === "INTERNAL_NOTE") return "Interne Notiz";
+  return "Nachricht";
+}
+
+function communicationMessageStatusLabel(status?: string | null) {
+  const normalized = String(status ?? "").toUpperCase();
+  if (normalized === "READ") return "Gelesen";
+  if (normalized === "DELIVERED") return "Zugestellt";
+  if (normalized === "SENT") return "Gesendet";
+  if (normalized === "RECEIVED") return "Empfangen";
+  if (normalized === "FAILED") return "Fehler";
+  if (normalized === "QUEUED") return "Wartet";
+  return normalized || "—";
+}
+
+function communicationPreviewText(value?: string | null) {
+  const text = String(value ?? "").trim();
+  return text || "Keine Vorschau vorhanden.";
 }
 
 function normalizePhoneForTel(phone: string) {
@@ -631,6 +709,81 @@ export default async function CustomerDetailPage({
     .eq("customer_profile_id", customerProfileId)
     .order("created_at", { ascending: false })
     .limit(100);
+
+
+  let communicationConversations: CustomerConversationRow[] = [];
+  if (personId) {
+    const { data: conversationsRaw, error: conversationsError } = await supabase
+      .from("customer_conversations")
+      .select("id, tenant_id, person_id, customer_profile_id, channel, status, subject, external_contact, last_message_at, last_message_preview, unread_count, created_at")
+      .or(`person_id.eq.${personId},customer_profile_id.eq.${customerProfileId}`)
+      .order("last_message_at", { ascending: false, nullsFirst: false })
+      .limit(10);
+
+    if (conversationsError) {
+      console.error("Customer communication conversations select error:", conversationsError);
+    }
+
+    communicationConversations = (conversationsRaw ?? []) as CustomerConversationRow[];
+  } else {
+    const { data: conversationsRaw, error: conversationsError } = await supabase
+      .from("customer_conversations")
+      .select("id, tenant_id, person_id, customer_profile_id, channel, status, subject, external_contact, last_message_at, last_message_preview, unread_count, created_at")
+      .eq("customer_profile_id", customerProfileId)
+      .order("last_message_at", { ascending: false, nullsFirst: false })
+      .limit(10);
+
+    if (conversationsError) {
+      console.error("Customer communication conversations select error:", conversationsError);
+    }
+
+    communicationConversations = (conversationsRaw ?? []) as CustomerConversationRow[];
+  }
+
+  const communicationConversationIds = communicationConversations.map((conversation) => conversation.id);
+
+  const { data: communicationMessagesRaw, error: communicationMessagesError } = communicationConversationIds.length
+    ? await supabase
+        .from("customer_messages")
+        .select("id, conversation_id, direction, channel, body, status, provider, provider_message_id, sent_at, received_at, created_at")
+        .in("conversation_id", communicationConversationIds)
+        .order("created_at", { ascending: false })
+        .limit(60)
+    : { data: [], error: null };
+
+  if (communicationMessagesError) {
+    console.error("Customer communication messages select error:", communicationMessagesError);
+  }
+
+  const communicationMessages = (communicationMessagesRaw ?? []) as CustomerMessageRow[];
+  const communicationMessagesByConversationId = new Map<string, CustomerMessageRow[]>();
+  for (const message of communicationMessages) {
+    const group = communicationMessagesByConversationId.get(message.conversation_id) ?? [];
+    group.push(message);
+    communicationMessagesByConversationId.set(message.conversation_id, group);
+  }
+
+  for (const [conversationId, group] of communicationMessagesByConversationId.entries()) {
+    communicationMessagesByConversationId.set(
+      conversationId,
+      [...group].sort((a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime())
+    );
+  }
+
+  const latestCommunicationConversation = communicationConversations[0] ?? null;
+  const latestCommunicationMessages = latestCommunicationConversation
+    ? (communicationMessagesByConversationId.get(latestCommunicationConversation.id) ?? []).slice(-8)
+    : [];
+  const totalCommunicationUnread = communicationConversations.reduce(
+    (sum, conversation) => sum + (Number(conversation.unread_count ?? 0) || 0),
+    0
+  );
+  const openCommunicationCount = communicationConversations.filter(
+    (conversation) => String(conversation.status ?? "OPEN").toUpperCase() === "OPEN"
+  ).length;
+  const communicationOpenHref = latestCommunicationConversation
+    ? `/kommunikation?status=all&c=${latestCommunicationConversation.id}&panel=chats`
+    : `/kommunikation?status=all&panel=chats`;
 
   const { data: waitlistEntriesRaw, error: waitlistError } = await supabase
     .from("appointment_waitlist")
@@ -981,6 +1134,14 @@ export default async function CustomerDetailPage({
               <a href="#waitlist" className="inline-flex h-10 items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]">
                 Warteliste
               </a>
+              <a href="#communication" className="inline-flex h-10 items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]">
+                Kommunikation
+                {totalCommunicationUnread > 0 ? (
+                  <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-[11px] font-bold text-white">
+                    {totalCommunicationUnread}
+                  </span>
+                ) : null}
+              </a>
               <a href="#notes" className="inline-flex h-10 items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.08]">
                 Notizen
               </a>
@@ -1114,6 +1275,144 @@ export default async function CustomerDetailPage({
                 </div>
               </div>
             </div>
+          </SectionCard>
+
+          <SectionCard
+            id="communication"
+            title="Kommunikation"
+            description="WhatsApp-Verlauf, offene Kundenchats und letzte Nachrichten direkt im Kundenprofil."
+            action={
+              <Link href={communicationOpenHref}>
+                <Button variant="secondary" size="sm">Chat öffnen</Button>
+              </Link>
+            }
+          >
+            {communicationConversations.length === 0 ? (
+              <div className="rounded-[24px] border border-white/10 bg-black/20 p-5 text-white/60">
+                Noch kein Kommunikationsverlauf vorhanden.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)]">
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="rounded-[18px] border border-white/10 bg-white/5 px-3 py-3">
+                      <div className="text-[10px] uppercase tracking-[0.14em] text-white/45">Chats</div>
+                      <div className="mt-1 text-lg font-semibold text-white">{communicationConversations.length}</div>
+                    </div>
+                    <div className="rounded-[18px] border border-amber-400/20 bg-amber-400/10 px-3 py-3">
+                      <div className="text-[10px] uppercase tracking-[0.14em] text-amber-100/60">Offen</div>
+                      <div className="mt-1 text-lg font-semibold text-amber-100">{openCommunicationCount}</div>
+                    </div>
+                    <div className="rounded-[18px] border border-blue-400/20 bg-blue-400/10 px-3 py-3">
+                      <div className="text-[10px] uppercase tracking-[0.14em] text-blue-100/60">Ungelesen</div>
+                      <div className="mt-1 text-lg font-semibold text-blue-100">{totalCommunicationUnread}</div>
+                    </div>
+                  </div>
+
+                  {communicationConversations.slice(0, 5).map((conversation) => {
+                    const isLatest = latestCommunicationConversation?.id === conversation.id;
+                    return (
+                      <Link
+                        key={conversation.id}
+                        href={`/kommunikation?status=all&c=${conversation.id}&panel=chats`}
+                        className={`block rounded-[22px] border p-4 no-underline transition hover:bg-white/[0.06] ${
+                          isLatest ? "border-[#d8c1a0]/30 bg-[#d8c1a0]/10" : "border-white/10 bg-black/20"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-semibold text-white">
+                                {communicationChannelLabel(conversation.channel)}
+                              </span>
+                              <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${communicationStatusClasses(conversation.status)}`}>
+                                {communicationStatusLabel(conversation.status)}
+                              </span>
+                            </div>
+                            <div className="mt-2 line-clamp-2 text-sm text-white/65">
+                              {communicationPreviewText(conversation.last_message_preview)}
+                            </div>
+                            <div className="mt-2 text-xs text-white/40">
+                              {fmtDateTimeOrDash(conversation.last_message_at || conversation.created_at)}
+                            </div>
+                          </div>
+                          {Number(conversation.unread_count ?? 0) > 0 ? (
+                            <span className="inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-blue-500 px-2 text-xs font-bold text-white">
+                              {conversation.unread_count}
+                            </span>
+                          ) : null}
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+
+                <div className="rounded-[24px] border border-white/10 bg-black/20 p-4">
+                  {latestCommunicationConversation ? (
+                    <>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--primary)]">Letzter Verlauf</div>
+                          <div className="mt-1 text-lg font-semibold text-white">
+                            {communicationChannelLabel(latestCommunicationConversation.channel)} · {communicationStatusLabel(latestCommunicationConversation.status)}
+                          </div>
+                          <div className="mt-1 text-sm text-white/45">
+                            {fmtDateTimeOrDash(latestCommunicationConversation.last_message_at || latestCommunicationConversation.created_at)}
+                          </div>
+                        </div>
+                        <Link
+                          href={`/kommunikation?status=all&c=${latestCommunicationConversation.id}&panel=chats`}
+                          className="inline-flex h-9 items-center justify-center rounded-[14px] border border-white/15 bg-white/10 px-3 text-sm font-semibold text-white no-underline hover:bg-white/[0.14]"
+                        >
+                          Verlauf öffnen
+                        </Link>
+                      </div>
+
+                      <div className="mt-4 space-y-3">
+                        {latestCommunicationMessages.length === 0 ? (
+                          <div className="rounded-[18px] border border-white/10 bg-white/5 p-4 text-sm text-white/55">
+                            Noch keine Nachrichten in diesem Verlauf.
+                          </div>
+                        ) : (
+                          latestCommunicationMessages.map((message) => {
+                            const isOutbound = String(message.direction ?? "").toUpperCase() === "OUTBOUND";
+                            return (
+                              <div
+                                key={message.id}
+                                className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
+                              >
+                                <div
+                                  className={`max-w-[82%] rounded-[18px] border px-4 py-3 ${
+                                    isOutbound
+                                      ? "border-[#d8c1a0]/24 bg-[#d8c1a0]/12 text-white"
+                                      : "border-white/10 bg-black/30 text-white/90"
+                                  }`}
+                                >
+                                  <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                                    {communicationPreviewText(message.body)}
+                                  </div>
+                                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-white/45">
+                                    <span>{fmtDateTimeOrDash(message.created_at || message.sent_at || message.received_at)}</span>
+                                    <span>·</span>
+                                    <span>{communicationDirectionLabel(message.direction)}</span>
+                                    <span>·</span>
+                                    <span>{communicationMessageStatusLabel(message.status)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="rounded-[18px] border border-white/10 bg-white/5 p-4 text-sm text-white/55">
+                      Noch kein Verlauf ausgewählt.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </SectionCard>
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
