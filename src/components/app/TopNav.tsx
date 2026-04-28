@@ -1212,14 +1212,11 @@ return (
             <div className="pointer-events-none absolute inset-y-[8px] right-[84px] hidden w-px bg-[linear-gradient(180deg,transparent_0%,rgba(214,195,163,0.06)_16%,rgba(214,195,163,0.06)_84%,transparent_100%)] md:block" />
             <nav className="relative z-10 hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto pl-2.5 md:flex [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
               {nav.slice(0, 6).map((item) => {
-                const isChat = item.href === "/dashboard/chat";
-                const active = isChat
-                  ? pathname?.startsWith("/dashboard/chat") || searchParams?.get("openChat") === "1"
-                  : item.href === "/dashboard"
-                    ? pathname === "/dashboard"
-                    : item.key === "communication"
-                      ? pathname?.startsWith("/kommunikation") || searchParams?.get("openChat") === "1"
-                      : pathname?.startsWith(item.href);
+                const active = item.href === "/dashboard"
+                  ? pathname === "/dashboard"
+                  : item.key === "communication"
+                    ? pathname?.startsWith("/kommunikation") || searchParams?.get("openChat") === "1"
+                    : pathname?.startsWith(item.href);
 
                 const commonClass = cn(
                   "clientique-nav-pill shrink-0 inline-flex items-center gap-1.5 rounded-[18px] border border-transparent px-3.5 py-[9px] text-[12px] font-medium text-[var(--text-muted)] hover:border-[rgba(214,195,163,0.16)] hover:bg-[rgba(255,248,240,0.055)] hover:text-[#fbf3e7]",
@@ -1233,13 +1230,6 @@ return (
                   </span>
                 );
 
-                if (isChat) {
-                  return (
-                    <button key={item.href} type="button" onClick={openChat} className={commonClass}>
-                      {content}
-                    </button>
-                  );
-                }
 
                 if (item.key === "receipts") {
                   return (
