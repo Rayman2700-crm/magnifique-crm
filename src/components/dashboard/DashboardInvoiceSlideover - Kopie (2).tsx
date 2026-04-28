@@ -200,37 +200,13 @@ function AutoCardPaymentPanel({
   const [status, setStatus] = useState("Stripe-Terminal wird vorbereitet…");
   const [error, setError] = useState("");
   const [readerLabel, setReaderLabel] = useState("");
+  const [started, setStarted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [canRetry, setCanRetry] = useState(false);
   const [readerHint, setReaderHint] = useState("");
   const pollTimerRef = useRef<number | null>(null);
   const startedAtRef = useRef<number>(Date.now());
   const wasClosedRef = useRef(false);
-  const autoStartedRef = useRef(false);
-
-  function isRecoverableTerminalBusyMessage(value: unknown) {
-    const message = String(value ?? "").toLowerCase();
-    return (
-      message.includes("payment läuft bereits") ||
-      message.includes("reader ist gerade beschäftigt") ||
-      message.includes("reader verarbeitet bereits") ||
-      message.includes("reader is currently busy") ||
-      message.includes("currently busy") ||
-      message.includes("processing another request") ||
-      message.includes("another request") ||
-      (message.includes("reader") && message.includes("busy"))
-    );
-  }
-
-  function continuePolling(message = "Reader verarbeitet bereits eine Zahlung. Status wird weiter geprüft…") {
-    setStatus(message);
-    setError("");
-    setCanRetry(false);
-    clearPollTimer();
-    pollTimerRef.current = window.setTimeout(() => {
-      void poll();
-    }, 900);
-  }
 
   function clearPollTimer() {
     if (pollTimerRef.current) {
@@ -350,20 +326,10 @@ function AutoCardPaymentPanel({
         throw new Error(`Reader ${label} ist aktuell nicht online.`);
       }
       if (preferredReader.isReady === false) {
-        const reason = preferredReader.readinessReason || `Reader ${label} ist gerade nicht bereit.`;
-        if (isRecoverableTerminalBusyMessage(reason)) {
-          continuePolling("Reader arbeitet bereits. Ich prüfe den Zahlungsstatus weiter…");
-          return;
-        }
-        throw new Error(reason);
+        throw new Error(preferredReader.readinessReason || `Reader ${label} ist gerade nicht bereit.`);
       }
       if (String(preferredReader.actionStatus ?? "").trim() && !preferredReader.isReady) {
-        const reason = `Reader ${label} ist gerade beschäftigt (${preferredReader.actionStatus}).`;
-        if (isRecoverableTerminalBusyMessage(reason)) {
-          continuePolling("Reader arbeitet bereits. Ich prüfe den Zahlungsstatus weiter…");
-          return;
-        }
-        throw new Error(reason);
+        throw new Error(`Reader ${label} ist gerade beschäftigt (${preferredReader.actionStatus}).`);
       }
 
       setStatus(`Reader bereit: ${label}. Zahlung wird gestartet…`);
@@ -378,31 +344,7 @@ function AutoCardPaymentPanel({
         }),
       });
       const sendJson = await sendRes.json();
-      if (!sendRes.ok) {
-        const sendMessage = String(sendJson?.error ?? sendJson?.message ?? "Payment konnte nicht an den Reader gesendet werden.");
-        if (sendJson?.should_reload || sendJson?.poll_recommended || isRecoverableTerminalBusyMessage(sendMessage)) {
-          continuePolling(sendJson?.message || "Reader arbeitet bereits. Ich prüfe den Zahlungsstatus weiter…");
-          return;
-        }
-        throw new Error(sendMessage);
-      }
-
-      if (sendJson?.already_processing || sendJson?.reader_busy || sendJson?.poll_recommended) {
-        const activeReaderLabel =
-          String(sendJson?.reader?.label ?? "").trim() ||
-          String(sendJson?.reader?.id ?? "").trim() ||
-          label;
-        setReaderLabel(activeReaderLabel);
-        setReaderHint([
-          String(sendJson?.reader?.status ?? "").trim(),
-          String(sendJson?.reader?.actionStatus ?? sendJson?.reader?.action_status ?? "").trim(),
-        ].filter(Boolean).join(" · "));
-
-        if (sendJson?.already_processing || sendJson?.reader_busy) {
-          continuePolling(sendJson?.message || "Reader arbeitet bereits. Ich prüfe den Zahlungsstatus weiter…");
-          return;
-        }
-      }
+      if (!sendRes.ok) throw new Error(String(sendJson?.error ?? "Payment konnte nicht an den Reader gesendet werden."));
 
       const activeReaderLabel =
         String(sendJson?.reader?.label ?? "").trim() ||
@@ -423,26 +365,18 @@ function AutoCardPaymentPanel({
         void poll();
       }, 1200);
     } catch (err: any) {
-      const message = String(err?.message ?? "Kartenzahlung konnte nicht automatisch gestartet werden.");
-      if (isRecoverableTerminalBusyMessage(message)) {
-        continuePolling("Reader arbeitet bereits. Ich prüfe den Zahlungsstatus weiter…");
-      } else {
-        setError(message);
-        setCanRetry(true);
-      }
+      setError(String(err?.message ?? "Kartenzahlung konnte nicht automatisch gestartet werden."));
+      setCanRetry(true);
     } finally {
       setBusy(false);
     }
   }
 
   useEffect(() => {
-    if (autoStartedRef.current) return;
-    autoStartedRef.current = true;
+    if (started) return;
+    setStarted(true);
     void startFlow();
-    // startFlow intentionally runs once when this payment stage opens.
-    // The server route is idempotent, so React dev remounts cannot create a second reader action.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paymentId, salesOrderId]);
+  }, [started]);
 
   function handleClose() {
     wasClosedRef.current = true;

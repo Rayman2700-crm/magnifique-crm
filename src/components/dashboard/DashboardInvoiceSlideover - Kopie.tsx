@@ -122,59 +122,6 @@ function CustomerPickIcon() {
   );
 }
 
-
-function menuIconButtonClass(active = false, danger = false) {
-  if (danger) {
-    return "inline-flex h-12 min-w-0 flex-1 basis-0 items-center justify-center rounded-[16px] border border-white/10 bg-white/10 px-3 text-sm font-semibold text-white transition-colors hover:bg-red-600/90 hover:text-white";
-  }
-
-  return `inline-flex h-12 min-w-0 flex-1 basis-0 items-center justify-center rounded-[16px] border ${
-    active ? "border-white/18 bg-white/12" : "border-white/12 bg-white/[0.04]"
-  } px-3 text-sm font-semibold text-white transition-colors hover:bg-white/[0.10] disabled:cursor-not-allowed disabled:opacity-45`;
-}
-
-function passiveMenuButtonClass(active = false) {
-  return `inline-flex h-12 min-w-0 flex-1 basis-0 items-center justify-center rounded-[16px] border ${
-    active ? "border-white/18 bg-white/12" : "border-white/12 bg-white/[0.04]"
-  } px-3 text-sm font-semibold text-white cursor-default select-none pointer-events-none`;
-}
-
-function ReceiptIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M6 2h12a2 2 0 0 1 2 2v18l-3-2-3 2-3-2-3 2-3-2-3 2V4a2 2 0 0 1 2-2Z" />
-      <path d="M8 7h8" />
-      <path d="M8 11h8" />
-      <path d="M8 15h5" />
-    </svg>
-  );
-}
-
-function PlusIcon({ spinning = false }: { spinning?: boolean }) {
-  if (spinning) {
-    return (
-      <svg viewBox="0 0 24 24" className="h-5 w-5 animate-spin" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-        <path d="M12 3a9 9 0 1 0 9 9" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 5v14" />
-      <path d="M5 12h14" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
-      <path d="M6 6l12 12M18 6L6 18" />
-    </svg>
-  );
-}
-
 function SubmitButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
   return (
@@ -200,37 +147,13 @@ function AutoCardPaymentPanel({
   const [status, setStatus] = useState("Stripe-Terminal wird vorbereitet…");
   const [error, setError] = useState("");
   const [readerLabel, setReaderLabel] = useState("");
+  const [started, setStarted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [canRetry, setCanRetry] = useState(false);
   const [readerHint, setReaderHint] = useState("");
   const pollTimerRef = useRef<number | null>(null);
   const startedAtRef = useRef<number>(Date.now());
   const wasClosedRef = useRef(false);
-  const autoStartedRef = useRef(false);
-
-  function isRecoverableTerminalBusyMessage(value: unknown) {
-    const message = String(value ?? "").toLowerCase();
-    return (
-      message.includes("payment läuft bereits") ||
-      message.includes("reader ist gerade beschäftigt") ||
-      message.includes("reader verarbeitet bereits") ||
-      message.includes("reader is currently busy") ||
-      message.includes("currently busy") ||
-      message.includes("processing another request") ||
-      message.includes("another request") ||
-      (message.includes("reader") && message.includes("busy"))
-    );
-  }
-
-  function continuePolling(message = "Reader verarbeitet bereits eine Zahlung. Status wird weiter geprüft…") {
-    setStatus(message);
-    setError("");
-    setCanRetry(false);
-    clearPollTimer();
-    pollTimerRef.current = window.setTimeout(() => {
-      void poll();
-    }, 900);
-  }
 
   function clearPollTimer() {
     if (pollTimerRef.current) {
@@ -350,20 +273,10 @@ function AutoCardPaymentPanel({
         throw new Error(`Reader ${label} ist aktuell nicht online.`);
       }
       if (preferredReader.isReady === false) {
-        const reason = preferredReader.readinessReason || `Reader ${label} ist gerade nicht bereit.`;
-        if (isRecoverableTerminalBusyMessage(reason)) {
-          continuePolling("Reader arbeitet bereits. Ich prüfe den Zahlungsstatus weiter…");
-          return;
-        }
-        throw new Error(reason);
+        throw new Error(preferredReader.readinessReason || `Reader ${label} ist gerade nicht bereit.`);
       }
       if (String(preferredReader.actionStatus ?? "").trim() && !preferredReader.isReady) {
-        const reason = `Reader ${label} ist gerade beschäftigt (${preferredReader.actionStatus}).`;
-        if (isRecoverableTerminalBusyMessage(reason)) {
-          continuePolling("Reader arbeitet bereits. Ich prüfe den Zahlungsstatus weiter…");
-          return;
-        }
-        throw new Error(reason);
+        throw new Error(`Reader ${label} ist gerade beschäftigt (${preferredReader.actionStatus}).`);
       }
 
       setStatus(`Reader bereit: ${label}. Zahlung wird gestartet…`);
@@ -378,31 +291,7 @@ function AutoCardPaymentPanel({
         }),
       });
       const sendJson = await sendRes.json();
-      if (!sendRes.ok) {
-        const sendMessage = String(sendJson?.error ?? sendJson?.message ?? "Payment konnte nicht an den Reader gesendet werden.");
-        if (sendJson?.should_reload || sendJson?.poll_recommended || isRecoverableTerminalBusyMessage(sendMessage)) {
-          continuePolling(sendJson?.message || "Reader arbeitet bereits. Ich prüfe den Zahlungsstatus weiter…");
-          return;
-        }
-        throw new Error(sendMessage);
-      }
-
-      if (sendJson?.already_processing || sendJson?.reader_busy || sendJson?.poll_recommended) {
-        const activeReaderLabel =
-          String(sendJson?.reader?.label ?? "").trim() ||
-          String(sendJson?.reader?.id ?? "").trim() ||
-          label;
-        setReaderLabel(activeReaderLabel);
-        setReaderHint([
-          String(sendJson?.reader?.status ?? "").trim(),
-          String(sendJson?.reader?.actionStatus ?? sendJson?.reader?.action_status ?? "").trim(),
-        ].filter(Boolean).join(" · "));
-
-        if (sendJson?.already_processing || sendJson?.reader_busy) {
-          continuePolling(sendJson?.message || "Reader arbeitet bereits. Ich prüfe den Zahlungsstatus weiter…");
-          return;
-        }
-      }
+      if (!sendRes.ok) throw new Error(String(sendJson?.error ?? "Payment konnte nicht an den Reader gesendet werden."));
 
       const activeReaderLabel =
         String(sendJson?.reader?.label ?? "").trim() ||
@@ -423,26 +312,18 @@ function AutoCardPaymentPanel({
         void poll();
       }, 1200);
     } catch (err: any) {
-      const message = String(err?.message ?? "Kartenzahlung konnte nicht automatisch gestartet werden.");
-      if (isRecoverableTerminalBusyMessage(message)) {
-        continuePolling("Reader arbeitet bereits. Ich prüfe den Zahlungsstatus weiter…");
-      } else {
-        setError(message);
-        setCanRetry(true);
-      }
+      setError(String(err?.message ?? "Kartenzahlung konnte nicht automatisch gestartet werden."));
+      setCanRetry(true);
     } finally {
       setBusy(false);
     }
   }
 
   useEffect(() => {
-    if (autoStartedRef.current) return;
-    autoStartedRef.current = true;
+    if (started) return;
+    setStarted(true);
     void startFlow();
-    // startFlow intentionally runs once when this payment stage opens.
-    // The server route is idempotent, so React dev remounts cannot create a second reader action.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paymentId, salesOrderId]);
+  }, [started]);
 
   function handleClose() {
     wasClosedRef.current = true;
@@ -583,7 +464,7 @@ export default function DashboardInvoiceSlideover({
   }, [tenants]);
 
   const customerMatches = useMemo(() => {
-    const search = normalizeSearch(customerName || customerSearch);
+    const search = normalizeSearch(customerSearch);
 
     const matchesSearch = (customer: CustomerOption) => {
       if (!search) return true;
@@ -623,21 +504,15 @@ export default function DashboardInvoiceSlideover({
 
   useEffect(() => {
     if (paymentIdParam) return;
-
-    const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId);
-
     setSelectedServiceId("");
+    setSelectedCustomerId("");
+    setCustomerName("");
+    setCustomerSearch("");
     setPickerOpen(false);
     setServiceTitle("");
     setPrice("");
     setNotes("");
     setNotesOpen(false);
-
-    if (!selectedCustomer || selectedCustomer.tenantId !== tenantId) {
-      setSelectedCustomerId("");
-      setCustomerName("");
-      setCustomerSearch("");
-    }
   }, [tenantId, paymentIdParam]);
 
   const totalPreview = useMemo(() => {
@@ -680,11 +555,6 @@ export default function DashboardInvoiceSlideover({
     setPickerOpen(false);
   };
 
-  const clearCustomerSelection = () => {
-    setSelectedCustomerId("");
-    setCustomerSearch("");
-  };
-
   const renderCustomerButton = (customer: CustomerOption) => {
     const tenantLabel = tenantNameById.get(customer.tenantId) ?? "Anderer Bereich";
     const isFromCurrentTenant = customer.tenantId === tenantId;
@@ -695,11 +565,7 @@ export default function DashboardInvoiceSlideover({
         key={customer.id}
         type="button"
         onClick={() => handleCustomerPick(customer)}
-        className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left transition ${
-          isActive
-            ? "border-[#d8c1a0]/35 bg-[#d8c1a0]/12 text-white"
-            : "border-white/8 bg-white/[0.03] text-white/82 hover:bg-white/[0.08]"
-        }`}
+        className="flex w-full items-start justify-between rounded-[14px] border border-transparent bg-white/[0.03] px-3 py-2 text-left transition hover:border-white/10 hover:bg-white/[0.06]"
       >
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold text-white">{customer.displayName}</div>
@@ -713,7 +579,7 @@ export default function DashboardInvoiceSlideover({
               {tenantLabel}
             </span>
           ) : null}
-          <span className="text-xs text-white/55">{isActive ? "✓" : "Übernehmen"}</span>
+          {isActive ? <span className="text-xs font-semibold text-emerald-300">Aktiv</span> : null}
         </div>
       </button>
     );
@@ -728,7 +594,7 @@ export default function DashboardInvoiceSlideover({
         style={{
           position: "absolute",
           inset: 0,
-          backgroundColor: "rgba(0,0,0,0.42)",
+          backgroundColor: "rgba(0,0,0,0.68)",
           backdropFilter: "blur(6px)",
         }}
       />
@@ -741,7 +607,7 @@ export default function DashboardInvoiceSlideover({
           bottom: 18,
           width: 470,
           maxWidth: "calc(100vw - 36px)",
-          borderRadius: 18,
+          borderRadius: 22,
           border: "1px solid rgba(255,255,255,0.12)",
           background: "linear-gradient(180deg, rgba(16,16,16,0.96), rgba(10,10,10,0.96))",
           boxShadow: "0 18px 60px rgba(0,0,0,0.55)",
@@ -752,51 +618,32 @@ export default function DashboardInvoiceSlideover({
       >
         <div
           style={{
-            padding: 18,
+            padding: 16,
             borderBottom: "1px solid rgba(255,255,255,0.08)",
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
           }}
         >
-          <div className="flex flex-nowrap items-center gap-3 overflow-x-auto pb-3">
-            <button type="button" className={menuIconButtonClass()} aria-label="Rechnung" title="Rechnung">
-              <ReceiptIcon />
-            </button>
-
-            <button
-              type="submit"
-              form="dashboard-invoice-form"
-              disabled={showAutoCardStage || !isValid}
-              className={
-                !showAutoCardStage && isValid
-                  ? "inline-flex h-12 min-w-0 flex-1 basis-0 items-center justify-center rounded-[16px] border border-emerald-400/35 bg-emerald-500/16 px-3 text-sm font-semibold text-emerald-50 transition-colors hover:bg-emerald-500/24"
-                  : "inline-flex h-12 min-w-0 flex-1 basis-0 items-center justify-center rounded-[16px] border border-white/10 bg-white/[0.04] px-3 text-sm font-semibold text-white/38 transition-colors disabled:cursor-not-allowed"
-              }
-              aria-label="Rechnung erstellen"
-              title="Rechnung erstellen"
-            >
-              <PlusIcon />
-            </button>
-
-            <button type="button" className={passiveMenuButtonClass()} disabled>
-              {totalPreview}
-            </button>
-
-            <button type="button" onClick={handleClose} className={menuIconButtonClass(false, true)} aria-label="Schließen" title="Schließen">
-              <CloseIcon />
-            </button>
-          </div>
-
-          <div className="border-t border-white/10 pt-3">
-            <div className="min-w-0">
-              <div style={{ fontSize: 18, fontWeight: 800, color: "white" }}>
-                {showAutoCardStage ? "Kartenzahlung" : "Neue Rechnung"}
-              </div>
-              <div style={{ marginTop: 6, fontSize: 13, color: "rgba(255,255,255,0.46)" }}>
-                {showAutoCardStage
-                  ? "Reader wird automatisch verwendet und der Beleg danach direkt geöffnet."
-                  : "Sales Order, Payment und Fiskalbeleg werden direkt erzeugt."}
-              </div>
+          <div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.58)" }}>Rechnungen</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "white" }}>
+              {showAutoCardStage ? "Kartenzahlung" : "Neue Rechnung"}
+            </div>
+            <div style={{ marginTop: 6, fontSize: 13, color: "rgba(255,255,255,0.46)" }}>
+              {showAutoCardStage
+                ? "Reader wird automatisch verwendet und der Beleg danach direkt geöffnet."
+                : "Sales Order, Payment und Fiskalbeleg werden direkt erzeugt."}
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={handleClose}
+            className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+          >
+            Schließen
+          </button>
         </div>
 
         {successParam && !showAutoCardStage ? (
@@ -817,7 +664,7 @@ export default function DashboardInvoiceSlideover({
             onClose={handleClose}
           />
         ) : (
-          <form id="dashboard-invoice-form" action={createDashboardInvoice} className="hide-scrollbar" style={{ padding: 16, overflow: "auto", scrollbarWidth: "none", msOverflowStyle: "none" }}>
+          <form action={createDashboardInvoice} className="hide-scrollbar" style={{ padding: 16, overflow: "auto", scrollbarWidth: "none", msOverflowStyle: "none" }}>
             <div className="space-y-4">
               <div className="sticky top-0 z-20 -mx-4 -mt-4 mb-4 border-b border-white/10 bg-[linear-gradient(180deg,rgba(16,16,16,0.98),rgba(12,12,12,0.96))] px-4 pb-4 pt-3 backdrop-blur-xl">
                 <div className="grid gap-3">
@@ -867,36 +714,67 @@ export default function DashboardInvoiceSlideover({
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-white/80">Kunde auswählen, falls vorhanden</label>
+                <label className="mb-2 block text-sm font-medium text-white">Kunde *</label>
                 <input type="hidden" name="customer_profile_id" value={selectedCustomerId} />
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                  <input
-                    name="customer_name"
-                    value={customerName}
-                    onChange={(e) => {
-                      setCustomerName(e.target.value);
-                      setCustomerSearch(e.target.value);
-                      if (selectedCustomerId) clearCustomerSelection();
-                    }}
-                    placeholder="Kunde suchen oder Name frei eingeben"
-                    className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white placeholder:text-white/30 outline-none focus:ring-2 focus:ring-white/15"
-                  />
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen((open) => !open)}
+                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[16px] border border-[var(--primary)]/30 bg-[linear-gradient(180deg,rgba(214,195,163,0.14),rgba(214,195,163,0.08))] px-4 text-base font-semibold text-white shadow-[0_8px_24px_rgba(214,195,163,0.10)] transition hover:border-[var(--primary)]/45 hover:bg-[linear-gradient(180deg,rgba(214,195,163,0.18),rgba(214,195,163,0.10))]"
+                >
+                  <CustomerPickIcon />
+                  <span>{selectedCustomerId ? "Kundenwahl ändern" : "Kunde auswählen"}</span>
+                </button>
 
-                  {selectedCustomerId ? (
-                    <div className="mt-2 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100">
-                      Bestehender Kunde ausgewählt. Beim Speichern wird kein neues Kundenprofil erstellt.
-                    </div>
-                  ) : null}
-
-                  <div className="mt-3 max-h-44 space-y-1 overflow-y-auto pr-1">
-                    {customerMatches.length > 0 ? (
-                      customerMatches.map((customer) => renderCustomerButton(customer))
-                    ) : (
-                      <div className="rounded-xl border border-dashed border-white/10 bg-black/20 px-3 py-3 text-xs text-white/45">
-                        Kein passender Kunde gefunden. Du kannst den Namen frei eingeben.
-                      </div>
-                    )}
+                {selectedCustomerId ? (
+                  <div className="mt-2 rounded-[16px] border border-emerald-400/20 bg-emerald-400/10 px-4 py-3">
+                    <div className="text-sm font-semibold text-white">{customerName}</div>
+                    <div className="mt-1 text-xs text-white/50">{tenantNameById.get(tenantId) ?? activeTenantName}</div>
                   </div>
+                ) : null}
+
+                {pickerOpen ? (
+                  <div className="mt-3 rounded-[18px] border border-white/10 bg-[#0d0e11] p-3 shadow-[0_14px_40px_rgba(0,0,0,0.38)]">
+                    <div className="mb-3">
+                      <div className="text-sm font-semibold text-white">Kunde auswählen</div>
+                      <div className="mt-1 text-xs text-white/45">Bestehende Kunden suchen und direkt übernehmen.</div>
+                    </div>
+
+                    <input
+                      value={customerSearch}
+                      onChange={(e) => setCustomerSearch(e.target.value)}
+                      placeholder="Name, Telefon oder E-Mail suchen"
+                      className="h-11 w-full rounded-[14px] border border-white/10 bg-black/30 px-4 text-sm text-white placeholder:text-white/30 outline-none"
+                    />
+
+                    <div className="hide-scrollbar mt-3 max-h-64 overflow-auto space-y-1">
+                      {customerMatches.length > 0 ? (
+                        customerMatches.map((customer) => renderCustomerButton(customer))
+                      ) : (
+                        <div className="rounded-[14px] border border-dashed border-white/10 px-3 py-3 text-sm text-white/55">
+                          Kein Treffer. Dann im Hauptformular einfach frei eingeben.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+
+                <input
+                  type="hidden"
+                  name="customer_name"
+                  value={customerName}
+                />
+
+                {!selectedCustomerId ? (
+                  <input
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    placeholder="Oder Kunde frei eingeben"
+                    className="mt-3 h-12 w-full rounded-[16px] border border-white/10 bg-black/30 px-4 text-base text-white outline-none"
+                  />
+                ) : null}
+
+                <div className="mt-2 text-xs text-white/45">
+                  Der Picker durchsucht jetzt immer alle geladenen Kunden. Treffer vom aktiven Behandler stehen oben.
                 </div>
               </div>
 

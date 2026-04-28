@@ -146,25 +146,6 @@ export async function POST(req: NextRequest) {
   const admin = supabaseAdmin();
   let paymentId = "";
 
-  const readerPayload = (reader: Stripe.Terminal.Reader | null | undefined) => ({
-    id: reader?.id ?? null,
-    label: reader?.label ?? null,
-    status: reader?.status ?? null,
-    actionStatus: reader?.action?.status ?? null,
-    actionType: reader?.action?.type ?? null,
-  });
-
-  const isReaderBusyMessage = (value: unknown) => {
-    const message = String(value ?? "").toLowerCase();
-    return (
-      message.includes("reader is currently busy") ||
-      message.includes("currently busy") ||
-      message.includes("processing another request") ||
-      message.includes("another request") ||
-      (message.includes("reader") && message.includes("busy"))
-    );
-  };
-
   try {
     const body = await req.json();
     paymentId = String(body?.payment_id ?? "").trim();
@@ -172,6 +153,20 @@ export async function POST(req: NextRequest) {
 
     if (!paymentId) {
       return jsonNoStore({ error: "payment_id fehlt." }, { status: 400 });
+    }
+
+    const reader = await resolveReader(requestedReaderId);
+    if (!reader?.id) {
+      return jsonNoStore({ error: "Kein verfügbarer Reader gefunden." }, { status: 400 });
+    }
+
+    const readerStatus = String(reader.status ?? "").trim().toLowerCase();
+    const readerActionStatus = String(reader.action?.status ?? "").trim().toLowerCase();
+    if (readerStatus !== "online") {
+      return jsonNoStore({ error: `Reader ${reader.label ?? reader.id} ist aktuell nicht online.` }, { status: 409 });
+    }
+    if (isReaderBlockingActionStatus(readerActionStatus)) {
+      return jsonNoStore({ error: `Reader ${reader.label ?? reader.id} ist gerade beschäftigt (${readerActionStatus}).` }, { status: 409 });
     }
 
     const { data: payment, error } = await admin
@@ -188,157 +183,26 @@ export async function POST(req: NextRequest) {
       return jsonNoStore({ error: "Payment wurde nicht gefunden." }, { status: 404 });
     }
 
-    const paymentRow = payment as PaymentRow;
-    const normalizedStatus = String(paymentRow.status ?? "").trim().toUpperCase();
-    const existingIntentId = String(paymentRow.provider_transaction_id ?? "").trim();
-
+    const normalizedStatus = String(payment.status ?? "").trim().toUpperCase();
     if (normalizedStatus === "COMPLETED") {
-      return jsonNoStore({
-        ok: true,
-        already_completed: true,
-        should_reload: true,
-        poll_recommended: true,
-        payment_id: paymentId,
-        payment_intent_id: existingIntentId || null,
-      });
+      return jsonNoStore({ error: "Payment ist bereits abgeschlossen.", should_reload: true }, { status: 409 });
     }
-
     if (normalizedStatus === "PROCESSING") {
-      return jsonNoStore({
-        ok: true,
-        already_processing: true,
-        poll_recommended: true,
-        payment_id: paymentId,
-        payment_intent_id: existingIntentId || null,
-        message: "Payment läuft bereits am Terminal. Status wird weiter geprüft.",
-      });
+      return jsonNoStore({ error: "Payment läuft bereits am Terminal.", should_reload: true }, { status: 409 });
     }
-
     if (normalizedStatus === "CANCELLED") {
       return jsonNoStore({ error: "Dieses Payment wurde bereits abgebrochen.", should_reload: true }, { status: 409 });
     }
 
-    const paymentIntentId = await ensurePaymentIntent(paymentRow);
-    const providerBeforeStart = ((paymentRow.provider_response_json as Record<string, unknown> | null) ?? {});
+    const paymentIntentId = await ensurePaymentIntent(payment as PaymentRow);
 
-    const { error: lockError } = await admin
-      .from("payments")
-      .update({
-        status: "PROCESSING",
-        provider: "STRIPE_TERMINAL",
-        provider_transaction_id: paymentIntentId,
-        provider_response_json: {
-          ...providerBeforeStart,
-          phase: "terminal_starting",
-          terminal_starting_at: new Date().toISOString(),
-          stripe_payment_intent_id: paymentIntentId,
-        },
-        failure_reason: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", paymentId)
-      .in("status", ["PENDING", "FAILED"]);
-
-    if (lockError) {
-      throw new Error(lockError.message ?? "Payment konnte nicht für Terminal gesperrt werden.");
-    }
-
-    const reader = await resolveReader(requestedReaderId);
-    if (!reader?.id) {
-      throw new Error("Kein verfügbarer Reader gefunden.");
-    }
-
-    const readerStatus = String(reader.status ?? "").trim().toLowerCase();
-    const readerActionStatus = String(reader.action?.status ?? "").trim().toLowerCase();
-    if (readerStatus !== "online") {
-      throw new Error(`Reader ${reader.label ?? reader.id} ist aktuell nicht online.`);
-    }
-
-    if (isReaderBlockingActionStatus(readerActionStatus)) {
-      await admin
-        .from("payments")
-        .update({
-          status: "PROCESSING",
-          provider: "STRIPE_TERMINAL",
-          provider_transaction_id: paymentIntentId,
-          provider_response_json: {
-            ...providerBeforeStart,
-            phase: "reader_busy_polling_existing_action",
-            checked_at: new Date().toISOString(),
-            reader_id: reader.id,
-            reader_label: reader.label ?? null,
-            reader_status: reader.status ?? null,
-            reader_action: {
-              status: reader.action?.status ?? null,
-              type: reader.action?.type ?? null,
-            },
-            stripe_payment_intent_id: paymentIntentId,
-          },
-          failure_reason: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", paymentId);
-
-      return jsonNoStore({
-        ok: true,
-        reader_busy: true,
-        poll_recommended: true,
-        payment_id: paymentId,
-        payment_intent_id: paymentIntentId,
-        message: "Reader verarbeitet bereits eine Zahlung. Status wird weiter geprüft.",
-        reader: readerPayload(reader),
-      }, { status: 202 });
-    }
-
-    let processedReader: Stripe.Terminal.Reader;
-    try {
-      processedReader = await stripe.terminal.readers.processPaymentIntent(reader.id, {
-        payment_intent: paymentIntentId,
-        process_config: {
-          skip_tipping: true,
-          enable_customer_cancellation: true,
-        },
-      });
-    } catch (processError: any) {
-      const message = String(processError?.message ?? "").trim();
-      if (isReaderBusyMessage(message)) {
-        await admin
-          .from("payments")
-          .update({
-            status: "PROCESSING",
-            provider: "STRIPE_TERMINAL",
-            provider_transaction_id: paymentIntentId,
-            provider_response_json: {
-              ...providerBeforeStart,
-              phase: "reader_busy_after_send_attempt",
-              checked_at: new Date().toISOString(),
-              error_message: message,
-              reader_id: reader.id,
-              reader_label: reader.label ?? null,
-              reader_status: reader.status ?? null,
-              reader_action: {
-                status: reader.action?.status ?? null,
-                type: reader.action?.type ?? null,
-              },
-              stripe_payment_intent_id: paymentIntentId,
-            },
-            failure_reason: null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", paymentId);
-
-        return jsonNoStore({
-          ok: true,
-          reader_busy: true,
-          poll_recommended: true,
-          payment_id: paymentId,
-          payment_intent_id: paymentIntentId,
-          message: "Reader verarbeitet bereits eine Zahlung. Status wird weiter geprüft.",
-          reader: readerPayload(reader),
-        }, { status: 202 });
-      }
-      throw processError;
-    }
+    const processedReader = await stripe.terminal.readers.processPaymentIntent(reader.id, {
+      payment_intent: paymentIntentId,
+      process_config: {
+        skip_tipping: true,
+        enable_customer_cancellation: true,
+      },
+    });
 
     const autoPresentedTestCard = isTestSecretKey() && isSimulatedReader(processedReader);
 
@@ -347,7 +211,7 @@ export async function POST(req: NextRequest) {
     }
 
     const providerPayload = {
-      ...providerBeforeStart,
+      ...((payment.provider_response_json as Record<string, unknown> | null) ?? {}),
       phase: autoPresentedTestCard ? "sent_to_reader_and_auto_presented" : "sent_to_reader",
       sent_to_reader_at: new Date().toISOString(),
       reader_id: processedReader.id,
@@ -377,14 +241,14 @@ export async function POST(req: NextRequest) {
       throw new Error(updateError.message ?? "Payment konnte nicht auf PROCESSING gesetzt werden.");
     }
 
-    if (paymentRow.sales_order_id) {
+    if (payment.sales_order_id) {
       await admin
         .from("sales_orders")
         .update({
           status: "OPEN",
           updated_at: new Date().toISOString(),
         })
-        .eq("id", paymentRow.sales_order_id);
+        .eq("id", payment.sales_order_id);
     }
 
     return jsonNoStore({
@@ -393,7 +257,13 @@ export async function POST(req: NextRequest) {
       payment_intent_id: paymentIntentId,
       auto_presented_test_card: autoPresentedTestCard,
       poll_recommended: true,
-      reader: readerPayload(processedReader),
+      reader: {
+        id: processedReader.id,
+        label: processedReader.label ?? null,
+        status: processedReader.status ?? null,
+        actionStatus: processedReader.action?.status ?? null,
+        actionType: processedReader.action?.type ?? null,
+      },
     });
   } catch (error: any) {
     const message = String(error?.message ?? "Payment konnte nicht an den Reader gesendet werden.").trim() || "Payment konnte nicht an den Reader gesendet werden.";
@@ -411,8 +281,7 @@ export async function POST(req: NextRequest) {
           },
           updated_at: new Date().toISOString(),
         })
-        .eq("id", paymentId)
-        .neq("status", "COMPLETED");
+        .eq("id", paymentId);
     }
 
     if (error instanceof Stripe.errors.StripeError) {

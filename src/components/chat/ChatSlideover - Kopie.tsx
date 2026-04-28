@@ -169,7 +169,6 @@ export default function ChatSlideover({
       />
 
       <div
-        data-chat-panel="true"
         style={{
           position: "absolute",
           top: 18,
@@ -191,17 +190,16 @@ export default function ChatSlideover({
         }}
       >
         <div
-          data-chat-header="true"
           style={{
             padding: "16px 16px 14px",
             borderBottom: "1px solid rgba(216,193,160,0.12)",
-            display: "grid",
-            gridTemplateColumns: "minmax(145px, auto) minmax(0, 1fr) auto",
+            display: "flex",
             alignItems: "flex-start",
+            justifyContent: "space-between",
             gap: 16,
           }}
         >
-          <div data-chat-title="true" style={{ minWidth: 145, flexShrink: 0 }}>
+          <div style={{ minWidth: 145, flexShrink: 0 }}>
             <div
               style={{
                 fontSize: 18,
@@ -227,30 +225,42 @@ export default function ChatSlideover({
           </div>
 
           <div
-            data-chat-team-avatar-wrap="true"
             style={{
               minWidth: 0,
+              flex: 1,
               display: "flex",
               alignItems: "flex-start",
               justifyContent: "flex-end",
-              overflow: "visible",
+              gap: 12,
             }}
           >
-            <ChatTeamAvatars />
-          </div>
+            <div
+              data-chat-team-avatar-wrap="true"
+              style={{
+                minWidth: 0,
+                flex: "1 1 auto",
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "flex-end",
+                overflow: "visible",
+              }}
+            >
+              <ChatTeamAvatars />
+            </div>
 
-          <button
-            type="button"
-            onClick={close}
-            className={closeIconButtonClass()}
-            aria-label="Schließen"
-            title="Schließen"
-            style={{ flexShrink: 0, justifySelf: "end" }}
-          >
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          </button>
+            <button
+              type="button"
+              onClick={close}
+              className={closeIconButtonClass()}
+              aria-label="Schließen"
+              title="Schließen"
+              style={{ flexShrink: 0 }}
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
 
           <style jsx global>{`
             [data-chat-team-avatar-wrap] > * {
@@ -261,55 +271,6 @@ export default function ChatSlideover({
               justify-content: flex-end !important;
               gap: 8px !important;
               overflow: visible !important;
-            }
-
-            @media (max-width: 640px) {
-              [data-chat-panel="true"] {
-                top: max(48px, calc(env(safe-area-inset-top, 0px) + 14px)) !important;
-                right: 10px !important;
-                bottom: max(10px, calc(env(safe-area-inset-bottom, 0px) + 10px)) !important;
-                left: 10px !important;
-                width: auto !important;
-                max-width: none !important;
-                border-radius: 22px !important;
-              }
-
-              [data-chat-header="true"] {
-                padding: 16px 14px 15px !important;
-                grid-template-columns: minmax(0, 1fr) auto !important;
-                column-gap: 12px !important;
-                row-gap: 12px !important;
-              }
-
-              [data-chat-title="true"] {
-                min-width: 0 !important;
-                grid-column: 1 / 2 !important;
-                grid-row: 1 / 2 !important;
-              }
-
-              [data-chat-team-avatar-wrap="true"] {
-                grid-column: 1 / -1 !important;
-                grid-row: 2 / 3 !important;
-                width: 100% !important;
-                justify-content: flex-start !important;
-                overflow-x: auto !important;
-                overflow-y: hidden !important;
-                padding: 1px 2px 4px 0 !important;
-                scrollbar-width: none !important;
-                -webkit-overflow-scrolling: touch !important;
-              }
-
-              [data-chat-team-avatar-wrap="true"]::-webkit-scrollbar {
-                display: none !important;
-              }
-
-              [data-chat-team-avatar-wrap="true"] > * {
-                flex-wrap: nowrap !important;
-                justify-content: flex-start !important;
-                gap: 8px !important;
-                width: max-content !important;
-                max-width: none !important;
-              }
             }
           `}</style>
         </div>

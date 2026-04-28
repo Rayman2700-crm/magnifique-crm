@@ -107,12 +107,27 @@ function resolveTerminalPaymentStatus(input: {
   const currentPaymentStatus = String(input.currentPaymentStatus ?? "").trim().toUpperCase();
   const providerPayload = input.providerPayload ?? {};
   const phase = String(providerPayload.phase ?? "").trim().toLowerCase();
+  const readerAction = providerPayload.reader_action as Record<string, unknown> | undefined;
+  const readerActionStatus = String(readerAction?.status ?? "").trim().toLowerCase();
   const hasReaderContext =
     Boolean(String(providerPayload.reader_id ?? "").trim()) ||
     phase.includes("reader") ||
-    phase.includes("sent_to_reader");
+    phase.includes("sent_to_reader") ||
+    phase.includes("terminal_starting");
 
   if (normalizedIntentStatus === "requires_payment_method") {
+    const terminalStillWorking =
+      currentPaymentStatus === "PROCESSING" &&
+      (readerActionStatus === "in_progress" ||
+        readerActionStatus === "pending" ||
+        phase.includes("sent_to_reader") ||
+        phase.includes("reader_busy") ||
+        phase.includes("terminal_starting"));
+
+    if (terminalStillWorking) {
+      return "PROCESSING";
+    }
+
     if (hasReaderContext || currentPaymentStatus === "PROCESSING") {
       return "FAILED";
     }
