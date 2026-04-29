@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import ChatClient, { type ChatMessageDTO } from "@/app/dashboard/chat/ChatClient";
-import { CLIENTIQUE_DEMO_TENANT_ID } from "@/lib/demoMode";
 
 function mapChatMessage(row: any): ChatMessageDTO {
   return {
@@ -138,82 +137,6 @@ function TeamUserFloatingRail({
   );
 }
 
-
-function DemoTeamChatPanel({ currentUserName, initialDraft = "" }: { currentUserName: string; initialDraft?: string }) {
-  const [draft, setDraft] = useState(initialDraft);
-  const [messages, setMessages] = useState([
-    {
-      id: "demo-team-1",
-      senderName: "Clientique Demo",
-      text: "Willkommen im Demo-Teamchat. Diese Nachrichten sind rein virtuell und bleiben nur in dieser Demo-Ansicht.",
-      createdAt: "09:15",
-    },
-    {
-      id: "demo-team-2",
-      senderName: "Demo Kollegin",
-      text: "Beispiel: Ich habe den Termin von Anna Berger vorbereitet und eine Notiz hinterlegt.",
-      createdAt: "09:22",
-    },
-    {
-      id: "demo-team-3",
-      senderName: "Demo Rezeption",
-      text: "Beispiel: Neue Anfrage für Fußpflege ist auf der Warteliste.",
-      createdAt: "10:05",
-    },
-  ]);
-
-  function sendDemoMessage(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const text = draft.trim();
-    if (!text) return;
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `demo-team-${Date.now()}`,
-        senderName: currentUserName || "Du",
-        text,
-        createdAt: new Intl.DateTimeFormat("de-AT", { hour: "2-digit", minute: "2-digit" }).format(new Date()),
-      },
-    ]);
-    setDraft("");
-  }
-
-  return (
-    <div className="flex h-full min-h-0 flex-col bg-black/[0.02]">
-      <div className="shrink-0 border-b border-emerald-400/15 bg-emerald-500/[0.06] px-4 py-3 text-xs font-bold text-emerald-200">
-        Demo-Teamchat · keine echten Teamnachrichten, keine Push-Benachrichtigungen
-      </div>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-        {messages.map((message) => {
-          const mine = message.senderName === (currentUserName || "Du");
-          return (
-            <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[78%] rounded-[20px] border px-4 py-3 shadow-sm ${mine ? "border-[#d8c1a0]/25 bg-[#d8c1a0]/16" : "border-white/[0.09] bg-white/[0.055]"}`}>
-                <div className="mb-1 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-white/45">
-                  <span>{mine ? "Du" : message.senderName}</span>
-                  <span>{message.createdAt}</span>
-                </div>
-                <div className="whitespace-pre-wrap text-sm font-semibold leading-relaxed text-[#f7efe2]">{message.text}</div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <form onSubmit={sendDemoMessage} className="flex shrink-0 gap-2 border-t border-white/[0.08] p-3">
-        <input
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder="Demo-Nachricht schreiben..."
-          className="min-w-0 flex-1 rounded-2xl border border-white/[0.10] bg-black/25 px-4 py-3 text-sm font-semibold text-white outline-none placeholder:text-white/30 focus:border-[#d8c1a0]/35"
-        />
-        <button type="submit" className="rounded-2xl bg-[#d8c1a0] px-5 py-3 text-sm font-extrabold text-black transition hover:brightness-105">
-          Senden
-        </button>
-      </form>
-    </div>
-  );
-}
-
 export default function KommunikationTeamChatPanel({
   tenantId,
   currentUserId,
@@ -229,7 +152,6 @@ export default function KommunikationTeamChatPanel({
   const [messages, setMessages] = useState<ChatMessageDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [teamUsers, setTeamUsers] = useState<TeamUser[]>([]);
-  const isDemoMode = tenantId === CLIENTIQUE_DEMO_TENANT_ID;
 
   const mentionUser = (user: TeamUser) => {
     window.dispatchEvent(
@@ -241,19 +163,6 @@ export default function KommunikationTeamChatPanel({
 
   useEffect(() => {
     let cancelled = false;
-
-    if (isDemoMode) {
-      setTeamUsers([
-        {
-          userId: currentUserId,
-          fullName: currentUserName || "Du",
-          avatarRingColor: "#22c55e",
-        },
-      ]);
-      return () => {
-        cancelled = true;
-      };
-    }
 
     async function loadUsers() {
       const userMap = new Map<string, TeamUser>();
@@ -305,18 +214,10 @@ export default function KommunikationTeamChatPanel({
     return () => {
       cancelled = true;
     };
-  }, [currentUserId, currentUserName, isDemoMode, supabase, tenantId]);
+  }, [currentUserId, currentUserName, supabase, tenantId]);
 
   useEffect(() => {
     let cancelled = false;
-
-    if (isDemoMode) {
-      setMessages([]);
-      setLoading(false);
-      return () => {
-        cancelled = true;
-      };
-    }
 
     async function loadMessages() {
       setLoading(true);
@@ -341,11 +242,7 @@ export default function KommunikationTeamChatPanel({
     return () => {
       cancelled = true;
     };
-  }, [isDemoMode]);
-
-  if (isDemoMode) {
-    return <DemoTeamChatPanel currentUserName={currentUserName} initialDraft={initialDraft} />;
-  }
+  }, []);
 
   if (loading) {
     return (

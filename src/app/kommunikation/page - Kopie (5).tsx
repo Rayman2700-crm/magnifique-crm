@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getEffectiveTenantId } from "@/lib/effectiveTenant";
-import { CLIENTIQUE_DEMO_TENANT_ID, demoExternalActionMessage, getIsDemoTenant } from "@/lib/demoMode";
+import { demoExternalActionMessage, getIsDemoTenant } from "@/lib/demoMode";
 import KommunikationComposerClient from "./KommunikationComposerClient";
 import KommunikationChatSearchClient from "./KommunikationChatSearchClient";
 import KommunikationTeamChatPanel from "./KommunikationTeamChatPanel";
@@ -166,109 +166,6 @@ type CustomerCandidateRow = {
   person?: any;
   customer_avatar_url?: string | null;
 };
-
-
-function buildDemoConversations(tenantId: string): ConversationRow[] {
-  const now = new Date();
-  const iso = (minutesAgo: number) => new Date(now.getTime() - minutesAgo * 60_000).toISOString();
-  return [
-    {
-      id: "demo-conversation-anna",
-      tenant_id: tenantId,
-      person_id: "demo-person-anna",
-      customer_profile_id: "demo-customer-anna",
-      channel: "WHATSAPP",
-      status: "OPEN",
-      subject: "Demo WhatsApp Beratung",
-      external_contact: "+43 660 1234567",
-      external_contact_normalized: "436601234567",
-      unread_count: 1,
-      last_message_at: iso(8),
-      last_message_preview: "Super, danke! Kann ich morgen um 11:00 kommen?",
-      created_at: iso(120),
-      person: { id: "demo-person-anna", full_name: "Anna Berger", phone: "+43 660 1234567", email: "anna.berger.demo@example.at" },
-      tenant: { id: tenantId, display_name: "Demo Beauty Studio" },
-      customer_avatar_url: null,
-    },
-    {
-      id: "demo-conversation-mira",
-      tenant_id: tenantId,
-      person_id: "demo-person-mira",
-      customer_profile_id: "demo-customer-mira",
-      channel: "WHATSAPP",
-      status: "OPEN",
-      subject: "Demo Sprachnachricht",
-      external_contact: "+43 676 7654321",
-      external_contact_normalized: "436767654321",
-      unread_count: 0,
-      last_message_at: iso(36),
-      last_message_preview: "Sprachnachricht · Terminwunsch für Fußpflege",
-      created_at: iso(220),
-      person: { id: "demo-person-mira", full_name: "Mira Novak", phone: "+43 676 7654321", email: "mira.novak.demo@example.at" },
-      tenant: { id: tenantId, display_name: "Demo Beauty Studio" },
-      customer_avatar_url: null,
-    },
-    {
-      id: "demo-conversation-laura",
-      tenant_id: tenantId,
-      person_id: "demo-person-laura",
-      customer_profile_id: "demo-customer-laura",
-      channel: "WHATSAPP",
-      status: "CLOSED",
-      subject: "Demo abgeschlossene Anfrage",
-      external_contact: "+43 699 11223344",
-      external_contact_normalized: "4369911223344",
-      unread_count: 0,
-      last_message_at: iso(180),
-      last_message_preview: "Danke, dann bis Donnerstag!",
-      created_at: iso(600),
-      person: { id: "demo-person-laura", full_name: "Laura Steiner", phone: "+43 699 11223344", email: "laura.steiner.demo@example.at" },
-      tenant: { id: tenantId, display_name: "Demo Beauty Studio" },
-      customer_avatar_url: null,
-    },
-  ];
-}
-
-function buildDemoMessages(conversationId: string): MessageRow[] {
-  const now = new Date();
-  const iso = (minutesAgo: number) => new Date(now.getTime() - minutesAgo * 60_000).toISOString();
-  const base = {
-    channel: "WHATSAPP",
-    status: "SENT",
-    error_message: null,
-    metadata: { demo_mode: true, simulated_external_send: true },
-  };
-
-  if (conversationId === "demo-conversation-mira") {
-    return [
-      { id: "demo-msg-mira-1", direction: "INBOUND", body: "Sprachnachricht", created_at: iso(48), sent_at: null, received_at: iso(48), ...base, metadata: { demo_mode: true, demo_voice: true, duration: "0:12" } },
-      { id: "demo-msg-mira-2", direction: "OUTBOUND", body: "Danke Mira, ich habe dir morgen 13:00 reserviert. Das ist eine Demo-Antwort und wird nicht gesendet.", created_at: iso(42), sent_at: iso(42), received_at: null, ...base },
-      { id: "demo-msg-mira-3", direction: "INBOUND", body: "Perfekt, danke!", created_at: iso(36), sent_at: null, received_at: iso(36), ...base },
-    ];
-  }
-
-  if (conversationId === "demo-conversation-laura") {
-    return [
-      { id: "demo-msg-laura-1", direction: "INBOUND", body: "Hallo, ich brauche bitte einen Termin für Nägel.", created_at: iso(210), sent_at: null, received_at: iso(210), ...base },
-      { id: "demo-msg-laura-2", direction: "OUTBOUND", body: "Gerne, Donnerstag 16:00 wäre frei. Soll ich dich eintragen?", created_at: iso(195), sent_at: iso(195), received_at: null, ...base },
-      { id: "demo-msg-laura-3", direction: "INBOUND", body: "Danke, dann bis Donnerstag!", created_at: iso(180), sent_at: null, received_at: iso(180), ...base },
-    ];
-  }
-
-  return [
-    { id: "demo-msg-anna-1", direction: "INBOUND", body: "Hallo, ich hätte gerne einen Termin für medizinische Fußpflege.", created_at: iso(34), sent_at: null, received_at: iso(34), ...base },
-    { id: "demo-msg-anna-2", direction: "OUTBOUND", body: "Sehr gerne 😊 Morgen um 11:00 wäre noch frei. Soll ich dich eintragen?", created_at: iso(21), sent_at: iso(21), received_at: null, ...base },
-    { id: "demo-msg-anna-3", direction: "INBOUND", body: "Super, danke! Kann ich morgen um 11:00 kommen?", created_at: iso(8), sent_at: null, received_at: iso(8), ...base },
-  ];
-}
-
-function buildDemoCustomers(tenantId: string): CustomerCandidateRow[] {
-  return [
-    { id: "demo-customer-anna", tenant_id: tenantId, person_id: "demo-person-anna", created_at: new Date().toISOString(), person: { id: "demo-person-anna", full_name: "Anna Berger", phone: "+43 660 1234567", email: "anna.berger.demo@example.at" }, customer_avatar_url: null },
-    { id: "demo-customer-mira", tenant_id: tenantId, person_id: "demo-person-mira", created_at: new Date().toISOString(), person: { id: "demo-person-mira", full_name: "Mira Novak", phone: "+43 676 7654321", email: "mira.novak.demo@example.at" }, customer_avatar_url: null },
-    { id: "demo-customer-laura", tenant_id: tenantId, person_id: "demo-person-laura", created_at: new Date().toISOString(), person: { id: "demo-person-laura", full_name: "Laura Steiner", phone: "+43 699 11223344", email: "laura.steiner.demo@example.at" }, customer_avatar_url: null },
-  ];
-}
 
 function firstJoin<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
@@ -907,10 +804,6 @@ async function sendCommunicationReply(formData: FormData) {
     redirect("/login");
   }
 
-  if (conversationId.startsWith("demo-conversation-")) {
-    redirect(`/kommunikation?status=${encodeURIComponent(statusFilter)}&c=${encodeURIComponent(conversationId)}&demoSent=1`);
-  }
-
   const { data: conversation, error: conversationError } = await supabase
     .from("customer_conversations")
     .select(
@@ -1255,30 +1148,40 @@ export default async function KommunikationPage({
       <main className="fixed inset-x-0 bottom-[calc(74px+env(safe-area-inset-bottom))] top-[88px] z-[60] w-full min-w-0 max-w-none overflow-hidden rounded-none border-y border-white/[0.08] bg-[linear-gradient(180deg,rgba(35,28,22,0.98)_0%,rgba(15,12,9,0.99)_100%)] text-white shadow-[-30px_30px_90px_rgba(0,0,0,0.48)] md:bottom-4 md:left-auto md:right-4 md:top-[96px] md:w-[min(760px,calc(100vw-112px))] md:min-w-[620px] md:max-w-[calc(100vw-112px)] md:resize-x md:rounded-[30px] md:border">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,rgba(214,195,163,0.15),transparent_32%),radial-gradient(circle_at_100%_0%,rgba(88,65,45,0.18),transparent_34%)]" />
         <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
-          <header className="flex h-[74px] shrink-0 items-center justify-between gap-3 border-b border-white/[0.08] bg-white/[0.035] px-4 md:px-5">
-            <div className="flex min-w-0 items-center gap-3">
-              <h1 className="truncate text-xl font-bold tracking-[-0.04em] text-[#f7efe2]">Team Chat</h1>
-              <span className="shrink-0 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-bold text-emerald-300">Live</span>
+          <header className="flex h-[74px] shrink-0 items-center justify-between border-b border-white/[0.08] bg-white/[0.035] px-4 md:px-5">
+            <div className="min-w-0">
+              <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#d6c3a3]/72">Kommunikation</div>
+              <div className="mt-2 flex items-center gap-2">
+                <Link href="/kommunikation?tab=customers" className="rounded-full border border-white/[0.10] bg-white/[0.04] px-4 py-2 text-xs font-semibold text-white/58 transition hover:bg-white/[0.07] hover:text-white">
+                  <span className="inline-flex items-center">Kunden<CountBadge count={customerUnreadCount} /></span>
+                </Link>
+                <Link href="/kommunikation?tab=team" className="rounded-full border border-[#d6c3a3]/28 bg-[#d6c3a3]/16 px-4 py-2 text-xs font-semibold text-[#f7efe2] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                  <span className="inline-flex items-center">Team<KommunikationTeamUnreadBadge tenantId={effectiveTenantId} currentUserId={user.id} /></span>
+                </Link>
+              </div>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <Link href="/kommunikation?tab=customers" className="rounded-full border border-white/[0.10] bg-white/[0.04] px-4 py-2 text-xs font-semibold text-white/58 transition hover:bg-white/[0.07] hover:text-white">
-                <span className="inline-flex items-center">Kunden<CountBadge count={customerUnreadCount} /></span>
-              </Link>
-              <Link href="/kommunikation?tab=team" className="rounded-full border border-[#d6c3a3]/28 bg-[#d6c3a3]/16 px-4 py-2 text-xs font-semibold text-[#f7efe2] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-                <span className="inline-flex items-center">Team<KommunikationTeamUnreadBadge tenantId={effectiveTenantId} currentUserId={user.id} /></span>
-              </Link>
-              <Link href="/dashboard" aria-label="Kommunikation schließen" className="flex h-11 w-11 items-center justify-center rounded-full border border-white/12 bg-white/[0.04] text-white/80 transition hover:bg-white/[0.10]">
-                <IconClose />
-              </Link>
-            </div>
+            <Link href="/dashboard" aria-label="Kommunikation schließen" className="flex h-11 w-11 items-center justify-center rounded-[16px] border border-white/12 bg-white/[0.04] text-white/80 transition hover:bg-white/[0.10]">
+              <IconClose />
+            </Link>
           </header>
-          <section className="min-h-0 flex-1 p-0">
-            <KommunikationTeamChatPanel
-              tenantId={effectiveTenantId}
-              currentUserId={user.id}
-              currentUserName={String(profile?.full_name ?? user.email ?? "Du")}
-              initialDraft={teamChatDraft}
-            />
+          <section className="min-h-0 flex-1 p-3 md:p-4">
+            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[24px] border border-white/[0.10] bg-black/[0.18] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <div className="flex shrink-0 items-center justify-between border-b border-white/[0.08] px-4 py-3">
+                <div>
+                  <h1 className="text-xl font-bold tracking-[-0.04em] text-[#f7efe2]">Team Chat</h1>
+                  <p className="mt-1 text-xs text-white/45">Interne Studio-Kommunikation</p>
+                </div>
+                <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-bold text-emerald-300">Live</span>
+              </div>
+              <div className="min-h-0 flex-1">
+                <KommunikationTeamChatPanel
+                  tenantId={effectiveTenantId}
+                  currentUserId={user.id}
+                  currentUserName={String(profile?.full_name ?? user.email ?? "Du")}
+                  initialDraft={teamChatDraft}
+                />
+              </div>
+            </div>
           </section>
         </div>
       </main>
@@ -1334,14 +1237,12 @@ export default async function KommunikationPage({
 
   const { data: conversationsRaw, error: conversationsError } =
     await conversationsQuery;
-  let allConversations = isDemoTenant
-    ? buildDemoConversations(effectiveTenantId ?? CLIENTIQUE_DEMO_TENANT_ID)
-    : ((conversationsRaw ?? []) as ConversationRow[]);
+  let allConversations = (conversationsRaw ?? []) as ConversationRow[];
 
   // Direkter Deep-Link aus dem Kundenprofil: /kommunikation?status=all&c=<conversation_id>
   // Der ausgewählte Chat muss auch dann geladen werden, wenn er durch Status, Suche
   // oder das 80er-Limit nicht in der normalen Liste enthalten ist.
-  if (!isDemoTenant && selectedParam && !allConversations.some((conversation) => conversation.id === selectedParam)) {
+  if (selectedParam && !allConversations.some((conversation) => conversation.id === selectedParam)) {
     let selectedConversationQuery = supabase
       .from("customer_conversations")
       .select(
@@ -1450,11 +1351,11 @@ export default async function KommunikationPage({
   }
 
   const { data: searchableCustomersRaw } = await searchableCustomersQuery;
-  let searchableCustomers = isDemoTenant
-    ? buildDemoCustomers(effectiveTenantId ?? CLIENTIQUE_DEMO_TENANT_ID)
-    : ((searchableCustomersRaw ?? []) as CustomerCandidateRow[]);
+  let searchableCustomers = (
+    searchableCustomersRaw ?? []
+  ) as CustomerCandidateRow[];
 
-  const customerProfileIdsForAvatars = isDemoTenant ? [] : Array.from(
+  const customerProfileIdsForAvatars = Array.from(
     new Set(
       [
         ...allConversations.map((conversation) => conversation.customer_profile_id),
@@ -1523,52 +1424,31 @@ export default async function KommunikationPage({
 
   let messages: MessageRow[] = [];
   if (selectedConversation) {
-    if (isDemoTenant) {
-      messages = buildDemoMessages(selectedConversation.id);
-      if (sp?.demoSent === "1") {
-        messages = [
-          ...messages,
-          {
-            id: `demo-msg-sent-${Date.now()}`,
-            direction: "OUTBOUND",
-            channel: "WHATSAPP",
-            body: "Demo-Antwort wurde gespeichert. Es wurde keine echte WhatsApp, SMS oder E-Mail gesendet.",
-            status: "SENT",
-            created_at: new Date().toISOString(),
-            sent_at: new Date().toISOString(),
-            received_at: null,
-            error_message: null,
-            metadata: { demo_mode: true, simulated_external_send: true },
-          },
-        ];
-      }
-    } else {
-      const { data: messagesRaw } = await supabase
-        .from("customer_messages")
-        .select(
-          `
-            id,
-            direction,
-            channel,
-            body,
-            status,
-            created_at,
-            sent_at,
-            received_at,
-            error_message,
-            metadata
-          `,
-        )
-        .eq("conversation_id", selectedConversation.id)
-        .order("created_at", { ascending: true })
-        .limit(200);
+    const { data: messagesRaw } = await supabase
+      .from("customer_messages")
+      .select(
+        `
+          id,
+          direction,
+          channel,
+          body,
+          status,
+          created_at,
+          sent_at,
+          received_at,
+          error_message,
+          metadata
+        `,
+      )
+      .eq("conversation_id", selectedConversation.id)
+      .order("created_at", { ascending: true })
+      .limit(200);
 
-      messages = (messagesRaw ?? []) as MessageRow[];
-    }
+    messages = (messagesRaw ?? []) as MessageRow[];
   }
 
   let customerCandidates: CustomerCandidateRow[] = [];
-  if (!isDemoTenant && selectedConversation && !selectedConversation.customer_profile_id) {
+  if (selectedConversation && !selectedConversation.customer_profile_id) {
     const { data: candidatesRaw } = await supabase
       .from("customer_profiles")
       .select(

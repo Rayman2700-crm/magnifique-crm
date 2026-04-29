@@ -594,7 +594,7 @@ export default function KommunikationComposerClient({
                     event.currentTarget.form?.requestSubmit();
                   }
                 }}
-                placeholder={recordedAudioFile ? "Sprachnachricht senden?" : "Gib eine Nachricht ein."}
+                placeholder="Gib eine Nachricht ein."
                 className="h-11 min-h-[44px] max-h-36 w-full resize-none overflow-y-auto rounded-[22px] border border-[#d8c1a0]/16 bg-black/25 py-[12px] pl-12 pr-[88px] text-sm leading-[20px] text-white outline-none placeholder:text-white/38 transition focus:border-[#d8c1a0]/45 focus:bg-black/30 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               />
             )}

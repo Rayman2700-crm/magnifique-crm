@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CLIENTIQUE_DEMO_TENANT_ID } from "@/lib/demoMode";
 
 type ChatMessageRow = {
   id: string;
@@ -27,7 +26,6 @@ export default function KommunikationTeamUnreadBadge({
   currentUserId: string;
 }) {
   const [count, setCount] = useState(0);
-  const isDemoMode = tenantId === CLIENTIQUE_DEMO_TENANT_ID;
   const storageKey = useMemo(() => {
     if (!tenantId || !currentUserId) return null;
     return `team-chat:last-read:${tenantId}:${currentUserId}`;
@@ -38,10 +36,6 @@ export default function KommunikationTeamUnreadBadge({
     cancelledRef.current = false;
 
     async function loadUnreadCount() {
-      if (isDemoMode) {
-        if (!cancelledRef.current) setCount(0);
-        return;
-      }
       if (!storageKey || !currentUserId) {
         if (!cancelledRef.current) setCount(0);
         return;
@@ -101,7 +95,7 @@ export default function KommunikationTeamUnreadBadge({
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("storage", onStorage);
     };
-  }, [storageKey, currentUserId, isDemoMode]);
+  }, [storageKey, currentUserId]);
 
   return <Badge count={count} />;
 }

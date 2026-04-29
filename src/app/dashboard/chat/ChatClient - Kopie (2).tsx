@@ -72,12 +72,6 @@ type MentionUser = {
   fullName: string;
 };
 
-type TeamUserMeta = {
-  userId: string;
-  fullName: string;
-  avatarRingColor?: string | null;
-};
-
 type MentionState = {
   active: boolean;
   query: string;
@@ -3261,50 +3255,6 @@ function EmojiMiniSlideover({
   );
 }
 
-function TeamChatAvatar({
-  userId,
-  name,
-  mine = false,
-  ringColor,
-  sizeClass = "h-9 w-9",
-}: {
-  userId: string;
-  name: string;
-  mine?: boolean;
-  ringColor?: string | null;
-  sizeClass?: string;
-}) {
-  const safeName = name || "Team";
-  const borderColor = ringColor || (mine ? "#d8c1a0" : "rgba(216,193,160,0.30)");
-
-  return (
-    <div
-      className={`relative shrink-0 overflow-hidden rounded-full border-2 bg-[#d8c1a0]/[0.08] ${sizeClass}`}
-      style={{
-        borderColor,
-        boxShadow: ringColor ? `0 0 0 2px ${ringColor}24` : undefined,
-      }}
-      title={safeName}
-      aria-label={safeName}
-    >
-      <span
-        className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white"
-        style={{ backgroundColor: getAvatarColor(safeName) }}
-      >
-        {getInitials(safeName)}
-      </span>
-      <img
-        src={`/users/${userId}.png`}
-        alt={safeName}
-        className="relative h-full w-full object-cover"
-        onError={(event) => {
-          event.currentTarget.style.display = "none";
-        }}
-      />
-    </div>
-  );
-}
-
 const ChatMessageItem = memo(function ChatMessageItem({
   message,
   prevMessage,
@@ -3328,7 +3278,6 @@ const ChatMessageItem = memo(function ChatMessageItem({
   editTextareaRef,
   messageRef,
   isHighlighted,
-  userMetaById,
 }: {
   message: ChatMessageDTO;
   prevMessage?: ChatMessageDTO;
@@ -3352,13 +3301,9 @@ const ChatMessageItem = memo(function ChatMessageItem({
   editTextareaRef: React.RefObject<HTMLTextAreaElement | null>;
   messageRef: (node: HTMLDivElement | null) => void;
   isHighlighted: boolean;
-  userMetaById: Record<string, TeamUserMeta>;
 }) {
   const mine = message.senderId === currentUserId;
   const name = message.senderName || (mine ? currentUserName : "Team");
-  const senderMeta = userMetaById[message.senderId];
-  const avatarName = senderMeta?.fullName || name;
-  const avatarRingColor = senderMeta?.avatarRingColor ?? null;
   const showHeader = !isSameGroup(prevMessage, message);
   const reactionGroups = groupReactions(reactions, currentUserId);
   const reactionPickerOpen = openReactionPickerMessageId === message.id;
@@ -3447,13 +3392,13 @@ const ChatMessageItem = memo(function ChatMessageItem({
       }
     >
       {showHeader ? (
-        <TeamChatAvatar
-          userId={message.senderId}
-          name={avatarName}
-          mine={mine}
-          ringColor={avatarRingColor}
-          sizeClass="mt-0.5 h-9 w-9"
-        />
+        <div
+          className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+          style={{ backgroundColor: getAvatarColor(name) }}
+          title={name}
+        >
+          {getInitials(name)}
+        </div>
       ) : (
         <div className="w-9 shrink-0" />
       )}
@@ -3589,13 +3534,22 @@ const ChatMessageItem = memo(function ChatMessageItem({
 
                     {hasAttachment ? (
                       isAudio(message.fileType, message.fileName) ? (
-                        <KommunikationVoiceMessagePlayer
-                          src={message.fileUrl || ""}
-                          title="Sprachnachricht"
-                          outbound={mine}
-                          avatarName={avatarName}
-                          avatarUrl={`/users/${message.senderId}.png`}
-                        />
+                        <div
+                          className={
+                            "inline-flex max-w-full rounded-[24px] border p-1.5 " +
+                            (mine
+                              ? "border-[#d8c1a0]/24 bg-[#d8c1a0]/[0.12]"
+                              : "border-white/10 bg-white/[0.04]")
+                          }
+                        >
+                          <KommunikationVoiceMessagePlayer
+                            src={message.fileUrl || ""}
+                            title="Sprachnachricht"
+                            outbound={mine}
+                            avatarName={name}
+                            avatarUrl={mine ? `/users/${currentUserId}.png` : `/users/${message.senderId}.png`}
+                          />
+                        </div>
                       ) : isImage(message.fileType) ? (
                         <button
                           type="button"
@@ -3800,7 +3754,6 @@ export default function ChatClient({
   initialMessages,
   initialDraft = "",
   embedded = false,
-  teamUsers = [],
   onRealtimeStatusChange,
 }: {
   tenantId: string | null;
@@ -3809,24 +3762,11 @@ export default function ChatClient({
   initialMessages: ChatMessageDTO[];
   initialDraft?: string;
   embedded?: boolean;
-  teamUsers?: TeamUserMeta[];
   onRealtimeStatusChange?: (status: RealtimeStatus) => void;
 }) {
   const supabase = useMemo(() => supabaseBrowser(), []);
   const [messages, setMessages] = useState<ChatMessageDTO[]>(initialMessages);
   const [text, setText] = useState(initialDraft);
-  const userMetaById = useMemo(() => {
-    const map: Record<string, TeamUserMeta> = {};
-    for (const user of teamUsers) {
-      map[user.userId] = user;
-    }
-    map[currentUserId] = map[currentUserId] || {
-      userId: currentUserId,
-      fullName: currentUserName || "Du",
-      avatarRingColor: null,
-    };
-    return map;
-  }, [currentUserId, currentUserName, teamUsers]);
   const [sending, setSending] = useState(false);
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   const [reactionsByMessage, setReactionsByMessage] = useState<
@@ -5166,7 +5106,6 @@ export default function ChatClient({
                     messageRefs.current[m.id] = node;
                   }}
                   isHighlighted={highlightedMessageId === m.id}
-                  userMetaById={userMetaById}
                 />
               </React.Fragment>
             ))}

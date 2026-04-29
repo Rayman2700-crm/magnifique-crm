@@ -5,6 +5,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getValidGoogleAccessToken } from "@/lib/google/getValidGoogleAccessToken";
 import { getEffectiveTenantId } from "@/lib/effectiveTenant";
+import { CLIENTIQUE_DEMO_CALENDAR_ID, getIsDemoTenant } from "@/lib/demoMode";
 
 type AppointmentStatus = "scheduled" | "completed" | "cancelled" | "no_show";
 
@@ -456,61 +457,33 @@ function resolveEnabledCalendarIds(tokenRow: GoogleTokenSelectionRow | null | un
   };
 }
 
-async function ensureExtraCalendarMirrorPersonId(admin: any, tenantId: string) {
-  const cleanName = EXTRA_GOOGLE_CALENDAR_PERSON_NAME;
+function getCalendarIdsFromConnection(row: Partial<GoogleOauthConnectionRow> | null | undefined) {
+  if (!row) return [];
 
-  const { data: existingProfiles } = await admin
-    .from("customer_profiles")
-    .select(`id, person_id, person:persons ( id, full_name )`)
-    .eq("tenant_id", tenantId)
-    .limit(500);
+  const enabledIds = Array.isArray(row.enabled_calendar_ids)
+    ? row.enabled_calendar_ids.map((value) => normalizeGoogleCalendarId(value))
+    : [];
 
-  const existingProfile = (Array.isArray(existingProfiles) ? existingProfiles : []).find((row: any) => {
-    const personJoin = Array.isArray(row?.person) ? row.person[0] : row?.person;
-    return String(personJoin?.full_name ?? "").trim().toLowerCase() === cleanName.toLowerCase();
-  });
+  return sanitizeCalendarIdList([
+    normalizeGoogleCalendarId(row.default_calendar_id ?? null),
+    ...enabledIds,
+    normalizeGoogleCalendarId(row.google_account_email ?? null),
+    normalizeGoogleCalendarId(row.google_account_name ?? null),
+    normalizeGoogleCalendarId(row.connection_label ?? null),
+  ]).filter(Boolean);
+}
 
-  if (existingProfile?.person_id) {
-    return String(existingProfile.person_id);
-  }
+function isReadOnlyExtraCalendarId(calendarId: string | null | undefined) {
+  const normalized = normalizeGoogleCalendarId(calendarId);
+  return Boolean(normalized && !isStudioWriteCalendarId(normalized));
+}
 
-  const { data: existingPersons } = await admin
-    .from("persons")
-    .select("id, full_name")
-    .limit(1000);
-
-  const existingPerson = (Array.isArray(existingPersons) ? existingPersons : []).find((row: any) => {
-    return String(row?.full_name ?? "").trim().toLowerCase() === cleanName.toLowerCase();
-  });
-
-  if (existingPerson?.id) {
-    return String(existingPerson.id);
-  }
-
-  const { data: insertedPerson, error: personError } = await admin
-    .from("persons")
-    .insert({ full_name: cleanName })
-    .select("id")
-    .single();
-
-  if (!personError && insertedPerson?.id) {
-    return String(insertedPerson.id);
-  }
-
-  const { data: retryPersons } = await admin
-    .from("persons")
-    .select("id, full_name")
-    .limit(1000);
-
-  const retryPerson = (Array.isArray(retryPersons) ? retryPersons : []).find((row: any) => {
-    return String(row?.full_name ?? "").trim().toLowerCase() === cleanName.toLowerCase();
-  });
-
-  if (retryPerson?.id) {
-    return String(retryPerson.id);
-  }
-
-  throw new Error("Zusatzkalender-Spiegelperson konnte nicht erstellt werden.");
+async function ensureExtraCalendarMirrorPersonId(_admin: any, _tenantId: string) {
+  // Sicherheitsbremse:
+  // Zusatzkalender/private Kalender sind read-only und dürfen niemals CRM-Personen
+  // oder Kundenprofile erzeugen. Diese Funktion bleibt nur noch als Schutz gegen
+  // alte Codepfade bestehen.
+  throw new Error("Zusatzkalender sind read-only und dürfen keine CRM-Daten schreiben.");
 }
 
 async function isReadOnlyExtraCalendarAppointment(
@@ -994,13 +967,36 @@ export async function setDefaultCalendar(formData: FormData) {
 
   const { data: profile } = await supabase
     .from("user_profiles")
-    .select("role")
+    .select("role, tenant_id, calendar_tenant_id")
     .eq("user_id", user.id)
     .maybeSingle();
 
   const isAdmin = isAdminUser((profile as any)?.role, user.email);
 
   const returnTo = safeReturnTo(String(formData.get("returnTo") ?? "/calendar/google"));
+
+  const effectiveTenantId = await getEffectiveTenantId({
+    role: (profile as any)?.role ?? "PRACTITIONER",
+    tenant_id: (profile as any)?.tenant_id ?? null,
+    calendar_tenant_id: (profile as any)?.calendar_tenant_id ?? null,
+  });
+  const isDemoMode = await getIsDemoTenant(supabaseAdmin(), effectiveTenantId);
+
+  if (isDemoMode) {
+    await supabase
+      .from("google_oauth_tokens")
+      .upsert(
+        {
+          user_id: user.id,
+          default_calendar_id: CLIENTIQUE_DEMO_CALENDAR_ID,
+          enabled_calendar_ids: [CLIENTIQUE_DEMO_CALENDAR_ID],
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      );
+
+    redirect(buildRedirectUrl(returnTo, "success", "Demo-Kalender gespeichert ✅ Keine echte Google-Verbindung wurde verwendet."));
+  }
   const calendarId = String(formData.get("calendarId") ?? "").trim();
   const enabledCalendarIds = sanitizeCalendarIdList(
     formData.getAll("enabledCalendarIds").map((value) => String(value ?? "").trim())
@@ -1078,6 +1074,22 @@ export async function createTestEvent(formData?: FormData) {
   if (!user) redirect("/login");
 
   const returnTo = safeReturnTo(String(formData?.get("returnTo") ?? "/calendar/google"));
+
+  const { data: profileForDemo } = await supabase
+    .from("user_profiles")
+    .select("role, tenant_id, calendar_tenant_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const effectiveTenantId = await getEffectiveTenantId({
+    role: (profileForDemo as any)?.role ?? "PRACTITIONER",
+    tenant_id: (profileForDemo as any)?.tenant_id ?? null,
+    calendar_tenant_id: (profileForDemo as any)?.calendar_tenant_id ?? null,
+  });
+
+  if (await getIsDemoTenant(supabaseAdmin(), effectiveTenantId)) {
+    redirect(buildRedirectUrl(returnTo, "success", "Demo-Testevent simuliert ✅ Es wurde kein echter Google-Termin erstellt."));
+  }
 
   const { data: tok, error: tokErr } = await supabase
     .from("google_oauth_tokens")
@@ -1249,6 +1261,22 @@ export async function getReadOnlyExtraGoogleCalendarEventsForRange(input: { star
     return { ok: false, items: [], reason: "invalid_range" as const };
   }
 
+  const { data: profileForDemo } = await supabase
+    .from("user_profiles")
+    .select("role, tenant_id, calendar_tenant_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const effectiveTenantId = await getEffectiveTenantId({
+    role: (profileForDemo as any)?.role ?? "PRACTITIONER",
+    tenant_id: (profileForDemo as any)?.tenant_id ?? null,
+    calendar_tenant_id: (profileForDemo as any)?.calendar_tenant_id ?? null,
+  });
+
+  if (await getIsDemoTenant(admin, effectiveTenantId)) {
+    return { ok: true, items: [], reason: "demo_mode" as const };
+  }
+
   const [{ data: tokenRow, error: tokenError }, { data: connectionRows, error: connectionsError }] = await Promise.all([
     supabase
       .from("google_oauth_tokens")
@@ -1284,13 +1312,7 @@ export async function getReadOnlyExtraGoogleCalendarEventsForRange(input: { star
   // aber der tatsächlich gewählte Kalender ist fenster.lenhardt@gmail.com.
   // Deshalb dürfen wir NICHT nur google_account_email/connection_label als Kalender-ID verwenden.
   const readOnlyEnabledIds = sanitizeCalendarIdList(
-    readOnlyConnections.flatMap((row) => {
-      const rowDefaultId = normalizeGoogleCalendarId(row.default_calendar_id ?? null);
-      const rowEnabledIds = Array.isArray(row.enabled_calendar_ids)
-        ? row.enabled_calendar_ids.map((value) => normalizeGoogleCalendarId(value))
-        : [];
-      return [rowDefaultId, ...rowEnabledIds];
-    })
+    readOnlyConnections.flatMap((row) => getCalendarIdsFromConnection(row))
   );
 
   const candidateExtraCalendarIds = readOnlyEnabledIds.length > 0 ? readOnlyEnabledIds : tokenEnabledIds;
@@ -1309,17 +1331,7 @@ export async function getReadOnlyExtraGoogleCalendarEventsForRange(input: { star
 
   const connectionByCalendarId = new Map<string, GoogleOauthConnectionRow>();
   for (const row of readOnlyConnections) {
-    const rowDefaultId = normalizeGoogleCalendarId(row.default_calendar_id ?? null);
-    const rowEnabledIds = Array.isArray(row.enabled_calendar_ids)
-      ? row.enabled_calendar_ids.map((value) => normalizeGoogleCalendarId(value))
-      : [];
-    const candidates = sanitizeCalendarIdList([
-      rowDefaultId,
-      ...rowEnabledIds,
-      normalizeGoogleCalendarId(row.google_account_email),
-      normalizeGoogleCalendarId(row.google_account_name),
-      normalizeGoogleCalendarId(row.connection_label),
-    ]);
+    const candidates = getCalendarIdsFromConnection(row);
 
     for (const normalized of candidates) {
       if (!normalized || !extraCalendarIds.includes(normalized) || connectionByCalendarId.has(normalized)) continue;
@@ -1442,7 +1454,7 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
 
   const { data: ownerProfile, error: ownerProfileError } = await admin
     .from("user_profiles")
-    .select("user_id, full_name, tenant_id, calendar_tenant_id")
+    .select("user_id, full_name, tenant_id, calendar_tenant_id, role")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -1455,6 +1467,16 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
 
   if (!ownerUserId || !ownerTenantId) {
     return { ok: true, synced: 0, deleted: 0 };
+  }
+
+  const ownerEffectiveTenantId = await getEffectiveTenantId({
+    role: (ownerProfile as any)?.role ?? "PRACTITIONER",
+    tenant_id: (ownerProfile as any)?.tenant_id ?? null,
+    calendar_tenant_id: (ownerProfile as any)?.calendar_tenant_id ?? null,
+  });
+
+  if (await getIsDemoTenant(admin, ownerEffectiveTenantId)) {
+    return { ok: true, synced: 0, deleted: 0, reason: "demo_mode" };
   }
 
   const { data: practitionerProfiles } = await admin
@@ -1492,7 +1514,7 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
 
   const { data: connectionRows, error: connectionRowsError } = await admin
     .from("google_oauth_connections")
-    .select("google_account_email, google_account_name, connection_label, is_active")
+    .select("id, owner_user_id, provider, connection_type, connection_label, google_account_email, google_account_name, is_active, is_read_only, default_calendar_id, enabled_calendar_ids")
     .eq("owner_user_id", ownerUserId);
 
   if (connectionRowsError) {
@@ -1500,21 +1522,25 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
   }
 
   const activeConnectionRows = Array.isArray(connectionRows)
-    ? connectionRows.filter((row: any) => row?.is_active === true)
+    ? (connectionRows as GoogleOauthConnectionRow[]).filter((row: any) => row?.is_active === true)
     : [];
 
-  const allowedIds = new Set<string>(
-    activeConnectionRows
-      .flatMap((row: any) => [row?.google_account_email, row?.google_account_name, row?.connection_label])
-      .map((value: any) => String(value ?? "").trim())
-      .filter(Boolean)
-  );
-
   const tokenSelection = resolveEnabledCalendarIds((tokenRow ?? null) as GoogleTokenSelectionRow | null);
-  const defaultCalendarId = String(tokenSelection.defaultCalendarId ?? "").trim();
-  const extraCalendarIds = sanitizeCalendarIdList(
-    tokenSelection.enabledIds.filter((calendarId) => String(calendarId).trim() !== defaultCalendarId && allowedIds.has(String(calendarId).trim()))
+  const defaultCalendarId = normalizeGoogleCalendarId(tokenSelection.defaultCalendarId ?? null);
+
+  // Private/Zusatzkalender sind ausschließlich read-only.
+  // Sie werden in getReadOnlyExtraGoogleCalendarEventsForRange(...) direkt von Google geladen
+  // und dürfen hier niemals als syncTargets in public.appointments landen.
+  const readOnlyConnectionRows = activeConnectionRows.filter((row) => row.is_read_only === true);
+  const readOnlyCalendarIds = sanitizeCalendarIdList(
+    readOnlyConnectionRows.flatMap((row) => getCalendarIdsFromConnection(row)).filter(isReadOnlyExtraCalendarId)
   );
+  const tokenExtraCalendarIds = sanitizeCalendarIdList(
+    tokenSelection.enabledIds
+      .map((calendarId) => normalizeGoogleCalendarId(calendarId))
+      .filter((calendarId) => calendarId !== defaultCalendarId && isReadOnlyExtraCalendarId(calendarId))
+  );
+  const extraCalendarIds = sanitizeCalendarIdList([...readOnlyCalendarIds, ...tokenExtraCalendarIds]);
   const sharedDefaultCalendarIds = await loadSharedDefaultCalendarIdSet(admin);
 
   const syncTargets: Array<{
@@ -1695,7 +1721,14 @@ export async function syncGoogleCalendarRangeToAppointments(input: { startISO: s
   const seenGoogleKeys = new Set<string>();
 
   for (const syncTarget of syncTargets) {
-    const calendarId = syncTarget.calendarId;
+    const calendarId = normalizeGoogleCalendarId(syncTarget.calendarId);
+
+    // Absolute Zukunftssperre:
+    // Nur die zwei definierten Studio-Schreibkalender dürfen CRM-appointments schreiben.
+    // Alles andere (private Kalender, zusätzliche Google-Kalender, reconnectete Tokens)
+    // wird hier übersprungen und bleibt read-only UI-only.
+    if (!isStudioWriteCalendarId(calendarId)) continue;
+
     const ownerInfo = ownerByCalendarId.get(calendarId);
     if (!ownerInfo?.tenantId) continue;
 
@@ -2048,6 +2081,59 @@ export async function createAppointmentQuick(formData: FormData) {
     personId = foundPersonId;
   }
 
+  const isDemoMode = await getIsDemoTenant(admin, assignedTenantId);
+
+  if (isDemoMode) {
+    const start = new Date(startLocal);
+    if (Number.isNaN(start.getTime())) {
+      redirect(buildRedirectUrl(baseReturnUrl, "error", "Ungültiges Start-Datum."));
+    }
+
+    const end = new Date(start.getTime() + durationMin * 60 * 1000);
+    const demoGoogleEventId = `demo_event_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
+    const notesInternal = buildNotesInternal({
+      existing: null,
+      title,
+      notes,
+      status,
+      bufferMin,
+      walkInName,
+      walkInPhone,
+      serviceName: serviceRow?.name,
+      servicePriceCents: serviceRow?.default_price_cents ?? null,
+      serviceDurationMinutes: serviceRow?.duration_minutes ?? null,
+    });
+
+    const payload = {
+      tenant_id: assignedTenantId,
+      person_id: personId,
+      service_id: serviceRow?.id ?? null,
+      service_name_snapshot: serviceRow?.name ?? null,
+      service_price_cents_snapshot: serviceRow?.default_price_cents ?? null,
+      service_duration_minutes_snapshot: serviceRow?.duration_minutes ?? null,
+      service_buffer_minutes_snapshot: serviceRow?.buffer_minutes ?? null,
+      start_at: start.toISOString(),
+      end_at: end.toISOString(),
+      reminder_at: buildReminderAt(start).toISOString(),
+      reminder_sent_at: null,
+      notes_internal: `${notesInternal || ""}${notesInternal ? "\n" : ""}Demo-Modus: Google-Termin wurde simuliert.`,
+      google_connection_id: null,
+      calendar_connection_id: null,
+      calendar_mode: "STUDIO",
+      google_write_calendar_id: CLIENTIQUE_DEMO_CALENDAR_ID,
+      google_calendar_id: CLIENTIQUE_DEMO_CALENDAR_ID,
+      google_event_id: demoGoogleEventId,
+    };
+
+    const insErr = await insertAppointmentBestEffort(admin, payload, status);
+    if (insErr) {
+      redirect(buildRedirectUrl(baseReturnUrl, "error", "Demo-Termin konnte nicht gespeichert werden: " + insErr.message));
+    }
+
+    redirect(buildRedirectUrl(baseReturnUrl, "success", "Demo-Termin erstellt ✅ Keine echte Google-Aktion wurde ausgelöst."));
+  }
+
     // Wichtig:
   // Standardverhalten bleibt sicher: Automatisch = Kalender des ausgewählten Behandlers.
   // Zusätzlich kann jetzt explizit in einen der zwei Studio-Schreibkalender geschrieben werden.
@@ -2320,12 +2406,21 @@ export async function deleteAppointmentFromCalendar(appointmentId: string, formD
 
   const { data: appt, error: apptErr } = await supabase
     .from("appointments")
-    .select("google_calendar_id, google_event_id, google_connection_id, calendar_connection_id, calendar_mode, notes_internal")
+    .select("tenant_id, google_calendar_id, google_event_id, google_connection_id, calendar_connection_id, calendar_mode, notes_internal")
     .eq("id", appointmentId)
     .single();
 
   if (apptErr || !appt) {
     redirect(buildRedirectUrl(baseReturnUrl, "error", "Termin nicht gefunden."));
+  }
+
+  if (await getIsDemoTenant(supabaseAdmin(), (appt as any).tenant_id ?? null)) {
+    await supabase.from("appointment_open_slots").delete().eq("appointment_id", appointmentId);
+    const { error: delErr } = await supabase.from("appointments").delete().eq("id", appointmentId);
+    if (delErr) {
+      redirect(buildRedirectUrl(baseReturnUrl, "error", "Demo-Termin konnte nicht gelöscht werden: " + delErr.message));
+    }
+    redirect(buildRedirectUrl(baseReturnUrl, "success", "Demo-Termin gelöscht ✅ Keine echte Google-Aktion wurde ausgelöst."));
   }
 
   let googleDeleteConfirmed = false;
@@ -2417,7 +2512,7 @@ export async function updateAppointmentFromCalendar(appointmentId: string, formD
 
   const { data: existing, error: findErr } = await admin
       .from("appointments")
-    .select("notes_internal, google_calendar_id, google_event_id, google_connection_id, calendar_connection_id, calendar_mode")
+    .select("tenant_id, notes_internal, google_calendar_id, google_event_id, google_connection_id, calendar_connection_id, calendar_mode, reminder_sent_at")
     .eq("id", appointmentId)
     .single();
 
@@ -2425,15 +2520,19 @@ export async function updateAppointmentFromCalendar(appointmentId: string, formD
     redirect(buildRedirectUrl(baseReturnUrl, "error", "Termin nicht gefunden."));
   }
 
-  try {
-    await ensureWritableGoogleCalendarAppointment(supabaseAdmin(), {
-      googleCalendarId: existing.google_calendar_id,
-      notesInternal: existing.notes_internal ?? null,
-      calendarMode: (existing as any).calendar_mode ?? null,
-      calendarConnectionId: (existing as any).calendar_connection_id ?? (existing as any).google_connection_id ?? null,
-    });
-  } catch (e: any) {
-    redirect(buildRedirectUrl(baseReturnUrl, "error", e?.message ?? "Termin ist schreibgeschützt."));
+  const isDemoMode = await getIsDemoTenant(admin, (existing as any).tenant_id ?? null);
+
+  if (!isDemoMode) {
+    try {
+      await ensureWritableGoogleCalendarAppointment(supabaseAdmin(), {
+        googleCalendarId: existing.google_calendar_id,
+        notesInternal: existing.notes_internal ?? null,
+        calendarMode: (existing as any).calendar_mode ?? null,
+        calendarConnectionId: (existing as any).calendar_connection_id ?? (existing as any).google_connection_id ?? null,
+      });
+    } catch (e: any) {
+      redirect(buildRedirectUrl(baseReturnUrl, "error", e?.message ?? "Termin ist schreibgeschützt."));
+    }
   }
 
   const bufferRaw = readLineValue(existing.notes_internal, "Buffer:");
@@ -2455,7 +2554,7 @@ export async function updateAppointmentFromCalendar(appointmentId: string, formD
   const reminderWasDeleted = hasReminderDeletedMarker(notesInternal);
 
   try {
-    if (existing.google_calendar_id && existing.google_event_id) {
+    if (!isDemoMode && existing.google_calendar_id && existing.google_event_id) {
       const token = await getGoogleAccessTokenForAppointmentTarget((existing as any).google_connection_id ?? null);
       await googleFetchWithToken(
         token,
@@ -2492,7 +2591,7 @@ export async function updateAppointmentFromCalendar(appointmentId: string, formD
     redirect(buildRedirectUrl(baseReturnUrl, "error", "Termin konnte nicht aktualisiert werden: " + updErr.message));
   }
 
-  redirect(buildRedirectUrl(baseReturnUrl, "success", "Termin gespeichert ✅"));
+  redirect(buildRedirectUrl(baseReturnUrl, "success", isDemoMode ? "Demo-Termin gespeichert ✅ Keine echte Google-Aktion wurde ausgelöst." : "Termin gespeichert ✅"));
 }
 
 async function syncOpenSlotForUnavailableAppointment(input: {

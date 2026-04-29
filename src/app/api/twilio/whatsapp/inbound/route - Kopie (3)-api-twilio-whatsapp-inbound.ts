@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { isDemoTenantId } from "@/lib/demoMode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -439,15 +438,6 @@ export async function POST(request: Request) {
 
     if (!tenantId) {
       console.error("Twilio inbound: no tenant resolved. Set communication_settings.twilio_whatsapp_from or TWILIO_DEFAULT_TENANT_ID.", {
-        from,
-        to,
-        messageSid,
-      });
-      return twilioXmlResponse();
-    }
-
-    if (isDemoTenantId(tenantId)) {
-      console.warn("Twilio inbound: Demo-Tenant erkannt. Eingehende echte Twilio-Nachricht wird nicht in Demo-Daten geschrieben.", {
         from,
         to,
         messageSid,

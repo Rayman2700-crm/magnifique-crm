@@ -69,7 +69,6 @@ function avatarRingColor(name: string | null, index: number) {
   if (n.includes("raluca")) return "#a855f7";
   if (n.includes("alexandra")) return "#22c55e";
   if (n.includes("barbara")) return "#f97316";
-  if (n.includes("demo") || n.includes("clientique")) return "#22c55e";
   const colors = ["rgba(255,255,255,0.55)", "#3b82f6", "#a855f7", "#22c55e", "#f97316"];
   return colors[index % colors.length];
 }

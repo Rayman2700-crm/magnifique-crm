@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getEffectiveTenantId } from "@/lib/effectiveTenant";
-import { CLIENTIQUE_DEMO_TENANT_ID, demoExternalActionMessage, getIsDemoTenant } from "@/lib/demoMode";
+import { demoExternalActionMessage, getIsDemoTenant } from "@/lib/demoMode";
 import KommunikationComposerClient from "./KommunikationComposerClient";
 import KommunikationChatSearchClient from "./KommunikationChatSearchClient";
 import KommunikationTeamChatPanel from "./KommunikationTeamChatPanel";
@@ -166,109 +166,6 @@ type CustomerCandidateRow = {
   person?: any;
   customer_avatar_url?: string | null;
 };
-
-
-function buildDemoConversations(tenantId: string): ConversationRow[] {
-  const now = new Date();
-  const iso = (minutesAgo: number) => new Date(now.getTime() - minutesAgo * 60_000).toISOString();
-  return [
-    {
-      id: "demo-conversation-anna",
-      tenant_id: tenantId,
-      person_id: "demo-person-anna",
-      customer_profile_id: "demo-customer-anna",
-      channel: "WHATSAPP",
-      status: "OPEN",
-      subject: "Demo WhatsApp Beratung",
-      external_contact: "+43 660 1234567",
-      external_contact_normalized: "436601234567",
-      unread_count: 1,
-      last_message_at: iso(8),
-      last_message_preview: "Super, danke! Kann ich morgen um 11:00 kommen?",
-      created_at: iso(120),
-      person: { id: "demo-person-anna", full_name: "Anna Berger", phone: "+43 660 1234567", email: "anna.berger.demo@example.at" },
-      tenant: { id: tenantId, display_name: "Demo Beauty Studio" },
-      customer_avatar_url: null,
-    },
-    {
-      id: "demo-conversation-mira",
-      tenant_id: tenantId,
-      person_id: "demo-person-mira",
-      customer_profile_id: "demo-customer-mira",
-      channel: "WHATSAPP",
-      status: "OPEN",
-      subject: "Demo Sprachnachricht",
-      external_contact: "+43 676 7654321",
-      external_contact_normalized: "436767654321",
-      unread_count: 0,
-      last_message_at: iso(36),
-      last_message_preview: "Sprachnachricht · Terminwunsch für Fußpflege",
-      created_at: iso(220),
-      person: { id: "demo-person-mira", full_name: "Mira Novak", phone: "+43 676 7654321", email: "mira.novak.demo@example.at" },
-      tenant: { id: tenantId, display_name: "Demo Beauty Studio" },
-      customer_avatar_url: null,
-    },
-    {
-      id: "demo-conversation-laura",
-      tenant_id: tenantId,
-      person_id: "demo-person-laura",
-      customer_profile_id: "demo-customer-laura",
-      channel: "WHATSAPP",
-      status: "CLOSED",
-      subject: "Demo abgeschlossene Anfrage",
-      external_contact: "+43 699 11223344",
-      external_contact_normalized: "4369911223344",
-      unread_count: 0,
-      last_message_at: iso(180),
-      last_message_preview: "Danke, dann bis Donnerstag!",
-      created_at: iso(600),
-      person: { id: "demo-person-laura", full_name: "Laura Steiner", phone: "+43 699 11223344", email: "laura.steiner.demo@example.at" },
-      tenant: { id: tenantId, display_name: "Demo Beauty Studio" },
-      customer_avatar_url: null,
-    },
-  ];
-}
-
-function buildDemoMessages(conversationId: string): MessageRow[] {
-  const now = new Date();
-  const iso = (minutesAgo: number) => new Date(now.getTime() - minutesAgo * 60_000).toISOString();
-  const base = {
-    channel: "WHATSAPP",
-    status: "SENT",
-    error_message: null,
-    metadata: { demo_mode: true, simulated_external_send: true },
-  };
-
-  if (conversationId === "demo-conversation-mira") {
-    return [
-      { id: "demo-msg-mira-1", direction: "INBOUND", body: "Sprachnachricht", created_at: iso(48), sent_at: null, received_at: iso(48), ...base, metadata: { demo_mode: true, demo_voice: true, duration: "0:12" } },
-      { id: "demo-msg-mira-2", direction: "OUTBOUND", body: "Danke Mira, ich habe dir morgen 13:00 reserviert. Das ist eine Demo-Antwort und wird nicht gesendet.", created_at: iso(42), sent_at: iso(42), received_at: null, ...base },
-      { id: "demo-msg-mira-3", direction: "INBOUND", body: "Perfekt, danke!", created_at: iso(36), sent_at: null, received_at: iso(36), ...base },
-    ];
-  }
-
-  if (conversationId === "demo-conversation-laura") {
-    return [
-      { id: "demo-msg-laura-1", direction: "INBOUND", body: "Hallo, ich brauche bitte einen Termin für Nägel.", created_at: iso(210), sent_at: null, received_at: iso(210), ...base },
-      { id: "demo-msg-laura-2", direction: "OUTBOUND", body: "Gerne, Donnerstag 16:00 wäre frei. Soll ich dich eintragen?", created_at: iso(195), sent_at: iso(195), received_at: null, ...base },
-      { id: "demo-msg-laura-3", direction: "INBOUND", body: "Danke, dann bis Donnerstag!", created_at: iso(180), sent_at: null, received_at: iso(180), ...base },
-    ];
-  }
-
-  return [
-    { id: "demo-msg-anna-1", direction: "INBOUND", body: "Hallo, ich hätte gerne einen Termin für medizinische Fußpflege.", created_at: iso(34), sent_at: null, received_at: iso(34), ...base },
-    { id: "demo-msg-anna-2", direction: "OUTBOUND", body: "Sehr gerne 😊 Morgen um 11:00 wäre noch frei. Soll ich dich eintragen?", created_at: iso(21), sent_at: iso(21), received_at: null, ...base },
-    { id: "demo-msg-anna-3", direction: "INBOUND", body: "Super, danke! Kann ich morgen um 11:00 kommen?", created_at: iso(8), sent_at: null, received_at: iso(8), ...base },
-  ];
-}
-
-function buildDemoCustomers(tenantId: string): CustomerCandidateRow[] {
-  return [
-    { id: "demo-customer-anna", tenant_id: tenantId, person_id: "demo-person-anna", created_at: new Date().toISOString(), person: { id: "demo-person-anna", full_name: "Anna Berger", phone: "+43 660 1234567", email: "anna.berger.demo@example.at" }, customer_avatar_url: null },
-    { id: "demo-customer-mira", tenant_id: tenantId, person_id: "demo-person-mira", created_at: new Date().toISOString(), person: { id: "demo-person-mira", full_name: "Mira Novak", phone: "+43 676 7654321", email: "mira.novak.demo@example.at" }, customer_avatar_url: null },
-    { id: "demo-customer-laura", tenant_id: tenantId, person_id: "demo-person-laura", created_at: new Date().toISOString(), person: { id: "demo-person-laura", full_name: "Laura Steiner", phone: "+43 699 11223344", email: "laura.steiner.demo@example.at" }, customer_avatar_url: null },
-  ];
-}
 
 function firstJoin<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
@@ -907,10 +804,6 @@ async function sendCommunicationReply(formData: FormData) {
     redirect("/login");
   }
 
-  if (conversationId.startsWith("demo-conversation-")) {
-    redirect(`/kommunikation?status=${encodeURIComponent(statusFilter)}&c=${encodeURIComponent(conversationId)}&demoSent=1`);
-  }
-
   const { data: conversation, error: conversationError } = await supabase
     .from("customer_conversations")
     .select(
@@ -1334,14 +1227,12 @@ export default async function KommunikationPage({
 
   const { data: conversationsRaw, error: conversationsError } =
     await conversationsQuery;
-  let allConversations = isDemoTenant
-    ? buildDemoConversations(effectiveTenantId ?? CLIENTIQUE_DEMO_TENANT_ID)
-    : ((conversationsRaw ?? []) as ConversationRow[]);
+  let allConversations = (conversationsRaw ?? []) as ConversationRow[];
 
   // Direkter Deep-Link aus dem Kundenprofil: /kommunikation?status=all&c=<conversation_id>
   // Der ausgewählte Chat muss auch dann geladen werden, wenn er durch Status, Suche
   // oder das 80er-Limit nicht in der normalen Liste enthalten ist.
-  if (!isDemoTenant && selectedParam && !allConversations.some((conversation) => conversation.id === selectedParam)) {
+  if (selectedParam && !allConversations.some((conversation) => conversation.id === selectedParam)) {
     let selectedConversationQuery = supabase
       .from("customer_conversations")
       .select(
@@ -1450,11 +1341,11 @@ export default async function KommunikationPage({
   }
 
   const { data: searchableCustomersRaw } = await searchableCustomersQuery;
-  let searchableCustomers = isDemoTenant
-    ? buildDemoCustomers(effectiveTenantId ?? CLIENTIQUE_DEMO_TENANT_ID)
-    : ((searchableCustomersRaw ?? []) as CustomerCandidateRow[]);
+  let searchableCustomers = (
+    searchableCustomersRaw ?? []
+  ) as CustomerCandidateRow[];
 
-  const customerProfileIdsForAvatars = isDemoTenant ? [] : Array.from(
+  const customerProfileIdsForAvatars = Array.from(
     new Set(
       [
         ...allConversations.map((conversation) => conversation.customer_profile_id),
@@ -1523,52 +1414,31 @@ export default async function KommunikationPage({
 
   let messages: MessageRow[] = [];
   if (selectedConversation) {
-    if (isDemoTenant) {
-      messages = buildDemoMessages(selectedConversation.id);
-      if (sp?.demoSent === "1") {
-        messages = [
-          ...messages,
-          {
-            id: `demo-msg-sent-${Date.now()}`,
-            direction: "OUTBOUND",
-            channel: "WHATSAPP",
-            body: "Demo-Antwort wurde gespeichert. Es wurde keine echte WhatsApp, SMS oder E-Mail gesendet.",
-            status: "SENT",
-            created_at: new Date().toISOString(),
-            sent_at: new Date().toISOString(),
-            received_at: null,
-            error_message: null,
-            metadata: { demo_mode: true, simulated_external_send: true },
-          },
-        ];
-      }
-    } else {
-      const { data: messagesRaw } = await supabase
-        .from("customer_messages")
-        .select(
-          `
-            id,
-            direction,
-            channel,
-            body,
-            status,
-            created_at,
-            sent_at,
-            received_at,
-            error_message,
-            metadata
-          `,
-        )
-        .eq("conversation_id", selectedConversation.id)
-        .order("created_at", { ascending: true })
-        .limit(200);
+    const { data: messagesRaw } = await supabase
+      .from("customer_messages")
+      .select(
+        `
+          id,
+          direction,
+          channel,
+          body,
+          status,
+          created_at,
+          sent_at,
+          received_at,
+          error_message,
+          metadata
+        `,
+      )
+      .eq("conversation_id", selectedConversation.id)
+      .order("created_at", { ascending: true })
+      .limit(200);
 
-      messages = (messagesRaw ?? []) as MessageRow[];
-    }
+    messages = (messagesRaw ?? []) as MessageRow[];
   }
 
   let customerCandidates: CustomerCandidateRow[] = [];
-  if (!isDemoTenant && selectedConversation && !selectedConversation.customer_profile_id) {
+  if (selectedConversation && !selectedConversation.customer_profile_id) {
     const { data: candidatesRaw } = await supabase
       .from("customer_profiles")
       .select(

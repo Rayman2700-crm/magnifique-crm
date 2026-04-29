@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import DashboardWeekGridClient from "./DashboardWeekGridClient";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { deleteAppointmentFromCalendar, getReadOnlyExtraGoogleCalendarEventsForRange, syncGoogleCalendarRangeToAppointments } from "@/app/calendar/actions";
-import { CLIENTIQUE_DEMO_TENANT_ID, isDemoTenantId } from "@/lib/demoMode";
 import type { AppointmentStatus, Item, ViewMode } from "@/components/calendar/types";
 import AppointmentDetailSlideover from "@/components/calendar/AppointmentDetailSlideover";
 import ReminderSlideover from "@/components/reminders/ReminderSlideover";
@@ -2703,16 +2702,13 @@ export default function DashboardCalendarCardClient({
     };
   }, [pathname, searchParams]);
 
-  const isDemoMode = isDemoTenantId(creatorTenantId) || tenants.some((tenant) => isDemoTenantId(tenant.id));
   const normalizedServices = useMemo<ServiceOption[]>(
     () =>
-      (services ?? [])
-        .filter((service) => !isDemoMode || isDemoTenantId(service.tenant_id))
-        .map((service) => ({
-          ...service,
-          is_active: service.is_active ?? null,
-        })),
-    [services, isDemoMode]
+      (services ?? []).map((service) => ({
+        ...service,
+        is_active: service.is_active ?? null,
+      })),
+    [services]
   );
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -2979,7 +2975,6 @@ export default function DashboardCalendarCardClient({
   }, []);
 
   const loadExtraGoogleItems = useCallback(async () => {
-    if (isDemoMode) return [] as Item[];
     // Private/Zusatzkalender sind pro Benutzer read-only und muessen fuer alle Benutzer sichtbar geladen werden.
     // Nicht nur Admin: jeder eingeloggte Benutzer darf seinen eigenen privaten Kalender anzeigen.
     try {
@@ -3029,7 +3024,7 @@ export default function DashboardCalendarCardClient({
       console.error("Zusatzkalender konnten nicht geladen werden", extraError);
       return [] as Item[];
     }
-  }, [creatorTenantId, currentLegendUser, currentTenantDisplayName, isDemoMode, range.endISO, range.startISO, studioCalendarTenantMap]);
+  }, [creatorTenantId, currentLegendUser, currentTenantDisplayName, range.endISO, range.startISO, studioCalendarTenantMap]);
 
   const loadAppointments = useCallback(async (options?: { skipGoogleSync?: boolean }) => {
     const seq = ++loadSeq.current;
@@ -3041,7 +3036,7 @@ export default function DashboardCalendarCardClient({
     setErrorText(null);
 
     try {
-      let apptQuery = supabase
+      const apptQuery = supabase
         .from("appointments")
         .select(
           `
@@ -3052,10 +3047,6 @@ export default function DashboardCalendarCardClient({
         )
         .gte("start_at", range.startISO)
         .lt("start_at", range.endISO);
-
-      if (isDemoMode) {
-        apptQuery = apptQuery.eq("tenant_id", CLIENTIQUE_DEMO_TENANT_ID);
-      }
 
       const { data: apptData, error: apptError } = await apptQuery.order("start_at", { ascending: true });
 
@@ -3080,7 +3071,7 @@ export default function DashboardCalendarCardClient({
       setIsRefreshing(false);
 
       const nowMs = Date.now();
-      const shouldRunGoogleSync = !isDemoMode && !options?.skipGoogleSync && nowMs - lastGoogleSyncAtRef.current > 20_000;
+      const shouldRunGoogleSync = !options?.skipGoogleSync && nowMs - lastGoogleSyncAtRef.current > 20_000;
 
       if (!shouldRunGoogleSync) return;
 
@@ -3102,7 +3093,7 @@ export default function DashboardCalendarCardClient({
       setIsInitialLoading(false);
       setIsRefreshing(false);
     }
-  }, [isDemoMode, loadExtraGoogleItems, mapAppointmentRowsToItems, mergeItemsByIdAndSort, range.endISO, range.startISO, supabase]);
+  }, [loadExtraGoogleItems, mapAppointmentRowsToItems, mergeItemsByIdAndSort, range.endISO, range.startISO, supabase]);
 
   const scheduleRefresh = useCallback((options?: { immediate?: boolean }) => {
     if (document.visibilityState !== "visible") return;

@@ -2,7 +2,6 @@ import Link from "next/link";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getEffectiveTenantId } from "@/lib/effectiveTenant";
-import { CLIENTIQUE_DEMO_TENANT_ID, isDemoTenantId } from "@/lib/demoMode";
 import { Card, CardContent } from "@/components/ui/card";
 import DashboardCalendarCardClient from "@/components/calendar/DashboardCalendarCardClient";
 import OpenSlotsSlideover from "@/components/dashboard/OpenSlotsSlideover";
@@ -860,7 +859,6 @@ export default async function DashboardPage() {
   let activeCalendarCount = 0;
   let extraCalendarLabel = "0 aktiv";
   let lastSyncLabel = "—";
-  let isDemoMode = false;
 
   if (user) {
     const { data: profile } = await supabase
@@ -884,7 +882,6 @@ export default async function DashboardPage() {
 
     effectiveReminderTenantId = effectiveCustomerTenantId;
     creatorTenantId = profile?.calendar_tenant_id ?? profile?.tenant_id ?? null;
-    isDemoMode = isDemoTenantId(effectiveCustomerTenantId) || isDemoTenantId(creatorTenantId) || isDemoTenantId(profile?.tenant_id ?? null);
 
     const profileTenantForDisplay =
       profile?.role === "ADMIN"
@@ -983,9 +980,6 @@ export default async function DashboardPage() {
   ]);
 
   const tenantRows = (tenantsRaw ?? []) as TenantRow[];
-  const calendarTenantRows = isDemoMode
-    ? tenantRows.filter((tenant) => tenant.id === CLIENTIQUE_DEMO_TENANT_ID)
-    : tenantRows;
 
   const tenantNameById = new Map<string, string>();
   for (const t of tenantRows) {
@@ -1020,10 +1014,6 @@ export default async function DashboardPage() {
     ).values()
   );
 
-  const calendarLegendUsers = isDemoMode
-    ? legendUsers.filter((entry) => entry.filterTenantId === CLIENTIQUE_DEMO_TENANT_ID || entry.tenantId === CLIENTIQUE_DEMO_TENANT_ID)
-    : legendUsers;
-
   const now = new Date();
   const startOfToday = new Date(now);
   startOfToday.setHours(0, 0, 0, 0);
@@ -1048,9 +1038,7 @@ export default async function DashboardPage() {
     .gte("start_at", startOfToday.toISOString())
     .lt("start_at", endOfToday.toISOString());
 
-  if (isDemoMode) {
-    todayCountQuery = todayCountQuery.eq("tenant_id", CLIENTIQUE_DEMO_TENANT_ID);
-  } else if (!isAdmin && effectiveReminderTenantId) {
+  if (!isAdmin && effectiveReminderTenantId) {
     todayCountQuery = todayCountQuery.eq("tenant_id", effectiveReminderTenantId);
   }
 
@@ -1060,9 +1048,7 @@ export default async function DashboardPage() {
     .gte("start_at", startOfWeek.toISOString())
     .lt("start_at", endOfWeek.toISOString());
 
-  if (isDemoMode) {
-    weekCountQuery = weekCountQuery.eq("tenant_id", CLIENTIQUE_DEMO_TENANT_ID);
-  } else if (!isAdmin && effectiveReminderTenantId) {
+  if (!isAdmin && effectiveReminderTenantId) {
     weekCountQuery = weekCountQuery.eq("tenant_id", effectiveReminderTenantId);
   }
 
@@ -1073,9 +1059,7 @@ export default async function DashboardPage() {
     .order("start_at", { ascending: true })
     .limit(16);
 
-  if (isDemoMode) {
-    nextAppointmentQuery = nextAppointmentQuery.eq("tenant_id", CLIENTIQUE_DEMO_TENANT_ID);
-  } else if (!isAdmin && effectiveReminderTenantId) {
+  if (!isAdmin && effectiveReminderTenantId) {
     nextAppointmentQuery = nextAppointmentQuery.eq("tenant_id", effectiveReminderTenantId);
   }
 
@@ -1118,9 +1102,7 @@ export default async function DashboardPage() {
     .is("reminder_sent_at", null)
     .lte("reminder_at", now.toISOString());
 
-  if (isDemoMode) {
-    reminderCountQuery = reminderCountQuery.eq("tenant_id", CLIENTIQUE_DEMO_TENANT_ID);
-  } else if (!isAdmin && effectiveReminderTenantId) {
+  if (!isAdmin && effectiveReminderTenantId) {
     reminderCountQuery = reminderCountQuery.eq("tenant_id", effectiveReminderTenantId);
   }
 
@@ -1133,9 +1115,7 @@ export default async function DashboardPage() {
     .order("created_at", { ascending: false })
     .limit(120);
 
-  if (isDemoMode) {
-    receiptsQuery = receiptsQuery.eq("tenant_id", CLIENTIQUE_DEMO_TENANT_ID);
-  } else if (!isAdmin && effectiveReminderTenantId) {
+  if (!isAdmin && effectiveReminderTenantId) {
     receiptsQuery = receiptsQuery.eq("tenant_id", effectiveReminderTenantId);
   }
 
@@ -1149,9 +1129,7 @@ export default async function DashboardPage() {
     .order("start_at", { ascending: true });
 
   // Admin sieht alle freien Slots. Normale Benutzer sehen nur ihren Tenant.
-  if (isDemoMode) {
-    openSlotsQuery = openSlotsQuery.eq("tenant_id", CLIENTIQUE_DEMO_TENANT_ID);
-  } else if (!isAdmin && effectiveReminderTenantId) {
+  if (!isAdmin && effectiveReminderTenantId) {
     openSlotsQuery = openSlotsQuery.eq("tenant_id", effectiveReminderTenantId);
   }
 
@@ -1172,21 +1150,15 @@ export default async function DashboardPage() {
     `);
 
   // Admin sieht alle aktiven Wartelisten-Einträge. Normale Benutzer sehen nur ihren Tenant.
-  if (isDemoMode) {
-    activeWaitlistQuery = activeWaitlistQuery.eq("tenant_id", CLIENTIQUE_DEMO_TENANT_ID);
-  } else if (!isAdmin && effectiveReminderTenantId) {
+  if (!isAdmin && effectiveReminderTenantId) {
     activeWaitlistQuery = activeWaitlistQuery.eq("tenant_id", effectiveReminderTenantId);
   }
 
-  let calendarServicesQuery = admin
+  const calendarServicesQuery = admin
     .from("services")
     .select("id, tenant_id, name, duration_minutes, buffer_minutes, default_price_cents, is_active")
     .eq("is_active", true)
     .order("name", { ascending: true });
-
-  if (isDemoMode) {
-    calendarServicesQuery = calendarServicesQuery.eq("tenant_id", CLIENTIQUE_DEMO_TENANT_ID);
-  }
 
   const dashboardCustomersBaseQuery = admin
     .from("customer_profiles")
@@ -1753,8 +1725,8 @@ export default async function DashboardPage() {
 
       <section id="dashboard-calendar-card" className="scroll-mt-[108px]">
         <DashboardCalendarCardClient
-          tenants={calendarTenantRows}
-          legendUsers={calendarLegendUsers}
+          tenants={tenantRows}
+          legendUsers={legendUsers}
           services={calendarServices}
           creatorTenantId={creatorTenantId}
           isAdmin={isAdmin}
@@ -1764,7 +1736,7 @@ export default async function DashboardPage() {
       <OpenSlotsSlideover items={openSlotItems} />
       <WaitlistSlideover items={waitlistItems} />
       <DashboardInvoiceSlideover
-        tenants={calendarTenantRows.map((tenant) => ({
+        tenants={tenantRows.map((tenant) => ({
           id: tenant.id,
           displayName: tenant.display_name ?? "Behandler",
         }))}

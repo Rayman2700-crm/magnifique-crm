@@ -5,8 +5,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import CalendarWeekClient from "@/components/calendar/CalendarWeekClient";
 import type { AppointmentStatus } from "@/components/calendar/types";
-import { getEffectiveTenantId } from "@/lib/effectiveTenant";
-import { CLIENTIQUE_DEMO_TENANT_ID, isDemoTenantId } from "@/lib/demoMode";
 
 type TenantJoin = { display_name: string | null };
 type PersonJoin = { full_name: string | null; phone: string | null; email: string | null };
@@ -89,25 +87,7 @@ export default async function CalendarPage() {
   const to = new Date(from);
   to.setDate(to.getDate() + 7);
 
-  const { data: userData } = await supabase.auth.getUser();
-  const user = userData.user;
-  const { data: profile } = user
-    ? await supabase
-        .from("user_profiles")
-        .select("role, tenant_id, calendar_tenant_id")
-        .eq("user_id", user.id)
-        .maybeSingle()
-    : { data: null as any };
-
-  const effectiveTenantId = await getEffectiveTenantId({
-    role: profile?.role ?? "PRACTITIONER",
-    tenant_id: profile?.tenant_id ?? null,
-    calendar_tenant_id: profile?.calendar_tenant_id ?? null,
-  });
-  const isDemoMode = isDemoTenantId(effectiveTenantId) || isDemoTenantId(profile?.tenant_id ?? null);
-  const role = String(profile?.role ?? "PRACTITIONER").toUpperCase();
-
-  let appointmentsQuery = supabase
+  const { data, error } = await supabase
     .from("appointments")
     .select(
       `
@@ -128,15 +108,8 @@ export default async function CalendarPage() {
     `
     )
     .gte("start_at", from.toISOString())
-    .lt("start_at", to.toISOString());
-
-  if (isDemoMode) {
-    appointmentsQuery = appointmentsQuery.eq("tenant_id", CLIENTIQUE_DEMO_TENANT_ID);
-  } else if (role !== "ADMIN" && effectiveTenantId) {
-    appointmentsQuery = appointmentsQuery.eq("tenant_id", effectiveTenantId);
-  }
-
-  const { data, error } = await appointmentsQuery.order("start_at", { ascending: true });
+    .lt("start_at", to.toISOString())
+    .order("start_at", { ascending: true });
 
   if (error) {
     return (

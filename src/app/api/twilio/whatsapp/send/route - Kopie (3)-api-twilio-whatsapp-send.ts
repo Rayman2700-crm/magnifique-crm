@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
-import { CLIENTIQUE_DEMO_TENANT_ID, isDemoTenantId } from "@/lib/demoMode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -301,75 +300,6 @@ export async function POST(request: Request) {
 
   if (conversation.channel !== "WHATSAPP") {
     return NextResponse.json({ ok: false, error: "Diese Route unterstützt aktuell nur WhatsApp." }, { status: 400 });
-  }
-
-  const isDemoMode = isDemoTenantId(conversation.tenant_id);
-  if (isDemoMode) {
-    const now = new Date().toISOString();
-    const storedBody = body || (attachment ? "🎙 Sprachnachricht" : mediaUrl ? "📎 Datei" : "Demo-Nachricht");
-    const demoAttachment = attachment
-      ? {
-          name: attachment.name || "demo-audio.webm",
-          type: attachment.type || "application/octet-stream",
-          size: attachment.size,
-          demo_only: true,
-        }
-      : mediaUrl
-        ? { public_url: mediaUrl, source: "demo_media_url", demo_only: true }
-        : null;
-
-    const { data: inserted, error: insertError } = await supabase
-      .from("customer_messages")
-      .insert({
-        conversation_id: conversation.id,
-        tenant_id: conversation.tenant_id,
-        person_id: conversation.person_id,
-        customer_profile_id: conversation.customer_profile_id,
-        direction: "OUTBOUND",
-        channel: "WHATSAPP",
-        body: storedBody,
-        provider: "DEMO",
-        provider_message_id: `demo-whatsapp-${crypto.randomUUID()}`,
-        whatsapp_from: "demo:clientique",
-        whatsapp_to: conversation.external_contact_normalized || conversation.external_contact || "demo-kunde",
-        status: "SENT",
-        sent_by_user_id: user.id,
-        sent_at: now,
-        delivered_at: now,
-        metadata: {
-          source: "demo_twilio_send_route",
-          demo_mode: true,
-          external_action_blocked: true,
-          attachment: demoAttachment,
-        },
-      })
-      .select("id")
-      .single();
-
-    if (insertError) {
-      return NextResponse.json({ ok: false, error: insertError.message }, { status: 500 });
-    }
-
-    await supabase
-      .from("customer_conversations")
-      .update({
-        unread_count: 0,
-        last_message_at: now,
-        last_message_preview: storedBody.slice(0, 160),
-        updated_at: now,
-      })
-      .eq("id", conversation.id)
-      .eq("tenant_id", CLIENTIQUE_DEMO_TENANT_ID);
-
-    return NextResponse.json({
-      ok: true,
-      demo: true,
-      messageId: inserted.id,
-      twilioSid: null,
-      status: "SENT",
-      mediaUrl: mediaUrl ?? null,
-      notice: "Demo-Modus: Nachricht wurde nur im CRM-Verlauf gespeichert. Es wurde nichts per Twilio/WhatsApp gesendet.",
-    });
   }
 
   const admin = supabaseAdmin();
