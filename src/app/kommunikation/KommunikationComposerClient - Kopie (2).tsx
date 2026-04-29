@@ -11,7 +11,6 @@ type Props = {
   statusFilter: string;
   draftBody?: string;
   selectedTemplateTitle?: string | null;
-  demoClosedState?: string;
 };
 
 const EMOJIS = [
@@ -172,7 +171,6 @@ export default function KommunikationComposerClient({
   statusFilter,
   draftBody = "",
   selectedTemplateTitle = null,
-  demoClosedState = "",
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -343,7 +341,6 @@ export default function KommunikationComposerClient({
           params.set("status", statusFilter);
           params.set("c", conversationId);
           params.set("panel", "chats");
-          if (demoClosedState) params.set("demoClosed", demoClosedState);
           params.set("demoSent", "1");
           const demoBody = text.trim() || (recordedAudioFile ? "🎙 Sprachnachricht" : selectedFile ? `📎 ${selectedFile.name}` : "Demo-Antwort");
           params.set("demoText", demoBody);
@@ -402,7 +399,6 @@ export default function KommunikationComposerClient({
     >
       <input type="hidden" name="conversation_id" value={conversationId} />
       <input type="hidden" name="status_filter" value={statusFilter} />
-      {demoClosedState ? <input type="hidden" name="demo_closed_state" value={demoClosedState} /> : null}
 
       <div className="w-full bg-transparent p-0">
         <div className="relative w-full">

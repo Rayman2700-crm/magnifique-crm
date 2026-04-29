@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import ChatClient, { type ChatMessageDTO } from "@/app/dashboard/chat/ChatClient";
 import { CLIENTIQUE_DEMO_TENANT_ID } from "@/lib/demoMode";
@@ -139,80 +139,6 @@ function TeamUserFloatingRail({
 }
 
 
-function DemoTeamChatPanel({ currentUserName, initialDraft = "" }: { currentUserName: string; initialDraft?: string }) {
-  const [draft, setDraft] = useState(initialDraft);
-  const [messages, setMessages] = useState([
-    {
-      id: "demo-team-1",
-      senderName: "Clientique Demo",
-      text: "Willkommen im Demo-Teamchat. Diese Nachrichten sind rein virtuell und bleiben nur in dieser Demo-Ansicht.",
-      createdAt: "09:15",
-    },
-    {
-      id: "demo-team-2",
-      senderName: "Demo Kollegin",
-      text: "Beispiel: Ich habe den Termin von Anna Berger vorbereitet und eine Notiz hinterlegt.",
-      createdAt: "09:22",
-    },
-    {
-      id: "demo-team-3",
-      senderName: "Demo Rezeption",
-      text: "Beispiel: Neue Anfrage für Fußpflege ist auf der Warteliste.",
-      createdAt: "10:05",
-    },
-  ]);
-
-  function sendDemoMessage(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const text = draft.trim();
-    if (!text) return;
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `demo-team-${Date.now()}`,
-        senderName: currentUserName || "Du",
-        text,
-        createdAt: new Intl.DateTimeFormat("de-AT", { hour: "2-digit", minute: "2-digit" }).format(new Date()),
-      },
-    ]);
-    setDraft("");
-  }
-
-  return (
-    <div className="flex h-full min-h-0 flex-col bg-black/[0.02]">
-      <div className="shrink-0 border-b border-emerald-400/15 bg-emerald-500/[0.06] px-4 py-3 text-xs font-bold text-emerald-200">
-        Demo-Teamchat · keine echten Teamnachrichten, keine Push-Benachrichtigungen
-      </div>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-        {messages.map((message) => {
-          const mine = message.senderName === (currentUserName || "Du");
-          return (
-            <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[78%] rounded-[20px] border px-4 py-3 shadow-sm ${mine ? "border-[#d8c1a0]/25 bg-[#d8c1a0]/16" : "border-white/[0.09] bg-white/[0.055]"}`}>
-                <div className="mb-1 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-white/45">
-                  <span>{mine ? "Du" : message.senderName}</span>
-                  <span>{message.createdAt}</span>
-                </div>
-                <div className="whitespace-pre-wrap text-sm font-semibold leading-relaxed text-[#f7efe2]">{message.text}</div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <form onSubmit={sendDemoMessage} className="flex shrink-0 gap-2 border-t border-white/[0.08] p-3">
-        <input
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder="Demo-Nachricht schreiben..."
-          className="min-w-0 flex-1 rounded-2xl border border-white/[0.10] bg-black/25 px-4 py-3 text-sm font-semibold text-white outline-none placeholder:text-white/30 focus:border-[#d8c1a0]/35"
-        />
-        <button type="submit" className="rounded-2xl bg-[#d8c1a0] px-5 py-3 text-sm font-extrabold text-black transition hover:brightness-105">
-          Senden
-        </button>
-      </form>
-    </div>
-  );
-}
 
 export default function KommunikationTeamChatPanel({
   tenantId,
@@ -244,11 +170,9 @@ export default function KommunikationTeamChatPanel({
 
     if (isDemoMode) {
       setTeamUsers([
-        {
-          userId: currentUserId,
-          fullName: currentUserName || "Du",
-          avatarRingColor: "#22c55e",
-        },
+        { userId: currentUserId, fullName: currentUserName || "Du", avatarRingColor: "#22c55e" },
+        { userId: "demo-team-reception", fullName: "Demo Rezeption", avatarRingColor: "#d8c1a0" },
+        { userId: "demo-team-kollegin", fullName: "Demo Kollegin", avatarRingColor: "#a855f7" },
       ]);
       return () => {
         cancelled = true;
@@ -355,7 +279,7 @@ export default function KommunikationTeamChatPanel({
     const demoMessages: ChatMessageDTO[] = [
       {
         id: "demo-team-1",
-        text: "Willkommen im Demo-Teamchat. Diese Nachrichten bleiben nur in dieser Demo-Ansicht.",
+        text: "Willkommen im Demo-Teamchat. Diese Nachrichten sind rein virtuell und bleiben nur in dieser Demo-Ansicht.",
         senderId: currentUserId,
         senderName: currentUserName || "Du",
         createdAt: new Date(Date.now() - 1000 * 60 * 55).toISOString(),
@@ -380,7 +304,10 @@ export default function KommunikationTeamChatPanel({
       <div className="relative flex h-full min-h-0 overflow-hidden bg-black/[0.02]">
         <TeamUserFloatingRail users={demoUsers} currentUserId={currentUserId} onMention={mentionUser} />
         <TeamUserRail users={demoUsers} currentUserId={currentUserId} onMention={mentionUser} />
-        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col pl-12 sm:pl-0">
+        <div className="min-w-0 flex-1 pl-12 sm:pl-0">
+          <div className="border-b border-emerald-400/15 bg-emerald-500/[0.06] px-4 py-2 text-[11px] font-bold text-emerald-200">
+            Demo-Teamchat · gleiche Oberfläche, keine echten Teamnachrichten und keine Push-Benachrichtigungen
+          </div>
           <ChatClient
             tenantId={tenantId}
             currentUserId={currentUserId}
@@ -408,7 +335,7 @@ export default function KommunikationTeamChatPanel({
     <div className="relative flex h-full min-h-0 overflow-hidden bg-black/[0.02]">
       <TeamUserFloatingRail users={teamUsers} currentUserId={currentUserId} onMention={mentionUser} />
       <TeamUserRail users={teamUsers} currentUserId={currentUserId} onMention={mentionUser} />
-      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col pl-12 sm:pl-0">
+      <div className="min-w-0 flex-1 pl-12 sm:pl-0">
         <ChatClient
           tenantId={tenantId}
           currentUserId={currentUserId}
@@ -422,3 +349,4 @@ export default function KommunikationTeamChatPanel({
     </div>
   );
 }
+//test
