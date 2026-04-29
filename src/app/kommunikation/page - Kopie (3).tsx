@@ -7,7 +7,6 @@ import KommunikationComposerClient from "./KommunikationComposerClient";
 import KommunikationChatSearchClient from "./KommunikationChatSearchClient";
 import KommunikationTeamChatPanel from "./KommunikationTeamChatPanel";
 import KommunikationTeamUnreadBadge from "./KommunikationTeamUnreadBadge";
-import KommunikationVoiceMessagePlayer from "./KommunikationVoiceMessagePlayer";
 
 export const dynamic = "force-dynamic";
 
@@ -495,9 +494,6 @@ type MessageAttachment = {
   storage_path?: string | null;
   twilio_url?: string | null;
   mirror_error?: string | null;
-  duration?: number | string | null;
-  duration_seconds?: number | string | null;
-  duration_ms?: number | string | null;
 };
 
 function firstMessageAttachment(message: MessageRow): MessageAttachment | null {
@@ -2058,17 +2054,11 @@ export default async function KommunikationPage({
                             />
                           ) : null}
                           <div
-                            className={
-                              firstAttachmentKind === "audio" && !failed
-                                ? "max-w-[92%] p-0 md:max-w-[78%]"
-                                : `max-w-[86%] rounded-[20px] px-4 py-3 shadow-[0_12px_28px_rgba(0,0,0,0.20)] md:max-w-[74%] ${failed ? "border border-red-400/24 bg-red-500/10 text-red-50" : outbound ? "rounded-br-[6px] border border-[#d6c3a3]/22 bg-[#d6c3a3]/20 text-[#fff7e8]" : "rounded-bl-[6px] border border-white/[0.07] bg-black/[0.24] text-white/86"}`
-                            }
+                            className={`max-w-[86%] rounded-[20px] md:max-w-[74%] px-4 py-3 shadow-[0_12px_28px_rgba(0,0,0,0.20)] ${failed ? "border border-red-400/24 bg-red-500/10 text-red-50" : outbound ? "rounded-br-[6px] border border-[#d6c3a3]/22 bg-[#d6c3a3]/20 text-[#fff7e8]" : "rounded-bl-[6px] border border-white/[0.07] bg-black/[0.24] text-white/86"}`}
                           >
-                            {firstAttachmentKind !== "audio" || failed ? (
-                              <div className="whitespace-pre-wrap text-sm leading-6">
-                                {message.body}
-                              </div>
-                            ) : null}
+                            <div className="whitespace-pre-wrap text-sm leading-6">
+                              {message.body}
+                            </div>
                             {(() => {
                               const attachment = firstAttachment;
                               if (!attachment) return null;
@@ -2078,34 +2068,45 @@ export default async function KommunikationPage({
                               const publicUrl = attachment.public_url || attachment.publicUrl || attachment.url || null;
 
                               if (kind === "audio") {
-                                const durationSecondsRaw =
-                                  attachment.duration_seconds ??
-                                  attachment.duration ??
-                                  (attachment.duration_ms != null ? Number(attachment.duration_ms) / 1000 : null);
-                                const durationSeconds = Number.isFinite(Number(durationSecondsRaw))
-                                  ? Number(durationSecondsRaw)
-                                  : null;
-
                                 return (
-                                  <>
-                                    {attachment.mirror_error ? (
-                                      <div className="mb-2 text-[10px] font-semibold text-amber-200/80">Audio nicht gespiegelt</div>
-                                    ) : null}
+                                  <div
+                                    className={`mt-2 min-w-[230px] rounded-[24px] border px-3 py-3 ${outbound ? "border-[#d6c3a3]/18 bg-[#d6c3a3]/12" : "border-white/[0.08] bg-black/[0.22]"}`}
+                                  >
+                                    <div className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold text-[#f7efe2]">
+                                      <span className="inline-flex items-center gap-2">
+                                        <span aria-hidden="true">🎙️</span>
+                                        <span>{title}</span>
+                                      </span>
+                                      {attachment.mirror_error ? (
+                                        <span className="text-[10px] text-amber-200/80">nicht gespiegelt</span>
+                                      ) : null}
+                                    </div>
                                     {publicUrl ? (
-                                      <KommunikationVoiceMessagePlayer
-                                        src={publicUrl}
-                                        title={title}
-                                        outbound={outbound}
-                                        avatarName={conversationName(selectedConversation)}
-                                        avatarUrl={!outbound ? conversationAvatarUrl(selectedConversation) : null}
-                                        durationSeconds={durationSeconds}
-                                      />
+                                      <div className="flex items-center gap-3">
+                                        {!outbound ? (
+                                          <AvatarBubble
+                                            name={conversationName(selectedConversation)}
+                                            src={conversationAvatarUrl(selectedConversation)}
+                                            size="md"
+                                            className="ring-1 ring-white/10"
+                                          />
+                                        ) : null}
+                                        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-3 py-2">
+                                          <audio
+                                            controls
+                                            preload="metadata"
+                                            src={publicUrl}
+                                            className="h-8 min-w-[150px] flex-1 opacity-90 [color-scheme:dark]"
+                                          />
+                                          <VoiceWaveform outbound={outbound} />
+                                        </div>
+                                      </div>
                                     ) : (
                                       <div className="rounded-xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs leading-5 text-amber-100/80">
                                         Audio konnte nicht öffentlich gespeichert werden. Bitte Storage/Twilio-Logs prüfen.
                                       </div>
                                     )}
-                                  </>
+                                  </div>
                                 );
                               }
 

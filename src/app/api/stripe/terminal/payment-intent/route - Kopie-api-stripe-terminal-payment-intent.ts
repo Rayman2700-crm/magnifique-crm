@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
-import { getIsDemoTenant } from "@/lib/demoMode";
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,21 +16,6 @@ export async function POST(req: NextRequest) {
         { error: "Ungültiger Betrag." },
         { status: 400 }
       );
-    }
-
-    const admin = supabaseAdmin();
-    const isDemoMode = await getIsDemoTenant(admin, tenantId);
-
-    if (isDemoMode) {
-      const demoIntentId = `demo_pi_${paymentId || salesOrderId || crypto.randomUUID()}`.replace(/[^a-zA-Z0-9_\-]/g, "_");
-
-      return NextResponse.json({
-        id: demoIntentId,
-        client_secret: `${demoIntentId}_secret_demo`,
-        status: "requires_payment_method",
-        demo: true,
-        message: "Demo-Modus: Es wurde kein echter Stripe PaymentIntent erstellt.",
-      });
     }
 
     const intent = await stripe.paymentIntents.create({

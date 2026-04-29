@@ -3,7 +3,6 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import KommunikationVoiceMessagePlayer from "./KommunikationVoiceMessagePlayer";
 
 type Props = {
   action?: (formData: FormData) => void | Promise<void>;
@@ -65,14 +64,13 @@ function autoResizeTextarea(textarea: HTMLTextAreaElement | null) {
 function fileKindLabel(file: File) {
   if (file.type.startsWith("image/")) return "Bild";
   if (file.type.startsWith("video/")) return "Video";
-  if (file.type.startsWith("audio/")) return "Sprachnachricht";
   if (file.type === "application/pdf") return "PDF";
   return file.type || "Datei";
 }
 
 function validateWhatsappAttachment(file: File) {
   const lowerName = file.name.toLowerCase();
-  const type = file.type.toLowerCase().split(";")[0]?.trim() || file.type.toLowerCase();
+  const type = file.type.toLowerCase();
   const isSupported =
     type === "image/jpeg" ||
     type === "image/png" ||
@@ -80,29 +78,16 @@ function validateWhatsappAttachment(file: File) {
     type === "image/gif" ||
     type === "video/mp4" ||
     type === "application/pdf" ||
-    type === "audio/ogg" ||
-    type === "audio/webm" ||
-    type === "audio/mpeg" ||
-    type === "audio/mp3" ||
-    type === "audio/mp4" ||
-    type === "audio/aac" ||
-    type === "audio/wav" ||
     lowerName.endsWith(".jpg") ||
     lowerName.endsWith(".jpeg") ||
     lowerName.endsWith(".png") ||
     lowerName.endsWith(".webp") ||
     lowerName.endsWith(".gif") ||
     lowerName.endsWith(".mp4") ||
-    lowerName.endsWith(".pdf") ||
-    lowerName.endsWith(".ogg") ||
-    lowerName.endsWith(".webm") ||
-    lowerName.endsWith(".mp3") ||
-    lowerName.endsWith(".m4a") ||
-    lowerName.endsWith(".aac") ||
-    lowerName.endsWith(".wav");
+    lowerName.endsWith(".pdf");
 
   if (!isSupported) {
-    return "Bitte nur JPG, PNG, WEBP, GIF, MP4, PDF oder Audio senden.";
+    return "Bitte nur JPG, PNG, WEBP, GIF, MP4 oder PDF senden.";
   }
 
   if (file.size > 15 * 1024 * 1024) {
@@ -110,42 +95,6 @@ function validateWhatsappAttachment(file: File) {
   }
 
   return null;
-}
-
-function getSupportedAudioMimeType() {
-  if (typeof window === "undefined" || typeof MediaRecorder === "undefined") return "";
-  const candidates = [
-    "audio/ogg;codecs=opus",
-    "audio/webm;codecs=opus",
-    "audio/webm",
-    "audio/mp4",
-  ];
-  return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? "";
-}
-
-function audioExtensionFromMimeType(mimeType: string) {
-  const normalized = mimeType.toLowerCase();
-  if (normalized.includes("ogg")) return "ogg";
-  if (normalized.includes("mp4")) return "m4a";
-  if (normalized.includes("mpeg")) return "mp3";
-  return "webm";
-}
-
-function formatRecordingTime(seconds: number) {
-  const safe = Math.max(0, Math.floor(seconds));
-  const mins = Math.floor(safe / 60);
-  const secs = safe % 60;
-  return `${mins}:${String(secs).padStart(2, "0")}`;
-}
-
-function MicIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-[16px] w-[16px]" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z" />
-      <path d="M19 11a7 7 0 0 1-14 0" />
-      <path d="M12 18v3" />
-    </svg>
-  );
 }
 
 function SendIcon() {
@@ -175,14 +124,6 @@ export default function KommunikationComposerClient({
   const router = useRouter();
   const [text, setText] = useState(draftBody);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [recordingState, setRecordingState] = useState<"idle" | "recording" | "review">("idle");
-  const [recordedAudioFile, setRecordedAudioFile] = useState<File | null>(null);
-  const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
-  const [recordingSeconds, setRecordingSeconds] = useState(0);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const recordingChunksRef = useRef<Blob[]>([]);
-  const recordingStreamRef = useRef<MediaStream | null>(null);
-  const recordingTimerRef = useRef<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -194,14 +135,6 @@ export default function KommunikationComposerClient({
     setText(draftBody);
     requestAnimationFrame(() => autoResizeTextarea(textareaRef.current));
   }, [draftBody]);
-
-  useEffect(() => {
-    return () => {
-      if (recordingTimerRef.current) window.clearInterval(recordingTimerRef.current);
-      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
-      if (recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);
-    };
-  }, [recordedAudioUrl]);
 
   function insertEmoji(emoji: string) {
     const textarea = textareaRef.current;
@@ -221,101 +154,7 @@ export default function KommunikationComposerClient({
     });
   }
 
-  function clearRecordedAudio() {
-    if (recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);
-    setRecordedAudioUrl(null);
-    setRecordedAudioFile(null);
-    setRecordingState("idle");
-    setRecordingSeconds(0);
-  }
-
-  async function startVoiceRecording() {
-    if (recordingState === "recording" || isPending) return;
-
-    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      setErrorMessage("Sprachaufnahme wird von diesem Browser nicht unterstützt.");
-      return;
-    }
-
-    try {
-      setErrorMessage(null);
-      setMenuOpen(false);
-      setEmojiOpen(false);
-      setSelectedFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      clearRecordedAudio();
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      recordingStreamRef.current = stream;
-      recordingChunksRef.current = [];
-
-      const mimeType = getSupportedAudioMimeType();
-      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-
-      recorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) recordingChunksRef.current.push(event.data);
-      };
-
-      recorder.onstop = () => {
-        if (recordingTimerRef.current) window.clearInterval(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-        stream.getTracks().forEach((track) => track.stop());
-        recordingStreamRef.current = null;
-
-        const recordedMimeType = recorder.mimeType || mimeType || "audio/webm";
-        const blob = new Blob(recordingChunksRef.current, { type: recordedMimeType });
-        recordingChunksRef.current = [];
-
-        if (!blob.size) {
-          setErrorMessage("Die Aufnahme war leer. Bitte nochmal versuchen.");
-          setRecordingState("idle");
-          return;
-        }
-
-        const extension = audioExtensionFromMimeType(recordedMimeType);
-        const file = new File([blob], `sprachnachricht-${Date.now()}.${extension}`, { type: recordedMimeType });
-        const objectUrl = URL.createObjectURL(blob);
-        setRecordedAudioFile(file);
-        setRecordedAudioUrl(objectUrl);
-        setRecordingState("review");
-      };
-
-      recorder.start(250);
-      setRecordingSeconds(0);
-      setRecordingState("recording");
-      recordingTimerRef.current = window.setInterval(() => {
-        setRecordingSeconds((value) => value + 1);
-      }, 1000);
-    } catch (error) {
-      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
-      recordingStreamRef.current = null;
-      setRecordingState("idle");
-      setErrorMessage(error instanceof Error ? error.message : "Mikrofon konnte nicht gestartet werden.");
-    }
-  }
-
-  function stopVoiceRecording() {
-    const recorder = mediaRecorderRef.current;
-    if (!recorder || recorder.state === "inactive") return;
-    recorder.stop();
-  }
-
-  function cancelVoiceRecording() {
-    const recorder = mediaRecorderRef.current;
-    if (recorder && recorder.state !== "inactive") {
-      recorder.onstop = null;
-      recorder.stop();
-    }
-    if (recordingTimerRef.current) window.clearInterval(recordingTimerRef.current);
-    recordingTimerRef.current = null;
-    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
-    recordingStreamRef.current = null;
-    recordingChunksRef.current = [];
-    clearRecordedAudio();
-  }
-
-  const canSend = Boolean(text.trim() || selectedFile || recordedAudioFile);
+  const canSend = Boolean(text.trim() || selectedFile);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -329,9 +168,7 @@ export default function KommunikationComposerClient({
     formData.set("statusFilter", statusFilter);
     formData.set("status_filter", statusFilter);
     formData.set("body", text.trim());
-    const outgoingAttachment = selectedFile ?? recordedAudioFile;
-    if (outgoingAttachment) formData.set("attachment", outgoingAttachment);
-    if (!text.trim() && recordedAudioFile) formData.set("body", "🎙 Sprachnachricht");
+    if (selectedFile) formData.set("attachment", selectedFile);
 
     startTransition(async () => {
       try {
@@ -353,7 +190,6 @@ export default function KommunikationComposerClient({
 
         setText("");
         setSelectedFile(null);
-        clearRecordedAudio();
         setMenuOpen(false);
         setEmojiOpen(false);
         if (fileInputRef.current) fileInputRef.current.value = "";
@@ -399,44 +235,6 @@ export default function KommunikationComposerClient({
           {errorMessage ? (
             <div className="mb-3 rounded-[16px] border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm leading-5 text-red-100">
               {errorMessage}
-            </div>
-          ) : null}
-
-          {recordingState === "recording" ? (
-            <div className="mb-3 flex items-center justify-between gap-3 rounded-[18px] border border-red-300/18 bg-red-500/10 px-3 py-2">
-              <div className="flex items-center gap-2 text-sm font-semibold text-red-50">
-                <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-300" />
-                Aufnahme läuft · {formatRecordingTime(recordingSeconds)}
-              </div>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={cancelVoiceRecording} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white/70 hover:bg-white/[0.08]">Abbrechen</button>
-                <button type="button" onClick={stopVoiceRecording} className="rounded-full border border-[#d8c1a0]/20 bg-[#d8c1a0]/16 px-3 py-1.5 text-xs font-semibold text-[#f6f0e8] hover:bg-[#d8c1a0]/22">Stop</button>
-              </div>
-            </div>
-          ) : null}
-
-          {recordedAudioFile && recordedAudioUrl ? (
-            <div className="mb-3 rounded-[20px] border border-[#d8c1a0]/12 bg-[#d8c1a0]/[0.04] px-3 py-3 pr-20 sm:pr-3">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-white">🎙 Sprachnachricht bereit</div>
-                  <div className="text-xs text-white/48">{formatRecordingTime(recordingSeconds)} · wird als WhatsApp-Audio gesendet</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={clearRecordedAudio}
-                  className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white/72 transition hover:bg-white/[0.08]"
-                >
-                  Entfernen
-                </button>
-              </div>
-              <KommunikationVoiceMessagePlayer
-                src={recordedAudioUrl}
-                title="Sprachnachricht"
-                outbound
-                avatarName="Du"
-                durationSeconds={recordingSeconds}
-              />
             </div>
           ) : null}
 
@@ -495,7 +293,7 @@ export default function KommunikationComposerClient({
           ) : null}
 
           {menuOpen ? (
-            <div className="mb-2 grid grid-cols-3 gap-2 rounded-[18px] border border-[#d8c1a0]/16 bg-[#211813]/96 p-2 shadow-[0_14px_34px_rgba(0,0,0,0.35)]">
+            <div className="mb-2 flex gap-2 rounded-[18px] border border-[#d8c1a0]/16 bg-[#211813]/96 p-2 shadow-[0_14px_34px_rgba(0,0,0,0.35)]">
               <button
                 type="button"
                 onClick={() => {
@@ -519,14 +317,6 @@ export default function KommunikationComposerClient({
                 <span aria-hidden="true">☺️</span>
                 Emoji
               </button>
-              <button
-                type="button"
-                onClick={startVoiceRecording}
-                className="flex flex-1 items-center justify-center gap-2 rounded-[14px] border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.06] px-3 py-2 text-sm font-semibold text-[#f6f0e8] transition hover:bg-[#d8c1a0]/[0.10] active:scale-[0.98]"
-              >
-                <MicIcon />
-                Sprache
-              </button>
             </div>
           ) : null}
 
@@ -536,7 +326,7 @@ export default function KommunikationComposerClient({
               type="file"
               name="attachment"
               className="hidden"
-              accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,application/pdf,audio/ogg,audio/webm,audio/mpeg,audio/mp4,audio/aac,audio/wav,.jpg,.jpeg,.png,.webp,.gif,.mp4,.pdf,.ogg,.webm,.mp3,.m4a,.aac,.wav"
+              accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,application/pdf,.jpg,.jpeg,.png,.webp,.gif,.mp4,.pdf"
               onChange={(event) => {
                 const file = event.target.files?.[0] ?? null;
 

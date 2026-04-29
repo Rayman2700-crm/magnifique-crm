@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { stripe } from "@/lib/stripe/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { getIsDemoTenant } from "@/lib/demoMode";
 
 export const runtime = "nodejs";
 
@@ -563,7 +562,6 @@ export async function GET(req: NextRequest) {
     }
 
     const salesOrder = (salesOrderRaw ?? null) as SalesOrderRow | null;
-    const isDemoMode = await getIsDemoTenant(admin, payment.tenant_id);
     const stripeIntentId = String(payment.provider_transaction_id ?? "").trim();
     const providerPayload = (payment.provider_response_json ?? {}) as Record<string, unknown>;
     const readerInfo = {
@@ -578,40 +576,7 @@ export async function GET(req: NextRequest) {
     let stripeStatus = String(providerPayload?.stripe_status ?? "").trim() || null;
     let stripeLastError = String(providerPayload?.error_message ?? "").trim() || null;
 
-    if (isDemoMode) {
-      const currentStatus = String(payment.status ?? "").trim().toUpperCase();
-      if (["PENDING", "PROCESSING"].includes(currentStatus)) {
-        const completedAt = new Date().toISOString();
-        const nextProviderPayload = {
-          ...providerPayload,
-          phase: "demo_terminal_completed",
-          stripe_status: "succeeded",
-          checked_at: completedAt,
-          demo_mode: true,
-        };
-
-        await admin
-          .from("payments")
-          .update({
-            status: "COMPLETED",
-            paid_at: payment.paid_at ?? completedAt,
-            provider: "DEMO_STRIPE_TERMINAL",
-            provider_transaction_id: stripeIntentId || `demo-pi-${payment.id}`,
-            provider_response_json: nextProviderPayload,
-            failure_reason: null,
-            updated_at: completedAt,
-          })
-          .eq("id", payment.id);
-
-        payment.status = "COMPLETED";
-        payment.paid_at = payment.paid_at ?? completedAt;
-        payment.provider_transaction_id = stripeIntentId || `demo-pi-${payment.id}`;
-        payment.provider_response_json = nextProviderPayload;
-        payment.failure_reason = null;
-        stripeStatus = "succeeded";
-        stripeLastError = null;
-      }
-    } else if (stripeIntentId) {
+    if (stripeIntentId) {
       const intent = await stripe.paymentIntents.retrieve(stripeIntentId);
       stripeStatus = String(intent.status ?? "").trim() || stripeStatus;
       stripeLastError = String(intent.last_payment_error?.message ?? "").trim() || stripeLastError;
@@ -701,10 +666,9 @@ export async function GET(req: NextRequest) {
         failure_reason: payment.failure_reason ?? null,
       },
       stripe: {
-        id: payment.provider_transaction_id || stripeIntentId || null,
+        id: stripeIntentId || null,
         status: stripeStatus,
         last_error: stripeLastError,
-        demo_mode: isDemoMode,
       },
       receipt,
       reader: readerInfo,

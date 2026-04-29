@@ -2058,17 +2058,11 @@ export default async function KommunikationPage({
                             />
                           ) : null}
                           <div
-                            className={
-                              firstAttachmentKind === "audio" && !failed
-                                ? "max-w-[92%] p-0 md:max-w-[78%]"
-                                : `max-w-[86%] rounded-[20px] px-4 py-3 shadow-[0_12px_28px_rgba(0,0,0,0.20)] md:max-w-[74%] ${failed ? "border border-red-400/24 bg-red-500/10 text-red-50" : outbound ? "rounded-br-[6px] border border-[#d6c3a3]/22 bg-[#d6c3a3]/20 text-[#fff7e8]" : "rounded-bl-[6px] border border-white/[0.07] bg-black/[0.24] text-white/86"}`
-                            }
+                            className={`max-w-[86%] rounded-[20px] md:max-w-[74%] px-4 py-3 shadow-[0_12px_28px_rgba(0,0,0,0.20)] ${failed ? "border border-red-400/24 bg-red-500/10 text-red-50" : outbound ? "rounded-br-[6px] border border-[#d6c3a3]/22 bg-[#d6c3a3]/20 text-[#fff7e8]" : "rounded-bl-[6px] border border-white/[0.07] bg-black/[0.24] text-white/86"}`}
                           >
-                            {firstAttachmentKind !== "audio" || failed ? (
-                              <div className="whitespace-pre-wrap text-sm leading-6">
-                                {message.body}
-                              </div>
-                            ) : null}
+                            <div className="whitespace-pre-wrap text-sm leading-6">
+                              {message.body}
+                            </div>
                             {(() => {
                               const attachment = firstAttachment;
                               if (!attachment) return null;
@@ -2087,7 +2081,9 @@ export default async function KommunikationPage({
                                   : null;
 
                                 return (
-                                  <>
+                                  <div
+                                    className={`mt-2 rounded-[24px] border px-3 py-3 ${outbound ? "border-[#d6c3a3]/18 bg-[#d6c3a3]/12" : "border-white/[0.08] bg-black/[0.22]"}`}
+                                  >
                                     {attachment.mirror_error ? (
                                       <div className="mb-2 text-[10px] font-semibold text-amber-200/80">Audio nicht gespiegelt</div>
                                     ) : null}
@@ -2105,7 +2101,7 @@ export default async function KommunikationPage({
                                         Audio konnte nicht öffentlich gespeichert werden. Bitte Storage/Twilio-Logs prüfen.
                                       </div>
                                     )}
-                                  </>
+                                  </div>
                                 );
                               }
 

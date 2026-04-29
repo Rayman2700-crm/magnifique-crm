@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { getIsDemoTenant } from "@/lib/demoMode";
 
 type PaymentResultStatus = "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED";
 
@@ -27,7 +26,7 @@ export async function POST(req: NextRequest) {
 
     const { data: existingPayment, error: existingPaymentError } = await admin
       .from("payments")
-      .select("id, tenant_id, status")
+      .select("id, status")
       .eq("id", paymentId)
       .maybeSingle();
 
@@ -50,67 +49,6 @@ export async function POST(req: NextRequest) {
         },
         { status: 404 }
       );
-    }
-
-
-    const isDemoMode = await getIsDemoTenant(admin, (existingPayment as any)?.tenant_id ?? null);
-    if (isDemoMode) {
-      const demoProviderResponse = {
-        ...(typeof providerResponse === "object" && providerResponse ? providerResponse : {}),
-        demo: true,
-        phase: "demo_payment_result",
-        processed_at: new Date().toISOString(),
-      };
-
-      const demoUpdatePayload: Record<string, unknown> = {
-        status,
-        provider: "DEMO_STRIPE_TERMINAL",
-        provider_transaction_id: providerTransactionId ?? `demo_result_${paymentId}`,
-        provider_response_json: demoProviderResponse,
-        failure_reason: failureReason,
-      };
-
-      if (status === "COMPLETED") {
-        demoUpdatePayload.paid_at = new Date().toISOString();
-      }
-
-      const { error: demoUpdateError } = await admin
-        .from("payments")
-        .update(demoUpdatePayload)
-        .eq("id", paymentId);
-
-      if (demoUpdateError) {
-        return NextResponse.json(
-          {
-            error: demoUpdateError.message ?? "Demo-Payment konnte nicht aktualisiert werden.",
-            step: "demo_update_payment",
-          },
-          { status: 500 }
-        );
-      }
-
-      const { data: updatedDemoPayment, error: demoReloadError } = await admin
-        .from("payments")
-        .select("*")
-        .eq("id", paymentId)
-        .maybeSingle();
-
-      if (demoReloadError) {
-        return NextResponse.json(
-          {
-            error: demoReloadError.message ?? "Aktualisiertes Demo-Payment konnte nicht geladen werden.",
-            step: "demo_reload_payment",
-          },
-          { status: 500 }
-        );
-      }
-
-      return NextResponse.json({
-        ok: true,
-        demo: true,
-        payment: updatedDemoPayment ?? null,
-        message: "Demo-Modus: Payment-Result wurde simuliert, ohne Stripe abzufragen.",
-      });
     }
 
     const updatePayload: Record<string, unknown> = {

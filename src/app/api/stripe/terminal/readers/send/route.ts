@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { stripe } from "@/lib/stripe/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getIsDemoTenant } from "@/lib/demoMode";
 
 export const runtime = "nodejs";
 
@@ -191,6 +192,89 @@ export async function POST(req: NextRequest) {
     const paymentRow = payment as PaymentRow;
     const normalizedStatus = String(paymentRow.status ?? "").trim().toUpperCase();
     const existingIntentId = String(paymentRow.provider_transaction_id ?? "").trim();
+
+    const isDemoMode = await getIsDemoTenant(admin, paymentRow.tenant_id);
+    if (isDemoMode) {
+      const demoIntentId = existingIntentId || `demo_pi_${paymentId}`;
+      const now = new Date().toISOString();
+      const providerBeforeStart = ((paymentRow.provider_response_json as Record<string, unknown> | null) ?? {});
+
+      if (normalizedStatus === "COMPLETED") {
+        return jsonNoStore({
+          ok: true,
+          demo: true,
+          already_completed: true,
+          should_reload: true,
+          poll_recommended: false,
+          payment_id: paymentId,
+          payment_intent_id: demoIntentId,
+          message: "Demo-Zahlung war bereits abgeschlossen.",
+        });
+      }
+
+      if (normalizedStatus === "CANCELLED") {
+        return jsonNoStore({ error: "Dieses Demo-Payment wurde bereits abgebrochen.", should_reload: true }, { status: 409 });
+      }
+
+      const { error: demoUpdateError } = await admin
+        .from("payments")
+        .update({
+          status: "COMPLETED",
+          provider: "DEMO_STRIPE_TERMINAL",
+          provider_transaction_id: demoIntentId,
+          provider_response_json: {
+            ...providerBeforeStart,
+            demo: true,
+            phase: "demo_reader_payment_completed",
+            sent_to_reader_at: now,
+            completed_at: now,
+            stripe_payment_intent_id: demoIntentId,
+            reader_id: "demo_reader",
+            reader_label: "Demo Terminal",
+            reader_status: "online",
+            reader_action: {
+              status: "succeeded",
+              type: "process_payment_intent",
+            },
+          },
+          failure_reason: null,
+          paid_at: now,
+          updated_at: now,
+        })
+        .eq("id", paymentId);
+
+      if (demoUpdateError) {
+        throw new Error(demoUpdateError.message ?? "Demo-Payment konnte nicht abgeschlossen werden.");
+      }
+
+      if (paymentRow.sales_order_id) {
+        await admin
+          .from("sales_orders")
+          .update({
+            status: "PAID",
+            updated_at: now,
+          })
+          .eq("id", paymentRow.sales_order_id);
+      }
+
+      return jsonNoStore({
+        ok: true,
+        demo: true,
+        payment_id: paymentId,
+        payment_intent_id: demoIntentId,
+        auto_presented_test_card: true,
+        poll_recommended: false,
+        should_reload: true,
+        reader: {
+          id: "demo_reader",
+          label: "Demo Terminal",
+          status: "online",
+          actionStatus: "succeeded",
+          actionType: "process_payment_intent",
+        },
+        message: "Demo-Modus: Kartenzahlung wurde simuliert abgeschlossen. Es wurde keine Stripe-Aktion ausgelöst.",
+      });
+    }
 
     if (normalizedStatus === "COMPLETED") {
       return jsonNoStore({

@@ -39,23 +39,13 @@ function safeFileName(name: string) {
   return cleaned.slice(0, 120) || "datei";
 }
 
-function baseMimeType(value: string) {
-  return String(value || "").toLowerCase().split(";")[0]?.trim() || "";
-}
-
 function extensionFromMime(mimeType: string) {
-  const normalized = baseMimeType(mimeType);
-  if (normalized === "image/jpeg") return "jpg";
-  if (normalized === "image/png") return "png";
-  if (normalized === "image/webp") return "webp";
-  if (normalized === "image/gif") return "gif";
-  if (normalized === "video/mp4") return "mp4";
-  if (normalized === "application/pdf") return "pdf";
-  if (normalized === "audio/ogg") return "ogg";
-  if (normalized === "audio/webm") return "webm";
-  if (normalized === "audio/mpeg" || normalized === "audio/mp3") return "mp3";
-  if (normalized === "audio/mp4" || normalized === "audio/aac") return "m4a";
-  if (normalized === "audio/wav") return "wav";
+  if (mimeType === "image/jpeg") return "jpg";
+  if (mimeType === "image/png") return "png";
+  if (mimeType === "image/webp") return "webp";
+  if (mimeType === "image/gif") return "gif";
+  if (mimeType === "video/mp4") return "mp4";
+  if (mimeType === "application/pdf") return "pdf";
   return "bin";
 }
 
@@ -67,18 +57,11 @@ function mimeFromFileName(name: string) {
   if (lower.endsWith(".gif")) return "image/gif";
   if (lower.endsWith(".mp4")) return "video/mp4";
   if (lower.endsWith(".pdf")) return "application/pdf";
-  if (lower.endsWith(".ogg") || lower.endsWith(".oga")) return "audio/ogg";
-  if (lower.endsWith(".webm")) return "audio/webm";
-  if (lower.endsWith(".mp3")) return "audio/mpeg";
-  if (lower.endsWith(".m4a")) return "audio/mp4";
-  if (lower.endsWith(".aac")) return "audio/aac";
-  if (lower.endsWith(".wav")) return "audio/wav";
   return "application/octet-stream";
 }
 
 function normalizeMimeType(file: File) {
-  const rawFromFile = String(file.type || "").toLowerCase().trim();
-  const fromFile = baseMimeType(rawFromFile);
+  const fromFile = String(file.type || "").toLowerCase().trim();
   const fromName = mimeFromFileName(file.name || "");
   const mimeType = fromFile && fromFile !== "application/octet-stream" ? fromFile : fromName;
 
@@ -95,17 +78,10 @@ function normalizeMimeType(file: File) {
     "image/gif",
     "video/mp4",
     "application/pdf",
-    "audio/ogg",
-    "audio/webm",
-    "audio/mpeg",
-    "audio/mp3",
-    "audio/mp4",
-    "audio/aac",
-    "audio/wav",
   ]);
 
   if (!allowed.has(mimeType)) {
-    throw new Error(`Dateityp ${rawFromFile || mimeType || "unbekannt"} wird für WhatsApp aktuell nicht unterstützt. Bitte JPG, PNG, WEBP, GIF, MP4, PDF oder Audio verwenden.`);
+    throw new Error(`Dateityp ${mimeType || "unbekannt"} wird für WhatsApp aktuell nicht unterstützt.`);
   }
 
   return mimeType;
@@ -119,9 +95,7 @@ async function assertPublicMediaUrl(publicUrl: string, expectedMimeType: string)
   }
 
   const contentType = response.headers.get("content-type") || "";
-  const normalizedContentType = baseMimeType(contentType);
-  const normalizedExpectedMimeType = baseMimeType(expectedMimeType);
-  if (normalizedContentType && normalizedExpectedMimeType && normalizedContentType !== normalizedExpectedMimeType) {
+  if (contentType && !contentType.toLowerCase().includes(expectedMimeType.toLowerCase())) {
     throw new Error(`Falscher Content-Type im Storage: ${contentType}. Erwartet: ${expectedMimeType}.`);
   }
 }
@@ -424,8 +398,7 @@ export async function POST(request: Request) {
 
     const status = mapInitialTwilioStatus(twilioMessage.status);
     const now = new Date().toISOString();
-    const isAudioAttachment = Boolean(attachmentMetadata?.attachment && String((attachmentMetadata.attachment as { type?: unknown }).type ?? "").toLowerCase().startsWith("audio/"));
-    const storedBody = body || (isAudioAttachment ? "🎙 Sprachnachricht" : attachment ? `📎 ${attachment.name}` : mediaUrl ? "📎 Datei" : "");
+    const storedBody = body || (attachment ? `📎 ${attachment.name}` : mediaUrl ? "📎 Datei" : "");
 
     const { data: inserted, error: insertError } = await supabase
       .from("customer_messages")

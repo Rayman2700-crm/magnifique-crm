@@ -3,7 +3,6 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import KommunikationVoiceMessagePlayer from "./KommunikationVoiceMessagePlayer";
 
 type Props = {
   action?: (formData: FormData) => void | Promise<void>;
@@ -72,7 +71,7 @@ function fileKindLabel(file: File) {
 
 function validateWhatsappAttachment(file: File) {
   const lowerName = file.name.toLowerCase();
-  const type = file.type.toLowerCase().split(";")[0]?.trim() || file.type.toLowerCase();
+  const type = file.type.toLowerCase();
   const isSupported =
     type === "image/jpeg" ||
     type === "image/png" ||
@@ -416,27 +415,13 @@ export default function KommunikationComposerClient({
           ) : null}
 
           {recordedAudioFile && recordedAudioUrl ? (
-            <div className="mb-3 rounded-[20px] border border-[#d8c1a0]/12 bg-[#d8c1a0]/[0.04] px-3 py-3 pr-20 sm:pr-3">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-white">🎙 Sprachnachricht bereit</div>
-                  <div className="text-xs text-white/48">{formatRecordingTime(recordingSeconds)} · wird als WhatsApp-Audio gesendet</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={clearRecordedAudio}
-                  className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white/72 transition hover:bg-white/[0.08]"
-                >
-                  Entfernen
-                </button>
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-[18px] border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] px-3 py-2">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold text-white">🎙 Sprachnachricht bereit</div>
+                <div className="text-xs text-white/50">{formatRecordingTime(recordingSeconds)} · wird als WhatsApp-Audio gesendet</div>
+                <audio src={recordedAudioUrl} controls className="mt-2 h-8 w-full max-w-sm" />
               </div>
-              <KommunikationVoiceMessagePlayer
-                src={recordedAudioUrl}
-                title="Sprachnachricht"
-                outbound
-                avatarName="Du"
-                durationSeconds={recordingSeconds}
-              />
+              <button type="button" onClick={clearRecordedAudio} className="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white hover:bg-white/[0.08]">Entfernen</button>
             </div>
           ) : null}
 

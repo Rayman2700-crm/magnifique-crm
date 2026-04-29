@@ -10,7 +10,6 @@ import { sendMail } from "@/lib/mail/sendMail";
 import { sendGoogleMail } from "@/lib/mail/sendGoogleMail";
 import { buildFiscalReceiptPdf } from "@/lib/receipts/buildFiscalReceiptPdf";
 import { stripe } from "@/lib/stripe/server";
-import { getIsDemoTenant } from "@/lib/demoMode";
 
 type UserProfileRow = {
   role: string | null;
@@ -725,8 +724,6 @@ export async function sendFiscalReceiptEmail(formData: FormData) {
     redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: "Dieser Beleg gehört nicht zum aktiven Tenant." }));
   }
 
-  const isDemoMode = await getIsDemoTenant(admin, tenantId);
-
   const isCancelled = isReceiptCancelled(receipt.status) || isStornoReceiptType(receipt.receipt_type, receipt.verification_notes);
   if (isCancelled) {
     redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: "Stornierte Belege können nicht per E-Mail versendet werden." }));
@@ -766,11 +763,7 @@ export async function sendFiscalReceiptEmail(formData: FormData) {
   }
 
   if (!customerEmail) {
-    if (isDemoMode) {
-      customerEmail = "demo-kunde@clientique.local";
-    } else {
-      redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: "Beim Kunden ist keine E-Mail-Adresse hinterlegt." }));
-    }
+    redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: "Beim Kunden ist keine E-Mail-Adresse hinterlegt." }));
   }
 
   const { data: tenantMailSettingsRaw } = await admin
@@ -795,7 +788,7 @@ export async function sendFiscalReceiptEmail(formData: FormData) {
     String(tenantMailSettings?.display_name ?? "").trim();
 
   const tenantMailIsActive = tenantMailSettings?.mail_is_active !== false;
-  if (!tenantMailIsActive && !isDemoMode) {
+  if (!tenantMailIsActive) {
     redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: "E-Mail-Versand ist für diesen Behandler aktuell deaktiviert." }));
   }
 
@@ -810,7 +803,7 @@ export async function sendFiscalReceiptEmail(formData: FormData) {
     String(tenantMailSettings?.mail_reply_to_email ?? "").trim() ||
     senderEmail;
 
-  if (!senderEmail && !isDemoMode) {
+  if (!senderEmail) {
     redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: "Für diesen Behandler ist keine Absender-E-Mail hinterlegt." }));
   }
 
@@ -916,47 +909,6 @@ export async function sendFiscalReceiptEmail(formData: FormData) {
   }
 
   const deliveryId = String(deliveryRaw.id);
-
-  if (isDemoMode) {
-    const sentAt = new Date().toISOString();
-    await admin
-      .from("receipt_deliveries")
-      .update({
-        status: "SENT",
-        provider: "DEMO_EMAIL",
-        provider_message_id: `demo-email-${deliveryId}`,
-        sent_at: sentAt,
-        failed_at: null,
-        error_message: null,
-      })
-      .eq("id", deliveryId);
-
-    await insertFiscalEventSafe(admin, {
-      tenantId,
-      fiscalReceiptId: receiptId,
-      performedBy: user.id,
-      eventType: "RECEIPT_DELIVERY_SENT",
-      notes: `Demo-Modus: Beleg per E-Mail an ${customerEmail} simuliert. Es wurde keine echte E-Mail versendet.`,
-      referenceData: {
-        receipt_id: receiptId,
-        delivery_id: deliveryId,
-        channel: "EMAIL",
-        recipient: customerEmail,
-        subject,
-        provider: "DEMO_EMAIL",
-        provider_message_id: `demo-email-${deliveryId}`,
-        demo_mode: true,
-        sent_at: sentAt,
-      },
-    });
-
-    revalidatePath("/rechnungen");
-    redirect(buildRechnungenUrlFromReturnQuery(returnQuery, {
-      receiptId,
-      success: `Demo: Beleg ${receiptNumber} per E-Mail simuliert ✅ Keine echte E-Mail wurde versendet.`,
-    }));
-  }
-
   let redirectUrl = "";
 
   try {
@@ -1130,8 +1082,6 @@ export async function openFiscalReceiptWhatsApp(formData: FormData) {
     redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: "Dieser Beleg gehört nicht zum aktiven Tenant." }));
   }
 
-  const isDemoMode = await getIsDemoTenant(admin, tenantId);
-
   const isCancelled = isReceiptCancelled(receipt.status) || isStornoReceiptType(receipt.receipt_type, receipt.verification_notes);
   if (isCancelled) {
     redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: "Stornierte Belege können nicht per WhatsApp vorbereitet werden." }));
@@ -1163,13 +1113,9 @@ export async function openFiscalReceiptWhatsApp(formData: FormData) {
     }
   }
 
-  let normalizedPhone = normalizePhoneForWhatsApp(customerPhone);
+  const normalizedPhone = normalizePhoneForWhatsApp(customerPhone);
   if (!normalizedPhone) {
-    if (isDemoMode) {
-      normalizedPhone = "+430000000000";
-    } else {
-      redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: "Beim Kunden ist keine WhatsApp-fähige Telefonnummer hinterlegt." }));
-    }
+    redirect(buildRechnungenUrlFromReturnQuery(returnQuery, { receiptId, error: "Beim Kunden ist keine WhatsApp-fähige Telefonnummer hinterlegt." }));
   }
 
   const { data: tenantRaw } = await admin
@@ -1213,12 +1159,7 @@ export async function openFiscalReceiptWhatsApp(formData: FormData) {
   }
 
   const deliveryId = String(deliveryRaw.id);
-  let redirectUrl = isDemoMode
-    ? buildRechnungenUrlFromReturnQuery(returnQuery, {
-        receiptId,
-        success: `Demo: WhatsApp für Beleg ${receiptNumber} simuliert ✅ Keine echte Nachricht wurde geöffnet oder gesendet.`,
-      })
-    : whatsappHref;
+  let redirectUrl = whatsappHref;
 
   try {
     const openedAt = new Date().toISOString();
@@ -1226,8 +1167,8 @@ export async function openFiscalReceiptWhatsApp(formData: FormData) {
       .from("receipt_deliveries")
       .update({
         status: "SENT",
-        provider: isDemoMode ? "DEMO_WHATSAPP" : "WHATSAPP_LINK",
-        provider_message_id: isDemoMode ? `demo-whatsapp-${deliveryId}` : null,
+        provider: "WHATSAPP_LINK",
+        provider_message_id: null,
         sent_at: openedAt,
         failed_at: null,
         error_message: null,
@@ -1243,19 +1184,16 @@ export async function openFiscalReceiptWhatsApp(formData: FormData) {
       fiscalReceiptId: receiptId,
       performedBy: user.id,
       eventType: "RECEIPT_DELIVERY_SENT",
-      notes: isDemoMode
-        ? `Demo-Modus: WhatsApp für ${normalizedPhone} simuliert. Es wurde keine echte Nachricht geöffnet oder gesendet.`
-        : `Beleg per WhatsApp an ${normalizedPhone} vorbereitet.`,
+      notes: `Beleg per WhatsApp an ${normalizedPhone} vorbereitet.`,
       referenceData: {
         receipt_id: receiptId,
         delivery_id: deliveryId,
         channel: "WHATSAPP",
         recipient: normalizedPhone,
         subject,
-        provider: isDemoMode ? "DEMO_WHATSAPP" : "WHATSAPP_LINK",
+        provider: "WHATSAPP_LINK",
         opened_at: openedAt,
-        whatsapp_href: isDemoMode ? null : whatsappHref,
-        demo_mode: isDemoMode,
+        whatsapp_href: whatsappHref,
       },
     });
   } catch (error: any) {
@@ -1797,7 +1735,6 @@ export async function createPaymentForSalesOrder(formData: FormData) {
   const tenantId = String(salesOrder.tenant_id ?? "").trim();
   if (!tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, error: "Sales Order hat keinen Tenant." }));
   if (effectiveTenantId && effectiveTenantId !== tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, error: "Diese Sales Order gehört nicht zum aktiven Tenant." }));
-  const isDemoMode = await getIsDemoTenant(admin, tenantId);
 
   const { data: lineRows, error: linesError } = await admin.from("sales_order_lines").select("line_total_gross").eq("sales_order_id", salesOrderId);
   if (linesError) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, error: "Sales-Order-Positionen konnten nicht geladen werden." }));
@@ -1821,13 +1758,12 @@ export async function createPaymentForSalesOrder(formData: FormData) {
   const isCard = isCardPaymentMethodCode(paymentMethodCode);
   const isTransfer = isTransferPaymentMethodCode(paymentMethodCode);
   const paymentStatus = isCard ? "PENDING" : "COMPLETED";
-  const provider = isCard ? (isDemoMode ? "DEMO_STRIPE_TERMINAL" : "STRIPE_TERMINAL") : "MANUAL";
+  const provider = isCard ? "STRIPE_TERMINAL" : "MANUAL";
   const paidAt = isCard ? null : createdAt;
   const providerResponse = isCard
     ? {
-        phase: isDemoMode ? "demo_payment_intent_pending" : "payment_intent_pending",
+        phase: "payment_intent_pending",
         method: "card",
-        demo_mode: isDemoMode,
         created_at: createdAt,
       }
     : {
@@ -1864,25 +1800,7 @@ export async function createPaymentForSalesOrder(formData: FormData) {
 
   const paymentId = String(paymentInsert.id);
 
-  if (isCard && isDemoMode) {
-    await admin
-      .from("payments")
-      .update({
-        provider: "DEMO_STRIPE_TERMINAL",
-        provider_transaction_id: `demo-pi-${paymentId}`,
-        provider_response_json: {
-          phase: "demo_payment_intent_created",
-          created_at: createdAt,
-          demo_payment_intent_id: `demo-pi-${paymentId}`,
-          stripe_status: "requires_payment_method",
-          has_client_secret: false,
-          demo_mode: true,
-        },
-        failure_reason: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", paymentId);
-  } else if (isCard) {
+  if (isCard) {
     try {
       const intent = await createStripeTerminalIntentForPayment({
         amountCents: paidAmountCents,
@@ -1941,9 +1859,7 @@ export async function createPaymentForSalesOrder(formData: FormData) {
   revalidatePath("/calendar");
   revalidatePath("/dashboard");
 
-  const successMessage = isCard
-    ? (isDemoMode ? "Demo-Kartenzahlung vorbereitet ✅ Keine echte Stripe-Aktion wurde ausgelöst." : "Kartenzahlung mit Stripe vorbereitet ✅")
-    : "Payment erfasst ✅";
+  const successMessage = isCard ? "Kartenzahlung mit Stripe vorbereitet ✅" : "Payment erfasst ✅";
   redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, success: successMessage }));
 }
 
@@ -1960,7 +1876,6 @@ export async function startCardPaymentForCheckout(formData: FormData) {
   const tenantId = String(salesOrder.tenant_id ?? "").trim();
   if (!tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Sales Order hat keinen Tenant." }));
   if (effectiveTenantId && effectiveTenantId !== tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Diese Sales Order gehört nicht zum aktiven Tenant." }));
-  const isDemoMode = await getIsDemoTenant(admin, tenantId);
 
   const { data: paymentRaw, error: paymentError } = await admin
     .from("payments")
@@ -1992,12 +1907,11 @@ export async function startCardPaymentForCheckout(formData: FormData) {
     .update({
       status: "PROCESSING",
       external_reference: providerReference,
-      provider: isDemoMode ? "DEMO_STRIPE_TERMINAL" : "STRIPE_TERMINAL",
+      provider: "STRIPE_TERMINAL",
       provider_response_json: {
-        phase: isDemoMode ? "demo_processing" : "processing",
+        phase: "processing",
         started_at: startedAt,
         provider_reference: providerReference,
-        demo_mode: isDemoMode,
       },
       failure_reason: null,
       updated_at: startedAt,
@@ -2011,7 +1925,7 @@ export async function startCardPaymentForCheckout(formData: FormData) {
   revalidatePath("/rechnungen");
   revalidatePath("/calendar");
   revalidatePath("/dashboard");
-  redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, success: isDemoMode ? "Demo-Kartenzahlung gestartet ✅ Keine echte Terminal-Aktion wurde ausgelöst." : "Kartenzahlung gestartet ✅" }));
+  redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, success: "Kartenzahlung gestartet ✅" }));
 }
 
 export async function completeCardPaymentForCheckout(formData: FormData) {
@@ -2027,7 +1941,6 @@ export async function completeCardPaymentForCheckout(formData: FormData) {
   const tenantId = String(salesOrder.tenant_id ?? "").trim();
   if (!tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Sales Order hat keinen Tenant." }));
   if (effectiveTenantId && effectiveTenantId !== tenantId) redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, error: "Diese Sales Order gehört nicht zum aktiven Tenant." }));
-  const isDemoMode = await getIsDemoTenant(admin, tenantId);
 
   const { data: paymentRaw, error: paymentError } = await admin
     .from("payments")
@@ -2059,13 +1972,12 @@ export async function completeCardPaymentForCheckout(formData: FormData) {
     .update({
       status: "COMPLETED",
       paid_at: completedAt,
-      provider: isDemoMode ? "DEMO_STRIPE_TERMINAL" : "STRIPE_TERMINAL",
+      provider: "STRIPE_TERMINAL",
       provider_transaction_id: providerTransactionId,
       provider_response_json: {
-        phase: isDemoMode ? "demo_completed" : "completed",
+        phase: "completed",
         completed_at: completedAt,
         provider_transaction_id: providerTransactionId,
-        demo_mode: isDemoMode,
       },
       failure_reason: null,
       updated_at: completedAt,
@@ -2084,7 +1996,7 @@ export async function completeCardPaymentForCheckout(formData: FormData) {
   revalidatePath("/rechnungen");
   revalidatePath("/calendar");
   revalidatePath("/dashboard");
-  redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, success: isDemoMode ? "Demo-Kartenzahlung abgeschlossen ✅ Keine echte Zahlung wurde ausgelöst." : "Kartenzahlung abgeschlossen ✅" }));
+  redirect(buildRechnungenUrl({ appointmentId, salesOrderId, paymentId, success: "Kartenzahlung abgeschlossen ✅" }));
 }
 
 export async function failCardPaymentForCheckout(formData: FormData) {
@@ -3663,7 +3575,6 @@ export async function createPaymentForSalesOrderInline(formData: FormData): Prom
     const tenantId = String(salesOrder.tenant_id ?? "").trim();
     if (!tenantId) throw new Error("Sales Order hat keinen Tenant.");
     if (effectiveTenantId && effectiveTenantId !== tenantId) throw new Error("Diese Sales Order gehört nicht zum aktiven Tenant.");
-    const isDemoMode = await getIsDemoTenant(admin, tenantId);
 
     const { data: lineRows, error: linesError } = await admin.from("sales_order_lines").select("line_total_gross").eq("sales_order_id", salesOrderId);
     if (linesError) throw new Error("Sales-Order-Positionen konnten nicht geladen werden.");
@@ -3687,13 +3598,12 @@ export async function createPaymentForSalesOrderInline(formData: FormData): Prom
     const isCard = isCardPaymentMethodCode(paymentMethodCode);
     const isTransfer = isTransferPaymentMethodCode(paymentMethodCode);
     const paymentStatus = isCard ? "PENDING" : "COMPLETED";
-    const provider = isCard ? (isDemoMode ? "DEMO_STRIPE_TERMINAL" : "STRIPE_TERMINAL") : "MANUAL";
+    const provider = isCard ? "STRIPE_TERMINAL" : "MANUAL";
     const paidAt = isCard ? null : createdAt;
     const providerResponse = isCard
       ? {
-          phase: isDemoMode ? "demo_payment_intent_pending" : "payment_intent_pending",
+          phase: "payment_intent_pending",
           method: "card",
-          demo_mode: isDemoMode,
           created_at: createdAt,
         }
       : {
@@ -3730,25 +3640,7 @@ export async function createPaymentForSalesOrderInline(formData: FormData): Prom
 
     const paymentId = String(paymentInsert.id);
 
-    if (isCard && isDemoMode) {
-      await admin
-        .from("payments")
-        .update({
-          provider: "DEMO_STRIPE_TERMINAL",
-          provider_transaction_id: `demo-pi-${paymentId}`,
-          provider_response_json: {
-            phase: "demo_payment_intent_created",
-            created_at: createdAt,
-            demo_payment_intent_id: `demo-pi-${paymentId}`,
-            stripe_status: "requires_payment_method",
-            has_client_secret: false,
-            demo_mode: true,
-          },
-          failure_reason: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", paymentId);
-    } else if (isCard) {
+    if (isCard) {
       try {
         const intent = await createStripeTerminalIntentForPayment({
           amountCents: paidAmountCents,
@@ -3806,9 +3698,7 @@ export async function createPaymentForSalesOrderInline(formData: FormData): Prom
 
     return {
       ok: true,
-      success: isCard
-        ? (isDemoMode ? "Demo-Kartenzahlung vorbereitet ✅ Keine echte Stripe-Aktion wurde ausgelöst." : "Kartenzahlung mit Stripe vorbereitet ✅")
-        : "Payment erfasst ✅",
+      success: isCard ? "Kartenzahlung mit Stripe vorbereitet ✅" : "Payment erfasst ✅",
       appointmentId,
       salesOrderId,
       paymentId,
