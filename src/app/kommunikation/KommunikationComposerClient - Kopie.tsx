@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import KommunikationVoiceMessagePlayer from "./KommunikationVoiceMessagePlayer";
 
 type Props = {
   action?: (formData: FormData) => void | Promise<void>;
@@ -64,13 +65,14 @@ function autoResizeTextarea(textarea: HTMLTextAreaElement | null) {
 function fileKindLabel(file: File) {
   if (file.type.startsWith("image/")) return "Bild";
   if (file.type.startsWith("video/")) return "Video";
+  if (file.type.startsWith("audio/")) return "Sprachnachricht";
   if (file.type === "application/pdf") return "PDF";
   return file.type || "Datei";
 }
 
 function validateWhatsappAttachment(file: File) {
   const lowerName = file.name.toLowerCase();
-  const type = file.type.toLowerCase();
+  const type = file.type.toLowerCase().split(";")[0]?.trim() || file.type.toLowerCase();
   const isSupported =
     type === "image/jpeg" ||
     type === "image/png" ||
@@ -78,16 +80,29 @@ function validateWhatsappAttachment(file: File) {
     type === "image/gif" ||
     type === "video/mp4" ||
     type === "application/pdf" ||
+    type === "audio/ogg" ||
+    type === "audio/webm" ||
+    type === "audio/mpeg" ||
+    type === "audio/mp3" ||
+    type === "audio/mp4" ||
+    type === "audio/aac" ||
+    type === "audio/wav" ||
     lowerName.endsWith(".jpg") ||
     lowerName.endsWith(".jpeg") ||
     lowerName.endsWith(".png") ||
     lowerName.endsWith(".webp") ||
     lowerName.endsWith(".gif") ||
     lowerName.endsWith(".mp4") ||
-    lowerName.endsWith(".pdf");
+    lowerName.endsWith(".pdf") ||
+    lowerName.endsWith(".ogg") ||
+    lowerName.endsWith(".webm") ||
+    lowerName.endsWith(".mp3") ||
+    lowerName.endsWith(".m4a") ||
+    lowerName.endsWith(".aac") ||
+    lowerName.endsWith(".wav");
 
   if (!isSupported) {
-    return "Bitte nur JPG, PNG, WEBP, GIF, MP4 oder PDF senden.";
+    return "Bitte nur JPG, PNG, WEBP, GIF, MP4, PDF oder Audio senden.";
   }
 
   if (file.size > 15 * 1024 * 1024) {
@@ -95,6 +110,42 @@ function validateWhatsappAttachment(file: File) {
   }
 
   return null;
+}
+
+function getSupportedAudioMimeType() {
+  if (typeof window === "undefined" || typeof MediaRecorder === "undefined") return "";
+  const candidates = [
+    "audio/ogg;codecs=opus",
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/mp4",
+  ];
+  return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? "";
+}
+
+function audioExtensionFromMimeType(mimeType: string) {
+  const normalized = mimeType.toLowerCase();
+  if (normalized.includes("ogg")) return "ogg";
+  if (normalized.includes("mp4")) return "m4a";
+  if (normalized.includes("mpeg")) return "mp3";
+  return "webm";
+}
+
+function formatRecordingTime(seconds: number) {
+  const safe = Math.max(0, Math.floor(seconds));
+  const mins = Math.floor(safe / 60);
+  const secs = safe % 60;
+  return `${mins}:${String(secs).padStart(2, "0")}`;
+}
+
+function MicIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-[16px] w-[16px]" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z" />
+      <path d="M19 11a7 7 0 0 1-14 0" />
+      <path d="M12 18v3" />
+    </svg>
+  );
 }
 
 function SendIcon() {
@@ -124,6 +175,14 @@ export default function KommunikationComposerClient({
   const router = useRouter();
   const [text, setText] = useState(draftBody);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [recordingState, setRecordingState] = useState<"idle" | "recording" | "review">("idle");
+  const [recordedAudioFile, setRecordedAudioFile] = useState<File | null>(null);
+  const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingChunksRef = useRef<Blob[]>([]);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
+  const recordingTimerRef = useRef<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -135,6 +194,14 @@ export default function KommunikationComposerClient({
     setText(draftBody);
     requestAnimationFrame(() => autoResizeTextarea(textareaRef.current));
   }, [draftBody]);
+
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) window.clearInterval(recordingTimerRef.current);
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+      if (recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);
+    };
+  }, [recordedAudioUrl]);
 
   function insertEmoji(emoji: string) {
     const textarea = textareaRef.current;
@@ -154,7 +221,101 @@ export default function KommunikationComposerClient({
     });
   }
 
-  const canSend = Boolean(text.trim() || selectedFile);
+  function clearRecordedAudio() {
+    if (recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);
+    setRecordedAudioUrl(null);
+    setRecordedAudioFile(null);
+    setRecordingState("idle");
+    setRecordingSeconds(0);
+  }
+
+  async function startVoiceRecording() {
+    if (recordingState === "recording" || isPending) return;
+
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setErrorMessage("Sprachaufnahme wird von diesem Browser nicht unterstützt.");
+      return;
+    }
+
+    try {
+      setErrorMessage(null);
+      setMenuOpen(false);
+      setEmojiOpen(false);
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      clearRecordedAudio();
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordingStreamRef.current = stream;
+      recordingChunksRef.current = [];
+
+      const mimeType = getSupportedAudioMimeType();
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) recordingChunksRef.current.push(event.data);
+      };
+
+      recorder.onstop = () => {
+        if (recordingTimerRef.current) window.clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+        stream.getTracks().forEach((track) => track.stop());
+        recordingStreamRef.current = null;
+
+        const recordedMimeType = recorder.mimeType || mimeType || "audio/webm";
+        const blob = new Blob(recordingChunksRef.current, { type: recordedMimeType });
+        recordingChunksRef.current = [];
+
+        if (!blob.size) {
+          setErrorMessage("Die Aufnahme war leer. Bitte nochmal versuchen.");
+          setRecordingState("idle");
+          return;
+        }
+
+        const extension = audioExtensionFromMimeType(recordedMimeType);
+        const file = new File([blob], `sprachnachricht-${Date.now()}.${extension}`, { type: recordedMimeType });
+        const objectUrl = URL.createObjectURL(blob);
+        setRecordedAudioFile(file);
+        setRecordedAudioUrl(objectUrl);
+        setRecordingState("review");
+      };
+
+      recorder.start(250);
+      setRecordingSeconds(0);
+      setRecordingState("recording");
+      recordingTimerRef.current = window.setInterval(() => {
+        setRecordingSeconds((value) => value + 1);
+      }, 1000);
+    } catch (error) {
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+      recordingStreamRef.current = null;
+      setRecordingState("idle");
+      setErrorMessage(error instanceof Error ? error.message : "Mikrofon konnte nicht gestartet werden.");
+    }
+  }
+
+  function stopVoiceRecording() {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === "inactive") return;
+    recorder.stop();
+  }
+
+  function cancelVoiceRecording() {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.onstop = null;
+      recorder.stop();
+    }
+    if (recordingTimerRef.current) window.clearInterval(recordingTimerRef.current);
+    recordingTimerRef.current = null;
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    recordingStreamRef.current = null;
+    recordingChunksRef.current = [];
+    clearRecordedAudio();
+  }
+
+  const canSend = Boolean(text.trim() || selectedFile || recordedAudioFile);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -168,7 +329,9 @@ export default function KommunikationComposerClient({
     formData.set("statusFilter", statusFilter);
     formData.set("status_filter", statusFilter);
     formData.set("body", text.trim());
-    if (selectedFile) formData.set("attachment", selectedFile);
+    const outgoingAttachment = selectedFile ?? recordedAudioFile;
+    if (outgoingAttachment) formData.set("attachment", outgoingAttachment);
+    if (!text.trim() && recordedAudioFile) formData.set("body", "🎙 Sprachnachricht");
 
     startTransition(async () => {
       try {
@@ -190,6 +353,7 @@ export default function KommunikationComposerClient({
 
         setText("");
         setSelectedFile(null);
+        clearRecordedAudio();
         setMenuOpen(false);
         setEmojiOpen(false);
         if (fileInputRef.current) fileInputRef.current.value = "";
@@ -235,6 +399,31 @@ export default function KommunikationComposerClient({
           {errorMessage ? (
             <div className="mb-3 rounded-[16px] border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm leading-5 text-red-100">
               {errorMessage}
+            </div>
+          ) : null}
+
+          {recordedAudioFile && recordedAudioUrl ? (
+            <div className="mb-3 rounded-[20px] border border-[#d8c1a0]/12 bg-[#d8c1a0]/[0.04] px-3 py-3 pr-20 sm:pr-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-white">🎙 Sprachnachricht bereit</div>
+                  <div className="text-xs text-white/48">{formatRecordingTime(recordingSeconds)} · wird als WhatsApp-Audio gesendet</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={clearRecordedAudio}
+                  className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white/72 transition hover:bg-white/[0.08]"
+                >
+                  Entfernen
+                </button>
+              </div>
+              <KommunikationVoiceMessagePlayer
+                src={recordedAudioUrl}
+                title="Sprachnachricht"
+                outbound
+                avatarName="Du"
+                durationSeconds={recordingSeconds}
+              />
             </div>
           ) : null}
 
@@ -293,7 +482,7 @@ export default function KommunikationComposerClient({
           ) : null}
 
           {menuOpen ? (
-            <div className="mb-2 flex gap-2 rounded-[18px] border border-[#d8c1a0]/16 bg-[#211813]/96 p-2 shadow-[0_14px_34px_rgba(0,0,0,0.35)]">
+            <div className="mb-2 grid grid-cols-2 gap-2 rounded-[18px] border border-[#d8c1a0]/16 bg-[#211813]/96 p-2 shadow-[0_14px_34px_rgba(0,0,0,0.35)]">
               <button
                 type="button"
                 onClick={() => {
@@ -326,7 +515,7 @@ export default function KommunikationComposerClient({
               type="file"
               name="attachment"
               className="hidden"
-              accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,application/pdf,.jpg,.jpeg,.png,.webp,.gif,.mp4,.pdf"
+              accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,application/pdf,audio/ogg,audio/webm,audio/mpeg,audio/mp4,audio/aac,audio/wav,.jpg,.jpeg,.png,.webp,.gif,.mp4,.pdf,.ogg,.webm,.mp3,.m4a,.aac,.wav"
               onChange={(event) => {
                 const file = event.target.files?.[0] ?? null;
 
@@ -365,40 +554,85 @@ export default function KommunikationComposerClient({
               +
             </button>
 
-            <textarea
-              ref={textareaRef}
-              name="body"
-              rows={1}
-              value={text}
-              onChange={(event) => {
-                setText(event.target.value);
-                autoResizeTextarea(event.currentTarget);
-              }}
-              onInput={(event) => autoResizeTextarea(event.currentTarget)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  event.currentTarget.form?.requestSubmit();
-                }
-              }}
-              placeholder="Gib eine Nachricht ein."
-              className="h-11 min-h-[44px] max-h-36 w-full resize-none overflow-y-auto rounded-[22px] border border-[#d8c1a0]/16 bg-black/25 py-[12px] pl-12 pr-12 text-sm leading-[20px] text-white outline-none placeholder:text-white/38 transition focus:border-[#d8c1a0]/45 focus:bg-black/30 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            />
+            {recordingState === "recording" ? (
+              <div className="flex h-11 min-h-[44px] w-full items-center justify-between gap-3 rounded-[22px] border border-red-300/18 bg-red-500/10 py-[7px] pl-12 pr-3 text-sm text-red-50">
+                <div className="flex min-w-0 items-center gap-2 font-semibold">
+                  <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-red-300" />
+                  <span className="truncate">Aufnahme läuft · {formatRecordingTime(recordingSeconds)}</span>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={cancelVoiceRecording}
+                    className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white/74 hover:bg-white/[0.08]"
+                  >
+                    Abbrechen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={stopVoiceRecording}
+                    className="rounded-full border border-[#d8c1a0]/20 bg-[#d8c1a0]/16 px-3 py-1.5 text-xs font-semibold text-[#f6f0e8] hover:bg-[#d8c1a0]/22"
+                  >
+                    Stop
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <textarea
+                ref={textareaRef}
+                name="body"
+                rows={1}
+                value={text}
+                onChange={(event) => {
+                  setText(event.target.value);
+                  autoResizeTextarea(event.currentTarget);
+                }}
+                onInput={(event) => autoResizeTextarea(event.currentTarget)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    event.currentTarget.form?.requestSubmit();
+                  }
+                }}
+                placeholder={recordedAudioFile ? "Sprachnachricht senden?" : "Gib eine Nachricht ein."}
+                className="h-11 min-h-[44px] max-h-36 w-full resize-none overflow-y-auto rounded-[22px] border border-[#d8c1a0]/16 bg-black/25 py-[12px] pl-12 pr-[88px] text-sm leading-[20px] text-white outline-none placeholder:text-white/38 transition focus:border-[#d8c1a0]/45 focus:bg-black/30 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              />
+            )}
 
-            <button
-              type="submit"
-              disabled={isPending || !canSend}
-              className={
-                "absolute bottom-1.5 right-1.5 z-10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] text-white transition-colors active:scale-[0.98] " +
-                (isPending || !canSend
-                  ? "pointer-events-none cursor-not-allowed opacity-45"
-                  : "hover:bg-[#d8c1a0]/[0.10]")
-              }
-              aria-label="Nachricht senden"
-              title="Senden"
-            >
-              {isPending ? <span className="text-sm font-bold">…</span> : <SendIcon />}
-            </button>
+            {recordingState !== "recording" ? (
+              <button
+                type="button"
+                onClick={startVoiceRecording}
+                disabled={isPending}
+                className={
+                  "absolute bottom-1.5 right-11 z-10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] text-white transition-colors active:scale-[0.98] " +
+                  (isPending
+                    ? "pointer-events-none cursor-not-allowed opacity-45"
+                    : "hover:bg-[#d8c1a0]/[0.10]")
+                }
+                aria-label="Sprachnachricht aufnehmen"
+                title="Sprachnachricht aufnehmen"
+              >
+                <MicIcon />
+              </button>
+            ) : null}
+
+            {recordingState !== "recording" ? (
+              <button
+                type="submit"
+                disabled={isPending || !canSend}
+                className={
+                  "absolute bottom-1.5 right-1.5 z-10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] text-white transition-colors active:scale-[0.98] " +
+                  (isPending || !canSend
+                    ? "pointer-events-none cursor-not-allowed opacity-45"
+                    : "hover:bg-[#d8c1a0]/[0.10]")
+                }
+                aria-label="Nachricht senden"
+                title="Senden"
+              >
+                {isPending ? <span className="text-sm font-bold">…</span> : <SendIcon />}
+              </button>
+            ) : null}
           </div>
         </div>
       </div>

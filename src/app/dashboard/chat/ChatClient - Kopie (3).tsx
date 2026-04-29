@@ -3802,7 +3802,6 @@ export default function ChatClient({
   embedded = false,
   teamUsers = [],
   onRealtimeStatusChange,
-  demoMode = false,
 }: {
   tenantId: string | null;
   currentUserId: string;
@@ -3812,7 +3811,6 @@ export default function ChatClient({
   embedded?: boolean;
   teamUsers?: TeamUserMeta[];
   onRealtimeStatusChange?: (status: RealtimeStatus) => void;
-  demoMode?: boolean;
 }) {
   const supabase = useMemo(() => supabaseBrowser(), []);
   const [messages, setMessages] = useState<ChatMessageDTO[]>(initialMessages);
@@ -4006,7 +4004,6 @@ export default function ChatClient({
   }, []);
 
   const refetchMessages = useCallback(async () => {
-    if (demoMode) return;
     try {
       const messagesRes = await fetch("/api/chat/messages", {
         cache: "no-store",
@@ -4073,18 +4070,10 @@ export default function ChatClient({
     } catch (e) {
       console.error("[chat] refetch failed", e);
     }
-  }, [collectMessageIds, demoMode, mergeMessages, supabase]);
+  }, [collectMessageIds, mergeMessages, supabase]);
 
   const loadMentionUsers = useCallback(async () => {
     if (!tenantId) return;
-
-    if (demoMode) {
-      const users = teamUsers.length
-        ? teamUsers.map((user) => ({ userId: user.userId, fullName: user.fullName }))
-        : [{ userId: currentUserId, fullName: currentUserName || "Du" }];
-      setMentionUsers(users);
-      return;
-    }
 
     try {
       const [profilesRes, messagesRes, reactionsRes] = await Promise.all([
@@ -4144,11 +4133,10 @@ export default function ChatClient({
     } catch (e) {
       console.error("[chat] load mention users failed", e);
     }
-  }, [supabase, tenantId, currentUserId, currentUserName, demoMode, teamUsers]);
+  }, [supabase, tenantId, currentUserId, currentUserName]);
 
   const sendTypingEvent = useCallback(
     async (isTyping: boolean) => {
-      if (demoMode) return;
       const channel = typingChannelRef.current;
       if (!channel || !tenantId) return;
 
@@ -4167,7 +4155,7 @@ export default function ChatClient({
         console.error("[typing] send failed", e);
       }
     },
-    [tenantId, currentUserId, currentUserName, demoMode],
+    [tenantId, currentUserId, currentUserName],
   );
 
   const markLatestAsRead = useCallback(() => {
@@ -4510,12 +4498,6 @@ export default function ChatClient({
   useEffect(() => {
     if (!tenantId) return;
 
-    if (demoMode) {
-      setRealtimeStatus("connected");
-      typingChannelRef.current = null;
-      return;
-    }
-
     let messageChannel: ReturnType<typeof supabase.channel> | null = null;
     let typingChannel: ReturnType<typeof supabase.channel> | null = null;
     let reactionsChannel: ReturnType<typeof supabase.channel> | null = null;
@@ -4755,7 +4737,6 @@ export default function ChatClient({
     loadMentionUsers,
     messages,
     clearReconnectTimeout,
-    demoMode,
   ]);
 
 
@@ -4896,44 +4877,28 @@ export default function ChatClient({
       if (fileInputRef.current) fileInputRef.current.value = "";
       await sendTypingEvent(false);
 
-      if (demoMode) {
-        const localMessage: ChatMessageDTO = {
-          id: `demo-team-local-${Date.now()}`,
-          text: finalText || (file ? `📎 ${file.name}` : ""),
-          senderId: currentUserId,
-          senderName: currentUserName || "Du",
-          createdAt: new Date().toISOString(),
-          fileName: file ? file.name : null,
-          filePath: null,
-          fileType: file ? file.type || "application/octet-stream" : null,
-          fileSize: file ? file.size : null,
-          fileUrl: file ? URL.createObjectURL(file) : null,
-        };
-        mergeMessages([localMessage]);
+      let res: Response;
+
+      if (file) {
+        const formData = new FormData();
+        formData.append("text", finalText);
+        formData.append("file", file);
+
+        res = await fetch("/api/chat/messages", {
+          method: "POST",
+          body: formData,
+        });
       } else {
-        let res: Response;
+        res = await fetch("/api/chat/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: finalText }),
+        });
+      }
 
-        if (file) {
-          const formData = new FormData();
-          formData.append("text", finalText);
-          formData.append("file", file);
-
-          res = await fetch("/api/chat/messages", {
-            method: "POST",
-            body: formData,
-          });
-        } else {
-          res = await fetch("/api/chat/messages", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: finalText }),
-          });
-        }
-
-        if (!res.ok) {
-          const t = await res.text();
-          throw new Error(t || "Senden fehlgeschlagen");
-        }
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || "Senden fehlgeschlagen");
       }
 
       setAutoScroll(true);
@@ -4974,10 +4939,6 @@ export default function ChatClient({
   }
 
   async function toggleReaction(messageId: string, emoji: string) {
-    if (demoMode) {
-      setOpenReactionPickerMessageId(null);
-      return;
-    }
     try {
       const res = await fetch("/api/chat/reactions", {
         method: "POST",
@@ -4998,19 +4959,6 @@ export default function ChatClient({
   async function saveEdit(messageId: string) {
     const value = editingText.trim();
     if (!value) return;
-
-    if (demoMode) {
-      setMessages((prev) =>
-        prev.map((message) =>
-          message.id === messageId
-            ? { ...message, text: value, editedAt: new Date().toISOString() }
-            : message,
-        ),
-      );
-      setEditingMessageId(null);
-      setEditingText("");
-      return;
-    }
 
     try {
       const res = await fetch(`/api/chat/messages/${messageId}`, {
@@ -5033,10 +4981,6 @@ export default function ChatClient({
   }
 
   async function deleteMessage(messageId: string) {
-    if (demoMode) {
-      setMessages((prev) => prev.map((message) => message.id === messageId ? { ...message, deletedAt: new Date().toISOString(), text: "" } : message));
-      return;
-    }
     const ok = window.confirm("Willst du diese Nachricht wirklich löschen?");
     if (!ok) return;
 

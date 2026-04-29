@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import KommunikationVoiceMessagePlayer from "./KommunikationVoiceMessagePlayer";
 
 type Props = {
@@ -173,6 +173,7 @@ export default function KommunikationComposerClient({
   selectedTemplateTitle = null,
 }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [text, setText] = useState(draftBody);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [recordingState, setRecordingState] = useState<"idle" | "recording" | "review">("idle");
@@ -335,6 +336,27 @@ export default function KommunikationComposerClient({
 
     startTransition(async () => {
       try {
+        if (conversationId.startsWith("demo-conversation-")) {
+          const params = new URLSearchParams(searchParams?.toString() || "");
+          params.set("status", statusFilter);
+          params.set("c", conversationId);
+          params.set("panel", "chats");
+          params.set("demoSent", "1");
+          const demoBody = text.trim() || (recordedAudioFile ? "🎙 Sprachnachricht" : selectedFile ? `📎 ${selectedFile.name}` : "Demo-Antwort");
+          params.set("demoText", demoBody);
+
+          setText("");
+          setSelectedFile(null);
+          clearRecordedAudio();
+          setMenuOpen(false);
+          setEmojiOpen(false);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+          requestAnimationFrame(() => autoResizeTextarea(textareaRef.current));
+          router.push(`/kommunikation?${params.toString()}`);
+          router.refresh();
+          return;
+        }
+
         const response = await fetch("/api/twilio/whatsapp/send", {
           method: "POST",
           body: formData,

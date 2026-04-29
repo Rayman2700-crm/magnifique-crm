@@ -105,6 +105,7 @@ type SearchParams =
       tab?: string;
       teamChatDraft?: string;
       demoSent?: string;
+      demoText?: string;
     }
   | Promise<{
       c?: string;
@@ -117,6 +118,7 @@ type SearchParams =
       tab?: string;
       teamChatDraft?: string;
       demoSent?: string;
+      demoText?: string;
     }>;
 
 type ConversationRow = {
@@ -1534,7 +1536,7 @@ export default async function KommunikationPage({
             id: `demo-msg-sent-${Date.now()}`,
             direction: "OUTBOUND",
             channel: "WHATSAPP",
-            body: "Demo-Antwort wurde gespeichert. Es wurde keine echte WhatsApp, SMS oder E-Mail gesendet.",
+            body: sp?.demoText ? decodeURIComponent(String(sp.demoText)) : "Demo-Antwort wurde gespeichert. Es wurde keine echte WhatsApp, SMS oder E-Mail gesendet.",
             status: "SENT",
             created_at: new Date().toISOString(),
             sent_at: new Date().toISOString(),
