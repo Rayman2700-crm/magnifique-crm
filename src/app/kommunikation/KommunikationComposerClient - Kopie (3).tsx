@@ -402,6 +402,19 @@ export default function KommunikationComposerClient({
             </div>
           ) : null}
 
+          {recordingState === "recording" ? (
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-[18px] border border-red-300/18 bg-red-500/10 px-3 py-2">
+              <div className="flex items-center gap-2 text-sm font-semibold text-red-50">
+                <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-300" />
+                Aufnahme läuft · {formatRecordingTime(recordingSeconds)}
+              </div>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={cancelVoiceRecording} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white/70 hover:bg-white/[0.08]">Abbrechen</button>
+                <button type="button" onClick={stopVoiceRecording} className="rounded-full border border-[#d8c1a0]/20 bg-[#d8c1a0]/16 px-3 py-1.5 text-xs font-semibold text-[#f6f0e8] hover:bg-[#d8c1a0]/22">Stop</button>
+              </div>
+            </div>
+          ) : null}
+
           {recordedAudioFile && recordedAudioUrl ? (
             <div className="mb-3 rounded-[20px] border border-[#d8c1a0]/12 bg-[#d8c1a0]/[0.04] px-3 py-3 pr-20 sm:pr-3">
               <div className="mb-2 flex items-center justify-between gap-3">
@@ -482,7 +495,7 @@ export default function KommunikationComposerClient({
           ) : null}
 
           {menuOpen ? (
-            <div className="mb-2 grid grid-cols-2 gap-2 rounded-[18px] border border-[#d8c1a0]/16 bg-[#211813]/96 p-2 shadow-[0_14px_34px_rgba(0,0,0,0.35)]">
+            <div className="mb-2 grid grid-cols-3 gap-2 rounded-[18px] border border-[#d8c1a0]/16 bg-[#211813]/96 p-2 shadow-[0_14px_34px_rgba(0,0,0,0.35)]">
               <button
                 type="button"
                 onClick={() => {
@@ -505,6 +518,14 @@ export default function KommunikationComposerClient({
               >
                 <span aria-hidden="true">☺️</span>
                 Emoji
+              </button>
+              <button
+                type="button"
+                onClick={startVoiceRecording}
+                className="flex flex-1 items-center justify-center gap-2 rounded-[14px] border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.06] px-3 py-2 text-sm font-semibold text-[#f6f0e8] transition hover:bg-[#d8c1a0]/[0.10] active:scale-[0.98]"
+              >
+                <MicIcon />
+                Sprache
               </button>
             </div>
           ) : null}
@@ -554,85 +575,40 @@ export default function KommunikationComposerClient({
               +
             </button>
 
-            {recordingState === "recording" ? (
-              <div className="flex h-11 min-h-[44px] w-full items-center justify-between gap-3 rounded-[22px] border border-red-300/18 bg-red-500/10 py-[7px] pl-12 pr-3 text-sm text-red-50">
-                <div className="flex min-w-0 items-center gap-2 font-semibold">
-                  <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-red-300" />
-                  <span className="truncate">Aufnahme läuft · {formatRecordingTime(recordingSeconds)}</span>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={cancelVoiceRecording}
-                    className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white/74 hover:bg-white/[0.08]"
-                  >
-                    Abbrechen
-                  </button>
-                  <button
-                    type="button"
-                    onClick={stopVoiceRecording}
-                    className="rounded-full border border-[#d8c1a0]/20 bg-[#d8c1a0]/16 px-3 py-1.5 text-xs font-semibold text-[#f6f0e8] hover:bg-[#d8c1a0]/22"
-                  >
-                    Stop
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <textarea
-                ref={textareaRef}
-                name="body"
-                rows={1}
-                value={text}
-                onChange={(event) => {
-                  setText(event.target.value);
-                  autoResizeTextarea(event.currentTarget);
-                }}
-                onInput={(event) => autoResizeTextarea(event.currentTarget)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    event.currentTarget.form?.requestSubmit();
-                  }
-                }}
-                placeholder="Gib eine Nachricht ein."
-                className="h-11 min-h-[44px] max-h-36 w-full resize-none overflow-y-auto rounded-[22px] border border-[#d8c1a0]/16 bg-black/25 py-[12px] pl-12 pr-[88px] text-sm leading-[20px] text-white outline-none placeholder:text-white/38 transition focus:border-[#d8c1a0]/45 focus:bg-black/30 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              />
-            )}
-
-            {recordingState !== "recording" ? (
-              <button
-                type="button"
-                onClick={startVoiceRecording}
-                disabled={isPending}
-                className={
-                  "absolute bottom-1.5 right-11 z-10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] text-white transition-colors active:scale-[0.98] " +
-                  (isPending
-                    ? "pointer-events-none cursor-not-allowed opacity-45"
-                    : "hover:bg-[#d8c1a0]/[0.10]")
+            <textarea
+              ref={textareaRef}
+              name="body"
+              rows={1}
+              value={text}
+              onChange={(event) => {
+                setText(event.target.value);
+                autoResizeTextarea(event.currentTarget);
+              }}
+              onInput={(event) => autoResizeTextarea(event.currentTarget)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  event.currentTarget.form?.requestSubmit();
                 }
-                aria-label="Sprachnachricht aufnehmen"
-                title="Sprachnachricht aufnehmen"
-              >
-                <MicIcon />
-              </button>
-            ) : null}
+              }}
+              placeholder="Gib eine Nachricht ein."
+              className="h-11 min-h-[44px] max-h-36 w-full resize-none overflow-y-auto rounded-[22px] border border-[#d8c1a0]/16 bg-black/25 py-[12px] pl-12 pr-12 text-sm leading-[20px] text-white outline-none placeholder:text-white/38 transition focus:border-[#d8c1a0]/45 focus:bg-black/30 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            />
 
-            {recordingState !== "recording" ? (
-              <button
-                type="submit"
-                disabled={isPending || !canSend}
-                className={
-                  "absolute bottom-1.5 right-1.5 z-10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] text-white transition-colors active:scale-[0.98] " +
-                  (isPending || !canSend
-                    ? "pointer-events-none cursor-not-allowed opacity-45"
-                    : "hover:bg-[#d8c1a0]/[0.10]")
-                }
-                aria-label="Nachricht senden"
-                title="Senden"
-              >
-                {isPending ? <span className="text-sm font-bold">…</span> : <SendIcon />}
-              </button>
-            ) : null}
+            <button
+              type="submit"
+              disabled={isPending || !canSend}
+              className={
+                "absolute bottom-1.5 right-1.5 z-10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] text-white transition-colors active:scale-[0.98] " +
+                (isPending || !canSend
+                  ? "pointer-events-none cursor-not-allowed opacity-45"
+                  : "hover:bg-[#d8c1a0]/[0.10]")
+              }
+              aria-label="Nachricht senden"
+              title="Senden"
+            >
+              {isPending ? <span className="text-sm font-bold">…</span> : <SendIcon />}
+            </button>
           </div>
         </div>
       </div>
