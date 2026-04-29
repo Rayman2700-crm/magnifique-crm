@@ -104,6 +104,7 @@ type SearchParams =
       mobileList?: string;
       tab?: string;
       teamChatDraft?: string;
+      demoSent?: string;
     }
   | Promise<{
       c?: string;
@@ -115,6 +116,7 @@ type SearchParams =
       mobileList?: string;
       tab?: string;
       teamChatDraft?: string;
+      demoSent?: string;
     }>;
 
 type ConversationRow = {
