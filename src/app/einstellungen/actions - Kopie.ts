@@ -17,6 +17,16 @@ function redirectWithInviteError(message: string) {
   redirect(`/einstellungen?invite_error=${encodeURIComponent(message)}`);
 }
 
+function getSiteUrl() {
+  const explicit = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL;
+  if (explicit) return explicit.replace(/\/$/, "");
+
+  const vercel = process.env.NEXT_PUBLIC_VERCEL_URL || process.env.VERCEL_URL;
+  if (vercel) return `https://${vercel}`.replace(/\/$/, "");
+
+  return "https://magnifique-crm.vercel.app";
+}
+
 export async function inviteCrmUser(formData: FormData) {
   const supabase = await supabaseServer();
   const admin = supabaseAdmin();
@@ -58,11 +68,7 @@ export async function inviteCrmUser(formData: FormData) {
   }
 
   if (tenantId) {
-    const { data: tenantExists } = await admin
-      .from("tenants")
-      .select("id")
-      .eq("id", tenantId)
-      .maybeSingle();
+    const { data: tenantExists } = await admin.from("tenants").select("id").eq("id", tenantId).maybeSingle();
 
     if (!tenantExists) {
       redirectWithInviteError("Der ausgewählte Tenant wurde nicht gefunden.");
@@ -80,11 +86,7 @@ export async function inviteCrmUser(formData: FormData) {
     redirectWithInviteError("Für diese E-Mail gibt es bereits eine offene Einladung.");
   }
 
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.NEXT_PUBLIC_VERCEL_URL && `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` ||
-    "https://magnifique-crm.vercel.app";
+  const siteUrl = getSiteUrl();
 
   const { error: inviteInsertError } = await admin.from("user_invites").insert({
     email,
@@ -99,7 +101,7 @@ export async function inviteCrmUser(formData: FormData) {
   }
 
   const { error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${siteUrl}/profile?invited=1`,
+    redirectTo: `${siteUrl}/auth/update-password`,
     data: {
       full_name: fullName,
       tenant_id: tenantId || null,

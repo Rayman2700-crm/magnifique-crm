@@ -416,9 +416,13 @@ function inboundStatusMark(status: string | null | undefined) {
 type MessageAttachment = {
   name?: string | null;
   type?: string | null;
+  content_type?: string | null;
   kind?: string | null;
   size?: number | null;
+  size_bytes?: number | null;
   public_url?: string | null;
+  publicUrl?: string | null;
+  url?: string | null;
   storage_path?: string | null;
   twilio_url?: string | null;
   mirror_error?: string | null;
@@ -426,7 +430,7 @@ type MessageAttachment = {
 
 function firstMessageAttachment(message: MessageRow): MessageAttachment | null {
   const direct = message.metadata?.attachment as MessageAttachment | null | undefined;
-  if (direct?.public_url || direct?.twilio_url || direct?.mirror_error) return direct;
+  if (direct?.public_url || direct?.publicUrl || direct?.url || direct?.twilio_url || direct?.mirror_error) return direct;
 
   const inboundMedia = message.metadata?.inbound_media;
   if (Array.isArray(inboundMedia) && inboundMedia.length > 0) {
@@ -440,7 +444,7 @@ function attachmentKind(attachment: MessageAttachment | null) {
   const explicit = String(attachment?.kind ?? "").toLowerCase();
   if (explicit) return explicit;
 
-  const type = String(attachment?.type ?? "").toLowerCase();
+  const type = String(attachment?.type ?? attachment?.content_type ?? "").toLowerCase();
   if (type.startsWith("audio/")) return "audio";
   if (type.startsWith("image/")) return "image";
   if (type.startsWith("video/")) return "video";
@@ -1871,7 +1875,7 @@ export default async function KommunikationPage({
 
                               const kind = attachmentKind(attachment);
                               const title = attachmentTitle(attachment);
-                              const publicUrl = attachment.public_url || null;
+                              const publicUrl = attachment.public_url || attachment.publicUrl || attachment.url || null;
 
                               if (kind === "audio") {
                                 return (

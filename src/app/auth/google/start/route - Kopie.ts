@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
-import { getIsDemoTenant } from "@/lib/demoMode";
 
 type OAuthMeta = {
   redirectTo: string;
@@ -83,19 +82,9 @@ export async function GET(req: Request) {
 
   const { data: profile } = await supabase
     .from("user_profiles")
-    .select("role, tenant_id")
+    .select("role")
     .eq("user_id", user.id)
     .maybeSingle();
-
-  const isDemoMode = await getIsDemoTenant(supabase, (profile as any)?.tenant_id ?? null);
-  if (isDemoMode) {
-    return NextResponse.redirect(
-      new URL(
-        `/calendar/google?success=${encodeURIComponent("Demo-Kalender verbunden. Es wurde keine echte Google-Verbindung hergestellt.")}`,
-        baseUrl
-      )
-    );
-  }
 
   const isAdmin = isAdminUser((profile as any)?.role, user.email);
 

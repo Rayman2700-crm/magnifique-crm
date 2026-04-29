@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getIsDemoTenant } from "@/lib/demoMode";
 
 function normalizeEmail(value: FormDataEntryValue | null) {
   return String(value ?? "").trim().toLowerCase();
@@ -41,9 +42,13 @@ export async function inviteCrmUser(formData: FormData) {
 
   const { data: currentProfile } = await admin
     .from("user_profiles")
-    .select("role")
+    .select("role, tenant_id")
     .eq("user_id", user.id)
     .maybeSingle();
+
+  if (await getIsDemoTenant(admin, (currentProfile as any)?.tenant_id ?? null)) {
+    redirectWithInviteError("Im Demo-Modus können keine echten Benutzer eingeladen werden.");
+  }
 
   if (String(currentProfile?.role ?? "").toUpperCase() !== "ADMIN") {
     redirectWithInviteError("Nur Admins dürfen neue Benutzer einladen.");

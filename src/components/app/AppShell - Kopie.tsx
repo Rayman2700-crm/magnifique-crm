@@ -7,7 +7,6 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getEffectiveTenantId } from "@/lib/effectiveTenant";
 import { getValidGoogleAccessToken } from "@/lib/google/getValidGoogleAccessToken";
-import { CLIENTIQUE_DEMO_CALENDAR_ID, CLIENTIQUE_DEMO_CALENDAR_LABEL, getIsDemoTenant } from "@/lib/demoMode";
 import type { Item } from "@/components/calendar/types";
 import GoogleCalendarSetupSlideover from "@/components/calendar/GoogleCalendarSetupSlideover";
 import StudioAssistantSlideover from "@/components/assistant/StudioAssistantSlideover";
@@ -98,6 +97,60 @@ function parseNote(notes: string | null) {
   return noteLine ? noteLine.replace(/^notiz:\s*/i, "").trim() : "";
 }
 
+
+
+async function acceptPendingCrmInviteForUser(
+  admin: ReturnType<typeof supabaseAdmin>,
+  userId: string,
+  email: string | null | undefined
+) {
+  const normalizedEmail = String(email ?? "").trim().toLowerCase();
+  if (!normalizedEmail || !userId) return;
+
+  const { data: invite, error: inviteError } = await admin
+    .from("user_invites")
+    .select("id, email, full_name, tenant_id, role, accepted_at")
+    .eq("email", normalizedEmail)
+    .is("accepted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (inviteError || !invite) return;
+
+  const role =
+    String((invite as any).role ?? "PRACTITIONER").toUpperCase() === "ADMIN"
+      ? "ADMIN"
+      : "PRACTITIONER";
+  const fullName = String((invite as any).full_name ?? "").trim() || normalizedEmail;
+  const tenantId = String((invite as any).tenant_id ?? "").trim() || null;
+
+  const { data: existingProfile } = await admin
+    .from("user_profiles")
+    .select("id")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existingProfile?.id) {
+    await admin
+      .from("user_profiles")
+      .update({ full_name: fullName, role, tenant_id: tenantId })
+      .eq("user_id", userId);
+  } else {
+    await admin.from("user_profiles").insert({
+      user_id: userId,
+      full_name: fullName,
+      role,
+      tenant_id: tenantId,
+    });
+  }
+
+  await admin
+    .from("user_invites")
+    .update({ accepted_at: new Date().toISOString() })
+    .eq("id", (invite as any).id);
+}
+
 function parseStatus(notes: string | null) {
   if (!notes) return "scheduled" as const;
 
@@ -139,9 +192,11 @@ export default async function AppShell({
 }) {
   const supabase = await supabaseServer();
   const admin = supabaseAdmin();
-  const isDemoMode = await getIsDemoTenant(admin, tenantId);
 
   const userId = currentUserId;
+
+  const { data: shellAuthUserData } = await supabase.auth.getUser();
+  await acceptPendingCrmInviteForUser(admin, userId, shellAuthUserData.user?.email ?? null);
 
   let resolvedUserLabel = userLabel ?? null;
   let resolvedUserEmail: string | null = null;
@@ -170,19 +225,7 @@ export default async function AppShell({
   let googleCalendars: CalendarListItem[] = [];
   let googleSavedDefault: string | null = null;
 
-  if (userId && isDemoMode) {
-    googleSetupAlertCount = 0;
-    googleLoadError = null;
-    googleSavedDefault = CLIENTIQUE_DEMO_CALENDAR_ID;
-    googleCalendars = [
-      {
-        id: CLIENTIQUE_DEMO_CALENDAR_ID,
-        summary: CLIENTIQUE_DEMO_CALENDAR_LABEL,
-        primary: true,
-        accessRole: "owner",
-      },
-    ];
-  } else if (userId) {
+  if (userId) {
     const [{ data: googleTokenRow }, { data: googleConnectionRows }] = await Promise.all([
       supabase
         .from("google_oauth_tokens")
@@ -506,12 +549,6 @@ export default async function AppShell({
           waitlistCount={waitlistItems.length}
           googleSetupAlertCount={googleSetupAlertCount}
         />
-
-        {isDemoMode ? (
-          <div className="fixed left-1/2 top-[78px] z-[90] -translate-x-1/2 rounded-full border border-[#dcc7a1]/40 bg-[#2a1f12]/90 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-[#f3ddb4] shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl lg:top-[86px]">
-            Demo-Modus · keine echten externen Aktionen
-          </div>
-        ) : null}
 
         <main className="clientique-content-layer min-h-screen pl-0 pb-[120px] pt-[88px] lg:pb-0 lg:pl-[76px] lg:pt-[72px] xl:pt-[78px]">
           <Container className="max-w-[1400px] px-0 sm:px-0">

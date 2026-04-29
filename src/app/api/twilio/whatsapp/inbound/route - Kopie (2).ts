@@ -263,39 +263,17 @@ async function findOrCreateConversation(params: {
   return data;
 }
 
-function getFormValueCaseInsensitive(form: FormData, key: string) {
-  const direct = form.get(key);
-  if (direct !== null) return direct;
-
-  const wanted = key.toLowerCase();
-  for (const [entryKey, entryValue] of form.entries()) {
-    if (entryKey.toLowerCase() === wanted) return entryValue;
-  }
-
-  return null;
-}
-
 function getIncomingMedia(form: FormData): IncomingMedia[] {
-  const numMediaRaw = getFormValueCaseInsensitive(form, "NumMedia");
-  const parsedNumMedia = Math.max(0, Number.parseInt(String(numMediaRaw ?? "0"), 10) || 0);
-
-  const discoveredIndexes = new Set<number>();
-  for (let index = 0; index < parsedNumMedia; index += 1) discoveredIndexes.add(index);
-
-  for (const [entryKey] of form.entries()) {
-    const match = entryKey.match(/^MediaUrl(\d+)$/i);
-    if (match) discoveredIndexes.add(Number(match[1]));
-  }
-
+  const numMedia = Math.max(0, Number.parseInt(String(form.get("NumMedia") ?? "0"), 10) || 0);
   const result: IncomingMedia[] = [];
 
-  for (const index of Array.from(discoveredIndexes).sort((a, b) => a - b)) {
-    const url = String(getFormValueCaseInsensitive(form, `MediaUrl${index}`) ?? "").trim();
+  for (let index = 0; index < numMedia; index += 1) {
+    const url = String(form.get(`MediaUrl${index}`) ?? "").trim();
     if (!url) continue;
     result.push({
       index,
       url,
-      contentType: cleanContentType(String(getFormValueCaseInsensitive(form, `MediaContentType${index}`) ?? "")),
+      contentType: cleanContentType(String(form.get(`MediaContentType${index}`) ?? "")),
     });
   }
 
@@ -416,14 +394,9 @@ export async function POST(request: Request) {
     const profileName = String(form.get("ProfileName") ?? "");
     const waId = String(form.get("WaId") ?? "");
     const incomingMedia = getIncomingMedia(form);
-    const messageType = String(getFormValueCaseInsensitive(form, "MessageType") ?? "").trim().toLowerCase();
-    const firstIncomingMediaKind = incomingMedia[0]
-      ? mediaKind(incomingMedia[0].contentType)
-      : messageType.includes("audio") || messageType.includes("voice")
-        ? "audio"
-        : null;
+    const firstIncomingMediaKind = incomingMedia[0] ? mediaKind(incomingMedia[0].contentType) : null;
     const mediaOnlyLabel = firstIncomingMediaKind ? mediaLabel(firstIncomingMediaKind) : "📎 Datei";
-    const body = incomingBody || (incomingMedia.length > 0 || firstIncomingMediaKind ? mediaOnlyLabel : "");
+    const body = incomingBody || (incomingMedia.length > 0 ? mediaOnlyLabel : "");
 
     if (!from || !messageSid) {
       console.warn("Twilio inbound: missing From or MessageSid", { from, messageSid });
@@ -485,7 +458,6 @@ export async function POST(request: Request) {
         wa_id: waId || null,
         raw_from: from,
         raw_to: to,
-        message_type: messageType || null,
         num_media: incomingMedia.length,
         inbound_media: mirroredMedia,
         attachment: firstAttachment

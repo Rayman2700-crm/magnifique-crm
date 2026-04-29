@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getValidGoogleAccessToken } from "@/lib/google/getValidGoogleAccessToken";
-import { inviteCrmUser } from "./actions";
+import { CLIENTIQUE_DEMO_CALENDAR_ID, CLIENTIQUE_DEMO_CALENDAR_LABEL, getIsDemoTenant } from "@/lib/demoMode";
 
 function resolveStorageAvatarUrl(raw: string | null | undefined, admin: ReturnType<typeof supabaseAdmin>) {
   const value = String(raw ?? "").trim();
@@ -71,16 +71,9 @@ function settingsCardClass() {
   return "flex h-full flex-col rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),rgba(255,255,255,0.02)_42%,rgba(255,255,255,0.01)_100%)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-sm";
 }
 
-export default async function EinstellungenPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ invite_success?: string; invite_error?: string }>;
-}) {
+export default async function EinstellungenPage() {
   const supabase = await supabaseServer();
   const admin = supabaseAdmin();
-  const sp = searchParams ? await searchParams : undefined;
-  const inviteSuccess = sp?.invite_success ? decodeURIComponent(sp.invite_success) : "";
-  const inviteError = sp?.invite_error ? decodeURIComponent(sp.invite_error) : "";
 
   const {
     data: { user },
@@ -115,33 +108,17 @@ export default async function EinstellungenPage({
 
   const tenantId = profile?.tenant_id ?? null;
   const { data: tenantProfile } = tenantId
-    ? await admin.from("tenants").select("legal_name, email, phone").eq("id", tenantId).maybeSingle()
+    ? await admin.from("tenants").select("legal_name, email, phone, is_demo, slug").eq("id", tenantId).maybeSingle()
     : { data: null as any };
 
-  const [{ data: inviteTenantRows }, { data: pendingInviteRows }] = isAdmin
-    ? await Promise.all([
-        admin
-          .from("tenants")
-          .select("id, display_name, legal_name, email")
-          .order("display_name", { ascending: true }),
-        admin
-          .from("user_invites")
-          .select("id, email, full_name, role, tenant_id, accepted_at, created_at, tenant:tenants(display_name, legal_name)")
-          .is("accepted_at", null)
-          .order("created_at", { ascending: false })
-          .limit(20),
-      ])
-    : [{ data: [] as any[] }, { data: [] as any[] }];
+  const isDemoMode = await getIsDemoTenant(admin, tenantId);
 
-  const inviteTenants = Array.isArray(inviteTenantRows) ? inviteTenantRows : [];
-  const pendingInvites = Array.isArray(pendingInviteRows) ? pendingInviteRows : [];
-
-  const connections = (Array.isArray(connectionRows) ? connectionRows : []) as GoogleConnectionRow[];
+  const connections = isDemoMode ? [] : ((Array.isArray(connectionRows) ? connectionRows : []) as GoogleConnectionRow[]);
   const storedActiveConnections = connections.filter((row) => row.is_active === true);
   const hasStoredGoogleRefreshToken = Boolean(String((tokenRow as any)?.refresh_token ?? "").trim());
   let googleConnectionHealthy = false;
 
-  if (storedActiveConnections.length > 0 && hasStoredGoogleRefreshToken) {
+  if (!isDemoMode && storedActiveConnections.length > 0 && hasStoredGoogleRefreshToken) {
     try {
       const token = await getValidGoogleAccessToken();
       const response = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=1", {
@@ -221,9 +198,11 @@ export default async function EinstellungenPage({
     ).map((target) => target.calendarId)
   );
 
-  const activeCalendarIds = activeConnections.length > 0
-    ? uniqueCalendarIds(Array.from(connectedStudioIds), enabledCalendarIds)
-    : [];
+  const activeCalendarIds = isDemoMode
+    ? [CLIENTIQUE_DEMO_CALENDAR_ID]
+    : activeConnections.length > 0
+      ? uniqueCalendarIds(Array.from(connectedStudioIds), enabledCalendarIds)
+      : [];
   const enabledExtraIds = activeCalendarIds.filter((id) => !STUDIO_TARGET_IDS.has(id));
   const studioConnectionCount = connectedStudioIds.size;
 
@@ -232,8 +211,8 @@ export default async function EinstellungenPage({
     String(primaryWritableConnection?.google_account_name ?? "").trim() ||
     "";
 
-  const hasAnyGoogleSetup = activeConnections.length > 0;
-  const googleStatusLabel = hasAnyGoogleSetup ? "Verbunden" : "Offen";
+  const hasAnyGoogleSetup = isDemoMode ? true : activeConnections.length > 0;
+  const googleStatusLabel = isDemoMode ? "Demo aktiv" : hasAnyGoogleSetup ? "Verbunden" : "Offen";
   const googleStatusChipClass = hasAnyGoogleSetup
     ? "rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-200"
     : "rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-white/70";
@@ -241,7 +220,9 @@ export default async function EinstellungenPage({
   const googleSetupAlertCount = hasAnyGoogleSetup ? 0 : 1;
 
   const selectedStudioTarget = STUDIO_TARGETS.find((target) => target.calendarId === defaultCalendarId) ?? null;
-  const selectedStudioLabel = selectedStudioTarget?.label ?? "Kein verbundener Schreibkalender";
+  const selectedStudioLabel = isDemoMode
+    ? CLIENTIQUE_DEMO_CALENDAR_LABEL
+    : selectedStudioTarget?.label ?? "Kein verbundener Schreibkalender";
   const lastSync = formatDateTime((tokenRow as any)?.updated_at ?? primaryWritableConnection?.updated_at ?? null);
 
   const cards = [
@@ -305,6 +286,11 @@ export default async function EinstellungenPage({
                 <p className="mt-2 text-sm text-white/70 sm:text-base">
                   Benutzerbezogene Einstellungen, Google-Kalender-Status und die nächsten Anschlusspunkte für Versand und App-Optionen.
                 </p>
+                {isDemoMode ? (
+                  <div className="mt-4 inline-flex rounded-full border border-[#dcc7a1]/40 bg-[#dcc7a1]/12 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-[#f3ddb4]">
+                    Demo-Modus · externe Dienste werden nur simuliert
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -315,132 +301,6 @@ export default async function EinstellungenPage({
             </div>
           </div>
         </section>
-
-        {(inviteSuccess || inviteError) ? (
-          <section
-            className={`rounded-[22px] border p-4 text-sm ${
-              inviteError
-                ? "border-red-500/30 bg-red-500/10 text-red-100"
-                : "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
-            }`}
-          >
-            {inviteError || inviteSuccess}
-          </section>
-        ) : null}
-
-        {isAdmin ? (
-          <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),rgba(255,255,255,0.02)_42%,rgba(255,255,255,0.01)_100%)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-sm sm:p-7">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#d7c097]">Admin</p>
-                <h2 className="mt-1 text-2xl font-semibold text-white">Benutzer einladen</h2>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-white/70">
-                  Neue Behandler werden hier sauber vorbereitet: Rolle, Tenant und Name werden gespeichert, danach verschickt Supabase die Einladung über Studio Magnifique Beauty Institut.
-                </p>
-              </div>
-              <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-200">
-                SMTP aktiv
-              </div>
-            </div>
-
-            <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
-              <form action={inviteCrmUser} className="rounded-[24px] border border-white/10 bg-black/20 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="block">
-                    <span className="text-sm font-medium text-white/80">Name</span>
-                    <input
-                      name="full_name"
-                      required
-                      placeholder="z. B. Maria Muster"
-                      className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-[#dcc7a1]/60"
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className="text-sm font-medium text-white/80">E-Mail</span>
-                    <input
-                      name="email"
-                      type="email"
-                      required
-                      placeholder="name@email.com"
-                      className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-[#dcc7a1]/60"
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className="text-sm font-medium text-white/80">Tenant / Behandler-Firma</span>
-                    <select
-                      name="tenant_id"
-                      required
-                      defaultValue=""
-                      className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none focus:border-[#dcc7a1]/60"
-                    >
-                      <option value="" disabled>Bitte wählen</option>
-                      {inviteTenants.map((tenant: any) => (
-                        <option key={tenant.id} value={tenant.id}>
-                          {tenant.display_name || tenant.legal_name || tenant.email || tenant.id}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="block">
-                    <span className="text-sm font-medium text-white/80">Rolle</span>
-                    <select
-                      name="role"
-                      defaultValue="PRACTITIONER"
-                      className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none focus:border-[#dcc7a1]/60"
-                    >
-                      <option value="PRACTITIONER">Behandler/in</option>
-                      <option value="ADMIN">Admin</option>
-                    </select>
-                  </label>
-                </div>
-
-                <button
-                  type="submit"
-                  className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-xl border border-[#dcc7a1]/40 bg-[#dcc7a1] px-4 text-sm font-semibold text-black shadow-[0_10px_24px_rgba(220,199,161,0.18)] transition hover:brightness-105 sm:w-auto"
-                >
-                  Einladung senden
-                </button>
-              </form>
-
-              <div className="rounded-[24px] border border-white/10 bg-black/20 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                <div className="flex items-center justify-between gap-4">
-                  <h3 className="text-lg font-semibold text-white">Offene Einladungen</h3>
-                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium text-white/65">
-                    {pendingInvites.length}
-                  </span>
-                </div>
-
-                <div className="mt-4 space-y-3">
-                  {pendingInvites.length > 0 ? (
-                    pendingInvites.map((invite: any) => {
-                      const inviteTenant = Array.isArray(invite.tenant) ? invite.tenant[0] : invite.tenant;
-                      return (
-                        <div key={invite.id} className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
-                          <div className="font-medium text-white">{invite.full_name || invite.email}</div>
-                          <div className="mt-1 text-sm text-white/60">{invite.email}</div>
-                          <div className="mt-2 flex flex-wrap gap-2 text-xs text-white/65">
-                            <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1">{invite.role}</span>
-                            <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
-                              {inviteTenant?.display_name || inviteTenant?.legal_name || "Tenant"}
-                            </span>
-                            <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
-                              {formatDateTime(invite.created_at)}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <p className="text-sm leading-6 text-white/60">Keine offenen Einladungen.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </section>
-        ) : null}
 
         <section className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)] items-stretch">
           <div className="h-full">
@@ -519,7 +379,7 @@ export default async function EinstellungenPage({
                 <div className="mt-auto pt-6">
                   {card.href ? (
                     <Link
-                      href={card.href}
+                      href={isDemoMode && card.title === "Google Kalender" ? "/calendar/google?success=Demo-Kalender ist simuliert. Es wird keine echte Google-Verbindung hergestellt." : card.href}
                       className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/[0.06] px-4 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:bg-white/10"
                     >
                       <span>{card.cta}</span>
