@@ -28,7 +28,6 @@ type ConversationItem = {
   created_at: string;
   person?: PersonLike | null;
   tenant?: TenantLike | null;
-  customer_avatar_url?: string | null;
 };
 
 type CustomerItem = {
@@ -37,7 +36,6 @@ type CustomerItem = {
   person_id: string;
   created_at?: string | null;
   person?: PersonLike | null;
-  customer_avatar_url?: string | null;
 };
 
 function formatDateTime(value: string | null | undefined) {
@@ -91,18 +89,6 @@ function initials(name: string) {
       .map((part) => part[0])
       .join("")
       .toUpperCase() || "?"
-  );
-}
-
-function AvatarCircle({ name, src, className = "h-12 w-12 text-sm" }: { name: string; src?: string | null; className?: string }) {
-  return (
-    <div className={`${className} relative shrink-0 overflow-hidden rounded-full border border-[#d6c3a3]/24 bg-[#d6c3a3]/12 font-bold text-[#f7efe2] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]`}>
-      {src ? (
-        <img src={src} alt={name} className="h-full w-full object-cover" />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center">{initials(name)}</div>
-      )}
-    </div>
   );
 }
 
@@ -264,7 +250,9 @@ export default function KommunikationChatSearchClient({
                     href={`/customers/${customer.id}`}
                     className="flex items-center gap-3 rounded-2xl px-2 py-2 transition hover:bg-white/[0.045]"
                   >
-                    <AvatarCircle name={name} src={customer.customer_avatar_url} className="h-9 w-9 text-xs" />
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#d6c3a3]/20 bg-[#d6c3a3]/10 text-xs font-bold text-[#f7efe2]">
+                      {initials(name)}
+                    </div>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold text-[#f7efe2]">
                         {name}
@@ -304,7 +292,9 @@ export default function KommunikationChatSearchClient({
                     : "border-transparent bg-transparent hover:border-white/[0.06] hover:bg-white/[0.035]"
                 }`}
               >
-                <AvatarCircle name={name} src={conversation.customer_avatar_url} />
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#d6c3a3]/24 bg-[#d6c3a3]/12 text-sm font-bold text-[#f7efe2]">
+                  {initials(name)}
+                </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-3">
                     <div className="truncate text-sm font-bold text-[#f7efe2]">

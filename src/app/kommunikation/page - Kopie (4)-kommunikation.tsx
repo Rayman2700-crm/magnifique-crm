@@ -132,7 +132,6 @@ type ConversationRow = {
   created_at: string;
   person?: any;
   tenant?: any;
-  customer_avatar_url?: string | null;
 };
 
 type MessageRow = {
@@ -163,7 +162,6 @@ type CustomerCandidateRow = {
   person_id: string;
   created_at?: string;
   person?: any;
-  customer_avatar_url?: string | null;
 };
 
 function firstJoin<T>(value: T | T[] | null | undefined): T | null {
@@ -305,71 +303,6 @@ function customerCandidateMeta(row: CustomerCandidateRow) {
   const person = firstJoin<any>(row.person);
   const parts = [person?.phone, person?.email].filter(Boolean);
   return parts.length > 0 ? parts.join(" · ") : "Keine Kontaktdaten";
-}
-
-function initialsFromName(name: string) {
-  return (
-    String(name || "")
-      .split(" ")
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0])
-      .join("")
-      .toUpperCase() || "?"
-  );
-}
-
-function conversationAvatarUrl(row: ConversationRow | null | undefined) {
-  return String((row as any)?.customer_avatar_url ?? "").trim() || null;
-}
-
-function AvatarBubble({
-  name,
-  src,
-  size = "md",
-  className = "",
-}: {
-  name: string;
-  src?: string | null;
-  size?: "sm" | "md" | "lg";
-  className?: string;
-}) {
-  const sizeClass =
-    size === "sm"
-      ? "h-8 w-8 text-[11px]"
-      : size === "lg"
-        ? "h-12 w-12 text-base"
-        : "h-10 w-10 text-sm";
-
-  return (
-    <div
-      className={`${sizeClass} relative shrink-0 overflow-hidden rounded-full border border-[#d6c3a3]/24 bg-[#d6c3a3]/12 font-bold text-[#f7efe2] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ${className}`}
-      aria-label={name}
-    >
-      {src ? (
-        <img src={src} alt={name} className="h-full w-full object-cover" />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center">
-          {initialsFromName(name)}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function VoiceWaveform({ outbound }: { outbound: boolean }) {
-  const bars = [8, 14, 10, 18, 13, 22, 16, 26, 18, 12, 20, 14, 24, 17, 11, 19, 13, 9];
-  return (
-    <div className="hidden h-8 min-w-[110px] flex-1 items-center gap-[3px] sm:flex" aria-hidden="true">
-      {bars.map((height, index) => (
-        <span
-          key={`${height}-${index}`}
-          className={`w-[3px] rounded-full ${outbound ? "bg-[#53b6ff]/65" : "bg-[#d6c3a3]/58"}`}
-          style={{ height }}
-        />
-      ))}
-    </div>
-  );
 }
 
 async function sendTwilioWhatsapp(params: {
@@ -1347,70 +1280,9 @@ export default async function KommunikationPage({
   }
 
   const { data: searchableCustomersRaw } = await searchableCustomersQuery;
-  let searchableCustomers = (
+  const searchableCustomers = (
     searchableCustomersRaw ?? []
   ) as CustomerCandidateRow[];
-
-  const customerProfileIdsForAvatars = Array.from(
-    new Set(
-      [
-        ...allConversations.map((conversation) => conversation.customer_profile_id),
-        ...searchableCustomers.map((customer) => customer.id),
-      ].filter(Boolean) as string[],
-    ),
-  );
-
-  const customerAvatarUrlByProfileId = new Map<string, string>();
-  if (customerProfileIdsForAvatars.length > 0) {
-    const { data: avatarPhotoRows } = await supabase
-      .from("customer_photos")
-      .select("id, customer_profile_id, storage_path, created_at")
-      .in("customer_profile_id", customerProfileIdsForAvatars)
-      .order("created_at", { ascending: false })
-      .limit(customerProfileIdsForAvatars.length * 6);
-
-    const latestPhotoByProfileId = new Map<string, string>();
-    for (const photo of (avatarPhotoRows ?? []) as Array<{ customer_profile_id: string | null; storage_path: string | null }>) {
-      if (!photo.customer_profile_id || !photo.storage_path) continue;
-      if (!latestPhotoByProfileId.has(photo.customer_profile_id)) {
-        latestPhotoByProfileId.set(photo.customer_profile_id, photo.storage_path);
-      }
-    }
-
-    const avatarPaths = Array.from(latestPhotoByProfileId.values());
-    if (avatarPaths.length > 0) {
-      const { data: signedAvatars } = await supabase.storage
-        .from("customer-photos")
-        .createSignedUrls(avatarPaths, 60 * 60);
-
-      const signedUrlByPath = new Map<string, string>();
-      for (const signed of signedAvatars ?? []) {
-        if (signed.path && signed.signedUrl) signedUrlByPath.set(signed.path, signed.signedUrl);
-      }
-
-      for (const [profileId, storagePath] of latestPhotoByProfileId.entries()) {
-        const signedUrl = signedUrlByPath.get(storagePath);
-        if (signedUrl) customerAvatarUrlByProfileId.set(profileId, signedUrl);
-      }
-    }
-  }
-
-  allConversations = allConversations.map((conversation) => ({
-    ...conversation,
-    customer_avatar_url: conversation.customer_profile_id
-      ? customerAvatarUrlByProfileId.get(conversation.customer_profile_id) ?? null
-      : null,
-  }));
-  conversations = conversations.map((conversation) => ({
-    ...conversation,
-    customer_avatar_url: conversation.customer_profile_id
-      ? customerAvatarUrlByProfileId.get(conversation.customer_profile_id) ?? null
-      : null,
-  }));
-  searchableCustomers = searchableCustomers.map((customer) => ({
-    ...customer,
-    customer_avatar_url: customerAvatarUrlByProfileId.get(customer.id) ?? null,
-  }));
 
   const selectedConversation = wantsMobileChatList
     ? null
@@ -1908,7 +1780,6 @@ export default async function KommunikationPage({
                   created_at: conversation.created_at,
                   person: firstJoin<any>(conversation.person),
                   tenant: firstJoin<any>(conversation.tenant),
-                  customer_avatar_url: conversation.customer_avatar_url ?? null,
                 }))}
                 customers={searchableCustomers.map((customer) => ({
                   id: customer.id,
@@ -1916,7 +1787,6 @@ export default async function KommunikationPage({
                   person_id: customer.person_id,
                   created_at: customer.created_at ?? null,
                   person: firstJoin<any>(customer.person),
-                  customer_avatar_url: customer.customer_avatar_url ?? null,
                 }))}
                 openCount={openConversationCount}
                 closedCount={closedConversationCount}
@@ -1938,12 +1808,15 @@ export default async function KommunikationPage({
                   >
                     ‹
                   </Link>
-                  <AvatarBubble
-                    name={conversationName(selectedConversation)}
-                    src={conversationAvatarUrl(selectedConversation)}
-                    size="lg"
-                    className="md:h-12 md:w-12"
-                  />
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#d6c3a3]/22 bg-[#d6c3a3]/14 text-sm font-bold text-[#f7efe2] md:h-12 md:w-12 md:text-base">
+                    {conversationName(selectedConversation)
+                      .split(" ")
+                      .filter(Boolean)
+                      .slice(0, 2)
+                      .map((part: string) => part[0])
+                      .join("")
+                      .toUpperCase() || "?"}
+                  </div>
                   <div className="min-w-0">
                     <h2 className="truncate text-base font-semibold tracking-[-0.035em] text-[#f7efe2] md:text-lg">
                       {conversationName(selectedConversation)}
@@ -2036,23 +1909,12 @@ export default async function KommunikationPage({
                     messages.map((message) => {
                       const outbound = message.direction === "OUTBOUND";
                       const failed = message.status === "FAILED";
-                      const firstAttachment = firstMessageAttachment(message);
-                      const firstAttachmentKind = attachmentKind(firstAttachment);
-                      const showRowAvatar = !outbound && firstAttachmentKind !== "audio";
 
                       return (
                         <div
                           key={message.id}
-                          className={`flex items-end gap-2 ${outbound ? "justify-end" : "justify-start"}`}
+                          className={`flex ${outbound ? "justify-end" : "justify-start"}`}
                         >
-                          {showRowAvatar ? (
-                            <AvatarBubble
-                              name={conversationName(selectedConversation)}
-                              src={conversationAvatarUrl(selectedConversation)}
-                              size="sm"
-                              className="mb-1 hidden sm:block"
-                            />
-                          ) : null}
                           <div
                             className={`max-w-[86%] rounded-[20px] md:max-w-[74%] px-4 py-3 shadow-[0_12px_28px_rgba(0,0,0,0.20)] ${failed ? "border border-red-400/24 bg-red-500/10 text-red-50" : outbound ? "rounded-br-[6px] border border-[#d6c3a3]/22 bg-[#d6c3a3]/20 text-[#fff7e8]" : "rounded-bl-[6px] border border-white/[0.07] bg-black/[0.24] text-white/86"}`}
                           >
@@ -2060,18 +1922,16 @@ export default async function KommunikationPage({
                               {message.body}
                             </div>
                             {(() => {
-                              const attachment = firstAttachment;
+                              const attachment = firstMessageAttachment(message);
                               if (!attachment) return null;
 
-                              const kind = firstAttachmentKind;
+                              const kind = attachmentKind(attachment);
                               const title = attachmentTitle(attachment);
                               const publicUrl = attachment.public_url || attachment.publicUrl || attachment.url || null;
 
                               if (kind === "audio") {
                                 return (
-                                  <div
-                                    className={`mt-2 min-w-[230px] rounded-[24px] border px-3 py-3 ${outbound ? "border-[#d6c3a3]/18 bg-[#d6c3a3]/12" : "border-white/[0.08] bg-black/[0.22]"}`}
-                                  >
+                                  <div className="mt-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-3">
                                     <div className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold text-[#f7efe2]">
                                       <span className="inline-flex items-center gap-2">
                                         <span aria-hidden="true">🎙️</span>
@@ -2082,25 +1942,7 @@ export default async function KommunikationPage({
                                       ) : null}
                                     </div>
                                     {publicUrl ? (
-                                      <div className="flex items-center gap-3">
-                                        {!outbound ? (
-                                          <AvatarBubble
-                                            name={conversationName(selectedConversation)}
-                                            src={conversationAvatarUrl(selectedConversation)}
-                                            size="md"
-                                            className="ring-1 ring-white/10"
-                                          />
-                                        ) : null}
-                                        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-3 py-2">
-                                          <audio
-                                            controls
-                                            preload="metadata"
-                                            src={publicUrl}
-                                            className="h-8 min-w-[150px] flex-1 opacity-90 [color-scheme:dark]"
-                                          />
-                                          <VoiceWaveform outbound={outbound} />
-                                        </div>
-                                      </div>
+                                      <audio controls preload="metadata" src={publicUrl} className="w-full max-w-[280px]" />
                                     ) : (
                                       <div className="rounded-xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs leading-5 text-amber-100/80">
                                         Audio konnte nicht öffentlich gespeichert werden. Bitte Storage/Twilio-Logs prüfen.
