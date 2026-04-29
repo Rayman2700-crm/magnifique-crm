@@ -412,51 +412,6 @@ function inboundStatusMark(status: string | null | undefined) {
   return <span className="text-white/36">↙</span>;
 }
 
-
-type MessageAttachment = {
-  name?: string | null;
-  type?: string | null;
-  kind?: string | null;
-  size?: number | null;
-  public_url?: string | null;
-  storage_path?: string | null;
-  twilio_url?: string | null;
-  mirror_error?: string | null;
-};
-
-function firstMessageAttachment(message: MessageRow): MessageAttachment | null {
-  const direct = message.metadata?.attachment as MessageAttachment | null | undefined;
-  if (direct?.public_url || direct?.twilio_url || direct?.mirror_error) return direct;
-
-  const inboundMedia = message.metadata?.inbound_media;
-  if (Array.isArray(inboundMedia) && inboundMedia.length > 0) {
-    return inboundMedia[0] as MessageAttachment;
-  }
-
-  return null;
-}
-
-function attachmentKind(attachment: MessageAttachment | null) {
-  const explicit = String(attachment?.kind ?? "").toLowerCase();
-  if (explicit) return explicit;
-
-  const type = String(attachment?.type ?? "").toLowerCase();
-  if (type.startsWith("audio/")) return "audio";
-  if (type.startsWith("image/")) return "image";
-  if (type.startsWith("video/")) return "video";
-  if (type === "application/pdf") return "document";
-  return "file";
-}
-
-function attachmentTitle(attachment: MessageAttachment | null) {
-  const kind = attachmentKind(attachment);
-  if (kind === "audio") return "Sprachnachricht";
-  if (kind === "image") return "Bild";
-  if (kind === "video") return "Video";
-  if (kind === "document") return "Dokument";
-  return attachment?.name || "Datei";
-}
-
 function CountBadge({ count }: { count: number }) {
   const safeCount = Math.max(0, Math.trunc(Number(count) || 0));
   if (safeCount <= 0) return null;
@@ -1865,65 +1820,19 @@ export default async function KommunikationPage({
                             <div className="whitespace-pre-wrap text-sm leading-6">
                               {message.body}
                             </div>
-                            {(() => {
-                              const attachment = firstMessageAttachment(message);
-                              if (!attachment) return null;
-
-                              const kind = attachmentKind(attachment);
-                              const title = attachmentTitle(attachment);
-                              const publicUrl = attachment.public_url || null;
-
-                              if (kind === "audio") {
-                                return (
-                                  <div className="mt-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-3">
-                                    <div className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold text-[#f7efe2]">
-                                      <span className="inline-flex items-center gap-2">
-                                        <span aria-hidden="true">🎙️</span>
-                                        <span>{title}</span>
-                                      </span>
-                                      {attachment.mirror_error ? (
-                                        <span className="text-[10px] text-amber-200/80">nicht gespiegelt</span>
-                                      ) : null}
-                                    </div>
-                                    {publicUrl ? (
-                                      <audio controls preload="metadata" src={publicUrl} className="w-full max-w-[280px]" />
-                                    ) : (
-                                      <div className="rounded-xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs leading-5 text-amber-100/80">
-                                        Audio konnte nicht öffentlich gespeichert werden. Bitte Storage/Twilio-Logs prüfen.
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              }
-
-                              if (kind === "image" && publicUrl) {
-                                return (
-                                  <a href={publicUrl} target="_blank" rel="noreferrer" className="mt-2 block overflow-hidden rounded-2xl border border-white/10 bg-black/20 hover:bg-black/30">
-                                    <img src={publicUrl} alt={attachment.name || "Bild"} className="max-h-[240px] w-full object-cover" />
-                                    <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-[#f7efe2]">
-                                      <span aria-hidden="true">🖼️</span>
-                                      <span className="truncate">{attachment.name || "Bild öffnen"}</span>
-                                    </div>
-                                  </a>
-                                );
-                              }
-
-                              return publicUrl ? (
-                                <a
-                                  href={publicUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="mt-2 flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold text-[#f7efe2] hover:bg-black/30"
-                                >
-                                  <span aria-hidden="true">📎</span>
-                                  <span className="truncate">{attachment.name || "Datei öffnen"}</span>
-                                </a>
-                              ) : (
-                                <div className="mt-2 rounded-xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs leading-5 text-amber-100/80">
-                                  {attachment.name || "Datei"} konnte nicht öffentlich gespeichert werden.
-                                </div>
-                              );
-                            })()}
+                            {message.metadata?.attachment?.public_url ? (
+                              <a
+                                href={message.metadata.attachment.public_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="mt-2 flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold text-[#f7efe2] hover:bg-black/30"
+                              >
+                                <span aria-hidden="true">📎</span>
+                                <span className="truncate">
+                                  {message.metadata.attachment.name || "Datei öffnen"}
+                                </span>
+                              </a>
+                            ) : null}
                             <div className="mt-1.5 flex items-center justify-end gap-2 text-[10px] text-white/40">
                               <span>
                                 {formatDateTime(

@@ -87,6 +87,7 @@ function getUserShortCode(tenantLabel: string) {
   if (label.includes("barbara")) return "BE";
   if (label.includes("radu")) return "RC";
   if (label.includes("raluca")) return "RC";
+  if (label.includes("demo")) return "DB";
   return "—";
 }
 
@@ -96,6 +97,7 @@ function getTenantDisplayLabel(tenantLabel: string) {
   if (label.includes("raluca")) return "Raluca";
   if (label.includes("alexandra")) return "Alexandra";
   if (label.includes("barbara")) return "Barbara";
+  if (label.includes("demo")) return "Demo";
   return (tenantLabel || "—").trim().split(/\s+/)[0] || "—";
 }
 
@@ -105,6 +107,7 @@ function getTenantAvatarRing(tenantLabel: string) {
   if (label.includes("raluca")) return "#a855f7";
   if (label.includes("alexandra")) return "#22c55e";
   if (label.includes("barbara")) return "#f97316";
+  if (label.includes("demo")) return "#d8c1a0";
   return "rgba(255,255,255,0.30)";
 }
 
@@ -114,6 +117,7 @@ function normalizeTenantSortKey(tenantLabel: string) {
   if (label.includes("raluca")) return "2-raluca";
   if (label.includes("alexandra")) return "3-alexandra";
   if (label.includes("barbara")) return "4-barbara";
+  if (label.includes("demo")) return "5-demo";
   return `9-${label}`;
 }
 
@@ -530,24 +534,50 @@ export default async function CustomersPage({
 
   if (role === "ADMIN") {
     currentAdminTenant = await getAdminTenantCookie();
-    const { data: tenantProfiles } = await admin
-      .from("user_profiles")
-      .select("user_id, role, tenant_id, calendar_tenant_id, full_name")
-      .in("role", ["PRACTITIONER", "ADMIN"]);
+
+    const [{ data: tenantProfiles }, { data: allTenants }] = await Promise.all([
+      admin
+        .from("user_profiles")
+        .select("user_id, role, tenant_id, calendar_tenant_id, full_name")
+        .in("role", ["PRACTITIONER", "ADMIN"]),
+      admin
+        .from("tenants")
+        .select("id, display_name")
+        .order("display_name", { ascending: true }),
+    ]);
 
     const seen = new Set<string>();
-    tenantOptions = (tenantProfiles ?? [])
-      .map((p: any) => {
-        const tenantId = (p?.tenant_id ?? p?.calendar_tenant_id ?? null) as string | null;
-        if (!tenantId) return null;
-        return { tenant_id: tenantId, label: (p?.full_name as string) || tenantId, user_id: (p?.user_id as string | null) ?? null };
-      })
-      .filter((x): x is { tenant_id: string; label: string; user_id: string | null } => x !== null)
-      .filter((x) => {
-        if (seen.has(x.tenant_id)) return false;
-        seen.add(x.tenant_id);
-        return true;
+    const nextTenantOptions: { tenant_id: string; label: string; user_id: string | null }[] = [];
+
+    // 1) Bestehende echte Benutzer-Tenants zuerst aufnehmen, damit deren Avatar/User-ID erhalten bleibt.
+    for (const p of tenantProfiles ?? []) {
+      const tenantId = (p?.tenant_id ?? p?.calendar_tenant_id ?? null) as string | null;
+      if (!tenantId || seen.has(tenantId)) continue;
+
+      seen.add(tenantId);
+      nextTenantOptions.push({
+        tenant_id: tenantId,
+        label: (p?.full_name as string) || tenantId,
+        user_id: (p?.user_id as string | null) ?? null,
       });
+    }
+
+    // 2) Zusätzlich alle Tenants aufnehmen, die noch keinen User haben.
+    // Wichtig für Demo-Tenants: Demo Beauty Studio soll im Admin-Switch sichtbar sein,
+    // auch wenn dafür kein echter Login/User existiert.
+    for (const tenant of allTenants ?? []) {
+      const tenantId = (tenant?.id ?? null) as string | null;
+      if (!tenantId || seen.has(tenantId)) continue;
+
+      seen.add(tenantId);
+      nextTenantOptions.push({
+        tenant_id: tenantId,
+        label: (tenant?.display_name as string) || tenantId,
+        user_id: null,
+      });
+    }
+
+    tenantOptions = nextTenantOptions;
   }
 
   const effectiveTenantId = await getEffectiveTenantId({

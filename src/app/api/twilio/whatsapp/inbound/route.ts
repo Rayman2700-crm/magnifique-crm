@@ -17,6 +17,45 @@ type CustomerProfileRow = {
   created_at: string;
 };
 
+type IncomingMedia = {
+  index: number;
+  url: string;
+  contentType: string | null;
+};
+
+type StoredIncomingMedia = {
+  index: number;
+  kind: "audio" | "image" | "video" | "document" | "file";
+  name: string;
+  content_type: string | null;
+  twilio_url: string;
+  storage_path: string | null;
+  public_url: string | null;
+  size_bytes: number | null;
+  mirror_error?: string | null;
+};
+
+const COMMUNICATION_BUCKET = "communication-attachments";
+
+const MIME_EXTENSION: Record<string, string> = {
+  "audio/ogg": "ogg",
+  "audio/opus": "ogg",
+  "audio/mpeg": "mp3",
+  "audio/mp3": "mp3",
+  "audio/mp4": "m4a",
+  "audio/x-m4a": "m4a",
+  "audio/aac": "aac",
+  "audio/amr": "amr",
+  "audio/webm": "webm",
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "video/mp4": "mp4",
+  "application/pdf": "pdf",
+};
+
 function requiredEnv(name: string) {
   const value = process.env[name];
   if (!value) {
@@ -34,7 +73,7 @@ function supabaseAdmin() {
         autoRefreshToken: false,
         persistSession: false,
       },
-    }
+    },
   );
 }
 
@@ -47,6 +86,51 @@ function normalizePhone(value: string | null | undefined) {
 
 function digitsOnly(value: string | null | undefined) {
   return normalizePhone(value).replace(/[^0-9]/g, "");
+}
+
+function safePathPart(value: string) {
+  return String(value || "file")
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 80);
+}
+
+function cleanContentType(value: string | null | undefined) {
+  const normalized = String(value ?? "")
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+  return normalized || null;
+}
+
+function extensionForContentType(contentType: string | null | undefined) {
+  const clean = cleanContentType(contentType);
+  if (!clean) return "bin";
+  return MIME_EXTENSION[clean] ?? clean.split("/").pop()?.replace(/[^a-z0-9]/g, "") ?? "bin";
+}
+
+function mediaKind(contentType: string | null | undefined): StoredIncomingMedia["kind"] {
+  const clean = cleanContentType(contentType) ?? "";
+  if (clean.startsWith("audio/")) return "audio";
+  if (clean.startsWith("image/")) return "image";
+  if (clean.startsWith("video/")) return "video";
+  if (clean === "application/pdf") return "document";
+  return "file";
+}
+
+function mediaLabel(kind: StoredIncomingMedia["kind"], fallback = "Datei") {
+  switch (kind) {
+    case "audio":
+      return "🎙️ Sprachnachricht";
+    case "image":
+      return "🖼️ Bild";
+    case "video":
+      return "🎥 Video";
+    case "document":
+      return "📄 Dokument";
+    default:
+      return `📎 ${fallback}`;
+  }
 }
 
 function twilioXmlResponse() {
@@ -179,16 +263,140 @@ async function findOrCreateConversation(params: {
   return data;
 }
 
+function getIncomingMedia(form: FormData): IncomingMedia[] {
+  const numMedia = Math.max(0, Number.parseInt(String(form.get("NumMedia") ?? "0"), 10) || 0);
+  const result: IncomingMedia[] = [];
+
+  for (let index = 0; index < numMedia; index += 1) {
+    const url = String(form.get(`MediaUrl${index}`) ?? "").trim();
+    if (!url) continue;
+    result.push({
+      index,
+      url,
+      contentType: cleanContentType(String(form.get(`MediaContentType${index}`) ?? "")),
+    });
+  }
+
+  return result;
+}
+
+async function mirrorIncomingMedia(params: {
+  admin: ReturnType<typeof supabaseAdmin>;
+  tenantId: string;
+  conversationId: string;
+  messageSid: string;
+  media: IncomingMedia[];
+}) {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+
+  const mirrored: StoredIncomingMedia[] = [];
+
+  for (const item of params.media) {
+    const initialContentType = cleanContentType(item.contentType);
+    const kind = mediaKind(initialContentType);
+    const extension = extensionForContentType(initialContentType);
+    const baseName = `${kind === "audio" ? "sprachnachricht" : kind}-${safePathPart(params.messageSid)}-${item.index}.${extension}`;
+
+    if (!accountSid || !authToken) {
+      mirrored.push({
+        index: item.index,
+        kind,
+        name: baseName,
+        content_type: initialContentType,
+        twilio_url: item.url,
+        storage_path: null,
+        public_url: null,
+        size_bytes: null,
+        mirror_error: "TWILIO_ACCOUNT_SID oder TWILIO_AUTH_TOKEN fehlt. Media konnte nicht gespiegelt werden.",
+      });
+      continue;
+    }
+
+    try {
+      const response = await fetch(item.url, {
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString("base64")}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Twilio Media Download fehlgeschlagen (${response.status})`);
+      }
+
+      const finalContentType = cleanContentType(response.headers.get("content-type")) ?? initialContentType ?? "application/octet-stream";
+      const finalKind = mediaKind(finalContentType);
+      const finalExtension = extensionForContentType(finalContentType);
+      const finalName = `${finalKind === "audio" ? "sprachnachricht" : finalKind}-${safePathPart(params.messageSid)}-${item.index}.${finalExtension}`;
+      const arrayBuffer = await response.arrayBuffer();
+      const storagePath = `${params.tenantId}/whatsapp/inbound/${params.conversationId}/${Date.now()}-${finalName}`;
+
+      const { error: uploadError } = await params.admin.storage
+        .from(COMMUNICATION_BUCKET)
+        .upload(storagePath, new Blob([arrayBuffer], { type: finalContentType }), {
+          cacheControl: "3600",
+          contentType: finalContentType,
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data: publicData } = params.admin.storage
+        .from(COMMUNICATION_BUCKET)
+        .getPublicUrl(storagePath);
+
+      mirrored.push({
+        index: item.index,
+        kind: finalKind,
+        name: finalName,
+        content_type: finalContentType,
+        twilio_url: item.url,
+        storage_path: storagePath,
+        public_url: publicData.publicUrl,
+        size_bytes: arrayBuffer.byteLength,
+        mirror_error: null,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unbekannter Media-Fehler";
+      console.error("Twilio inbound: media mirror failed", {
+        messageSid: params.messageSid,
+        mediaIndex: item.index,
+        error: message,
+      });
+
+      mirrored.push({
+        index: item.index,
+        kind,
+        name: baseName,
+        content_type: initialContentType,
+        twilio_url: item.url,
+        storage_path: null,
+        public_url: null,
+        size_bytes: null,
+        mirror_error: message,
+      });
+    }
+  }
+
+  return mirrored;
+}
+
 export async function POST(request: Request) {
   try {
     const form = await request.formData();
 
     const from = String(form.get("From") ?? "");
     const to = String(form.get("To") ?? "");
-    const body = String(form.get("Body") ?? "").trim();
+    const incomingBody = String(form.get("Body") ?? "").trim();
     const messageSid = String(form.get("MessageSid") ?? form.get("SmsMessageSid") ?? "");
     const profileName = String(form.get("ProfileName") ?? "");
     const waId = String(form.get("WaId") ?? "");
+    const incomingMedia = getIncomingMedia(form);
+    const firstIncomingMediaKind = incomingMedia[0] ? mediaKind(incomingMedia[0].contentType) : null;
+    const mediaOnlyLabel = firstIncomingMediaKind ? mediaLabel(firstIncomingMediaKind) : "📎 Datei";
+    const body = incomingBody || (incomingMedia.length > 0 ? mediaOnlyLabel : "");
 
     if (!from || !messageSid) {
       console.warn("Twilio inbound: missing From or MessageSid", { from, messageSid });
@@ -219,6 +427,18 @@ export async function POST(request: Request) {
       body,
     });
 
+    const mirroredMedia = incomingMedia.length > 0
+      ? await mirrorIncomingMedia({
+          admin,
+          tenantId,
+          conversationId: conversation.id,
+          messageSid,
+          media: incomingMedia,
+        })
+      : [];
+
+    const firstAttachment = mirroredMedia[0] ?? null;
+
     const { error: insertError } = await admin.from("customer_messages").insert({
       conversation_id: conversation.id,
       tenant_id: tenantId,
@@ -238,6 +458,20 @@ export async function POST(request: Request) {
         wa_id: waId || null,
         raw_from: from,
         raw_to: to,
+        num_media: incomingMedia.length,
+        inbound_media: mirroredMedia,
+        attachment: firstAttachment
+          ? {
+              name: firstAttachment.name,
+              type: firstAttachment.content_type,
+              kind: firstAttachment.kind,
+              size: firstAttachment.size_bytes,
+              public_url: firstAttachment.public_url,
+              storage_path: firstAttachment.storage_path,
+              twilio_url: firstAttachment.twilio_url,
+              mirror_error: firstAttachment.mirror_error ?? null,
+            }
+          : null,
       },
     });
 
