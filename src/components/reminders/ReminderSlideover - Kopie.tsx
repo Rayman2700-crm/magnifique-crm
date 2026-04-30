@@ -703,11 +703,11 @@ export default function ReminderSlideover({
       <div
         style={{
           position: "absolute",
-          top: "max(18px, calc(env(safe-area-inset-top, 0px) + 12px))",
-          right: "max(18px, calc(env(safe-area-inset-right, 0px) + 18px))",
-          bottom: "max(18px, calc(env(safe-area-inset-bottom, 0px) + 18px))",
+          top: 18,
+          right: 18,
+          bottom: 18,
           width: 470,
-          maxWidth: "calc(100vw - max(18px, calc(env(safe-area-inset-left, 0px) + 18px)) - max(18px, calc(env(safe-area-inset-right, 0px) + 18px)))",
+          maxWidth: "calc(100vw - 36px)",
           borderRadius: 18,
           border: "1px solid rgba(255,255,255,0.12)",
           background: "linear-gradient(180deg, rgba(16,16,16,0.96) 0%, rgba(10,10,10,0.96) 100%)",

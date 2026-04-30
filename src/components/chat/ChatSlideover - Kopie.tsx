@@ -174,11 +174,11 @@ export default function ChatSlideover({
         data-chat-panel="true"
         style={{
           position: "absolute",
-          top: "max(18px, calc(env(safe-area-inset-top, 0px) + 12px))",
-          right: "max(18px, calc(env(safe-area-inset-right, 0px) + 18px))",
-          bottom: "max(18px, calc(env(safe-area-inset-bottom, 0px) + 18px))",
+          top: 18,
+          right: 18,
+          bottom: 18,
           width: 620,
-          maxWidth: "calc(100vw - max(18px, calc(env(safe-area-inset-left, 0px) + 18px)) - max(18px, calc(env(safe-area-inset-right, 0px) + 18px)))",
+          maxWidth: "calc(100vw - 36px)",
           borderRadius: 18,
           border: "1px solid rgba(216,193,160,0.16)",
           background:
