@@ -106,6 +106,7 @@ type SearchParams =
       teamChatDraft?: string;
       demoSent?: string;
       demoText?: string;
+      demoClosed?: string;
     }
   | Promise<{
       c?: string;
@@ -119,6 +120,7 @@ type SearchParams =
       teamChatDraft?: string;
       demoSent?: string;
       demoText?: string;
+      demoClosed?: string;
     }>;
 
 type ConversationRow = {
@@ -231,6 +233,77 @@ function buildDemoConversations(tenantId: string): ConversationRow[] {
       customer_avatar_url: null,
     },
   ];
+}
+
+function applyDemoConversationState(conversations: ConversationRow[], demoClosedRaw: string | null | undefined) {
+  const closedIds = new Set(
+    String(demoClosedRaw ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+
+  return conversations.map((conversation) => ({
+    ...conversation,
+    status: closedIds.has(conversation.id)
+      ? "CLOSED"
+      : conversation.status === "CLOSED"
+        ? "CLOSED"
+        : "OPEN",
+    unread_count: closedIds.has(conversation.id) ? 0 : conversation.unread_count,
+  }));
+}
+
+function updateDemoClosedState(currentRaw: string | null, conversationId: string, nextStatus: "OPEN" | "CLOSED") {
+  const closedIds = new Set(
+    String(currentRaw ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+
+  if (nextStatus === "CLOSED") {
+    closedIds.add(conversationId);
+  } else {
+    closedIds.delete(conversationId);
+  }
+
+  return Array.from(closedIds).join(",");
+}
+
+function filterDemoConversations(conversations: ConversationRow[], statusFilter: string) {
+  if (statusFilter === "closed") {
+    return conversations.filter((conversation) => String(conversation.status).toUpperCase() === "CLOSED");
+  }
+  if (statusFilter === "all") {
+    return conversations;
+  }
+  return conversations.filter((conversation) => String(conversation.status).toUpperCase() !== "CLOSED");
+}
+
+function buildDemoRedirectPath({
+  statusFilter,
+  conversationId,
+  demoClosed,
+  panel = "chats",
+  demoSent,
+  demoText,
+}: {
+  statusFilter: string;
+  conversationId?: string | null;
+  demoClosed?: string | null;
+  panel?: string;
+  demoSent?: boolean;
+  demoText?: string | null;
+}) {
+  const query = new URLSearchParams();
+  query.set("status", statusFilter || "open");
+  if (conversationId) query.set("c", conversationId);
+  if (panel) query.set("panel", panel);
+  if (demoClosed) query.set("demoClosed", demoClosed);
+  if (demoSent) query.set("demoSent", "1");
+  if (demoText) query.set("demoText", demoText);
+  return `/kommunikation?${query.toString()}`;
 }
 
 function buildDemoMessages(conversationId: string): MessageRow[] {
@@ -850,6 +923,26 @@ async function toggleConversationStatus(formData: FormData) {
     redirect("/kommunikation?status=open&panel=chats");
   }
 
+  const statusFilter = String(formData.get("status_filter") ?? "open").trim() || "open";
+  const demoClosedCurrent = String(formData.get("demo_closed_state") ?? "").trim();
+
+  if (conversationId.startsWith("demo-conversation-")) {
+    const nextDemoClosed = updateDemoClosedState(
+      demoClosedCurrent || null,
+      conversationId,
+      nextStatus as "OPEN" | "CLOSED",
+    );
+    const targetStatus = nextStatus === "CLOSED" ? "all" : "open";
+    redirect(
+      buildDemoRedirectPath({
+        statusFilter: targetStatus,
+        conversationId,
+        demoClosed: nextDemoClosed,
+        panel: "chats",
+      }),
+    );
+  }
+
   const supabase = await supabaseServer();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
@@ -912,7 +1005,17 @@ async function sendCommunicationReply(formData: FormData) {
   }
 
   if (conversationId.startsWith("demo-conversation-")) {
-    redirect(`/kommunikation?status=${encodeURIComponent(statusFilter)}&c=${encodeURIComponent(conversationId)}&demoSent=1`);
+    const demoClosedCurrent = String(formData.get("demo_closed_state") ?? "").trim();
+    redirect(
+      buildDemoRedirectPath({
+        statusFilter,
+        conversationId,
+        demoClosed: demoClosedCurrent,
+        panel: "chats",
+        demoSent: true,
+        demoText: rawBody || "Demo-Antwort wurde gespeichert.",
+      }),
+    );
   }
 
   const { data: conversation, error: conversationError } = await supabase
@@ -1187,6 +1290,7 @@ export default async function KommunikationPage({
   const sp = searchParams ? await searchParams : undefined;
   const selectedParam = typeof sp?.c === "string" ? sp.c : null;
   const statusFilter = typeof sp?.status === "string" ? sp.status : "open";
+  const demoClosedRaw = typeof sp?.demoClosed === "string" ? sp.demoClosed : "";
   const customerSearchRaw =
     typeof sp?.customerSearch === "string" ? sp.customerSearch : "";
   const customerSearch = customerSearchRaw.trim().toLowerCase();
@@ -1238,10 +1342,18 @@ export default async function KommunikationPage({
   }
 
   const { data: communicationCountsRaw } = await communicationCountsQuery;
-  const communicationCountRows = (communicationCountsRaw ?? []) as Array<{
-    status: string | null;
-    unread_count: number | null;
-  }>;
+  const communicationCountRows = isDemoTenant
+    ? applyDemoConversationState(
+        buildDemoConversations(effectiveTenantId ?? CLIENTIQUE_DEMO_TENANT_ID),
+        demoClosedRaw,
+      ).map((conversation) => ({
+        status: conversation.status,
+        unread_count: conversation.unread_count ?? 0,
+      }))
+    : ((communicationCountsRaw ?? []) as Array<{
+        status: string | null;
+        unread_count: number | null;
+      }>);
   const openConversationCount = communicationCountRows.filter(
     (row) => String(row.status ?? "OPEN").toUpperCase() === "OPEN",
   ).length;
@@ -1339,7 +1451,10 @@ export default async function KommunikationPage({
   const { data: conversationsRaw, error: conversationsError } =
     await conversationsQuery;
   let allConversations = isDemoTenant
-    ? buildDemoConversations(effectiveTenantId ?? CLIENTIQUE_DEMO_TENANT_ID)
+    ? applyDemoConversationState(
+        buildDemoConversations(effectiveTenantId ?? CLIENTIQUE_DEMO_TENANT_ID),
+        demoClosedRaw,
+      )
     : ((conversationsRaw ?? []) as ConversationRow[]);
 
   // Direkter Deep-Link aus dem Kundenprofil: /kommunikation?status=all&c=<conversation_id>
@@ -1408,6 +1523,10 @@ export default async function KommunikationPage({
         return haystack.includes(chatSearch);
       })
     : allConversations;
+
+  if (isDemoTenant) {
+    conversations = filterDemoConversations(conversations, statusFilter);
+  }
 
   // Wenn ein Chat per Link geöffnet wird, bleibt er trotz aktiver Suche sichtbar/ausgewählt.
   if (selectedParam) {
@@ -1519,11 +1638,25 @@ export default async function KommunikationPage({
     customer_avatar_url: customerAvatarUrlByProfileId.get(customer.id) ?? null,
   }));
 
+  let selectedConversationUnreadBeforeRead = 0;
+
   const selectedConversation = wantsMobileChatList
     ? null
     : conversations.find((conversation) => conversation.id === selectedParam) ??
       conversations[0] ??
       null;
+
+  if (!isDemoTenant && selectedConversation && Number(selectedConversation.unread_count ?? 0) > 0) {
+    selectedConversationUnreadBeforeRead = Math.max(0, Math.trunc(Number(selectedConversation.unread_count ?? 0)));
+    await supabase
+      .from("customer_conversations")
+      .update({ unread_count: 0, updated_at: new Date().toISOString() })
+      .eq("id", selectedConversation.id);
+
+    selectedConversation.unread_count = 0;
+  }
+
+  const visibleCustomerUnreadCount = Math.max(0, customerUnreadCount - selectedConversationUnreadBeforeRead);
 
   let messages: MessageRow[] = [];
   if (selectedConversation) {
@@ -1536,7 +1669,7 @@ export default async function KommunikationPage({
             id: `demo-msg-sent-${Date.now()}`,
             direction: "OUTBOUND",
             channel: "WHATSAPP",
-            body: sp?.demoText ? decodeURIComponent(String(sp.demoText)) : "Demo-Antwort wurde gespeichert. Es wurde keine echte WhatsApp, SMS oder E-Mail gesendet.",
+            body: "Demo-Antwort wurde gespeichert. Es wurde keine echte WhatsApp, SMS oder E-Mail gesendet.",
             status: "SENT",
             created_at: new Date().toISOString(),
             sent_at: new Date().toISOString(),
@@ -1663,12 +1796,6 @@ export default async function KommunikationPage({
   return (
     <main className="fixed inset-x-0 bottom-[calc(74px+env(safe-area-inset-bottom))] top-[88px] z-[60] w-full min-w-0 max-w-none overflow-hidden rounded-none border-y border-white/[0.08] bg-[linear-gradient(180deg,rgba(35,28,22,0.98)_0%,rgba(15,12,9,0.99)_100%)] text-white shadow-[-30px_30px_90px_rgba(0,0,0,0.48)] md:bottom-4 md:left-auto md:right-4 md:top-[96px] md:w-[min(1040px,calc(100vw-112px))] md:min-w-[760px] md:max-w-[calc(100vw-112px)] md:resize-x md:rounded-[30px] md:border">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,rgba(214,195,163,0.15),transparent_32%),radial-gradient(circle_at_100%_0%,rgba(88,65,45,0.18),transparent_34%)]" />
-      {isDemoTenant ? (
-        <div className="absolute left-4 top-3 z-20 hidden rounded-full border border-amber-300/30 bg-amber-300/12 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.18em] text-amber-100 shadow-[0_12px_30px_rgba(0,0,0,0.28)] md:inline-flex">
-          Demo-Modus · Nachrichten werden nur simuliert
-        </div>
-      ) : null}
-
       <div className="relative flex h-full min-h-0 overflow-hidden">
         <aside className="hidden w-[54px] shrink-0 min-h-0 flex-col items-center border-r border-white/[0.07] bg-black/[0.18] py-3 md:flex">
           <Link
@@ -1868,6 +1995,9 @@ export default async function KommunikationPage({
                                     name="status_filter"
                                     value={statusFilter}
                                   />
+                                  {isDemoTenant ? (
+                                    <input type="hidden" name="demo_closed_state" value={demoClosedRaw} />
+                                  ) : null}
                                   <button
                                     type="submit"
                                     className="w-full rounded-full border border-[#d6c3a3]/24 bg-[#d6c3a3]/12 px-3 py-2 text-xs font-semibold text-[#f7efe2] hover:bg-[#d6c3a3]/18"
@@ -2002,7 +2132,7 @@ export default async function KommunikationPage({
 
                   <div className="grid min-w-[132px] flex-1 grid-cols-2 gap-2">
                     <Link href="/kommunikation?tab=customers" className="inline-flex h-10 items-center justify-center rounded-full border border-[#d6c3a3]/28 bg-[#d6c3a3]/16 px-3 text-center text-xs font-semibold text-[#f7efe2] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:bg-[#d6c3a3]/20">
-                      <span className="inline-flex items-center justify-center">Kunden<CountBadge count={customerUnreadCount} /></span>
+                      <span className="inline-flex items-center justify-center">Kunden<CountBadge count={visibleCustomerUnreadCount} /></span>
                     </Link>
                     <Link href="/kommunikation?tab=team" className="inline-flex h-10 items-center justify-center rounded-full border border-white/[0.10] bg-white/[0.04] px-3 text-center text-xs font-semibold text-white/58 transition hover:bg-white/[0.07] hover:text-white">
                       <span className="inline-flex items-center justify-center">Team<KommunikationTeamUnreadBadge tenantId={effectiveTenantId} currentUserId={user.id} /></span>
@@ -2103,6 +2233,8 @@ export default async function KommunikationPage({
                   </Link>
                   <form action={toggleConversationStatus} className="hidden sm:block">
                     <input type="hidden" name="conversation_id" value={selectedConversation.id} />
+                    <input type="hidden" name="status_filter" value={statusFilter} />
+                    {isDemoTenant ? <input type="hidden" name="demo_closed_state" value={demoClosedRaw} /> : null}
                     <input
                       type="hidden"
                       name="next_status"
@@ -2118,6 +2250,8 @@ export default async function KommunikationPage({
                   </form>
                   <form action={toggleConversationStatus} className="sm:hidden">
                     <input type="hidden" name="conversation_id" value={selectedConversation.id} />
+                    <input type="hidden" name="status_filter" value={statusFilter} />
+                    {isDemoTenant ? <input type="hidden" name="demo_closed_state" value={demoClosedRaw} /> : null}
                     <input
                       type="hidden"
                       name="next_status"
@@ -2293,17 +2427,13 @@ export default async function KommunikationPage({
                 </div>
               </div>
 
-              {isDemoTenant ? (
-                <div className="border-t border-amber-300/15 bg-amber-300/[0.055] px-4 py-2 text-center text-[11px] font-semibold text-amber-100/82">
-                  Demo-Modus: Antworten werden im Verlauf gespeichert, aber nicht per WhatsApp, SMS oder E-Mail gesendet.
-                </div>
-              ) : null}
               <KommunikationComposerClient
                 action={sendCommunicationReply}
                 conversationId={selectedConversation.id}
                 statusFilter={statusFilter}
                 draftBody={draftBody}
                 selectedTemplateTitle={selectedTemplate?.title ?? null}
+                demoClosedState={isDemoTenant ? demoClosedRaw : undefined}
               />
             </>
           ) : (

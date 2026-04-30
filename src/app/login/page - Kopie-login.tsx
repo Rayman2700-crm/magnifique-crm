@@ -1,27 +1,10 @@
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
-import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/brand/Logo";
-import { appBranding } from "@/lib/appBranding";
+import { Button } from "@/components/ui/button";
 
 function AnimatedLoginLogo() {
-  if (appBranding.loginHeroLogoPath) {
-    return (
-      <div className="clientique-login-logo">
-        <div className="relative h-[180px] w-full max-w-[620px] sm:h-[220px]">
-          <Image
-            src={appBranding.loginHeroLogoPath}
-            alt={appBranding.appName}
-            fill
-            priority
-            className="object-contain"
-          />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <>
       <div className="clientique-login-logo">
@@ -29,7 +12,7 @@ function AnimatedLoginLogo() {
           <Image src="/brand/rings.png" alt="" fill priority className="clientique-rings object-contain" />
           <Image
             src="/brand/text.png"
-            alt={appBranding.appName}
+            alt="CLIENTIQUE Digital Solutions"
             fill
             priority
             className="clientique-text object-contain"
@@ -57,22 +40,6 @@ function AnimatedLoginLogo() {
   );
 }
 
-function LoginBrandMark() {
-  return (
-    <div className="flex items-center gap-3">
-      <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-        <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-2xl bg-[#0d0d10] [&_img]:h-full [&_img]:w-full [&_img]:object-cover">
-          <Logo showText={false} />
-        </div>
-      </div>
-      <div className="min-w-0">
-        <div className="truncate text-base font-semibold text-white">{appBranding.appName}</div>
-        <div className="truncate text-xs text-white/45">{appBranding.studioName}</div>
-      </div>
-    </div>
-  );
-}
-
 export default async function LoginPage({
   searchParams,
 }: {
@@ -97,10 +64,10 @@ export default async function LoginPage({
 
         <div className="mx-auto max-w-md rounded-[28px] border border-white/10 bg-[rgba(255,255,255,0.04)] p-6 md:p-7 shadow-[0_10px_40px_rgba(0,0,0,0.45)] backdrop-blur-sm">
           <div className="text-[var(--foreground)]">
-            <LoginBrandMark />
+            <Logo size="md" />
           </div>
 
-          <p className="mt-4 text-sm text-white/60">{appBranding.loginSubtitle}</p>
+          <p className="mt-1 text-sm text-white/60">Bitte einloggen, um fortzufahren.</p>
 
           {hasError && (
             <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
@@ -141,8 +108,8 @@ export default async function LoginPage({
           </form>
 
           <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.035] p-4 text-center text-xs leading-5 text-white/55">
-            Neuer Zugang? Administratoren laden neue Benutzer über <span className="font-semibold text-white/75">Einstellungen → Benutzer einladen</span> ein.
-            Danach kommt der Aktivierungslink per E-Mail von {appBranding.inviteSenderName}.
+            Neuer Zugang? Radu lädt neue Benutzer über <span className="font-semibold text-white/75">Einstellungen → Benutzer einladen</span> ein.
+            Danach kommt der Aktivierungslink per E-Mail von Studio Magnifique Beauty Institut.
           </div>
         </div>
       </div>

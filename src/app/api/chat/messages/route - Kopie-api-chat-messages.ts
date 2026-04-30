@@ -223,7 +223,7 @@ export async function POST(req: Request) {
         file_type: fileType,
         file_size: fileSize,
       })
-      .select("id, text, sender_id, sender_name, created_at, edited_at, deleted_at, file_name, file_path, file_type, file_size, tenant_id")
+      .select("id, created_at")
       .maybeSingle();
 
     if (insertError) {
@@ -291,38 +291,11 @@ export async function POST(req: Request) {
       }
     }
 
-    let fileUrl: string | null = null;
-
-    if (inserted?.file_path) {
-      const { data: publicUrlData } = admin.storage
-        .from(CHAT_STORAGE_BUCKET)
-        .getPublicUrl(inserted.file_path);
-
-      fileUrl = publicUrlData?.publicUrl ?? null;
-    }
-
     return NextResponse.json({
       ok: true,
       id: inserted?.id ?? null,
       created_at: inserted?.created_at ?? null,
       mentioned_user_ids: Array.from(mentionedUserIds),
-      message: inserted
-        ? {
-            id: inserted.id,
-            text: inserted.text,
-            sender_id: inserted.sender_id,
-            sender_name: inserted.sender_name,
-            created_at: inserted.created_at,
-            edited_at: inserted.edited_at,
-            deleted_at: inserted.deleted_at,
-            file_name: inserted.file_name,
-            file_path: inserted.file_path,
-            file_type: inserted.file_type,
-            file_size: inserted.file_size,
-            file_url: fileUrl,
-            tenant_id: inserted.tenant_id,
-          }
-        : null,
     });
   } catch (error: any) {
     console.error("[chat/messages POST] fatal error:", error?.message ?? error);

@@ -6,7 +6,6 @@ import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cancelFiscalReceiptMvp, openFiscalReceiptWhatsApp, sendFiscalReceiptEmail, updateFiscalReceiptDetails } from "@/app/rechnungen/actions";
-import { appBranding } from "@/lib/appBranding";
 
 type SlideoverEvent = {
   id: string;
@@ -347,15 +346,15 @@ function normalizePhoneForWhatsApp(value: string | null | undefined) {
 }
 
 function buildReceiptMailto(receiptNumber: string, providerName: string, paymentMethodLabel: string) {
-  const subject = encodeURIComponent(`Beleg ${receiptNumber} – ${providerName || appBranding.appName}`);
+  const subject = encodeURIComponent(`Beleg ${receiptNumber} – ${providerName || "Magnifique CRM"}`);
   const body = encodeURIComponent(
-    `Hallo,\n\nim Anhang bzw. zur Ansicht dein Beleg ${receiptNumber}.\nZahlungsart: ${paymentMethodLabel || "—"}\n\nLiebe Grüße\n${providerName || appBranding.appName}`
+    `Hallo,\n\nim Anhang bzw. zur Ansicht dein Beleg ${receiptNumber}.\nZahlungsart: ${paymentMethodLabel || "—"}\n\nLiebe Grüße\n${providerName || "Magnifique CRM"}`
   );
   return `?subject=${subject}&body=${body}`;
 }
 
 function buildReceiptWhatsAppText(receiptNumber: string, providerName: string, amountLabel: string) {
-  return `Hallo, hier ist dein Beleg ${receiptNumber}${amountLabel && amountLabel !== "—" ? ` über ${amountLabel}` : ""}.\n\nLiebe Grüße\n${providerName || appBranding.appName}`;
+  return `Hallo, hier ist dein Beleg ${receiptNumber}${amountLabel && amountLabel !== "—" ? ` über ${amountLabel}` : ""}.\n\nLiebe Grüße\n${providerName || "Magnifique CRM"}`;
 }
 
 function buildEditableLines(payloadLines: Record<string, unknown>[]) {
@@ -1012,7 +1011,7 @@ export default function FiscalReceiptSlideover({ items }: { items: SlideoverRece
               <div className="hidden print:block">
                 <div className="flex items-start justify-between gap-6 border-b border-black/10 pb-4">
                   <div>
-                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/60">{appBranding.appName}</div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-black/60">Magnifique CRM</div>
                     <div className="mt-2 text-3xl font-extrabold text-black">Beleg {receipt.receiptNumber}</div>
                     <div className="mt-2 text-sm text-black/65">{issuedAtLabel}</div>
                   </div>

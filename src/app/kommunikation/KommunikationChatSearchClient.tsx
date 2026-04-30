@@ -119,14 +119,16 @@ function matchesQuery(values: Array<unknown>, query: string) {
   return values.some((value) => normalize(value).includes(q));
 }
 
-function CountBadge({ count }: { count: number }) {
+function CountBadge({ count, tone = "neutral" }: { count: number; tone?: "blue" | "neutral" }) {
   const safeCount = Math.max(0, Math.trunc(Number(count) || 0));
   if (safeCount <= 0) return null;
-  return (
-    <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#2f79ff] px-1.5 text-[10px] font-extrabold leading-none text-white shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_5px_14px_rgba(47,121,255,0.32)]">
-      {safeCount > 99 ? "99+" : safeCount}
-    </span>
-  );
+
+  const className =
+    tone === "blue"
+      ? "ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#2f79ff] px-1.5 text-[10px] font-extrabold leading-none text-white shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_5px_14px_rgba(47,121,255,0.32)]"
+      : "ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-[#d6c3a3]/18 bg-white/[0.075] px-1.5 text-[10px] font-extrabold leading-none text-[#f7efe2]/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]";
+
+  return <span className={className}>{safeCount > 99 ? "99+" : safeCount}</span>;
 }
 
 export default function KommunikationChatSearchClient({
@@ -221,7 +223,7 @@ export default function KommunikationChatSearchClient({
           href="/kommunikation?status=open&panel=chats"
           className={`inline-flex h-10 items-center justify-center rounded-full border px-2 text-center text-xs font-semibold transition ${statusFilter !== "closed" && statusFilter !== "all" ? "border-[#d6c3a3]/30 bg-[#d6c3a3]/16 text-[#f7efe2] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]" : "border-white/10 bg-white/[0.035] text-white/55 hover:bg-white/[0.06] hover:text-white/75"}`}
         >
-          <span className="inline-flex items-center justify-center">Offen<CountBadge count={openCount} /></span>
+          <span className="inline-flex items-center justify-center">Offen<CountBadge count={openCount} tone="blue" /></span>
         </Link>
         <Link
           href="/kommunikation?status=closed&panel=chats"

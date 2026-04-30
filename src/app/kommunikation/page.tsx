@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 function IconClose() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
     </svg>
   );
@@ -1371,7 +1371,7 @@ export default async function KommunikationPage({
       <main className="fixed inset-x-0 bottom-[calc(74px+env(safe-area-inset-bottom))] top-[88px] z-[60] w-full min-w-0 max-w-none overflow-hidden rounded-none border-y border-white/[0.08] bg-[linear-gradient(180deg,rgba(35,28,22,0.98)_0%,rgba(15,12,9,0.99)_100%)] text-white shadow-[-30px_30px_90px_rgba(0,0,0,0.48)] md:bottom-4 md:left-auto md:right-4 md:top-[96px] md:w-[min(760px,calc(100vw-112px))] md:min-w-[620px] md:max-w-[calc(100vw-112px)] md:resize-x md:rounded-[30px] md:border">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,rgba(214,195,163,0.15),transparent_32%),radial-gradient(circle_at_100%_0%,rgba(88,65,45,0.18),transparent_34%)]" />
         <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
-          <header className="flex h-[74px] shrink-0 items-center justify-between gap-3 border-b border-white/[0.08] bg-white/[0.035] px-4 md:px-5">
+          <header className="flex h-[60px] shrink-0 items-center justify-between gap-3 border-b border-white/[0.08] bg-white/[0.035] px-4 md:px-5">
             <div className="flex min-w-0 items-center gap-3">
               <h1 className="truncate text-xl font-bold tracking-[-0.04em] text-[#f7efe2]">Team Chat</h1>
               <span className="shrink-0 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-bold text-emerald-300">Live</span>
@@ -1383,7 +1383,7 @@ export default async function KommunikationPage({
               <Link href="/kommunikation?tab=team" className="rounded-full border border-[#d6c3a3]/28 bg-[#d6c3a3]/16 px-4 py-2 text-xs font-semibold text-[#f7efe2] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
                 <span className="inline-flex items-center">Team<KommunikationTeamUnreadBadge tenantId={effectiveTenantId} currentUserId={user.id} /></span>
               </Link>
-              <Link href="/dashboard" aria-label="Kommunikation schließen" className="flex h-11 w-11 items-center justify-center rounded-full border border-white/12 bg-white/[0.04] text-white/80 transition hover:bg-white/[0.10]">
+              <Link href="/dashboard" aria-label="Kommunikation schließen" className="flex h-9 w-9 items-center justify-center rounded-full border border-white/12 bg-white/[0.04] text-white/80 transition hover:bg-white/[0.10]">
                 <IconClose />
               </Link>
             </div>
@@ -1638,11 +1638,25 @@ export default async function KommunikationPage({
     customer_avatar_url: customerAvatarUrlByProfileId.get(customer.id) ?? null,
   }));
 
+  let selectedConversationUnreadBeforeRead = 0;
+
   const selectedConversation = wantsMobileChatList
     ? null
     : conversations.find((conversation) => conversation.id === selectedParam) ??
       conversations[0] ??
       null;
+
+  if (!isDemoTenant && selectedConversation && Number(selectedConversation.unread_count ?? 0) > 0) {
+    selectedConversationUnreadBeforeRead = Math.max(0, Math.trunc(Number(selectedConversation.unread_count ?? 0)));
+    await supabase
+      .from("customer_conversations")
+      .update({ unread_count: 0, updated_at: new Date().toISOString() })
+      .eq("id", selectedConversation.id);
+
+    selectedConversation.unread_count = 0;
+  }
+
+  const visibleCustomerUnreadCount = Math.max(0, customerUnreadCount - selectedConversationUnreadBeforeRead);
 
   let messages: MessageRow[] = [];
   if (selectedConversation) {
@@ -1787,7 +1801,7 @@ export default async function KommunikationPage({
           <Link
             href="/dashboard"
             aria-label="Kommunikation schließen"
-            className="mb-3 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.045] text-white/70 transition hover:bg-white/[0.075]"
+            className="mb-3 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.045] text-white/70 transition hover:bg-white/[0.075] hover:text-white/90"
           >
             <IconClose />
           </Link>
@@ -2118,7 +2132,7 @@ export default async function KommunikationPage({
 
                   <div className="grid min-w-[132px] flex-1 grid-cols-2 gap-2">
                     <Link href="/kommunikation?tab=customers" className="inline-flex h-10 items-center justify-center rounded-full border border-[#d6c3a3]/28 bg-[#d6c3a3]/16 px-3 text-center text-xs font-semibold text-[#f7efe2] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition hover:bg-[#d6c3a3]/20">
-                      <span className="inline-flex items-center justify-center">Kunden<CountBadge count={customerUnreadCount} /></span>
+                      <span className="inline-flex items-center justify-center">Kunden<CountBadge count={visibleCustomerUnreadCount} /></span>
                     </Link>
                     <Link href="/kommunikation?tab=team" className="inline-flex h-10 items-center justify-center rounded-full border border-white/[0.10] bg-white/[0.04] px-3 text-center text-xs font-semibold text-white/58 transition hover:bg-white/[0.07] hover:text-white">
                       <span className="inline-flex items-center justify-center">Team<KommunikationTeamUnreadBadge tenantId={effectiveTenantId} currentUserId={user.id} /></span>

@@ -130,7 +130,7 @@ function TeamUserFloatingRail({
   onMention: (user: TeamUser) => void;
 }) {
   return (
-    <aside className="pointer-events-auto absolute left-2 top-20 z-30 flex max-h-[calc(100%-150px)] w-10 flex-col items-center gap-2 overflow-y-auto rounded-full border border-[#d8c1a0]/12 bg-black/25 px-1.5 py-2 shadow-[0_18px_45px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <aside className="pointer-events-auto absolute right-3 top-20 z-50 flex max-h-[calc(100%-150px)] w-11 flex-col items-center gap-2 overflow-y-auto rounded-full border border-[#d8c1a0]/12 bg-black/35 px-1.5 py-1.5 shadow-[0_18px_45px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {users.map((user) => (
         <UserAvatarButton key={user.userId} user={user} currentUserId={currentUserId} onMention={onMention} size="mobile" />
       ))}
@@ -230,6 +230,23 @@ export default function KommunikationTeamChatPanel({
   const [loading, setLoading] = useState(true);
   const [teamUsers, setTeamUsers] = useState<TeamUser[]>([]);
   const isDemoMode = tenantId === CLIENTIQUE_DEMO_TENANT_ID;
+  const storageKey = useMemo(() => {
+    if (!currentUserId) return null;
+    return `team-chat:last-read:global:${currentUserId}`;
+  }, [currentUserId]);
+
+  function markLatestMessageAsRead(rows: ChatMessageDTO[]) {
+    if (!storageKey || typeof window === "undefined") return;
+    const sorted = [...rows]
+      .filter((message) => message.id)
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    const latestMessage = sorted[sorted.length - 1];
+    if (!latestMessage?.id) return;
+    if (window.localStorage.getItem(storageKey) !== latestMessage.id) {
+      window.localStorage.setItem(storageKey, latestMessage.id);
+      window.dispatchEvent(new Event("communication:counts-changed"));
+    }
+  }
 
   const mentionUser = (user: TeamUser) => {
     window.dispatchEvent(
@@ -268,8 +285,6 @@ export default function KommunikationTeamChatPanel({
           .from("user_profiles")
           .select("user_id, full_name, tenant_id, avatar_ring_color")
           .not("user_id", "is", null);
-
-        if (tenantId) query = query.eq("tenant_id", tenantId);
 
         const { data, error } = await query.order("full_name", { ascending: true });
 
@@ -318,17 +333,24 @@ export default function KommunikationTeamChatPanel({
       };
     }
 
-    async function loadMessages() {
+    async function fetchMappedMessages() {
+      const res = await fetch("/api/chat/messages", { cache: "no-store" });
+      if (!res.ok) return [];
+
+      const json = await res.json();
+      const rows = Array.isArray(json?.messages) ? json.messages : [];
+      return rows.map(mapChatMessage);
+    }
+
+    async function loadInitialMessages() {
       setLoading(true);
       try {
-        const res = await fetch("/api/chat/messages", { cache: "no-store" });
-        if (!res.ok) return;
+        const mapped = await fetchMappedMessages();
 
-        const json = await res.json();
-        const rows = Array.isArray(json?.messages) ? json.messages : [];
-        const mapped = rows.map(mapChatMessage);
-
-        if (!cancelled) setMessages(mapped);
+        if (!cancelled) {
+          setMessages(mapped);
+          markLatestMessageAsRead(mapped);
+        }
       } catch (error) {
         console.error("[kommunikation-team-chat] load failed", error);
       } finally {
@@ -336,12 +358,43 @@ export default function KommunikationTeamChatPanel({
       }
     }
 
-    loadMessages();
+    async function syncReadStateOnly() {
+      try {
+        const mapped = await fetchMappedMessages();
+        if (!cancelled) markLatestMessageAsRead(mapped);
+      } catch (error) {
+        console.error("[kommunikation-team-chat] read sync failed", error);
+      }
+    }
+
+    loadInitialMessages();
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void syncReadStateOnly();
+      }
+    }, 5000);
+
+    const onFocus = () => {
+      void syncReadStateOnly();
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void syncReadStateOnly();
+      }
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
       cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [isDemoMode]);
+  }, [isDemoMode, storageKey]);
 
   if (isDemoMode) {
     const demoUsers = teamUsers.length
@@ -380,7 +433,7 @@ export default function KommunikationTeamChatPanel({
       <div className="relative flex h-full min-h-0 overflow-hidden bg-black/[0.02]">
         <TeamUserFloatingRail users={demoUsers} currentUserId={currentUserId} onMention={mentionUser} />
         <TeamUserRail users={demoUsers} currentUserId={currentUserId} onMention={mentionUser} />
-        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col pl-12 sm:pl-0">
+        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
           <ChatClient
             tenantId={tenantId}
             currentUserId={currentUserId}
@@ -408,7 +461,7 @@ export default function KommunikationTeamChatPanel({
     <div className="relative flex h-full min-h-0 overflow-hidden bg-black/[0.02]">
       <TeamUserFloatingRail users={teamUsers} currentUserId={currentUserId} onMention={mentionUser} />
       <TeamUserRail users={teamUsers} currentUserId={currentUserId} onMention={mentionUser} />
-      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col pl-12 sm:pl-0">
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
         <ChatClient
           tenantId={tenantId}
           currentUserId={currentUserId}

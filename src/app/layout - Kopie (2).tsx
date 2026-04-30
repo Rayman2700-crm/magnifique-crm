@@ -95,7 +95,7 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang="de" style={{ backgroundColor: appBranding.themeColor }} className="clientique-ios-root">
+    <html lang="de" style={{ backgroundColor: appBranding.themeColor }}>
       <head>
         <meta name="theme-color" content={appBranding.themeColor} />
         <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -117,7 +117,7 @@ export default async function RootLayout({
         ))}
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased clientique-ios-body`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         style={{ backgroundColor: appBranding.themeColor }}
       >
         {currentUserId ? (

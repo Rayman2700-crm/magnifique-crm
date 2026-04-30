@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { appBranding, brandInitials } from "@/lib/appBranding";
 
 export default function Home() {
   const router = useRouter();
@@ -21,14 +22,14 @@ export default function Home() {
 
         <div className="relative flex h-24 w-24 items-center justify-center rounded-[28px] border border-[rgba(255,244,232,0.08)] bg-[rgba(255,248,240,0.03)] shadow-[0_18px_60px_rgba(0,0,0,0.32),inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-xl animate-[clientiqueAppPulse_2.8s_ease-in-out_infinite]">
           <span className="text-[34px] font-semibold tracking-[-0.04em] text-[var(--primary)]">
-            C
+            {brandInitials(appBranding.shortName)}
           </span>
         </div>
 
         <div className="mt-5 text-[26px] font-semibold tracking-[-0.04em] text-white/95">
-          Clientique
+          {appBranding.shortName}
         </div>
-        <div className="mt-1 text-sm text-white/45">Launching dashboard…</div>
+        <div className="mt-1 text-sm text-white/45">Dashboard wird geladen…</div>
       </div>
 
       <style jsx global>{`

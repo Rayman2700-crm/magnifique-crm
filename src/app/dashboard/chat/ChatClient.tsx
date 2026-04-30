@@ -4873,8 +4873,26 @@ export default function ChatClient({
     if ((!value && !file && !replyTarget) || sending || recordingState === "recording") return;
 
     const finalText = buildReplyMessage(replyTarget, value);
+    const optimisticId = `team-local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const optimisticFileUrl = file ? URL.createObjectURL(file) : null;
+    const optimisticMessage: ChatMessageDTO = {
+      id: optimisticId,
+      text: finalText || (file ? `📎 ${file.name}` : ""),
+      senderId: currentUserId,
+      senderName: currentUserName || "Du",
+      createdAt: new Date().toISOString(),
+      editedAt: null,
+      deletedAt: null,
+      fileName: file ? file.name : null,
+      filePath: null,
+      fileType: file ? file.type || "application/octet-stream" : null,
+      fileSize: file ? file.size : null,
+      fileUrl: optimisticFileUrl,
+    };
 
     setSending(true);
+    mergeMessages([optimisticMessage]);
+
     try {
       setText("");
       setSelectedFile(null);
@@ -4896,21 +4914,7 @@ export default function ChatClient({
       if (fileInputRef.current) fileInputRef.current.value = "";
       await sendTypingEvent(false);
 
-      if (demoMode) {
-        const localMessage: ChatMessageDTO = {
-          id: `demo-team-local-${Date.now()}`,
-          text: finalText || (file ? `📎 ${file.name}` : ""),
-          senderId: currentUserId,
-          senderName: currentUserName || "Du",
-          createdAt: new Date().toISOString(),
-          fileName: file ? file.name : null,
-          filePath: null,
-          fileType: file ? file.type || "application/octet-stream" : null,
-          fileSize: file ? file.size : null,
-          fileUrl: file ? URL.createObjectURL(file) : null,
-        };
-        mergeMessages([localMessage]);
-      } else {
+      if (!demoMode) {
         let res: Response;
 
         if (file) {
@@ -4934,6 +4938,54 @@ export default function ChatClient({
           const t = await res.text();
           throw new Error(t || "Senden fehlgeschlagen");
         }
+
+        const json = await res.json().catch(() => null);
+        const row = json?.message ?? null;
+        const confirmedMessage: ChatMessageDTO | null = row
+          ? {
+              id: String(row.id ?? optimisticId),
+              text: String(row.text ?? optimisticMessage.text),
+              senderId: String(row.sender_id ?? currentUserId),
+              senderName: String(row.sender_name ?? currentUserName ?? "Du"),
+              createdAt: String(row.created_at ?? optimisticMessage.createdAt),
+              editedAt: row.edited_at ? String(row.edited_at) : null,
+              deletedAt: row.deleted_at ? String(row.deleted_at) : null,
+              fileName: row.file_name ? String(row.file_name) : optimisticMessage.fileName,
+              filePath: row.file_path ? String(row.file_path) : null,
+              fileType: row.file_type ? String(row.file_type) : optimisticMessage.fileType,
+              fileSize:
+                typeof row.file_size === "number"
+                  ? row.file_size
+                  : row.file_size
+                    ? Number(row.file_size)
+                    : optimisticMessage.fileSize,
+              fileUrl: row.file_url ? String(row.file_url) : optimisticMessage.fileUrl,
+            }
+          : json?.id
+            ? {
+                ...optimisticMessage,
+                id: String(json.id),
+                createdAt: String(json.created_at ?? optimisticMessage.createdAt),
+              }
+            : null;
+
+        if (confirmedMessage) {
+          setMessages((prev) => {
+            const withoutOptimistic = prev.filter((message) => message.id !== optimisticId);
+            const withoutDuplicate = withoutOptimistic.filter(
+              (message) => message.id !== confirmedMessage.id,
+            );
+
+            return [...withoutDuplicate, confirmedMessage].sort(
+              (a, b) =>
+                new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+            );
+          });
+
+          if (optimisticFileUrl && confirmedMessage.fileUrl !== optimisticFileUrl) {
+            URL.revokeObjectURL(optimisticFileUrl);
+          }
+        }
       }
 
       setAutoScroll(true);
@@ -4942,6 +4994,8 @@ export default function ChatClient({
         markLatestAsRead();
       });
     } catch (e) {
+      setMessages((prev) => prev.filter((message) => message.id !== optimisticId));
+      if (optimisticFileUrl) URL.revokeObjectURL(optimisticFileUrl);
       setText(value);
       if (audioFile) {
         setRecordedAudioFile(audioFile);

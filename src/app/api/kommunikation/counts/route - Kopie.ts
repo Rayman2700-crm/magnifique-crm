@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getEffectiveTenantId } from "@/lib/effectiveTenant";
 
 export const dynamic = "force-dynamic";
@@ -12,54 +11,25 @@ type CustomerConversationCountRow = {
 
 type TeamMessageCountRow = {
   id: string;
-  sender_id?: string | null;
-  senderId?: string | null;
-  created_at?: string | null;
-  createdAt?: string | null;
+  sender_id: string | null;
+  created_at: string | null;
 };
 
 function safeCount(value: unknown) {
   return Math.max(0, Math.trunc(Number(value ?? 0) || 0));
 }
 
-function normalizeTeamRows(rows: any[]) {
-  return rows
-    .map((row: TeamMessageCountRow) => ({
-      id: String(row?.id ?? ""),
-      senderId: String(row?.sender_id ?? row?.senderId ?? ""),
-      createdAt: String(row?.created_at ?? row?.createdAt ?? ""),
-    }))
-    .filter((message) => message.id)
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-}
+function countTeamUnread(messages: TeamMessageCountRow[], currentUserId: string, lastReadMessageId: string | null) {
+  const readableMessages = messages.filter((message) => String(message.id || "").trim());
+  const foreignMessages = (rows: TeamMessageCountRow[]) =>
+    rows.filter((message) => String(message.sender_id ?? "") !== currentUserId).length;
 
-function countTeamUnread(rows: any[], currentUserId: string, lastReadMessageId: string | null) {
-  const messages = normalizeTeamRows(rows);
-  const foreignCount = (list: typeof messages) =>
-    list.filter((message) => message.senderId && message.senderId !== currentUserId).length;
+  if (!lastReadMessageId) return foreignMessages(readableMessages);
 
-  if (!lastReadMessageId) return foreignCount(messages);
+  const lastReadIndex = readableMessages.findIndex((message) => message.id === lastReadMessageId);
+  if (lastReadIndex < 0) return foreignMessages(readableMessages);
 
-  const lastReadIndex = messages.findIndex((message) => message.id === lastReadMessageId);
-  if (lastReadIndex < 0) return foreignCount(messages);
-
-  return foreignCount(messages.slice(lastReadIndex + 1));
-}
-
-async function loadTeamRowsWithAdmin() {
-  try {
-    const admin = supabaseAdmin();
-    const { data, error } = await admin
-      .from("chat_messages")
-      .select("id, sender_id, created_at")
-      .order("created_at", { ascending: true })
-      .limit(1000);
-
-    if (error) throw error;
-    return { rows: data ?? [], source: "chat_messages_admin", error: null as string | null };
-  } catch (error: any) {
-    return { rows: [], source: "chat_messages_admin_failed", error: String(error?.message ?? error) };
-  }
+  return foreignMessages(readableMessages.slice(lastReadIndex + 1));
 }
 
 export async function GET(request: Request) {
@@ -93,7 +63,9 @@ export async function GET(request: Request) {
     tenant_id: profile?.tenant_id ?? null,
   });
 
-  let conversationQuery = supabase.from("customer_conversations").select("status, unread_count");
+  let conversationQuery = supabase
+    .from("customer_conversations")
+    .select("status, unread_count");
 
   if (effectiveTenantId) {
     conversationQuery = conversationQuery.eq("tenant_id", effectiveTenantId);
@@ -102,7 +74,10 @@ export async function GET(request: Request) {
   const { data: conversationRowsRaw } = await conversationQuery;
   const conversationRows = (conversationRowsRaw ?? []) as CustomerConversationCountRow[];
 
-  const customerUnreadCount = conversationRows.reduce((sum, row) => sum + safeCount(row.unread_count), 0);
+  const customerUnreadCount = conversationRows.reduce(
+    (sum, row) => sum + safeCount(row.unread_count),
+    0,
+  );
   const openConversationCount = conversationRows.filter(
     (row) => String(row.status ?? "OPEN").toUpperCase() === "OPEN",
   ).length;
@@ -113,8 +88,33 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const lastReadMessageId = url.searchParams.get("teamLastReadMessageId");
 
-  const teamResult = await loadTeamRowsWithAdmin();
-  const teamUnreadCount = countTeamUnread(teamResult.rows, user.id, lastReadMessageId);
+  let teamRows: TeamMessageCountRow[] = [];
+  let teamSource = "chat_messages";
+
+  try {
+    let teamQuery = supabase
+      .from("chat_messages")
+      .select("id, sender_id, created_at, tenant_id")
+      .order("created_at", { ascending: true })
+      .limit(1000);
+
+    if (effectiveTenantId) teamQuery = teamQuery.eq("tenant_id", effectiveTenantId);
+
+    const { data, error } = await teamQuery;
+    if (error) throw error;
+    teamRows = (data ?? []) as TeamMessageCountRow[];
+  } catch {
+    const { data } = await supabase
+      .from("chat_messages")
+      .select("id, sender_id, created_at")
+      .order("created_at", { ascending: true })
+      .limit(1000);
+
+    teamRows = (data ?? []) as TeamMessageCountRow[];
+    teamSource = "chat_messages_without_tenant_filter";
+  }
+
+  const teamUnreadCount = countTeamUnread(teamRows, user.id, lastReadMessageId);
   const totalUnreadCount = customerUnreadCount + teamUnreadCount;
 
   return NextResponse.json({
@@ -127,9 +127,7 @@ export async function GET(request: Request) {
     meta: {
       role,
       effectiveTenantId,
-      teamSource: teamResult.source,
-      teamRowsLoaded: teamResult.rows.length,
-      teamError: teamResult.error,
+      teamSource,
       teamLastReadMessageId: lastReadMessageId,
     },
   });

@@ -10,6 +10,7 @@ import React, {
 } from "react";
 import { createPortal } from "react-dom";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import KommunikationVoiceMessagePlayer from "@/app/kommunikation/KommunikationVoiceMessagePlayer";
 
 export type ChatMessageDTO = {
   id: string;
@@ -69,6 +70,12 @@ type ParsedReplyMessage = {
 type MentionUser = {
   userId: string;
   fullName: string;
+};
+
+type TeamUserMeta = {
+  userId: string;
+  fullName: string;
+  avatarRingColor?: string | null;
 };
 
 type MentionState = {
@@ -2855,6 +2862,13 @@ function formatTime(iso: string) {
   }).format(d);
 }
 
+function formatDuration(seconds: number) {
+  const safe = Math.max(0, Math.floor(seconds));
+  const mins = Math.floor(safe / 60);
+  const secs = safe % 60;
+  return `${mins}:${String(secs).padStart(2, "0")}`;
+}
+
 function formatFileSize(bytes?: number | null) {
   if (!bytes || bytes <= 0) return "";
 
@@ -2866,6 +2880,15 @@ function formatFileSize(bytes?: number | null) {
 
 function isImage(fileType?: string | null) {
   return Boolean(fileType && fileType.startsWith("image/"));
+}
+
+function isAudio(fileType?: string | null, fileName?: string | null) {
+  const type = String(fileType || "").toLowerCase();
+  const name = String(fileName || "").toLowerCase();
+  return (
+    type.startsWith("audio/") ||
+    /\.(webm|ogg|oga|mp3|m4a|aac|wav)$/i.test(name)
+  );
 }
 
 function getInitials(name: string) {
@@ -3238,6 +3261,50 @@ function EmojiMiniSlideover({
   );
 }
 
+function TeamChatAvatar({
+  userId,
+  name,
+  mine = false,
+  ringColor,
+  sizeClass = "h-9 w-9",
+}: {
+  userId: string;
+  name: string;
+  mine?: boolean;
+  ringColor?: string | null;
+  sizeClass?: string;
+}) {
+  const safeName = name || "Team";
+  const borderColor = ringColor || (mine ? "#d8c1a0" : "rgba(216,193,160,0.30)");
+
+  return (
+    <div
+      className={`relative shrink-0 overflow-hidden rounded-full border-2 bg-[#d8c1a0]/[0.08] ${sizeClass}`}
+      style={{
+        borderColor,
+        boxShadow: ringColor ? `0 0 0 2px ${ringColor}24` : undefined,
+      }}
+      title={safeName}
+      aria-label={safeName}
+    >
+      <span
+        className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white"
+        style={{ backgroundColor: getAvatarColor(safeName) }}
+      >
+        {getInitials(safeName)}
+      </span>
+      <img
+        src={`/users/${userId}.png`}
+        alt={safeName}
+        className="relative h-full w-full object-cover"
+        onError={(event) => {
+          event.currentTarget.style.display = "none";
+        }}
+      />
+    </div>
+  );
+}
+
 const ChatMessageItem = memo(function ChatMessageItem({
   message,
   prevMessage,
@@ -3261,6 +3328,7 @@ const ChatMessageItem = memo(function ChatMessageItem({
   editTextareaRef,
   messageRef,
   isHighlighted,
+  userMetaById,
 }: {
   message: ChatMessageDTO;
   prevMessage?: ChatMessageDTO;
@@ -3284,9 +3352,13 @@ const ChatMessageItem = memo(function ChatMessageItem({
   editTextareaRef: React.RefObject<HTMLTextAreaElement | null>;
   messageRef: (node: HTMLDivElement | null) => void;
   isHighlighted: boolean;
+  userMetaById: Record<string, TeamUserMeta>;
 }) {
   const mine = message.senderId === currentUserId;
   const name = message.senderName || (mine ? currentUserName : "Team");
+  const senderMeta = userMetaById[message.senderId];
+  const avatarName = senderMeta?.fullName || name;
+  const avatarRingColor = senderMeta?.avatarRingColor ?? null;
   const showHeader = !isSameGroup(prevMessage, message);
   const reactionGroups = groupReactions(reactions, currentUserId);
   const reactionPickerOpen = openReactionPickerMessageId === message.id;
@@ -3375,13 +3447,13 @@ const ChatMessageItem = memo(function ChatMessageItem({
       }
     >
       {showHeader ? (
-        <div
-          className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-          style={{ backgroundColor: getAvatarColor(name) }}
-          title={name}
-        >
-          {getInitials(name)}
-        </div>
+        <TeamChatAvatar
+          userId={message.senderId}
+          name={avatarName}
+          mine={mine}
+          ringColor={avatarRingColor}
+          sizeClass="mt-0.5 h-9 w-9"
+        />
       ) : (
         <div className="w-9 shrink-0" />
       )}
@@ -3516,7 +3588,15 @@ const ChatMessageItem = memo(function ChatMessageItem({
                     ) : null}
 
                     {hasAttachment ? (
-                      isImage(message.fileType) ? (
+                      isAudio(message.fileType, message.fileName) ? (
+                        <KommunikationVoiceMessagePlayer
+                          src={message.fileUrl || ""}
+                          title="Sprachnachricht"
+                          outbound={mine}
+                          avatarName={avatarName}
+                          avatarUrl={`/users/${message.senderId}.png`}
+                        />
+                      ) : isImage(message.fileType) ? (
                         <button
                           type="button"
                           onClick={() =>
@@ -3720,7 +3800,9 @@ export default function ChatClient({
   initialMessages,
   initialDraft = "",
   embedded = false,
+  teamUsers = [],
   onRealtimeStatusChange,
+  demoMode = false,
 }: {
   tenantId: string | null;
   currentUserId: string;
@@ -3728,11 +3810,25 @@ export default function ChatClient({
   initialMessages: ChatMessageDTO[];
   initialDraft?: string;
   embedded?: boolean;
+  teamUsers?: TeamUserMeta[];
   onRealtimeStatusChange?: (status: RealtimeStatus) => void;
+  demoMode?: boolean;
 }) {
   const supabase = useMemo(() => supabaseBrowser(), []);
   const [messages, setMessages] = useState<ChatMessageDTO[]>(initialMessages);
   const [text, setText] = useState(initialDraft);
+  const userMetaById = useMemo(() => {
+    const map: Record<string, TeamUserMeta> = {};
+    for (const user of teamUsers) {
+      map[user.userId] = user;
+    }
+    map[currentUserId] = map[currentUserId] || {
+      userId: currentUserId,
+      fullName: currentUserName || "Du",
+      avatarRingColor: null,
+    };
+    return map;
+  }, [currentUserId, currentUserName, teamUsers]);
   const [sending, setSending] = useState(false);
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   const [reactionsByMessage, setReactionsByMessage] = useState<
@@ -3741,6 +3837,16 @@ export default function ChatClient({
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [recordingState, setRecordingState] = useState<
+    "idle" | "recording" | "review"
+  >("idle");
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [recordedAudioFile, setRecordedAudioFile] = useState<File | null>(null);
+  const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
+  const recordingRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingChunksRef = useRef<BlobPart[]>([]);
+  const recordingTimerRef = useRef<number | null>(null);
   const [previewImage, setPreviewImage] = useState<PreviewImage | null>(null);
   const [keyboardInset, setKeyboardInset] = useState(0);
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
@@ -3784,6 +3890,16 @@ export default function ChatClient({
       composerTextareaRef.current?.focus();
     });
   }, [initialDraft]);
+
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current !== null) {
+        window.clearInterval(recordingTimerRef.current);
+      }
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+      if (recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);
+    };
+  }, [recordedAudioUrl]);
 
   const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(
     null,
@@ -3890,6 +4006,7 @@ export default function ChatClient({
   }, []);
 
   const refetchMessages = useCallback(async () => {
+    if (demoMode) return;
     try {
       const messagesRes = await fetch("/api/chat/messages", {
         cache: "no-store",
@@ -3956,10 +4073,18 @@ export default function ChatClient({
     } catch (e) {
       console.error("[chat] refetch failed", e);
     }
-  }, [collectMessageIds, mergeMessages, supabase]);
+  }, [collectMessageIds, demoMode, mergeMessages, supabase]);
 
   const loadMentionUsers = useCallback(async () => {
     if (!tenantId) return;
+
+    if (demoMode) {
+      const users = teamUsers.length
+        ? teamUsers.map((user) => ({ userId: user.userId, fullName: user.fullName }))
+        : [{ userId: currentUserId, fullName: currentUserName || "Du" }];
+      setMentionUsers(users);
+      return;
+    }
 
     try {
       const [profilesRes, messagesRes, reactionsRes] = await Promise.all([
@@ -4019,10 +4144,11 @@ export default function ChatClient({
     } catch (e) {
       console.error("[chat] load mention users failed", e);
     }
-  }, [supabase, tenantId, currentUserId, currentUserName]);
+  }, [supabase, tenantId, currentUserId, currentUserName, demoMode, teamUsers]);
 
   const sendTypingEvent = useCallback(
     async (isTyping: boolean) => {
+      if (demoMode) return;
       const channel = typingChannelRef.current;
       if (!channel || !tenantId) return;
 
@@ -4041,7 +4167,7 @@ export default function ChatClient({
         console.error("[typing] send failed", e);
       }
     },
-    [tenantId, currentUserId, currentUserName],
+    [tenantId, currentUserId, currentUserName, demoMode],
   );
 
   const markLatestAsRead = useCallback(() => {
@@ -4384,6 +4510,12 @@ export default function ChatClient({
   useEffect(() => {
     if (!tenantId) return;
 
+    if (demoMode) {
+      setRealtimeStatus("connected");
+      typingChannelRef.current = null;
+      return;
+    }
+
     let messageChannel: ReturnType<typeof supabase.channel> | null = null;
     let typingChannel: ReturnType<typeof supabase.channel> | null = null;
     let reactionsChannel: ReturnType<typeof supabase.channel> | null = null;
@@ -4623,14 +4755,122 @@ export default function ChatClient({
     loadMentionUsers,
     messages,
     clearReconnectTimeout,
+    demoMode,
   ]);
+
+
+  function clearVoiceRecording() {
+    if (recordingTimerRef.current !== null) {
+      window.clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    recordingStreamRef.current = null;
+    recordingRecorderRef.current = null;
+    recordingChunksRef.current = [];
+    if (recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);
+    setRecordedAudioFile(null);
+    setRecordedAudioUrl(null);
+    setRecordingSeconds(0);
+    setRecordingState("idle");
+  }
+
+  async function startVoiceRecording() {
+    if (recordingState === "recording" || sending) return;
+    setMobileComposerMenuOpen(false);
+    setComposerEmojiPickerOpen(false);
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+
+    try {
+      if (recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);
+      setRecordedAudioFile(null);
+      setRecordedAudioUrl(null);
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/webm")
+          ? "audio/webm"
+          : "";
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+
+      recordingStreamRef.current = stream;
+      recordingRecorderRef.current = recorder;
+      recordingChunksRef.current = [];
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) recordingChunksRef.current.push(event.data);
+      };
+
+      recorder.onstop = () => {
+        if (recordingTimerRef.current !== null) {
+          window.clearInterval(recordingTimerRef.current);
+          recordingTimerRef.current = null;
+        }
+        stream.getTracks().forEach((track) => track.stop());
+        recordingStreamRef.current = null;
+
+        const blobType = recorder.mimeType || "audio/webm";
+        const blob = new Blob(recordingChunksRef.current, { type: blobType });
+        recordingChunksRef.current = [];
+
+        if (!blob.size) {
+          clearVoiceRecording();
+          return;
+        }
+
+        const objectUrl = URL.createObjectURL(blob);
+        const file = new File([blob], `team-sprachnachricht-${Date.now()}.webm`, {
+          type: blobType,
+        });
+
+        setRecordedAudioFile(file);
+        setRecordedAudioUrl(objectUrl);
+        setRecordingState("review");
+      };
+
+      recorder.start(250);
+      setRecordingSeconds(0);
+      setRecordingState("recording");
+      recordingTimerRef.current = window.setInterval(() => {
+        setRecordingSeconds((value) => value + 1);
+      }, 1000);
+    } catch (error) {
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+      recordingStreamRef.current = null;
+      setRecordingState("idle");
+      alert(error instanceof Error ? error.message : "Mikrofon konnte nicht gestartet werden.");
+    }
+  }
+
+  function stopVoiceRecording() {
+    const recorder = recordingRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+      return;
+    }
+    clearVoiceRecording();
+  }
+
+  function cancelVoiceRecording() {
+    const recorder = recordingRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.onstop = null;
+      recorder.stop();
+    }
+    clearVoiceRecording();
+  }
 
   async function send() {
     setMobileComposerMenuOpen(false);
     const value = text.trim();
-    const file = selectedFile;
+    const audioFile = recordedAudioFile;
+    const file = audioFile ?? selectedFile;
 
-    if ((!value && !file && !replyTarget) || sending) return;
+    if ((!value && !file && !replyTarget) || sending || recordingState === "recording") return;
 
     const finalText = buildReplyMessage(replyTarget, value);
 
@@ -4638,6 +4878,13 @@ export default function ChatClient({
     try {
       setText("");
       setSelectedFile(null);
+      setRecordedAudioFile(null);
+      if (recordedAudioUrl) {
+        URL.revokeObjectURL(recordedAudioUrl);
+        setRecordedAudioUrl(null);
+      }
+      setRecordingSeconds(0);
+      setRecordingState("idle");
       setReplyTarget(null);
       setMentionState({
         active: false,
@@ -4649,28 +4896,44 @@ export default function ChatClient({
       if (fileInputRef.current) fileInputRef.current.value = "";
       await sendTypingEvent(false);
 
-      let res: Response;
-
-      if (file) {
-        const formData = new FormData();
-        formData.append("text", finalText);
-        formData.append("file", file);
-
-        res = await fetch("/api/chat/messages", {
-          method: "POST",
-          body: formData,
-        });
+      if (demoMode) {
+        const localMessage: ChatMessageDTO = {
+          id: `demo-team-local-${Date.now()}`,
+          text: finalText || (file ? `📎 ${file.name}` : ""),
+          senderId: currentUserId,
+          senderName: currentUserName || "Du",
+          createdAt: new Date().toISOString(),
+          fileName: file ? file.name : null,
+          filePath: null,
+          fileType: file ? file.type || "application/octet-stream" : null,
+          fileSize: file ? file.size : null,
+          fileUrl: file ? URL.createObjectURL(file) : null,
+        };
+        mergeMessages([localMessage]);
       } else {
-        res = await fetch("/api/chat/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: finalText }),
-        });
-      }
+        let res: Response;
 
-      if (!res.ok) {
-        const t = await res.text();
-        throw new Error(t || "Senden fehlgeschlagen");
+        if (file) {
+          const formData = new FormData();
+          formData.append("text", finalText);
+          formData.append("file", file);
+
+          res = await fetch("/api/chat/messages", {
+            method: "POST",
+            body: formData,
+          });
+        } else {
+          res = await fetch("/api/chat/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: finalText }),
+          });
+        }
+
+        if (!res.ok) {
+          const t = await res.text();
+          throw new Error(t || "Senden fehlgeschlagen");
+        }
       }
 
       setAutoScroll(true);
@@ -4680,7 +4943,12 @@ export default function ChatClient({
       });
     } catch (e) {
       setText(value);
-      setSelectedFile(file);
+      if (audioFile) {
+        setRecordedAudioFile(audioFile);
+        setRecordingState("review");
+      } else {
+        setSelectedFile(file);
+      }
       console.error(e);
       alert("Nachricht/Datei konnte nicht gesendet werden.");
     } finally {
@@ -4706,6 +4974,10 @@ export default function ChatClient({
   }
 
   async function toggleReaction(messageId: string, emoji: string) {
+    if (demoMode) {
+      setOpenReactionPickerMessageId(null);
+      return;
+    }
     try {
       const res = await fetch("/api/chat/reactions", {
         method: "POST",
@@ -4726,6 +4998,19 @@ export default function ChatClient({
   async function saveEdit(messageId: string) {
     const value = editingText.trim();
     if (!value) return;
+
+    if (demoMode) {
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === messageId
+            ? { ...message, text: value, editedAt: new Date().toISOString() }
+            : message,
+        ),
+      );
+      setEditingMessageId(null);
+      setEditingText("");
+      return;
+    }
 
     try {
       const res = await fetch(`/api/chat/messages/${messageId}`, {
@@ -4748,6 +5033,10 @@ export default function ChatClient({
   }
 
   async function deleteMessage(messageId: string) {
+    if (demoMode) {
+      setMessages((prev) => prev.map((message) => message.id === messageId ? { ...message, deletedAt: new Date().toISOString(), text: "" } : message));
+      return;
+    }
     const ok = window.confirm("Willst du diese Nachricht wirklich löschen?");
     if (!ok) return;
 
@@ -4933,6 +5222,7 @@ export default function ChatClient({
                     messageRefs.current[m.id] = node;
                   }}
                   isHighlighted={highlightedMessageId === m.id}
+                  userMetaById={userMetaById}
                 />
               </React.Fragment>
             ))}
@@ -4977,6 +5267,32 @@ export default function ChatClient({
                   >
                     Entfernen
                   </button>
+                </div>
+              ) : null}
+
+
+              {recordingState === "review" && recordedAudioFile && recordedAudioUrl ? (
+                <div className="mb-3 rounded-[18px] border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] px-3 py-3">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-white">🎙 Sprachnachricht bereit</div>
+                      <div className="text-xs text-white/50">wird als Team-Audio gesendet</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={clearVoiceRecording}
+                      className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/[0.08]"
+                    >
+                      Entfernen
+                    </button>
+                  </div>
+                  <KommunikationVoiceMessagePlayer
+                    src={recordedAudioUrl}
+                    title="Sprachnachricht"
+                    outbound
+                    avatarName={currentUserName || "Du"}
+                    avatarUrl={`/users/${currentUserId}.png`}
+                  />
                 </div>
               ) : null}
 
@@ -5089,6 +5405,17 @@ export default function ChatClient({
                     <span aria-hidden="true">☺️</span>
                     Emoji
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileComposerMenuOpen(false);
+                      startVoiceRecording();
+                    }}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-[14px] border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.06] px-3 py-2 text-sm font-semibold text-[#f6f0e8] active:scale-[0.98]"
+                  >
+                    <span aria-hidden="true">🎙</span>
+                    Sprache
+                  </button>
                 </div>
               ) : null}
 
@@ -5119,7 +5446,15 @@ export default function ChatClient({
                   +
                 </button>
 
-                <textarea
+                {recordingState === "recording" ? (
+                  <div className="h-11 min-h-[44px] w-full rounded-[22px] border border-red-300/20 bg-red-500/10 py-[12px] pl-12 pr-28 text-sm leading-[20px] text-red-50">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-red-300 shadow-[0_0_0_4px_rgba(252,165,165,0.12)]" />
+                      <span className="font-semibold">Aufnahme läuft · {formatDuration(recordingSeconds)}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <textarea
                   ref={composerTextareaRef}
                   value={text}
                   onFocus={() => {
@@ -5189,18 +5524,59 @@ export default function ChatClient({
                       : "Gib eine Nachricht ein."
                   }
                   rows={1}
-                  className="h-11 min-h-[44px] max-h-36 w-full resize-none overflow-y-auto rounded-[22px] border border-[#d8c1a0]/16 bg-black/25 py-[12px] pl-12 pr-12 text-sm leading-[20px] text-white outline-none placeholder:text-white/38 transition focus:border-[#d8c1a0]/45 focus:bg-black/30 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  className="h-11 min-h-[44px] max-h-36 w-full resize-none overflow-y-auto rounded-[22px] border border-[#d8c1a0]/16 bg-black/25 py-[12px] pl-12 pr-[88px] text-sm leading-[20px] text-white outline-none placeholder:text-white/38 transition focus:border-[#d8c1a0]/45 focus:bg-black/30 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 />
+                )}
+
+                {recordingState === "recording" ? (
+                  <div className="absolute bottom-1.5 right-1.5 z-10 flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={cancelVoiceRecording}
+                      className="inline-flex h-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] px-3 text-[11px] font-semibold text-white/76 hover:bg-white/[0.09]"
+                    >
+                      Abbrechen
+                    </button>
+                    <button
+                      type="button"
+                      onClick={stopVoiceRecording}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-red-200/20 bg-red-500/20 text-red-50 hover:bg-red-500/28"
+                      aria-label="Aufnahme stoppen"
+                      title="Aufnahme stoppen"
+                    >
+                      ■
+                    </button>
+                  </div>
+                ) : null}
+
+                {recordingState !== "recording" ? (
+                  <button
+                    type="button"
+                    onClick={startVoiceRecording}
+                    disabled={sending}
+                    className="absolute bottom-1.5 right-10 z-10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] text-white transition-colors hover:bg-[#d8c1a0]/[0.10] active:scale-[0.98] disabled:opacity-45"
+                    aria-label="Sprachnachricht aufnehmen"
+                    title="Sprachnachricht aufnehmen"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-[15px] w-[15px]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z" />
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                      <path d="M12 19v3" />
+                    </svg>
+                  </button>
+                ) : null}
 
                 <button
                   type="button"
                   onClick={send}
                   disabled={
-                    sending || (!text.trim() && !selectedFile && !replyTarget)
+                    sending ||
+                    recordingState === "recording" ||
+                    (!text.trim() && !selectedFile && !recordedAudioFile && !replyTarget)
                   }
                   className={
                     "absolute bottom-1.5 right-1.5 z-10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#d8c1a0]/14 bg-[#d8c1a0]/[0.045] text-white transition-colors active:scale-[0.98] " +
-                    (sending || (!text.trim() && !selectedFile && !replyTarget)
+                    (sending || recordingState === "recording" || (!text.trim() && !selectedFile && !recordedAudioFile && !replyTarget)
                       ? "cursor-not-allowed opacity-45 pointer-events-none"
                       : "hover:bg-[#d8c1a0]/[0.10]")
                   }

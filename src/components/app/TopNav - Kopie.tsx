@@ -299,7 +299,7 @@ function UserMenuPopover({ open, shown, onClose, userLabel, userEmail, currentUs
   return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 1200, isolation: "isolate" }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "transparent" }} />
-      <div style={{ position: "absolute", top: "max(20px, calc(env(safe-area-inset-top, 0px) + 12px))", right: 18, width: 296, maxWidth: "calc(100vw - 24px)", borderRadius: 26, border: "1px solid rgba(214,195,163,0.16)", background: "linear-gradient(180deg, rgba(34,27,22,0.97) 0%, rgba(21,17,14,0.98) 100%)", boxShadow: "0 28px 80px rgba(0,0,0,0.42)", overflow: "hidden", transform: shown ? "translateY(0) scale(1)" : "translateY(-6px) scale(0.985)", opacity: shown ? 1 : 0, transformOrigin: "top right", transition: "transform 180ms ease, opacity 180ms ease", backdropFilter: "blur(24px) saturate(135%)" }}>
+      <div style={{ position: "absolute", top: 20, right: 18, width: 296, maxWidth: "calc(100vw - 24px)", borderRadius: 26, border: "1px solid rgba(214,195,163,0.16)", background: "linear-gradient(180deg, rgba(34,27,22,0.97) 0%, rgba(21,17,14,0.98) 100%)", boxShadow: "0 28px 80px rgba(0,0,0,0.42)", overflow: "hidden", transform: shown ? "translateY(0) scale(1)" : "translateY(-6px) scale(0.985)", opacity: shown ? 1 : 0, transformOrigin: "top right", transition: "transform 180ms ease, opacity 180ms ease", backdropFilter: "blur(24px) saturate(135%)" }}>
         <div style={{ padding: 16, display: "flex", gap: 12, alignItems: "center", background: "linear-gradient(180deg, rgba(255,248,240,0.065) 0%, rgba(255,248,240,0.03) 100%)", borderBottom: "1px solid rgba(214,195,163,0.12)" }}>
           <img src={avatarSrc} alt="Benutzerfoto" className="shrink-0 rounded-xl border border-white/10 object-cover" style={{ width: 46, height: 46, boxShadow: `0 0 0 2px rgba(11,11,12,0.95), 0 0 0 4px ${avatarTheme.color}` }} />
           <div style={{ minWidth: 0 }}>
@@ -351,7 +351,7 @@ function SettingsMenuPopover({ open, shown, onClose, onOpenGoogleSetup, googleSe
   return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 1190, isolation: "isolate" }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "transparent" }} />
-      <div style={{ position: "absolute", top: "max(14px, calc(env(safe-area-inset-top, 0px) + 12px))", right: 68, width: 248, maxWidth: "calc(100vw - 24px)", borderRadius: 22, border: "1px solid rgba(255,255,255,0.10)", background: "linear-gradient(180deg, rgba(28,28,31,0.98) 0%, rgba(18,19,22,0.98) 100%)", boxShadow: "0 24px 70px rgba(0,0,0,0.44)", overflow: "hidden", transform: shown ? "translateY(0) scale(1)" : "translateY(-6px) scale(0.98)", opacity: shown ? 1 : 0, transformOrigin: "top right", transition: "transform 180ms ease, opacity 180ms ease", backdropFilter: "blur(18px)" }}>
+      <div style={{ position: "absolute", top: 14, right: 68, width: 248, maxWidth: "calc(100vw - 24px)", borderRadius: 22, border: "1px solid rgba(255,255,255,0.10)", background: "linear-gradient(180deg, rgba(28,28,31,0.98) 0%, rgba(18,19,22,0.98) 100%)", boxShadow: "0 24px 70px rgba(0,0,0,0.44)", overflow: "hidden", transform: shown ? "translateY(0) scale(1)" : "translateY(-6px) scale(0.98)", opacity: shown ? 1 : 0, transformOrigin: "top right", transition: "transform 180ms ease, opacity 180ms ease", backdropFilter: "blur(18px)" }}>
         <div style={{ padding: 8 }}>
           <button type="button" onClick={onOpenGoogleSetup} className="block w-full rounded-xl border border-white/10 bg-white/[0.04] text-left transition hover:bg-white/[0.07]">
             <div style={{ display: "flex", alignItems: "center", gap: 12, padding: 8 }}>
@@ -558,7 +558,7 @@ function MobileNavDrawer({ open, shown, onClose, pathname, remindersOpen, waitli
   return createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 1180, isolation: "isolate" }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.60)", backdropFilter: "blur(6px)", opacity: shown ? 1 : 0, transition: "opacity 200ms ease" }} />
-      <div className="clientique-mobile-drawer-safe" style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: "min(220px, calc(100vw - 20px))", transform: shown ? "translateX(0)" : "translateX(-24px)", opacity: shown ? 1 : 0, transition: "transform 220ms ease, opacity 220ms ease", borderRight: "1px solid rgba(255,255,255,0.04)", background: "linear-gradient(180deg, rgba(255,250,244,0.04) 0%, rgba(255,248,240,0.012) 100%)", color: "white", boxShadow: "0 24px 72px rgba(0,0,0,0.24)", backdropFilter: "blur(22px) saturate(135%)", display: "flex", flexDirection: "column" }}>
+      <div style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: "min(220px, calc(100vw - 20px))", transform: shown ? "translateX(0)" : "translateX(-24px)", opacity: shown ? 1 : 0, transition: "transform 220ms ease, opacity 220ms ease", borderRight: "1px solid rgba(255,255,255,0.04)", background: "linear-gradient(180deg, rgba(255,250,244,0.04) 0%, rgba(255,248,240,0.012) 100%)", color: "white", boxShadow: "0 24px 72px rgba(0,0,0,0.24)", backdropFilter: "blur(22px) saturate(135%)", display: "flex", flexDirection: "column" }}>
         <div className="flex items-center justify-between border-b border-white/10 p-4">
           <div>
             <div className="text-xs uppercase tracking-[0.16em] text-white/45">Navigation</div>
@@ -663,7 +663,7 @@ function MobileBottomNavIsland({
   onAssistant: () => void;
 }) {
   return (
-    <div className={cn("clientique-mobile-nav-safe pointer-events-none fixed inset-x-0 z-[85] px-3", visible ? "block" : "hidden")}>
+    <div className={cn("pointer-events-none fixed inset-x-0 bottom-[max(10px,env(safe-area-inset-bottom))] z-[85] px-3", visible ? "block" : "hidden")}>
       <div className="pointer-events-auto relative mx-auto flex max-w-[440px] items-center gap-[1px] overflow-visible rounded-[22px] border border-white/[0.12] bg-[rgba(255,255,255,0.09)] px-[4px] py-[4px] backdrop-blur-[20px] saturate-[118%]">
         <div className="pointer-events-none absolute inset-0 rounded-[22px] shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]" />
         <MobileBottomNavButton icon={<HomeIcon />} label="Dashboard" active={isDashboardActive} onClick={onDashboard} />
@@ -1205,12 +1205,12 @@ return (
 
     <div
       className={cn(
-        "clientique-topbar-safe fixed inset-x-0 z-40 bg-transparent shadow-none backdrop-blur-0",
+        "fixed inset-x-0 z-40 bg-transparent shadow-none backdrop-blur-0",
         isMobile
-          ? "px-1"
-          : "px-5 lg:pl-[100px] lg:pr-2 xl:top-3"
+          ? "px-1 pt-[max(env(safe-area-inset-top),10px)]"
+          : "top-4 px-5 lg:pl-[100px] lg:pr-2 xl:top-3"
       )}
-      style={undefined}
+      style={isMobile ? { paddingTop: "max(env(safe-area-inset-top), 10px)" } : undefined}
     >
       <div className={cn(isMobile ? "w-full" : "mx-auto w-full max-w-[1400px]")}>
         <div

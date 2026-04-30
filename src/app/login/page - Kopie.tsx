@@ -2,8 +2,7 @@ import Image from "next/image";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
-import { Logo } from "@/components/brand/Logo";
-import { appBranding } from "@/lib/appBranding";
+import { appBranding, brandInitials } from "@/lib/appBranding";
 
 function AnimatedLoginLogo() {
   if (appBranding.loginHeroLogoPath) {
@@ -61,9 +60,11 @@ function LoginBrandMark() {
   return (
     <div className="flex items-center gap-3">
       <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-        <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-2xl bg-[#0d0d10] [&_img]:h-full [&_img]:w-full [&_img]:object-cover">
-          <Logo showText={false} />
-        </div>
+        {appBranding.loginLogoPath ? (
+          <Image src={appBranding.loginLogoPath} alt={appBranding.appName} fill className="object-contain p-1.5" />
+        ) : (
+          <span className="text-lg font-bold text-[var(--primary)]">{brandInitials()}</span>
+        )}
       </div>
       <div className="min-w-0">
         <div className="truncate text-base font-semibold text-white">{appBranding.appName}</div>

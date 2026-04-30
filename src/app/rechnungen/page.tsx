@@ -11,6 +11,7 @@ import ClosingDateAutoSubmit from "@/components/rechnungen/ClosingDateAutoSubmit
 import RechnungenClosingSlideover from "@/components/rechnungen/RechnungenClosingSlideover";
 import DashboardInvoiceSlideover from "@/components/dashboard/DashboardInvoiceSlideover";
 import { backfillReadyFiscalReceipts, cancelCardPaymentForCheckout, completeCardPaymentForCheckout, createFiscalReceiptForPayment, createPaymentForSalesOrder, createSalesOrderFromAppointment, failCardPaymentForCheckout, startCardPaymentForCheckout } from "./actions";
+import { appBranding } from "@/lib/appBranding";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -2418,7 +2419,7 @@ export default async function RechnungenPage({
                 <div className="flex flex-col gap-6">
                   <div className="min-w-0">
                     <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)] whitespace-nowrap">
-                      Magnifique Beauty Institut Backoffice
+                      {appBranding.backofficeLabel}
                     </div>
                     <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">
                       Rechnungen
@@ -2717,7 +2718,7 @@ export default async function RechnungenPage({
 
                 <div className="min-w-0">
                   <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">
-                    Magnifique Beauty Institut Backoffice
+                    {appBranding.backofficeLabel}
                   </div>
                   <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">
                     Rechnungen

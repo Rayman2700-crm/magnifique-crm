@@ -508,12 +508,12 @@ export default async function AppShell({
         />
 
         {isDemoMode ? (
-          <div className="fixed left-1/2 top-[78px] z-[90] -translate-x-1/2 rounded-full border border-[#dcc7a1]/40 bg-[#2a1f12]/90 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-[#f3ddb4] shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl lg:top-[86px]">
+          <div className="clientique-demo-banner-safe fixed left-1/2 z-[90] -translate-x-1/2 rounded-full border border-[#dcc7a1]/40 bg-[#2a1f12]/90 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-[#f3ddb4] shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl">
             Demo-Modus · keine echten externen Aktionen
           </div>
         ) : null}
 
-        <main className="clientique-content-layer min-h-screen pl-0 pb-[120px] pt-[88px] lg:pb-0 lg:pl-[76px] lg:pt-[72px] xl:pt-[78px]">
+        <main className="clientique-content-layer clientique-main-safe pl-0 lg:pl-[76px]">
           <Container className="max-w-[1400px] px-0 sm:px-0">
             {children}
           </Container>

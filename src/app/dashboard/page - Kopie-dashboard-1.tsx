@@ -11,7 +11,6 @@ import DashboardServicesCard from "@/components/dashboard/DashboardServicesCard"
 import DashboardInvoiceSlideover from "@/components/dashboard/DashboardInvoiceSlideover";
 import OpenCreateAppointmentButton from "@/components/dashboard/OpenCreateAppointmentButton";
 import { cn } from "@/lib/cn";
-import { appBranding } from "@/lib/appBranding";
 
 type TenantRow = {
   id: string;
@@ -207,7 +206,11 @@ function uniqueCalendarIds(...groups: unknown[]) {
   return Array.from(new Set(groups.flatMap((group) => uniqueStrings(group))));
 }
 
-const STUDIO_TARGETS = appBranding.studioTargets;
+const STUDIO_TARGETS = [
+  { key: "studio_radu", label: "Studio Radu", calendarId: "radu.craus@gmail.com" },
+  { key: "studio_raluca", label: "Studio Raluca", calendarId: "raluca.magnifique@gmail.com" },
+] as const;
+
 const STUDIO_TARGET_IDS = new Set<string>(STUDIO_TARGETS.map((target) => target.calendarId));
 
 type GoogleConnectionRow = {
@@ -932,7 +935,7 @@ export default async function DashboardPage() {
       activeConnections
         .map((row) => String(row.default_calendar_id ?? "").trim())
         .find(Boolean) ||
-      STUDIO_TARGETS[0]?.calendarId || appBranding.defaultStudioCalendarId;
+      STUDIO_TARGETS[0].calendarId;
 
     const connectedStudioIds = new Set<string>(
       STUDIO_TARGETS.filter((target) =>
@@ -1565,7 +1568,7 @@ export default async function DashboardPage() {
 
                 <div className="min-w-0 pt-1">
                   <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--primary)]">
-                    {appBranding.dashboardLabel}
+                    Magnifique Beauty Institut Dashboard
                   </div>
                   <div className="mt-2 break-words text-[32px] font-semibold leading-none tracking-[-0.03em] text-[var(--text)] xl:text-[32px]">
                     {displayName}
@@ -1652,7 +1655,7 @@ export default async function DashboardPage() {
 
                 <div className="min-w-0">
                   <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-[var(--primary)]">
-                    {appBranding.dashboardLabel}
+                    Magnifique Beauty Institut Dashboard
                   </div>
                   <div className="mt-1.5 break-words text-[24px] font-semibold leading-none tracking-tight text-[var(--text)]">
                     {displayName}

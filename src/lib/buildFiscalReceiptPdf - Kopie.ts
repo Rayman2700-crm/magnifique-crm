@@ -2,7 +2,6 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { PDFDocument, StandardFonts, rgb, type PDFPage, type PDFFont, type PDFImage } from "pdf-lib";
 import QRCode from "qrcode";
-import { appBranding } from "@/lib/appBranding";
 
 export type FiscalReceiptPdfLine = {
   name: string;
@@ -74,25 +73,68 @@ type ProviderDefaults = {
   logoPath: string;
 };
 
-function envValue(name: string, fallback = "") {
-  const value = process.env[name];
-  return typeof value === "string" && value.trim() ? value.trim() : fallback;
-}
-
-function getConfiguredProviderDefaults(): ProviderDefaults {
-  return {
-    studioName: appBranding.studioName || appBranding.appName || "Clientique",
-    address1: envValue("NEXT_PUBLIC_PROVIDER_ADDRESS_1", ""),
-    address2: envValue("NEXT_PUBLIC_PROVIDER_ADDRESS_2", ""),
-    country: envValue("NEXT_PUBLIC_PROVIDER_COUNTRY", "Österreich"),
-    phone: envValue("NEXT_PUBLIC_PROVIDER_PHONE", ""),
-    email: envValue("NEXT_PUBLIC_PROVIDER_EMAIL", ""),
-    iban: envValue("NEXT_PUBLIC_PROVIDER_IBAN", ""),
-    bic: envValue("NEXT_PUBLIC_PROVIDER_BIC", ""),
-    invoicePrefix: envValue("NEXT_PUBLIC_PROVIDER_INVOICE_PREFIX", ""),
-    logoPath: appBranding.pwaIconPath || appBranding.appleTouchIconPath || "",
-  };
-}
+const PROVIDER_DEFAULTS: Array<{ match: string; values: ProviderDefaults }> = [
+  {
+    match: "radu craus",
+    values: {
+      studioName: "Magnifique Beauty Institut",
+      address1: "Flugfeldgürtel 24/1",
+      address2: "2700 Wiener Neustadt",
+      country: "Österreich",
+      phone: "+43 676 6742429",
+      email: "radu.craus@gmail.com",
+      iban: "AT12 3456 7890 1234 5678",
+      bic: "",
+      invoicePrefix: "RAD",
+      logoPath: "/logos/radu-craus.png",
+    },
+  },
+  {
+    match: "raluca craus",
+    values: {
+      studioName: "Magnifique Beauty Institut",
+      address1: "Flugfeldgürtel 24/1",
+      address2: "2700 Wiener Neustadt",
+      country: "Österreich",
+      phone: "+43 676 4106468",
+      email: "raluca.schwarz@gmail.com",
+      iban: "",
+      bic: "",
+      invoicePrefix: "RAL",
+      logoPath: "/logos/raluca-craus.png",
+    },
+  },
+  {
+    match: "alexandra sacadat",
+    values: {
+      studioName: "Magnifique Beauty Institut",
+      address1: "Flugfeldgürtel 24/1",
+      address2: "2700 Wiener Neustadt",
+      country: "Österreich",
+      phone: "+43 664 1433818",
+      email: "alexandra_soj@hotmail.com",
+      iban: "",
+      bic: "",
+      invoicePrefix: "ALE",
+      logoPath: "/logos/alexandra-sacadat.png",
+    },
+  },
+  {
+    match: "barbara",
+    values: {
+      studioName: "Magnifique Beauty Institut",
+      address1: "Flugfeldgürtel 24/1",
+      address2: "2700 Wiener Neustadt",
+      country: "Österreich",
+      phone: "+43 699 12638348",
+      email: "eder.barbara1969@gmail.com",
+      iban: "",
+      bic: "",
+      invoicePrefix: "BAR",
+      logoPath: "/logos/barbara-eder.png",
+    },
+  },
+];
 
 function toText(value: unknown): string {
   if (value == null) return "";
@@ -225,33 +267,12 @@ async function buildTransferQrPngBytes(params: {
   });
 }
 
-function getProviderDefaults(_providerName: string): ProviderDefaults {
-  return getConfiguredProviderDefaults();
-}
-
-function buildDefaultThankYouText(providerStudioName: string) {
-  const studio = toText(providerStudioName) || appBranding.studioName || "unserem Studio";
-  return `Vielen Dank für Ihren Besuch bei ${studio}. Wir freuen uns, Sie bald wieder verwöhnen zu dürfen.`;
-}
-
-function buildDefaultFooterLegalText(args: {
-  providerName: string;
-  providerStudioName: string;
-  providerAddress1: string;
-  providerAddress2: string;
-  providerCountry: string;
-  providerPhone: string;
-  providerEmail: string;
-}) {
-  const parts = [
-    toText(args.providerName) ? `Inhaber: ${toText(args.providerName)}` : "",
-    toText(args.providerStudioName) ? `Studio: ${toText(args.providerStudioName)}` : "",
-    [toText(args.providerAddress1), toText(args.providerAddress2), toText(args.providerCountry)].filter(Boolean).join(", "),
-    toText(args.providerPhone) ? `Tel: ${toText(args.providerPhone)}` : "",
-    toText(args.providerEmail) ? `E-Mail: ${toText(args.providerEmail)}` : "",
-  ].filter(Boolean);
-
-  return parts.join(" | ");
+function getProviderDefaults(providerName: string): ProviderDefaults | null {
+  const lower = toText(providerName).toLowerCase();
+  for (const item of PROVIDER_DEFAULTS) {
+    if (lower.includes(item.match)) return item.values;
+  }
+  return null;
 }
 
 function toAbsolutePublicPath(candidate: string) {
@@ -369,25 +390,26 @@ export async function buildFiscalReceiptPdf(input: BuildFiscalReceiptPdfInput) {
 
   const defaults = getProviderDefaults(input.providerName);
 
-  const providerStudioName = toText(input.providerStudioName) || defaults.studioName || appBranding.studioName || "Clientique";
-  const providerAddress1 = toText(input.providerAddress1) || defaults.address1 || "";
-  const providerAddress2 = toText(input.providerAddress2) || defaults.address2 || "";
-  const providerCountry = toText(input.providerCountry) || defaults.country || "Österreich";
-  const providerPhone = toText(input.providerPhone) || defaults.phone || "";
-  const providerEmail = toText(input.providerEmail) || defaults.email || "";
-  const providerIban = toText(input.providerIban) || defaults.iban || "";
-  const providerBic = toText(input.providerBic) || defaults.bic || "";
-  const providerInvoicePrefix = toText(input.providerInvoicePrefix) || defaults.invoicePrefix || "";
+  const providerStudioName = toText(input.providerStudioName) || defaults?.studioName || "Magnifique Beauty Institut";
+  const providerAddress1 = toText(input.providerAddress1) || defaults?.address1 || "";
+  const providerAddress2 = toText(input.providerAddress2) || defaults?.address2 || "";
+  const providerCountry = toText(input.providerCountry) || defaults?.country || "Österreich";
+  const providerPhone = toText(input.providerPhone) || defaults?.phone || "";
+  const providerEmail = toText(input.providerEmail) || defaults?.email || "";
+  const providerIban = toText(input.providerIban) || defaults?.iban || "";
+  const providerBic = toText(input.providerBic) || defaults?.bic || "";
+  const providerInvoicePrefix = toText(input.providerInvoicePrefix) || defaults?.invoicePrefix || "";
 
   const providerLogo = await tryLoadImage(pdfDoc, [
     toText(input.providerLogoPath),
-    defaults.logoPath || "",
+    defaults?.logoPath || "",
   ].filter(Boolean));
 
   const footerLogo = await tryLoadImage(pdfDoc, [
     toText(input.footerLogoPath),
-    appBranding.pwaIconPath,
-    appBranding.appleTouchIconPath,
+    "/logos/magnifique-footer.png",
+    "/branding/magnifique-logo-gold.png",
+    "/magnifique-logo-gold.png",
   ].filter(Boolean));
 
   const lines = Array.isArray(input.lines) ? input.lines : [];
@@ -401,21 +423,13 @@ export async function buildFiscalReceiptPdf(input: BuildFiscalReceiptPdfInput) {
 
   const thankYouText =
     toText(input.thankYouText) ||
-    buildDefaultThankYouText(providerStudioName);
+    "Vielen Dank für Ihren Besuch bei Magnifique Beauty Institut. Wir freuen uns, Sie bald wieder verwöhnen zu dürfen.";
 
   const footerLegalText =
     toText(input.footerLegalText) ||
-    buildDefaultFooterLegalText({
-      providerName: input.providerName,
-      providerStudioName,
-      providerAddress1,
-      providerAddress2,
-      providerCountry,
-      providerPhone,
-      providerEmail,
-    });
+    "Inhaber: Raluca Craus | Standort: Flugfeldgürtel 24/1, 2700 Wiener Neustadt | Tel: +43 676 4106468 | Kontaktdaten: +43 676 4106468, raluca.schwarz@gmail.com | Einzelunternehmen | Firmengericht: Landesgericht Wiener Neustadt | Aufsichtsbehörde: Bezirkshauptmannschaft Wiener Neustadt | Kammer: Wirtschaftskammer Niederösterreich | Berufszweig: Kosmetik";
 
-  const footerWebsite = toText(input.footerWebsite) || envValue("NEXT_PUBLIC_APP_WEBSITE", "");
+  const footerWebsite = toText(input.footerWebsite) || "www.magnifique-beauty.at";
   const smallBusinessNotice =
     toText(input.smallBusinessNotice) ||
     "Gemäß § 6 Abs. 1 Z 27 UStG wird keine Umsatzsteuer berechnet.";
@@ -841,7 +855,7 @@ function formatDateTimeForPdf(value: string | null | undefined) {
 
 function drawDailyClosingFooter(page: PDFPage, width: number, marginLeft: number, marginRight: number, fontRegular: PDFFont, generatedByName: string) {
   page.drawLine({ start: { x: marginLeft, y: 64 }, end: { x: width - marginRight, y: 64 }, thickness: 1, color: rgb(0.88, 0.88, 0.88) });
-  page.drawText(`Tagesabschluss PDF · ${appBranding.appName}`, { x: marginLeft, y: 48, size: 8.5, font: fontRegular, color: FOOTER_TEXT });
+  page.drawText("Tagesabschluss PDF · Magnifique CRM", { x: marginLeft, y: 48, size: 8.5, font: fontRegular, color: FOOTER_TEXT });
   drawRightAlignedText(page, `Erzeugt von ${generatedByName || "Unbekannt"}`, width - marginRight, 48, fontRegular, 8.5, FOOTER_TEXT);
 }
 
